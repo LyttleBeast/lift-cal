@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="theme-color" content="#14161a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Rack">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="stylesheet" href="app.css">
+<title>Rack</title>
+</head>
+<body>
+
+<!-- ===== AUTH GATE ===== -->
+<div id="auth">
+  <div class="auth-box">
+    <div class="auth-mark" aria-hidden="true">
+      <i style="background:#d6252b;animation-delay:0ms"></i>
+      <i style="background:#2e7fd9;animation-delay:60ms"></i>
+      <i style="background:#f0be1e;animation-delay:120ms"></i>
+      <i style="background:#2aa85c;animation-delay:180ms"></i>
+      <i style="background:#e8e5de;animation-delay:240ms"></i>
+      <i style="background:#a8aeb8;animation-delay:300ms"></i>
+    </div>
+    <div class="field">
+      <label for="authEmail">Email</label>
+      <input id="authEmail" type="email" autocomplete="username" inputmode="email">
+    </div>
+    <div class="field">
+      <label for="authPass">Password</label>
+      <input id="authPass" type="password" autocomplete="current-password">
+    </div>
+    <div class="auth-err" id="authErr"></div>
+    <button class="btn btn-primary btn-block btn-lg" id="authBtn">Sign in</button>
+  </div>
+</div>
+
+<!-- ===== SYNC STATE ===== -->
+<div class="sync-pip" id="syncPip"><i></i><span>synced</span></div>
+
+<!-- ===== APP ===== -->
+<div id="app">
+  <section class="view active" id="view-workout"></section>
+  <section class="view" id="view-food"></section>
+  <section class="view" id="view-weight"></section>
+</div>
+
+<!-- ===== DOCK ===== -->
+<nav class="dock" id="dock">
+  <button data-view="workout" class="active" aria-label="Training">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 9v6M20 9v6M7 6v12M17 6v12M7 12h10"/>
+    </svg>
+    Train
+  </button>
+  <button data-view="food" aria-label="Nutrition">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M6 3v8a3 3 0 0 0 6 0V3M9 11v10M18 3c-1.5 2-2 4-2 6s.5 3 2 3 2-1 2-3-.5-4-2-6zM18 12v9"/>
+    </svg>
+    Fuel
+  </button>
+  <button data-view="weight" aria-label="Body weight">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 17l5-6 4 3 5-7 4 5"/><path d="M3 21h18"/>
+    </svg>
+    Weight
+  </button>
+</nav>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
