@@ -3,6 +3,7 @@
 
 import { read, write, writeFeed, LS, todayKey, feedUrl, logout } from './store.js';
 import { toast, hasActiveSession } from './workout.js';
+import { openImport } from './importer.js';
 
 const $  = s => document.querySelector(s);
 const el = (t, c, txt) => { const n = document.createElement(t); if (c) n.className = c; if (txt != null) n.textContent = txt; return n; };
@@ -348,6 +349,11 @@ function renderSettings() {
   restIn.onchange = e => { LS.set('restDefault', parseInt(e.target.value) || 150); toast('Rest updated'); };
   restRow.appendChild(restIn);
   card.appendChild(restRow);
+
+  const imp = el('button', 'btn btn-ghost btn-block', 'Import workout history');
+  imp.style.marginTop = '12px';
+  imp.onclick = openImport;
+  card.appendChild(imp);
 
   const out = el('button', 'btn btn-danger btn-block', 'Sign out');
   out.style.marginTop = '12px';
