@@ -5,12 +5,14 @@
 //   food/meals             -> { mealId: meal }      saved multi-item meals
 //   food/targets           -> { cal, p, f }         carbs = remainder
 //   food/daySummaries/{d}  -> { cal, p, c, f }      tiny per-day rollup (TDEE math)
+//
+// Every one of those paths is already per-account — store.js prefixes them
+// with users/{uid}/. The only thing that used to leak between accounts was
+// the hard-coded starter foods, which are now owner-only (see seedItems).
 
-import { read, write, writeFeed, LS, todayKey } from './store.js';
-import { toast } from './workout.js';
-
-const $  = s => document.querySelector(s);
-const el = (t, c, txt) => { const n = document.createElement(t); if (c) n.className = c; if (txt != null) n.textContent = txt; return n; };
+import { read, write, writeFeed, LS, todayKey, uid } from './store.js';
+import { OWNER_UID } from './firebase-config.js';
+import { $, el, sheet, toast, noteEl, confirmSheet, r1, trimNum } from './ui.js';
 
 const MEALS = [
   ['breakfast', 'Breakfast'],
@@ -55,8 +57,14 @@ async function loadDay() {
 function dk(d) { return todayKey(d); }
 function isToday() { return dk(viewDate) === todayKey(); }
 
-/* ---------- pre-seeded items from Micah's reference data ---------- */
+/* ---------- starter foods ----------
+   These are personal reference values (work pizza crusts, the wings, the
+   tub of whey). They are seeded ONLY into the owner's account — anybody else
+   who signs up starts with an empty library, the same way they start with an
+   empty training log. */
 async function seedItems() {
+  if (uid() !== OWNER_UID) return;
+
   const seeds = {
     'seed-bf-scoop': mkItem('Body Fortress whey (vanilla)', 'Body Fortress', 'serv',
       { label: 'scoop', grams: 44 }, { cal: 180, p: 30, c: 7, f: 3 },
@@ -67,11 +75,15 @@ async function seedItems() {
     'seed-crust-xl': mkItem('Pizza crust — x-large (dough only)','Work', 'serv', { label: 'crust' }, { cal: 1855, p: 60, c: 331, f: 30 }),
     'seed-wings-oz': mkItem('Wings (per oz)', 'Work', 'serv', { label: 'oz', grams: 28 }, { cal: 60, p: 5, c: 5, f: 2 })
   };
+
+  // A one-time flag, so deleting a starter food makes it stay deleted.
+  const seeded = LS.get('seededV1', false);
   let changed = false;
   for (const id of Object.keys(seeds)) {
-    if (!items[id]) { items[id] = { id, ...seeds[id] }; changed = true; }
+    if (!items[id] && !seeded) { items[id] = { id, ...seeds[id] }; changed = true; }
   }
   if (changed) await write('food/items', items);
+  if (!seeded) LS.set('seededV1', true);
 }
 
 function mkItem(name, brand, base, serv, n, micro) {
@@ -111,11 +123,9 @@ function macrosFor(item, amt, unit) {
 function qtyLabel(item, amt, unit) {
   if (unit === 'g') return trimNum(amt) + ' g';
   const lbl = item.serv ? item.serv.label : 'serving';
-  return trimNum(amt) + ' \u00d7 ' + lbl + (item.serv && item.serv.grams ? ' (' + trimNum(amt * item.serv.grams) + ' g)' : '');
+  return trimNum(amt) + ' × ' + lbl + (item.serv && item.serv.grams ? ' (' + trimNum(amt * item.serv.grams) + ' g)' : '');
 }
 
-function r1(x) { return Math.round(x * 10) / 10; }
-function trimNum(x) { return String(r1(x)).replace(/\.0$/, ''); }
 function carbsTarget() { return Math.max(0, Math.round((targets.cal - targets.p * 4 - targets.f * 9) / 4)); }
 
 function defaultMeal() {
@@ -169,8 +179,12 @@ async function pushFoodFeed() {
   });
 }
 
+function newEntryId() {
+  return 'f' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+}
+
 function addEntry(entry) {
-  const id = 'f' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+  const id = newEntryId();
   dayLog[id] = { id, t: Date.now(), ...entry };
   saveDay();
   render();
@@ -181,6 +195,35 @@ function touchItem(id) {
   items[id].uses = (items[id].uses || 0) + 1;
   items[id].last = Date.now();
   write('food/items', items);
+}
+
+/* ---------- portion scaling on an already-logged entry ----------
+   "I ate that twice" shouldn't mean re-typing four numbers. `factor` is
+   relative to what is currently showing, so tapping ×2 twice gives 4×. */
+function scaleEntry(e, factor) {
+  const item = e.itemId ? items[e.itemId] : null;
+
+  // Library-linked entries scale by amount so the gram maths stays honest.
+  if (item && e.amt) {
+    const amt = r1(e.amt * factor);
+    const m = macrosFor(item, amt, e.unit || 'serv');
+    if (m) {
+      Object.assign(e, m, { amt, qty: qtyLabel(item, amt, e.unit || 'serv') });
+      return;
+    }
+  }
+
+  e.cal = Math.round((e.cal || 0) * factor);
+  e.p = r1((e.p || 0) * factor);
+  e.c = r1((e.c || 0) * factor);
+  e.f = r1((e.f || 0) * factor);
+  if (e.micro) for (const k of Object.keys(e.micro)) e.micro[k] = r1(e.micro[k] * factor);
+
+  if (e.qtyBase == null) { e.qtyBase = e.qty || ''; e.mult = 1; }
+  e.mult = r1((e.mult || 1) * factor);
+  e.qty = e.mult === 1
+    ? e.qtyBase
+    : (e.qtyBase ? e.qtyBase + ' × ' + trimNum(e.mult) : '× ' + trimNum(e.mult));
 }
 
 /* ================= RENDER ================= */
@@ -200,8 +243,18 @@ export function render() {
   hd.appendChild(left);
 
   const nav = el('div', 'cal-nav');
-  const prev = el('button', null, '\u2039'); prev.setAttribute('aria-label', 'Previous day');
-  const next = el('button', null, '\u203A'); next.setAttribute('aria-label', 'Next day');
+  const gear = el('button', 'gear-btn');
+  gear.setAttribute('aria-label', 'Fuel settings');
+  gear.innerHTML =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">' +
+    '<circle cx="12" cy="12" r="3"/>' +
+    '<path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>' +
+    '</svg>';
+  gear.onclick = openFuelSettings;
+  nav.appendChild(gear);
+
+  const prev = el('button', null, '‹'); prev.setAttribute('aria-label', 'Previous day');
+  const next = el('button', null, '›'); next.setAttribute('aria-label', 'Next day');
   prev.onclick = async () => { viewDate = new Date(viewDate.getTime() - 864e5); await loadDay(); render(); };
   next.onclick = async () => { viewDate = new Date(viewDate.getTime() + 864e5); await loadDay(); render(); };
   next.disabled = isToday();
@@ -210,14 +263,6 @@ export function render() {
   wrap.appendChild(hd);
 
   wrap.appendChild(renderSummary());
-
-  // tool row
-  const tools = el('div', 'tool-row');
-  const mk = (label, fn) => { const b = el('button', 'chip', label); b.onclick = fn; return b; };
-  tools.appendChild(mk('Copy yesterday', copyYesterday));
-  tools.appendChild(mk('Targets', openTargets));
-  tools.appendChild(mk('Import', () => openImportPaste()));
-  wrap.appendChild(tools);
 
   MEALS.forEach(([id, label]) => wrap.appendChild(renderMeal(id, label)));
 
@@ -229,8 +274,7 @@ function renderSummary() {
   const t = totals();
   const card = el('div', 'card');
 
-  const top = el('div');
-  top.style.cssText = 'display:flex;align-items:baseline;gap:10px;margin-bottom:12px';
+  const top = el('div', 'fuel-top');
   const remain = targets.cal - t.cal;
   const big = el('div', 'load-num num', String(Math.abs(remain).toLocaleString()));
   big.style.fontSize = '40px';
@@ -238,8 +282,7 @@ function renderSummary() {
   top.appendChild(big);
   const sub = el('div');
   sub.appendChild(el('div', 'eyebrow', remain < 0 ? 'kcal over' : 'kcal left'));
-  const eaten = el('div', 'num', t.cal.toLocaleString() + ' / ' + targets.cal.toLocaleString());
-  eaten.style.cssText = 'font-size:12px;color:var(--dim)';
+  const eaten = el('div', 'num fuel-eaten', t.cal.toLocaleString() + ' / ' + targets.cal.toLocaleString());
   sub.appendChild(eaten);
   top.appendChild(sub);
   card.appendChild(top);
@@ -272,11 +315,10 @@ function renderMeal(mealId, label) {
   const entries = Object.values(dayLog).filter(e => e.meal === mealId).sort((a, b) => (a.t || 0) - (b.t || 0));
   const kcal = entries.reduce((s, e) => s + (e.cal || 0), 0);
 
-  const right = el('div');
-  right.style.cssText = 'display:flex;align-items:center;gap:8px';
-  if (entries.length) right.appendChild(el('div', 'num', kcal + ' kcal')).style.cssText += ';font-size:11px;color:var(--dim)';
+  const right = el('div', 'meal-right');
   if (entries.length) {
-    const save = el('button', 'ex-menu', '\u22ef');
+    right.appendChild(el('div', 'num meal-kcal', kcal + ' kcal'));
+    const save = el('button', 'ex-menu', '⋯');
     save.title = 'Save as meal';
     save.onclick = () => saveAsMeal(label, entries);
     right.appendChild(save);
@@ -295,13 +337,10 @@ function renderMeal(mealId, label) {
 
 function renderEntry(e) {
   const row = el('button', 'food-entry');
-  const body = el('div');
-  body.style.minWidth = '0';
-  const nm = el('div', 'fe-name', e.name);
-  body.appendChild(nm);
-  const sub = el('div', 'fe-sub num',
-    (e.qty ? e.qty + '  \u00b7  ' : '') + 'P ' + trimNum(e.p || 0) + '  C ' + trimNum(e.c || 0) + '  F ' + trimNum(e.f || 0));
-  body.appendChild(sub);
+  const body = el('div', 'fe-body');
+  body.appendChild(el('div', 'fe-name', e.name));
+  body.appendChild(el('div', 'fe-sub num',
+    (e.qty ? e.qty + '  ·  ' : '') + 'P ' + trimNum(e.p || 0) + '  C ' + trimNum(e.c || 0) + '  F ' + trimNum(e.f || 0)));
   row.appendChild(body);
   row.appendChild(el('div', 'fe-cal num', String(e.cal || 0)));
   row.onclick = () => openEntry(e);
@@ -316,14 +355,8 @@ function renderMicros() {
   card.appendChild(hd);
 
   const withData = Object.keys(t.micro).length;
-  if (!t.n) {
-    card.appendChild(noteEl('Nothing logged yet.'));
-    return card;
-  }
-  if (!withData) {
-    card.appendChild(noteEl('None of today\u2019s foods carry micronutrient data.'));
-    return card;
-  }
+  if (!t.n) { card.appendChild(noteEl('Nothing logged yet.')); return card; }
+  if (!withData) { card.appendChild(noteEl('None of today’s foods carry micronutrient data.')); return card; }
 
   const grid = el('div', 'micro-grid');
   MICROS.forEach(([k, label, unit]) => {
@@ -331,76 +364,126 @@ function renderMicros() {
     const cell = el('div');
     cell.appendChild(el('div', 'stat-val num', trimNum(t.micro[k]) + ' ' + unit));
     cell.appendChild(el('div', 'stat-lbl', label));
-    const cov = el('div', 'stat-lbl', t.microCount[k] + ' of ' + t.n + ' foods');
-    cov.style.color = 'var(--knurl)';
+    const cov = el('div', 'stat-lbl micro-cov', t.microCount[k] + ' of ' + t.n + ' foods');
     cell.appendChild(cov);
     grid.appendChild(cell);
   });
   card.appendChild(grid);
-  card.appendChild(noteEl('Sums cover only foods that report each value \u2014 treat these as floors, not truth.'));
+  card.appendChild(noteEl('Sums cover only foods that report each value — treat these as floors, not truth.'));
   return card;
 }
 
-function noteEl(txt) {
-  const p = el('div', null, txt);
-  p.style.cssText = 'font-size:12px;color:var(--dim);line-height:1.5';
-  return p;
-}
-
-/* ================= ENTRY SHEET (edit / delete) ================= */
+/* ================= ENTRY SHEET (edit / multiply / delete) ================= */
+// Rebuilt wholesale on every change so the quick-multiply chips, the portion
+// control and the raw number fields can never drift out of sync with each other.
 function openEntry(e) {
-  const { back, sh, close } = sheet();
-  sh.appendChild(el('h2', null, e.name));
-  if (e.qty) sh.appendChild(el('div', 'eyebrow', e.qty));
+  const { sh, close } = sheet(() => render());
+  const body = el('div');
+  sh.appendChild(body);
 
-  // linked to a library item -> quantity is re-computable
-  const item = e.itemId ? items[e.itemId] : null;
+  function paint() {
+    body.innerHTML = '';
+    const item = e.itemId ? items[e.itemId] : null;
 
-  if (item) {
-    sh.appendChild(portionControl(item, e.amt || 1, e.unit || 'serv', (amt, unit, m) => {
-      Object.assign(e, m, { amt, unit, qty: qtyLabel(item, amt, unit) });
-      saveDay();
-    }));
-  } else {
-    const grid = el('div', 'row-split');
-    const mkNum = (key, label) => {
-      const f = el('div', 'field');
-      f.appendChild(el('label', null, label));
-      const i = el('input'); i.type = 'number'; i.inputMode = 'decimal'; i.value = e[key] || 0;
-      i.onchange = ev => { e[key] = parseFloat(ev.target.value) || 0; saveDay(); };
-      f.appendChild(i);
-      return f;
+    body.appendChild(el('h2', null, e.name));
+    body.appendChild(el('div', 'eyebrow', e.qty || ''));
+
+    const readout = el('div', 'entry-readout num',
+      (e.cal || 0) + ' kcal   ·   P ' + trimNum(e.p || 0) +
+      '   C ' + trimNum(e.c || 0) + '   F ' + trimNum(e.f || 0));
+    body.appendChild(readout);
+
+    /* ---- ate more than one? ---- */
+    body.appendChild(el('div', 'field-lbl', 'Ate more than one?'));
+    const multRow = el('div', 'filter-row');
+    [['×2', 2], ['×3', 3], ['×4', 4], ['Half', 0.5]].forEach(([label, factor]) => {
+      const c = el('button', 'chip', label);
+      c.onclick = () => {
+        scaleEntry(e, factor);
+        saveDay();
+        paint();
+        toast(factor === 0.5 ? 'Halved' : 'Multiplied by ' + factor);
+      };
+      multRow.appendChild(c);
+    });
+    body.appendChild(multRow);
+
+    const again = el('button', 'btn btn-ghost btn-block', 'Log this again separately');
+    again.style.marginTop = '10px';
+    again.onclick = () => {
+      const copy = { ...e };
+      delete copy.id; delete copy.t;
+      addEntry({ ...copy, src: 'copy' });
+      close();
+      toast('Logged again');
     };
-    grid.append(mkNum('cal', 'kcal'), mkNum('p', 'Protein'));
-    sh.appendChild(grid);
-    const grid2 = el('div', 'row-split');
-    grid2.append(mkNum('c', 'Carbs'), mkNum('f', 'Fat'));
-    sh.appendChild(grid2);
+    body.appendChild(again);
+
+    /* ---- precise editing ---- */
+    body.appendChild(el('div', 'field-lbl', item ? 'Exact portion' : 'Exact numbers'));
+
+    if (item) {
+      let first = true;
+      body.appendChild(portionControl(item, e.amt || 1, e.unit || 'serv', (amt, unit, m) => {
+        if (first) { first = false; return; }   // the control paints once on build
+        Object.assign(e, m, { amt, unit, qty: qtyLabel(item, amt, unit) });
+        delete e.qtyBase; delete e.mult;
+        saveDay();
+        readout.textContent = (e.cal || 0) + ' kcal   ·   P ' + trimNum(e.p || 0) +
+          '   C ' + trimNum(e.c || 0) + '   F ' + trimNum(e.f || 0);
+      }));
+    } else {
+      const mkNum = (key, label) => {
+        const f = el('div', 'field');
+        f.appendChild(el('label', null, label));
+        const i = el('input'); i.type = 'number'; i.inputMode = 'decimal'; i.value = e[key] || 0;
+        i.onchange = ev => {
+          e[key] = key === 'cal'
+            ? Math.round(parseFloat(ev.target.value) || 0)
+            : r1(parseFloat(ev.target.value) || 0);
+          // a manual override invalidates the multiplier bookkeeping
+          delete e.qtyBase; delete e.mult;
+          saveDay();
+          paint();
+        };
+        f.appendChild(i);
+        return f;
+      };
+      const g1 = el('div', 'row-split');
+      g1.append(mkNum('cal', 'kcal'), mkNum('p', 'Protein'));
+      body.appendChild(g1);
+      const g2 = el('div', 'row-split');
+      g2.append(mkNum('c', 'Carbs'), mkNum('f', 'Fat'));
+      body.appendChild(g2);
+    }
+
+    /* ---- meal mover ---- */
+    body.appendChild(el('div', 'field-lbl', 'Meal'));
+    const mealRow = el('div', 'filter-row');
+    MEALS.forEach(([id, label]) => {
+      const c = el('button', 'chip' + (e.meal === id ? ' on' : ''), label);
+      c.onclick = () => { e.meal = id; saveDay(); paint(); };
+      mealRow.appendChild(c);
+    });
+    body.appendChild(mealRow);
+
+    const del = el('button', 'btn btn-danger btn-block', 'Delete entry');
+    del.style.marginTop = '14px';
+    del.onclick = () => { delete dayLog[e.id]; saveDay(); close(); };
+    body.appendChild(del);
+
+    const done = el('button', 'btn btn-ghost btn-block', 'Done');
+    done.style.marginTop = '8px';
+    done.onclick = close;
+    body.appendChild(done);
   }
 
-  // meal mover
-  const mealRow = el('div', 'filter-row');
-  MEALS.forEach(([id, label]) => {
-    const c = el('button', 'chip' + (e.meal === id ? ' on' : ''), label);
-    c.onclick = () => { e.meal = id; saveDay(); close(); render(); };
-    mealRow.appendChild(c);
-  });
-  sh.appendChild(mealRow);
-
-  const del = el('button', 'btn btn-danger btn-block', 'Delete entry');
-  del.style.marginTop = '12px';
-  del.onclick = () => { delete dayLog[e.id]; saveDay(); close(); render(); };
-  sh.appendChild(del);
-
-  const done = el('button', 'btn btn-ghost btn-block', 'Done');
-  done.style.marginTop = '8px';
-  done.onclick = () => { close(); render(); };
-  sh.appendChild(done);
+  paint();
 }
 
 /* ================= ADD FLOW ================= */
 function openAdd(mealId) {
-  const { back, sh, close } = sheet();
+  const { sh, close } = sheet();
 
   const search = el('div', 'picker-search');
   const inp = el('input');
@@ -409,7 +492,7 @@ function openAdd(mealId) {
   search.appendChild(inp);
 
   const actions = el('div', 'filter-row');
-  const scanBtn = el('button', 'chip', '\u25a3 Scan barcode');
+  const scanBtn = el('button', 'chip', '▣ Scan barcode');
   scanBtn.onclick = () => { close(); openScanner(code => lookupBarcode(code, mealId)); };
   const manBtn = el('button', 'chip', '+ Manual');
   manBtn.onclick = () => { close(); openManual(mealId); };
@@ -424,8 +507,7 @@ function openAdd(mealId) {
   search.appendChild(actions);
   sh.appendChild(search);
 
-  const list = el('div');
-  list.className = 'ex-list';
+  const list = el('div', 'ex-list');
   sh.appendChild(list);
 
   let q = '';
@@ -435,22 +517,26 @@ function openAdd(mealId) {
     list.innerHTML = '';
     if (tab === 'meals') {
       const pool = Object.values(meals).filter(m => !q || m.name.toLowerCase().includes(q));
-      if (!pool.length) list.appendChild(noteEl(q ? 'No saved meals match.' : 'No saved meals yet. Log a meal, then \u22ef \u2192 save.'));
+      if (!pool.length) list.appendChild(noteEl(q ? 'No saved meals match.' : 'No saved meals yet. Log a meal, then ⋯ → save.'));
       pool.forEach(m => {
         const kcal = m.items.reduce((s, i) => s + (i.cal || 0), 0);
         const b = el('button', 'ex-item');
         b.appendChild(el('span', 'nm', m.name));
-        b.appendChild(el('span', 'eq num', m.items.length + ' items \u00b7 ' + kcal + ' kcal'));
+        b.appendChild(el('span', 'eq num', m.items.length + ' items · ' + kcal + ' kcal'));
         b.onclick = () => {
           m.items.forEach(i => addEntry({ ...i, meal: mealId, src: 'meal' }));
           close(); toast('Added ' + m.name);
         };
-        const x = el('span', 'eq', '\u2715');
-        x.style.marginLeft = '8px';
+        const x = el('span', 'eq ex-del', '✕');
         x.onclick = ev => {
           ev.stopPropagation();
-          if (!confirm('Delete saved meal \u201c' + m.name + '\u201d?')) return;
-          delete meals[m.id]; write('food/meals', meals); paint();
+          confirmSheet({
+            title: 'Delete saved meal?',
+            body: '“' + m.name + '” will be removed from your meal library.',
+            confirmLabel: 'Delete',
+            danger: true,
+            onConfirm: () => { delete meals[m.id]; write('food/meals', meals); paint(); }
+          });
         };
         b.appendChild(x);
         list.appendChild(b);
@@ -464,9 +550,7 @@ function openAdd(mealId) {
     if (!pool.length) list.appendChild(noteEl('Nothing saved matches. Scan it or add it manually.'));
     pool.slice(0, 80).forEach(it => {
       const b = el('button', 'ex-item');
-      const body = el('span', 'nm');
-      body.textContent = it.name;
-      b.appendChild(body);
+      b.appendChild(el('span', 'nm', it.name));
       const per = it.base === '100g' ? 'per 100 g' : 'per ' + ((it.serv && it.serv.label) || 'serving');
       b.appendChild(el('span', 'eq num', it.n.cal + ' kcal ' + per));
       b.onclick = () => { close(); openPortion(it, mealId); };
@@ -492,11 +576,10 @@ function portionControl(item, startAmt, startUnit, onChange) {
   if (unit === 'serv' && !canServ) unit = 'g';
   let amt = startAmt;
 
-  const preview = el('div', 'num');
-  preview.style.cssText = 'font-size:13px;color:var(--steel);margin:6px 0 12px';
+  const preview = el('div', 'num portion-preview');
 
   const stepRow = el('div', 'qty-row');
-  const minus = el('button', 'btn btn-ghost', '\u2212');
+  const minus = el('button', 'btn btn-ghost', '−');
   const amtIn = el('input'); amtIn.type = 'number'; amtIn.inputMode = 'decimal';
   const plus  = el('button', 'btn btn-ghost', '+');
   stepRow.append(minus, amtIn, plus);
@@ -525,7 +608,7 @@ function portionControl(item, startAmt, startUnit, onChange) {
     amtIn.value = trimNum(amt);
     const m = macrosFor(item, amt, unit);
     if (m) {
-      preview.textContent = m.cal + ' kcal   \u00b7   P ' + trimNum(m.p) + '   C ' + trimNum(m.c) + '   F ' + trimNum(m.f);
+      preview.textContent = m.cal + ' kcal   ·   P ' + trimNum(m.p) + '   C ' + trimNum(m.c) + '   F ' + trimNum(m.f);
       onChange(amt, unit, m);
     }
   }
@@ -539,7 +622,7 @@ function portionControl(item, startAmt, startUnit, onChange) {
 }
 
 function openPortion(item, mealId) {
-  const { back, sh, close } = sheet();
+  const { sh, close } = sheet();
   sh.appendChild(el('div', 'eyebrow', item.brand || 'Food'));
   sh.appendChild(el('h2', null, item.name));
 
@@ -581,7 +664,7 @@ function openPortion(item, mealId) {
 
 /* ---------- manual entry ---------- */
 function openManual(mealId, prefill) {
-  const { back, sh, close } = sheet();
+  const { sh, close } = sheet();
   sh.appendChild(el('h2', null, prefill ? 'Confirm food' : 'Manual entry'));
 
   const f = (label, val, type) => {
@@ -597,7 +680,7 @@ function openManual(mealId, prefill) {
   };
 
   const name = f('Name', prefill && prefill.name, 'text');
-  const qty  = f('Amount (label only \u2014 e.g. \u201c2 slices\u201d)', prefill && prefill.qty, 'text');
+  const qty  = f('Amount (label only — e.g. “2 slices”)', prefill && prefill.qty, 'text');
   sh.append(name, qty);
 
   const g1 = el('div', 'row-split');
@@ -669,7 +752,7 @@ function loadZXing() {
 function openScanner(onCode) {
   const { back, sh, close } = sheet();
   sh.appendChild(el('h2', null, 'Scan barcode'));
-  const status = el('div', 'eyebrow', 'Starting camera\u2026');
+  const status = el('div', 'eyebrow', 'Starting camera…');
   sh.appendChild(status);
 
   const video = document.createElement('video');
@@ -715,7 +798,7 @@ function openScanner(onCode) {
         }, 280);
         stopFns.push(() => clearInterval(iv));
       } else {
-        status.textContent = 'Loading scanner\u2026';
+        status.textContent = 'Loading scanner…';
         const ZX = await loadZXing();
         const reader = new ZX.BrowserMultiFormatReader();
         status.textContent = 'Point at the barcode';
@@ -725,18 +808,18 @@ function openScanner(onCode) {
         stopFns.push(() => controls.stop());
       }
     } catch (err) {
-      status.textContent = 'Camera unavailable \u2014 check permission in Settings.';
+      status.textContent = 'Camera unavailable — check permission in Settings.';
     }
   })();
 }
 
 async function lookupBarcode(code, mealId) {
-  toast('Looking up ' + code + '\u2026');
+  toast('Looking up ' + code + '…');
   try {
     const r = await fetch('https://world.openfoodfacts.org/api/v2/product/' + encodeURIComponent(code) + '.json');
     const j = await r.json();
     if (!j || j.status !== 1 || !j.product) {
-      toast('Not in Open Food Facts \u2014 add it manually');
+      toast('Not in Open Food Facts — add it manually');
       openManual(mealId, { name: '', qty: '', src: 'barcode' });
       return;
     }
@@ -753,7 +836,7 @@ async function lookupBarcode(code, mealId) {
     await write('food/items', items);
     openPortion(items[id], mealId);
   } catch {
-    toast('Lookup failed \u2014 no connection?');
+    toast('Lookup failed — no connection?');
     openManual(mealId, { name: '', src: 'barcode' });
   }
 }
@@ -792,38 +875,79 @@ function itemFromOFF(prod, code) {
 
 /* ================= SAVED MEALS ================= */
 function saveAsMeal(defaultLabel, entries) {
-  const name = prompt('Name this meal', defaultLabel + ' \u2014 ' + todayKey());
-  if (!name) return;
-  const id = 'm' + Date.now().toString(36);
-  meals[id] = {
-    id, name,
-    items: entries.map(e => ({
-      name: e.name, qty: e.qty || '', cal: e.cal || 0, p: e.p || 0, c: e.c || 0, f: e.f || 0,
-      micro: e.micro || null, itemId: e.itemId || null, amt: e.amt || null, unit: e.unit || null
-    }))
+  const { sh, close } = sheet();
+  sh.appendChild(el('h2', null, 'Save as a meal'));
+  sh.appendChild(noteEl('These ' + entries.length + ' items become one entry you can add in a single tap.'));
+
+  const w = el('div', 'field');
+  w.style.marginTop = '14px';
+  w.appendChild(el('label', null, 'Name'));
+  const i = el('input');
+  i.type = 'text';
+  i.value = defaultLabel + ' — ' + todayKey();
+  w.appendChild(i);
+  sh.appendChild(w);
+
+  const go = el('button', 'btn btn-primary btn-block btn-lg', 'Save meal');
+  go.style.marginTop = '14px';
+  go.onclick = () => {
+    const name = i.value.trim();
+    if (!name) { toast('Give it a name'); return; }
+    const id = 'm' + Date.now().toString(36);
+    meals[id] = {
+      id, name,
+      items: entries.map(e => ({
+        name: e.name, qty: e.qty || '', cal: e.cal || 0, p: e.p || 0, c: e.c || 0, f: e.f || 0,
+        micro: e.micro || null, itemId: e.itemId || null, amt: e.amt || null, unit: e.unit || null
+      }))
+    };
+    write('food/meals', meals);
+    close();
+    toast('Meal saved');
   };
-  write('food/meals', meals);
-  toast('Meal saved');
+  sh.appendChild(go);
+
+  const cancel = el('button', 'btn btn-ghost btn-block', 'Cancel');
+  cancel.style.marginTop = '8px';
+  cancel.onclick = close;
+  sh.appendChild(cancel);
 }
 
-/* ================= COPY YESTERDAY ================= */
-async function copyYesterday() {
-  const y = new Date(viewDate.getTime() - 864e5);
-  const src = (await read('food/log/' + dk(y), null)) || {};
-  const list = Object.values(src);
-  if (!list.length) { toast('Nothing logged ' + (isToday() ? 'yesterday' : 'the day before')); return; }
-  list.forEach(e => {
-    const id = 'f' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
-    dayLog[id] = { ...e, id, t: Date.now(), src: 'copy' };
-  });
-  await saveDay();
-  toast('Copied ' + list.length + ' foods');
-  render();
+/* ================= FUEL SETTINGS ================= */
+// Targets and the Claude importer used to sit as chips above the meal cards.
+// They are one-off setup actions, not daily controls, so they live behind the
+// gear in the header now.
+function openFuelSettings() {
+  const { sh, close } = sheet();
+  sh.appendChild(el('div', 'eyebrow', 'Fuel'));
+  sh.appendChild(el('h2', null, 'Settings'));
+
+  const summary = el('div', 'settings-summary num');
+  summary.textContent = targets.cal.toLocaleString() + ' kcal  ·  P ' + targets.p +
+    '  ·  C ' + carbsTarget() + '  ·  F ' + targets.f;
+  sh.appendChild(summary);
+
+  const tBtn = el('button', 'btn btn-ghost btn-block', 'Daily targets');
+  tBtn.style.marginTop = '14px';
+  tBtn.onclick = () => { close(); openTargets(); };
+  sh.appendChild(tBtn);
+
+  const iBtn = el('button', 'btn btn-ghost btn-block', 'Import from Claude');
+  iBtn.style.marginTop = '10px';
+  iBtn.onclick = () => { close(); openImportPaste(); };
+  sh.appendChild(iBtn);
+
+  sh.appendChild(noteEl('Saved foods, meals and targets belong to your account only — a second sign-in starts with an empty library.'));
+
+  const done = el('button', 'btn btn-ghost btn-block', 'Close');
+  done.style.marginTop = '14px';
+  done.onclick = close;
+  sh.appendChild(done);
 }
 
 /* ================= TARGETS ================= */
 function openTargets() {
-  const { back, sh, close } = sheet();
+  const { sh, close } = sheet();
   sh.appendChild(el('h2', null, 'Daily targets'));
   sh.appendChild(noteEl('Carbs are whatever calories remain after protein and fat.'));
 
@@ -842,7 +966,7 @@ function openTargets() {
   const carbs = el('div', 'eyebrow');
   const paintCarbs = () => {
     const cal = parseInt(tc.input.value) || 0, p = parseInt(tp.input.value) || 0, f = parseInt(tf.input.value) || 0;
-    carbs.textContent = 'Carbs \u2192 ' + Math.max(0, Math.round((cal - p * 4 - f * 9) / 4)) + ' g';
+    carbs.textContent = 'Carbs → ' + Math.max(0, Math.round((cal - p * 4 - f * 9) / 4)) + ' g';
   };
   [tc, tp, tf].forEach(w => w.input.oninput = paintCarbs);
   paintCarbs();
@@ -878,14 +1002,14 @@ function handleHash() {
     while (b64.length % 4) b64 += '=';
     payload = JSON.parse(decodeURIComponent(escape(atob(b64))));
   } catch {
-    toast('Couldn\u2019t read that log link');
+    toast('Couldn’t read that log link');
   }
-  history.replaceState(null, '', location.pathname + location.search);
+  window.history.replaceState(null, '', location.pathname + location.search);
   if (payload) confirmImport(normalizeImport(payload), 'From Claude');
 }
 
 function openImportPaste() {
-  const { back, sh, close } = sheet();
+  const { sh, close } = sheet();
   sh.appendChild(el('h2', null, 'Import from Claude'));
   sh.appendChild(noteEl('Paste the JSON Claude gave you. Nothing is logged until you confirm.'));
 
@@ -898,7 +1022,7 @@ function openImportPaste() {
   go.style.marginTop = '10px';
   go.onclick = () => {
     let data = null;
-    try { data = JSON.parse(ta.value); } catch { toast('That isn\u2019t valid JSON'); return; }
+    try { data = JSON.parse(ta.value); } catch { toast('That isn’t valid JSON'); return; }
     const entries = normalizeImport(data);
     if (!entries.length) { toast('No foods found in that JSON'); return; }
     close();
@@ -939,21 +1063,20 @@ function normalizeImport(data) {
 
 function confirmImport(entries, sourceLabel) {
   if (!entries.length) return;
-  const { back, sh, close } = sheet();
+  const { sh, close } = sheet();
   sh.appendChild(el('div', 'eyebrow', sourceLabel));
   sh.appendChild(el('h2', null, 'Log ' + entries.length + ' food' + (entries.length > 1 ? 's' : '') + '?'));
 
   const tot = entries.reduce((s, e) => ({ cal: s.cal + e.cal, p: s.p + e.p, c: s.c + e.c, f: s.f + e.f }),
     { cal: 0, p: 0, c: 0, f: 0 });
-  sh.appendChild(noteEl(tot.cal + ' kcal \u00b7 P ' + trimNum(tot.p) + ' \u00b7 C ' + trimNum(tot.c) + ' \u00b7 F ' + trimNum(tot.f) + ' \u2014 logging to today'));
+  sh.appendChild(noteEl(tot.cal + ' kcal · P ' + trimNum(tot.p) + ' · C ' + trimNum(tot.c) + ' · F ' + trimNum(tot.f) + ' — logging to today'));
 
-  const list = el('div');
-  list.style.marginTop = '8px';
+  const list = el('div', 'import-list');
   entries.forEach(e => {
     const row = el('div', 'food-entry');
-    const body = el('div');
+    const body = el('div', 'fe-body');
     body.appendChild(el('div', 'fe-name', e.name));
-    body.appendChild(el('div', 'fe-sub num', (e.qty ? e.qty + '  \u00b7  ' : '') + 'P ' + trimNum(e.p) + '  C ' + trimNum(e.c) + '  F ' + trimNum(e.f) + '  \u00b7  ' + e.meal));
+    body.appendChild(el('div', 'fe-sub num', (e.qty ? e.qty + '  ·  ' : '') + 'P ' + trimNum(e.p) + '  C ' + trimNum(e.c) + '  F ' + trimNum(e.f) + '  ·  ' + e.meal));
     row.appendChild(body);
     row.appendChild(el('div', 'fe-cal num', String(e.cal)));
     list.appendChild(row);
@@ -966,7 +1089,7 @@ function confirmImport(entries, sourceLabel) {
     // imports always land on TODAY regardless of the day being viewed
     if (!isToday()) { viewDate = new Date(); await loadDay(); }
     entries.forEach(e => {
-      const id = 'f' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+      const id = newEntryId();
       dayLog[id] = { id, t: Date.now(), ...e };
     });
     await saveDay();
@@ -979,15 +1102,4 @@ function confirmImport(entries, sourceLabel) {
   cancel.style.marginTop = '8px';
   cancel.onclick = close;
   sh.appendChild(cancel);
-}
-
-/* ================= SHEET HELPER ================= */
-function sheet() {
-  const back = el('div', 'sheet-backdrop');
-  const sh = el('div', 'sheet');
-  sh.appendChild(el('div', 'sheet-grab'));
-  const close = () => { back.remove(); sh.remove(); };
-  back.onclick = close;
-  document.body.append(back, sh);
-  return { back, sh, close };
 }

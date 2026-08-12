@@ -551,3 +551,321 @@ h2 { font-size: 18px; }
 .wc-avg { fill: none; stroke: var(--p-yellow); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
 .cal-nav button:disabled { opacity: .3; pointer-events: none; }
+
+/* ================================================================
+   ============ ADDED: SHARED PRIMITIVES ============
+   Everything below this line was added alongside the statistics
+   page, the post-workout summary, swipe-to-delete and the Fuel
+   settings sheet. Nothing above it was changed.
+   ================================================================ */
+
+/* small explanatory text — replaces the inline styles that used to
+   be repeated in six places */
+.note {
+  font-size: 12px;
+  color: var(--dim);
+  line-height: 1.5;
+  margin-top: 8px;
+}
+
+.field-lbl {
+  font-size: 10px; letter-spacing: .16em; text-transform: uppercase;
+  color: var(--dim); font-variation-settings: 'wdth' 88, 'wght' 700;
+  margin: 16px 0 2px;
+}
+
+.row-split { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+.card-sub { font-size: 11px; color: var(--dim); }
+
+.chip-row { display: flex; gap: 6px; }
+
+.back-btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 12px; color: var(--steel);
+  padding: 4px 0 8px;
+  font-variation-settings: 'wdth' 90, 'wght' 700;
+  letter-spacing: .04em;
+}
+.back-btn span { font-size: 17px; line-height: 1; }
+.back-btn:active { color: var(--chalk); }
+
+/* segmented control */
+.seg {
+  display: flex; gap: 3px; padding: 3px;
+  background: var(--bar); border: 1px solid var(--collar);
+  border-radius: 999px; margin-bottom: 14px;
+}
+.seg-btn {
+  flex: 1; padding: 8px 4px; border-radius: 999px;
+  font-size: 11px; color: var(--steel);
+  font-variation-settings: 'wdth' 92, 'wght' 700;
+  letter-spacing: .06em; text-transform: uppercase;
+  transition: all var(--fast) var(--ease);
+}
+.seg-btn.on { background: var(--chalk); color: var(--rack); }
+
+/* gear button in a header nav — inherits size and chrome from
+   `.cal-nav button`, this only handles the icon and the press state */
+.cal-nav .gear-btn svg { width: 16px; height: 16px; }
+.cal-nav .gear-btn { margin-right: 2px; }
+.cal-nav .gear-btn:active { transform: scale(.9); }
+
+/* ============ SWIPE TO DELETE ============ */
+.swipe { position: relative; overflow: hidden; }
+.swipe-back {
+  position: absolute; inset: 0;
+  display: flex; justify-content: flex-end; align-items: stretch;
+  background: var(--p-red);
+}
+.swipe-del {
+  width: 88px;
+  color: #fff; font-size: 12px;
+  font-variation-settings: 'wdth' 92, 'wght' 800;
+  letter-spacing: .08em; text-transform: uppercase;
+}
+.swipe-front {
+  position: relative;
+  background: var(--bar);
+  transition: transform var(--med) var(--ease);
+  touch-action: pan-y;
+}
+.swipe-front.no-anim { transition: none; }
+
+.swipe-hint {
+  font-size: 10px; color: var(--dim); opacity: .65;
+  padding: 6px 12px 0 26px;
+  letter-spacing: .04em;
+}
+
+/* ============ CALENDAR LEGEND ============ */
+.cal-legend { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0 18px; }
+.cal-legend-item {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 10px; color: var(--dim);
+  letter-spacing: .06em; text-transform: uppercase;
+}
+.cal-legend-item i { width: 12px; height: 3px; border-radius: 1px; display: block; }
+
+/* ============ DAY SHEET ============ */
+.day-title { font-size: 14px; font-variation-settings: 'wdth' 90, 'wght' 700; }
+.day-ex {
+  display: flex; gap: 8px; align-items: flex-start;
+  padding: 6px 0; border-top: 1px solid var(--collar);
+}
+.day-ex-tag { width: 3px; align-self: stretch; border-radius: 2px; flex-shrink: 0; }
+.day-ex-body { flex: 1; min-width: 0; }
+.day-ex-name { font-size: 13px; font-variation-settings: 'wdth' 90, 'wght' 700; }
+.day-ex-sets { font-size: 11px; color: var(--steel); margin-top: 2px; }
+.day-actions { display: flex; gap: 8px; margin-top: 12px; }
+.day-actions .btn { flex: 1; padding: 10px; font-size: 12px; }
+
+/* ============ ACTIVE WORKOUT BAR ============ */
+.wk-bar-left { min-width: 0; flex: 1; }
+.wk-name {
+  background: none; border: none; color: var(--chalk);
+  font-size: 14px; font-variation-settings: 'wdth' 88, 'wght' 700;
+  padding: 0; width: 100%;
+}
+.wk-name:focus { outline: none; color: var(--p-yellow); }
+
+/* ============ POST-WORKOUT SUMMARY ============ */
+.summary-page { animation: summaryIn var(--med) var(--ease); }
+@keyframes summaryIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+.summary-hero { margin-bottom: 16px; }
+.summary-hero h1 { margin-top: 2px; }
+.summary-date { font-size: 12px; color: var(--dim); margin-top: 4px; }
+
+.pr-card {
+  border-color: rgba(240,190,30,.4);
+  background: linear-gradient(180deg, rgba(240,190,30,.09), transparent 70%), var(--bar);
+}
+.pr-hit, .pr-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 0; border-top: 1px solid var(--collar);
+  width: 100%; text-align: left;
+}
+.pr-card .pr-hit:first-of-type { border-top: none; }
+.pr-tag { width: 3px; align-self: stretch; min-height: 30px; border-radius: 2px; flex-shrink: 0; }
+.pr-body { flex: 1; min-width: 0; }
+.pr-name {
+  font-size: 14px; font-variation-settings: 'wdth' 90, 'wght' 700;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.pr-sub { font-size: 11px; color: var(--dim); margin-top: 2px; }
+.pr-right { text-align: right; flex-shrink: 0; }
+.pr-val {
+  font-size: 19px; font-variation-settings: 'wdth' 110, 'wght' 800;
+  color: var(--p-yellow); line-height: 1;
+}
+.pr-delta { font-size: 10px; color: var(--good); margin-top: 3px; }
+
+/* ============ PERSONAL BEST ROWS ============ */
+.pb-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 10px 0; border-top: 1px solid var(--collar);
+}
+.pb-row:first-of-type { border-top: none; }
+.pb-lbl { font-size: 13px; font-variation-settings: 'wdth' 90, 'wght' 600; }
+.pb-sub { font-size: 11px; color: var(--dim); margin-top: 2px; }
+.pb-val {
+  font-size: 15px; font-variation-settings: 'wdth' 108, 'wght' 800;
+  flex-shrink: 0; text-align: right;
+}
+
+/* ============ RANK / LEADERBOARD ROWS ============ */
+.rank-row {
+  display: flex; align-items: center; gap: 9px;
+  padding: 10px 0; border-top: 1px solid var(--collar);
+  width: 100%; text-align: left;
+}
+.rank-row:first-of-type { border-top: none; }
+.rank-no {
+  width: 18px; flex-shrink: 0;
+  font-size: 13px; color: var(--dim);
+  font-variation-settings: 'wdth' 108, 'wght' 800;
+}
+.rank-tag { width: 3px; align-self: stretch; min-height: 28px; border-radius: 2px; flex-shrink: 0; }
+.rank-body { flex: 1; min-width: 0; }
+.rank-name {
+  font-size: 14px; font-variation-settings: 'wdth' 90, 'wght' 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.rank-sub { font-size: 11px; color: var(--dim); margin-top: 2px; }
+.rank-val {
+  font-size: 15px; font-variation-settings: 'wdth' 108, 'wght' 800;
+  flex-shrink: 0;
+}
+
+/* ============ SESSION LIST ROWS ============ */
+.sess-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 9px 0; border-top: 1px solid var(--collar);
+}
+.sess-row:first-of-type { border-top: none; }
+.sess-row.is-pr { background: linear-gradient(90deg, rgba(240,190,30,.09), transparent 60%); }
+.sess-date { font-size: 13px; font-variation-settings: 'wdth' 90, 'wght' 600; }
+.sess-sub { font-size: 11px; color: var(--dim); margin-top: 2px; }
+.sess-right { text-align: right; flex-shrink: 0; }
+.sess-e1 { font-size: 16px; font-variation-settings: 'wdth' 108, 'wght' 800; line-height: 1; }
+.sess-e1lbl { font-size: 9px; color: var(--dim); letter-spacing: .1em; text-transform: uppercase; margin-top: 2px; }
+
+.group-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 11px; border-radius: 999px;
+  background: var(--bar); border: 1px solid var(--collar);
+  font-size: 10px; color: var(--steel);
+  letter-spacing: .1em; text-transform: uppercase;
+  font-variation-settings: 'wdth' 88, 'wght' 700;
+  margin-bottom: 14px;
+}
+.group-pill i { width: 7px; height: 7px; border-radius: 2px; }
+
+/* ================================================================
+   ============ CHARTS ============
+   ================================================================ */
+.chart { width: 100%; height: auto; display: block; overflow: visible; }
+
+.chart-grid { stroke: var(--collar); stroke-width: 1; stroke-dasharray: 2 5; opacity: .7; }
+.chart-line { fill: none; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.chart-dot  { opacity: .9; }
+.chart-scatter { fill: var(--steel); opacity: .42; }
+
+.chart-peak-ring { fill: none; stroke-width: 1.6; opacity: .95; }
+.chart-peak-lbl {
+  font-size: 10px; font-family: inherit;
+  font-variation-settings: 'wdth' 100, 'wght' 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-axis {
+  font-size: 9px; fill: var(--dim); font-family: inherit;
+  letter-spacing: .04em;
+  font-variation-settings: 'wdth' 88, 'wght' 600;
+}
+
+.chart-bar-bg { fill: var(--collar); opacity: .35; }
+.chart-bar { transition: opacity var(--fast); }
+.chart-barval {
+  font-size: 9px; fill: var(--steel); font-family: inherit;
+  font-variant-numeric: tabular-nums;
+  font-variation-settings: 'wdth' 100, 'wght' 700;
+}
+
+.chart-empty {
+  padding: 26px 10px; text-align: center;
+  font-size: 12px; color: var(--dim);
+  border: 1px dashed var(--collar); border-radius: var(--r-sm);
+}
+
+.chart-foot {
+  display: flex; justify-content: space-between;
+  font-size: 10px; color: var(--dim); margin-top: 6px;
+}
+
+/* donut */
+.donut-wrap { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.chart-donut { width: 132px; height: 132px; flex-shrink: 0; }
+.donut-seg { transition: opacity var(--fast); }
+.donut-top {
+  font-size: 22px; fill: var(--chalk); font-family: inherit;
+  font-variant-numeric: tabular-nums;
+  font-variation-settings: 'wdth' 112, 'wght' 800;
+}
+.donut-sub {
+  font-size: 9px; fill: var(--dim); font-family: inherit;
+  letter-spacing: .14em; text-transform: uppercase;
+  font-variation-settings: 'wdth' 88, 'wght' 700;
+}
+
+/* legend */
+.legend { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 120px; }
+.legend-item { display: flex; align-items: center; gap: 7px; font-size: 11px; }
+.legend-item i { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
+.legend-lbl { flex: 1; color: var(--steel); }
+.legend-val { color: var(--dim); font-size: 10px; }
+
+/* consistency heat strip */
+.heat { max-width: 100%; margin: 2px 0 12px; }
+
+/* ================================================================
+   ============ FUEL TWEAKS ============
+   ================================================================ */
+.fuel-top { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; }
+.fuel-eaten { font-size: 12px; color: var(--dim); }
+
+.meal-right { display: flex; align-items: center; gap: 8px; }
+.meal-kcal { font-size: 11px; color: var(--dim); }
+
+.fe-body { min-width: 0; }
+.micro-cov { color: var(--knurl); }
+
+.entry-readout {
+  font-size: 15px; color: var(--chalk);
+  font-variation-settings: 'wdth' 104, 'wght' 700;
+  margin: 12px 0 4px;
+}
+
+.settings-summary {
+  font-size: 13px; color: var(--steel);
+  margin-top: 8px;
+  font-variation-settings: 'wdth' 100, 'wght' 600;
+}
+
+.portion-preview { font-size: 13px; color: var(--steel); margin: 6px 0 12px; }
+
+.ex-del { margin-left: 8px; }
+
+.import-list { margin-top: 8px; }
+.import-bar { height: 6px; border-radius: 3px; overflow: hidden; display: flex; margin-top: 12px; }
+.import-status { margin-top: 10px; }
+.file-pick { margin-top: 14px; width: 100%; color: var(--steel); font-size: 13px; }
+
+.picker-foot {
+  position: sticky; bottom: 0; background: var(--bar);
+  padding-top: 10px; display: flex; gap: 8px;
+}
+
+/* keep the calendar nav row tidy now that it can hold a gear too */
+.cal-nav { display: flex; align-items: center; gap: 6px; }

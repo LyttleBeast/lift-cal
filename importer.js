@@ -2,54 +2,34 @@
 // Merges by month so existing sessions are never clobbered.
 
 import { read, write } from './store.js';
-import { toast } from './workout.js';
-
-const el = (t, c, txt) => { const n = document.createElement(t); if (c) n.className = c; if (txt != null) n.textContent = txt; return n; };
-
-function sheet() {
-  const back = el('div', 'sheet-backdrop');
-  const sh = el('div', 'sheet');
-  sh.appendChild(el('div', 'sheet-grab'));
-  const close = () => { back.remove(); sh.remove(); };
-  back.onclick = close;
-  document.body.append(back, sh);
-  return { back, sh, close };
-}
-
-function note(txt) {
-  const p = el('div', null, txt);
-  p.style.cssText = 'font-size:12px;color:var(--dim);line-height:1.5;margin-top:8px';
-  return p;
-}
+import { el, sheet, toast, noteEl } from './ui.js';
 
 export function openImport() {
   const { sh, close } = sheet();
   sh.appendChild(el('h2', null, 'Import workout history'));
-  sh.appendChild(note('Pick the rack-import.json file Claude generated from your Liftoff export. Nothing is written until you confirm on the next screen.'));
+  sh.appendChild(noteEl('Pick the rack-import.json file Claude generated from your Liftoff export. Nothing is written until you confirm on the next screen.'));
 
-  const pick = el('input');
+  const pick = el('input', 'file-pick');
   pick.type = 'file';
   pick.accept = '.json,application/json';
-  pick.style.cssText = 'margin-top:14px;width:100%;color:var(--steel);font-size:13px';
   sh.appendChild(pick);
 
-  const status = el('div', 'eyebrow');
-  status.style.marginTop = '10px';
+  const status = el('div', 'eyebrow import-status');
   sh.appendChild(status);
 
   pick.onchange = async () => {
     const f = pick.files && pick.files[0];
     if (!f) return;
-    status.textContent = 'Reading ' + f.name + '\u2026';
+    status.textContent = 'Reading ' + f.name + '…';
     let data;
     try {
       data = JSON.parse(await f.text());
     } catch {
-      status.textContent = 'That file isn\u2019t valid JSON.';
+      status.textContent = 'That file isn’t valid JSON.';
       return;
     }
     if (!data || data.type !== 'rack-workout-import' || !data.workouts) {
-      status.textContent = 'That doesn\u2019t look like a Rack import file.';
+      status.textContent = 'That doesn’t look like a Rack import file.';
       return;
     }
     close();
@@ -102,24 +82,23 @@ function preview(data) {
   row.appendChild(cell(Math.round(s.volume / 1000) + 'k', 'lb volume'));
   sh.appendChild(row);
 
-  sh.appendChild(note(
+  sh.appendChild(noteEl(
     s.months[0] + ' through ' + s.months[s.months.length - 1] +
-    ' \u00b7 ' + s.months.length + ' months. Existing sessions are kept \u2014 this only adds days you don\u2019t already have.'));
+    ' · ' + s.months.length + ' months. Existing sessions are kept — this only adds days you don’t already have.'));
 
-  const bar = el('div');
-  bar.style.cssText = 'height:6px;border-radius:3px;overflow:hidden;display:flex;margin-top:12px';
+  const bar = el('div', 'import-bar');
   const COLORS = { chest:'var(--p-red)', back:'var(--p-blue)', legs:'var(--p-yellow)',
                    shoulders:'var(--p-green)', arms:'var(--p-white)', core:'var(--p-chrome)' };
   const tot = Object.values(s.groups).reduce((a, b) => a + b, 0) || 1;
   Object.entries(s.groups).sort((a, b) => b[1] - a[1]).forEach(([g, n]) => {
     const seg = el('div');
-    seg.style.cssText = 'width:' + (n / tot * 100) + '%;background:' + (COLORS[g] || 'var(--knurl)');
+    seg.style.width = (n / tot * 100) + '%';
+    seg.style.background = COLORS[g] || 'var(--knurl)';
     bar.appendChild(seg);
   });
   sh.appendChild(bar);
 
-  const prog = el('div', 'eyebrow');
-  prog.style.marginTop = '12px';
+  const prog = el('div', 'eyebrow import-status');
   sh.appendChild(prog);
 
   const go = el('button', 'btn btn-primary btn-block btn-lg', 'Import');
@@ -150,7 +129,7 @@ async function runImport(data, onProgress) {
   // 1. custom exercises the library doesn't cover
   const customs = data.customExercises && Object.values(data.customExercises);
   if (customs && customs.length) {
-    onProgress('Adding ' + customs.length + ' custom exercises\u2026');
+    onProgress('Adding ' + customs.length + ' custom exercises…');
     const existing = (await read('exercises/custom', null)) || [];
     const haveIds = new Set(existing.map(e => e.id));
     const merged = existing.concat(customs.filter(c => !haveIds.has(c.id)));
@@ -171,7 +150,7 @@ async function runImport(data, onProgress) {
 
   // 3. per-exercise history for the "last time" line
   if (data.history) {
-    onProgress('Building exercise history\u2026');
+    onProgress('Building exercise history…');
     const hist = (await read('history', null)) || {};
     for (const exId of Object.keys(data.history)) {
       const seen = new Set((hist[exId] || []).map(e => e.date));
@@ -183,5 +162,5 @@ async function runImport(data, onProgress) {
     await write('history', hist);
   }
 
-  onProgress('Finishing\u2026');
+  onProgress('Finishing…');
 }

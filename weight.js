@@ -2,11 +2,10 @@
 //   weight/entries -> { id: { lb, t } }
 
 import { read, write, writeFeed, LS, todayKey, feedUrl, logout } from './store.js';
-import { toast, hasActiveSession } from './workout.js';
+import { hasActiveSession } from './workout.js';
 import { openImport } from './importer.js';
-
-const $  = s => document.querySelector(s);
-const el = (t, c, txt) => { const n = document.createElement(t); if (c) n.className = c; if (txt != null) n.textContent = txt; return n; };
+import { lineChart } from './analytics.js';
+import { $, el, toast, noteEl, confirmSheet, r1, parseKey, fmtDateFull } from './ui.js';
 
 let entries = {};      // id -> { lb, t }
 let range   = 30;      // chart window, days
@@ -39,8 +38,8 @@ function dailyMeans() {
 // trailing 7-day moving average at each day
 function movingAvg(days) {
   return days.map((pt, i) => {
-    const t0 = new Date(pt.d + 'T12:00:00').getTime() - 6.5 * 864e5;
-    const win = days.filter((q, j) => j <= i && new Date(q.d + 'T12:00:00').getTime() >= t0);
+    const t0 = parseKey(pt.d).getTime() - 6.5 * 864e5;
+    const win = days.filter((q, j) => j <= i && parseKey(q.d).getTime() >= t0);
     return { d: pt.d, lb: win.reduce((s, x) => s + x.lb, 0) / win.length };
   });
 }
@@ -48,7 +47,7 @@ function movingAvg(days) {
 function windowAvg(days, fromAgo, toAgo) {
   const now = Date.now();
   const win = days.filter(p => {
-    const t = new Date(p.d + 'T12:00:00').getTime();
+    const t = parseKey(p.d).getTime();
     return t <= now - toAgo * 864e5 && t > now - fromAgo * 864e5;
   });
   if (win.length < 3) return null;
@@ -62,7 +61,7 @@ function stats() {
   const avg7 = windowAvg(days, 7, 0);
   const prev7 = windowAvg(days, 14, 7);
   const rateWk = avg7 != null && prev7 != null ? avg7 - prev7 : null;
-  const d30 = days.filter(p => new Date(p.d + 'T12:00:00').getTime() > Date.now() - 30 * 864e5);
+  const d30 = days.filter(p => parseKey(p.d).getTime() > Date.now() - 30 * 864e5);
   const change30 = d30.length >= 2 ? d30[d30.length - 1].lb - d30[0].lb : null;
   return { latest, avg7, rateWk, change30, days };
 }
@@ -80,8 +79,6 @@ async function pushWeightFeed() {
     }
   });
 }
-
-function r1(x) { return Math.round(x * 10) / 10; }
 
 /* ================= RENDER ================= */
 export async function render() {
@@ -120,9 +117,7 @@ export async function render() {
   };
   row.append(inp, btn);
   log.appendChild(row);
-  const hint = el('div', null, 'Same scale, same time of day makes the trend honest. Morning after waking is the classic.');
-  hint.style.cssText = 'font-size:11px;color:var(--dim);margin-top:8px;line-height:1.5';
-  log.appendChild(hint);
+  log.appendChild(noteEl('Same scale, same time of day makes the trend honest. Morning after waking is the classic.'));
   wrap.appendChild(log);
 
   // ---- headline stats ----
@@ -137,10 +132,10 @@ export async function render() {
       return c;
     };
     sr.appendChild(cell(r1(s.latest.lb) + '', 'Latest lb'));
-    sr.appendChild(cell(s.avg7 != null ? String(r1(s.avg7)) : '\u2013', '7-day avg'));
+    sr.appendChild(cell(s.avg7 != null ? String(r1(s.avg7)) : '–', '7-day avg'));
     const rate = s.rateWk;
     sr.appendChild(cell(
-      rate != null ? (rate > 0 ? '+' : '') + r1(rate) : '\u2013',
+      rate != null ? (rate > 0 ? '+' : '') + r1(rate) : '–',
       'lb / week',
       rate != null ? (rate <= 0 ? 'var(--good)' : 'var(--warn)') : null
     ));
@@ -162,10 +157,9 @@ function renderChart(s) {
   const card = el('div', 'card');
   const hd = el('div', 'card-hd');
   hd.appendChild(el('div', 'eyebrow', 'Trend'));
-  const chips = el('div');
-  chips.style.cssText = 'display:flex;gap:6px';
-  [30, 90].forEach(n => {
-    const c = el('button', 'chip' + (range === n ? ' on' : ''), n + 'd');
+  const chips = el('div', 'chip-row');
+  [30, 90, 365].forEach(n => {
+    const c = el('button', 'chip' + (range === n ? ' on' : ''), n === 365 ? '1y' : n + 'd');
     c.onclick = () => { range = n; render(); };
     chips.appendChild(c);
   });
@@ -173,57 +167,33 @@ function renderChart(s) {
   card.appendChild(hd);
 
   const since = Date.now() - range * 864e5;
-  const days = s.days.filter(p => new Date(p.d + 'T12:00:00').getTime() > since);
+  const days = s.days.filter(p => parseKey(p.d).getTime() > since);
   const raw = sorted().filter(e => e.t > since);
 
   if (days.length < 2) {
-    const p = el('div', null, 'Two days of data draws the first line. Keep logging.');
-    p.style.cssText = 'font-size:13px;color:var(--dim)';
-    card.appendChild(p);
+    card.appendChild(noteEl('Two days of data draws the first line. Keep logging.'));
     return card;
   }
 
-  const avg = movingAvg(s.days).filter(p => new Date(p.d + 'T12:00:00').getTime() > since);
+  const avg = movingAvg(s.days).filter(p => parseKey(p.d).getTime() > since);
 
-  const W = 340, H = 150, PAD = 8;
-  const lbs = raw.map(e => e.lb).concat(avg.map(a => a.lb));
-  let lo = Math.min(...lbs), hi = Math.max(...lbs);
-  if (hi - lo < 2) { const m = (hi + lo) / 2; lo = m - 1; hi = m + 1; }
-  const t0 = since, t1 = Date.now();
-  const X = t => PAD + (t - t0) / (t1 - t0) * (W - PAD * 2);
-  const Y = lb => PAD + (1 - (lb - lo) / (hi - lo)) * (H - PAD * 2);
+  card.appendChild(lineChart(
+    avg.map(p => ({ t: parseKey(p.d).getTime(), v: p.lb })),
+    {
+      color: 'var(--p-yellow)',
+      height: 178,
+      unit: 'lb',
+      dots: false,
+      markMax: false,
+      scatter: raw.map(e => ({ t: e.t, v: e.lb }))
+    }
+  ));
 
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
-  svg.classList.add('wchart');
-
-  // raw dots
-  raw.forEach(e => {
-    const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    c.setAttribute('cx', X(e.t).toFixed(1));
-    c.setAttribute('cy', Y(e.lb).toFixed(1));
-    c.setAttribute('r', '2.4');
-    c.setAttribute('class', 'wc-dot');
-    svg.appendChild(c);
-  });
-
-  // moving average line
-  if (avg.length >= 2) {
-    const d = avg.map((p, i) =>
-      (i ? 'L' : 'M') + X(new Date(p.d + 'T12:00:00').getTime()).toFixed(1) + ' ' + Y(p.lb).toFixed(1)
-    ).join(' ');
-    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    path.setAttribute('d', d);
-    path.setAttribute('class', 'wc-avg');
-    svg.appendChild(path);
-  }
-
-  card.appendChild(svg);
-
-  const foot = el('div');
-  foot.style.cssText = 'display:flex;justify-content:space-between;font-size:10px;color:var(--dim);margin-top:4px';
-  foot.appendChild(el('span', 'num', r1(hi) + ' \u2013 ' + r1(lo) + ' lb'));
-  foot.appendChild(el('span', null, 'dots raw \u00b7 line 7-day avg'));
+  const lo = Math.min(...raw.map(e => e.lb), ...avg.map(a => a.lb));
+  const hi = Math.max(...raw.map(e => e.lb), ...avg.map(a => a.lb));
+  const foot = el('div', 'chart-foot');
+  foot.appendChild(el('span', 'num', r1(hi) + ' – ' + r1(lo) + ' lb'));
+  foot.appendChild(el('span', null, 'dots raw · line 7-day avg'));
   card.appendChild(foot);
   return card;
 }
@@ -251,12 +221,12 @@ function renderTOD() {
   Object.entries(buckets).forEach(([label, lbs]) => {
     const c = el('div', 'stat');
     c.appendChild(el('div', 'stat-val num', lbs.length
-      ? String(r1(lbs.reduce((s, x) => s + x, 0) / lbs.length)) : '\u2013'));
-    c.appendChild(el('div', 'stat-lbl', label + ' \u00b7 ' + lbs.length));
+      ? String(r1(lbs.reduce((s, x) => s + x, 0) / lbs.length)) : '–'));
+    c.appendChild(el('div', 'stat-lbl', label + ' · ' + lbs.length));
     grid.appendChild(c);
   });
   card.appendChild(grid);
-  card.appendChild(noteEl('Averages per window \u2014 expect evening to run heavier than morning. Compare like with like.'));
+  card.appendChild(noteEl('Averages per window — expect evening to run heavier than morning. Compare like with like.'));
   return card;
 }
 
@@ -271,24 +241,24 @@ async function renderTDEE(s) {
   const today = todayKey();
   const calDays = Object.entries(summaries)
     .filter(([d, v]) => d !== today && v && v.cal > 0)
-    .filter(([d]) => new Date(d + 'T12:00:00').getTime() > Date.now() - 15 * 864e5);
+    .filter(([d]) => parseKey(d).getTime() > Date.now() - 15 * 864e5);
 
   if (s.rateWk == null || calDays.length < 7) {
     const need = [];
     if (calDays.length < 7) need.push((7 - calDays.length) + ' more day' + (7 - calDays.length === 1 ? '' : 's') + ' of food logging');
     if (s.rateWk == null) need.push('two weeks of weigh-ins');
-    card.appendChild(noteEl('Needs ' + need.join(' and ') + '. Then the math does itself: average intake corrected by the scale\u2019s direction.'));
+    card.appendChild(noteEl('Needs ' + need.join(' and ') + '. Then the math does itself: average intake corrected by the scale’s direction.'));
     return card;
   }
 
   const avgIntake = calDays.reduce((sum, [, v]) => sum + v.cal, 0) / calDays.length;
   const tdee = Math.round((avgIntake - s.rateWk * 500) / 10) * 10;
 
-  const big = el('div', 'load-num num', '\u2248 ' + tdee.toLocaleString());
+  const big = el('div', 'load-num num', '≈ ' + tdee.toLocaleString());
   big.style.fontSize = '32px';
   card.appendChild(big);
   card.appendChild(noteEl(
-    'kcal/day to hold steady \u2014 from ' + Math.round(avgIntake).toLocaleString() + ' avg intake over ' + calDays.length +
+    'kcal/day to hold steady — from ' + Math.round(avgIntake).toLocaleString() + ' avg intake over ' + calDays.length +
     ' logged days and a ' + (s.rateWk > 0 ? '+' : '') + r1(s.rateWk) + ' lb/week trend.'));
   return card;
 }
@@ -307,19 +277,26 @@ function renderRecent() {
   }
   list.forEach(e => {
     const row = el('button', 'food-entry');
-    const body = el('div');
+    const body = el('div', 'fe-body');
     const d = new Date(e.t);
     body.appendChild(el('div', 'fe-name num', r1(e.lb) + ' lb'));
     body.appendChild(el('div', 'fe-sub', d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
-      + ' \u00b7 ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })));
+      + ' · ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })));
     row.appendChild(body);
-    row.appendChild(el('div', 'fe-cal', '\u2715'));
-    row.onclick = async () => {
-      if (!confirm('Delete this ' + r1(e.lb) + ' lb entry?')) return;
-      delete entries[e.id];
-      await write('weight/entries', entries);
-      await pushWeightFeed();
-      render();
+    row.appendChild(el('div', 'fe-cal', '✕'));
+    row.onclick = () => {
+      confirmSheet({
+        title: 'Delete this weigh-in?',
+        body: r1(e.lb) + ' lb logged ' + fmtDateFull(todayKey(new Date(e.t))) + '.',
+        confirmLabel: 'Delete',
+        danger: true,
+        onConfirm: async () => {
+          delete entries[e.id];
+          await write('weight/entries', entries);
+          await pushWeightFeed();
+          render();
+        }
+      });
     };
     card.appendChild(row);
   });
@@ -329,7 +306,9 @@ function renderRecent() {
 /* ---------- settings ---------- */
 function renderSettings() {
   const card = el('div', 'card');
-  card.appendChild(el('div', 'card-hd')).appendChild(el('div', 'eyebrow', 'Settings'));
+  const hd = el('div', 'card-hd');
+  hd.appendChild(el('div', 'eyebrow', 'Settings'));
+  card.appendChild(hd);
 
   const linkBtn = el('button', 'btn btn-ghost btn-block', 'Copy Claude link');
   linkBtn.onclick = async () => {
@@ -358,15 +337,18 @@ function renderSettings() {
   const out = el('button', 'btn btn-danger btn-block', 'Sign out');
   out.style.marginTop = '12px';
   out.onclick = () => {
-    if (hasActiveSession() && !confirm('You have a workout in progress. Sign out anyway?')) return;
+    if (hasActiveSession()) {
+      confirmSheet({
+        title: 'Workout in progress',
+        body: 'You have a live session. Signing out keeps it saved on this device, but you’ll need to sign back in to finish it.',
+        confirmLabel: 'Sign out anyway',
+        danger: true,
+        onConfirm: () => logout()
+      });
+      return;
+    }
     logout();
   };
   card.appendChild(out);
   return card;
-}
-
-function noteEl(txt) {
-  const p = el('div', null, txt);
-  p.style.cssText = 'font-size:12px;color:var(--dim);line-height:1.5';
-  return p;
 }

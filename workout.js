@@ -1,14 +1,21 @@
-import { GROUPS, GROUP_ORDER, EXERCISES, makeCustomExercise } from './exercises.js';
+import { GROUPS, GROUP_ORDER, EXERCISES, EQUIPMENT, makeCustomExercise } from './exercises.js';
 import { read, write, writeFeed, LS, todayKey, monthKey } from './store.js';
-
-const $ = s => document.querySelector(s);
-const el = (t, c, txt) => { const n = document.createElement(t); if (c) n.className = c; if (txt != null) n.textContent = txt; return n; };
+import {
+  $, el, sheet, toast, noteEl, confirmSheet, swipeToDelete,
+  fmtDate, fmtDateFull, fmtDuration, compact, parseKey
+} from './ui.js';
+import {
+  allSessions, invalidate, detectPRs, sessionMilestones, isWorking, groupColor
+} from './analytics.js';
+// One-way dependency: this file imports stats.js, stats.js never imports back.
+import { openStats, isStatsOpen, renderStats, refresh as refreshStats } from './stats.js';
 
 let customEx   = [];
-let monthCache = {};        // 'YYYY-MM' -> { 'DD': [workout,...] }
+let monthCache = {};        // 'YYYY-MM' -> { 'DD': { sessionId: record } }
 let viewMonth  = new Date();
 let history    = {};        // exId -> [{date, sets}]
-let session    = null;      // active workout
+let session    = null;      // active workout (or a past one being edited)
+let summary    = null;      // post-workout recap, shown once after finishing
 let restEnd    = null;
 let restTotal  = 0;
 let wakeLock   = null;
@@ -22,7 +29,7 @@ export async function initWorkout() {
   history  = (await read('history', null)) || {};
 
   const saved = LS.get('activeSession', null);
-  if (saved) { session = saved; }
+  if (saved) session = saved;
 
   await loadMonth(monthKey(viewMonth));
   render();
@@ -34,16 +41,20 @@ function startTick() {
   // Timestamp-driven, never a counter. iOS throttles background JS;
   // recomputing from Date.now() means the clock is right on resume.
   tickHandle = setInterval(() => {
-    if (session) paintClock();
+    if (session && !session._edit) paintClock();
     if (restEnd) paintRest();
   }, 250);
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) { if (session) paintClock(); if (restEnd) paintRest(); requestWakeLock(); }
+    if (!document.hidden) {
+      if (session && !session._edit) paintClock();
+      if (restEnd) paintRest();
+      requestWakeLock();
+    }
   });
 }
 
 async function requestWakeLock() {
-  if (!session || !('wakeLock' in navigator)) return;
+  if (!session || session._edit || !('wakeLock' in navigator)) return;
   try { wakeLock = await navigator.wakeLock.request('screen'); } catch {}
 }
 function releaseWakeLock() { try { wakeLock && wakeLock.release(); } catch {} wakeLock = null; }
@@ -56,13 +67,43 @@ async function loadMonth(mk) {
   return data;
 }
 
+// Whole-month write. Used whenever a session is edited, moved or deleted,
+// because store.write() replaces a node rather than merging into it.
+async function saveMonth(mk) {
+  await write(`workouts/${mk}`, monthCache[mk] || {});
+  invalidate();
+}
+
+// After an edit or delete the per-exercise "last time" index can be wrong, so
+// it gets rebuilt from the log itself. Always correct, never incremental.
+async function rebuildHistoryFromLog() {
+  const sessions = await allSessions(true);
+  const h = {};
+  sessions.forEach(s => {
+    (s.exercises || []).forEach(ex => {
+      if (!ex.exId) return;
+      const sets = (ex.sets || []).filter(isWorking).map(x => ({ w: x.w, r: x.r, type: x.type }));
+      if (!sets.length) return;
+      (h[ex.exId] = h[ex.exId] || []).push({ date: s._date, sets, _t: s.startedAt });
+    });
+  });
+  Object.keys(h).forEach(k => {
+    h[k].sort((a, b) => b._t - a._t);
+    h[k] = h[k].slice(0, 20).map(({ date, sets }) => ({ date, sets }));
+  });
+  history = h;
+  await write('history', history);
+}
+
 /* ================= RENDER ROOT ================= */
 export function render() {
   const root = $('#view-workout');
   if (!root) return;
+  if (summary)       { root.innerHTML = ''; root.appendChild(renderSummary()); return; }
+  if (session)       { root.innerHTML = ''; root.appendChild(renderSession()); return; }
+  if (isStatsOpen()) { renderStats(); return; }
   root.innerHTML = '';
-  if (session) root.appendChild(renderSession());
-  else root.appendChild(renderCalendar());
+  root.appendChild(renderCalendar());
 }
 
 /* ================= CALENDAR ================= */
@@ -80,8 +121,8 @@ function renderCalendar() {
   hd.appendChild(left);
 
   const nav = el('div', 'cal-nav');
-  const prev = el('button', null, '\u2039'); prev.setAttribute('aria-label', 'Previous month');
-  const next = el('button', null, '\u203A'); next.setAttribute('aria-label', 'Next month');
+  const prev = el('button', null, '‹'); prev.setAttribute('aria-label', 'Previous month');
+  const next = el('button', null, '›'); next.setAttribute('aria-label', 'Next month');
   prev.onclick = async () => { viewMonth = new Date(viewMonth.getFullYear(), viewMonth.getMonth() - 1, 1); await loadMonth(monthKey(viewMonth)); render(); };
   next.onclick = async () => { viewMonth = new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 1); await loadMonth(monthKey(viewMonth)); render(); };
   nav.append(prev, next);
@@ -122,7 +163,7 @@ function renderCalendar() {
       });
       cell.appendChild(plates);
       cell.setAttribute('aria-label', `${d} — ${groups.map(g => GROUPS[g].label).join(', ')}`);
-      cell.onclick = () => openDay(key, list);
+      cell.onclick = () => openDay(mk, dd);
     } else {
       cell.setAttribute('aria-label', `${d} — no training`);
       cell.onclick = () => {};
@@ -132,13 +173,11 @@ function renderCalendar() {
   wrap.appendChild(grid);
 
   // legend
-  const leg = el('div');
-  leg.style.cssText = 'display:flex;flex-wrap:wrap;gap:10px;margin:14px 0 18px';
+  const leg = el('div', 'cal-legend');
   GROUP_ORDER.forEach(g => {
-    const it = el('div');
-    it.style.cssText = 'display:flex;align-items:center;gap:5px;font-size:10px;color:var(--dim);letter-spacing:.06em;text-transform:uppercase';
+    const it = el('div', 'cal-legend-item');
     const sw = el('i');
-    sw.style.cssText = `width:12px;height:3px;border-radius:1px;background:${GROUPS[g].color};display:block`;
+    sw.style.background = GROUPS[g].color;
     it.append(sw, document.createTextNode(GROUPS[g].label));
     leg.appendChild(it);
   });
@@ -148,8 +187,16 @@ function renderCalendar() {
   wrap.appendChild(renderWeekVolume());
 
   const start = el('button', 'btn btn-primary btn-block btn-lg', 'Start workout');
-  start.onclick = startWorkout;
+  start.onclick = () => startWorkout();
   wrap.appendChild(start);
+
+  const stats = el('button', 'btn btn-ghost btn-block btn-lg', 'Statistics');
+  stats.style.marginTop = '10px';
+  stats.onclick = async () => {
+    toast('Crunching your history…');
+    await openStats(() => { render(); });
+  };
+  wrap.appendChild(stats);
 
   return wrap;
 }
@@ -177,7 +224,7 @@ function renderMonthStats(days) {
 function renderWeekVolume() {
   const card = el('div', 'card');
   const hd = el('div', 'card-hd');
-  hd.appendChild(el('div', 'eyebrow', 'Last 7 days \u2014 working sets'));
+  hd.appendChild(el('div', 'eyebrow', 'Last 7 days — working sets'));
   card.appendChild(hd);
 
   const since = Date.now() - 7 * 864e5;
@@ -213,63 +260,77 @@ function renderWeekVolume() {
     card.appendChild(row);
   });
 
-  if (!any) {
-    const p = el('div');
-    p.style.cssText = 'font-size:13px;color:var(--dim)';
-    p.textContent = 'No sets logged this week yet.';
-    card.appendChild(p);
-  }
+  if (!any) card.appendChild(noteEl('No sets logged this week yet.'));
   return card;
 }
 
 /* ================= DAY SHEET ================= */
-function openDay(dateKey, list) {
-  const back = el('div', 'sheet-backdrop');
-  const sh = el('div', 'sheet');
-  sh.appendChild(el('div', 'sheet-grab'));
+// Now an editing surface: rename, edit, or delete any session on the day.
+function openDay(mk, dd) {
+  const dateKey = `${mk}-${dd}`;
+  const dayObj = (monthCache[mk] || {})[dd] || {};
+  const list = Object.values(dayObj);
+  if (!list.length) return;
 
-  const d = new Date(dateKey + 'T12:00:00');
-  sh.appendChild(el('div', 'eyebrow', d.toLocaleDateString('en-US', { weekday: 'long' })));
-  sh.appendChild(el('h2', null, d.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })));
+  const { sh, close } = sheet();
 
-  list.forEach(w => {
+  sh.appendChild(el('div', 'eyebrow', parseKey(dateKey).toLocaleDateString('en-US', { weekday: 'long' })));
+  sh.appendChild(el('h2', null, parseKey(dateKey).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })));
+
+  list.sort((a, b) => (a.startedAt || 0) - (b.startedAt || 0)).forEach(w => {
     const c = el('div', 'card');
     c.style.marginTop = '12px';
+
     const hd = el('div', 'card-hd');
-    hd.appendChild(el('div', null, w.name || 'Workout'));
-    const meta = el('div', 'eyebrow', `${Math.round((w.durationSec || 0) / 60)} min \u00b7 ${(w.volume || 0).toLocaleString()} lb`);
-    hd.appendChild(meta);
+    hd.appendChild(el('div', 'day-title', w.name || 'Workout'));
+    hd.appendChild(el('div', 'eyebrow',
+      fmtDuration(w.durationSec) + ' · ' + (w.volume || 0).toLocaleString() + ' lb'));
     c.appendChild(hd);
 
     (w.exercises || []).forEach(ex => {
-      const r = el('div');
-      r.style.cssText = 'display:flex;gap:8px;align-items:flex-start;padding:6px 0;border-top:1px solid var(--collar)';
-      const tag = el('i');
-      tag.style.cssText = `width:3px;align-self:stretch;border-radius:2px;background:${(GROUPS[ex.group]||{}).color};flex-shrink:0`;
-      const body = el('div');
-      body.style.flex = '1';
-      const nm = el('div', null, ex.name);
-      nm.style.cssText = 'font-size:13px;font-variation-settings:"wdth" 90,"wght" 700';
-      body.appendChild(nm);
-      const sets = (ex.sets || []).filter(s => s.done)
-        .map(s => `${s.w || 0}\u00d7${s.r || 0}${s.type !== 'N' ? s.type : ''}`).join('   ');
-      const sd = el('div', 'num', sets);
-      sd.style.cssText = 'font-size:11px;color:var(--steel);margin-top:2px';
-      body.appendChild(sd);
+      const r = el('div', 'day-ex');
+      const tag = el('i', 'day-ex-tag');
+      tag.style.background = groupColor(ex.group);
+      const body = el('div', 'day-ex-body');
+      body.appendChild(el('div', 'day-ex-name', ex.name));
+      const sets = (ex.sets || []).filter(s => s.done !== false)
+        .map(s => `${s.w || 0}×${s.r || 0}${s.type !== 'N' ? s.type : ''}`).join('   ');
+      body.appendChild(el('div', 'day-ex-sets num', sets));
       r.append(tag, body);
       c.appendChild(r);
     });
+
+    const acts = el('div', 'day-actions');
+    const edit = el('button', 'btn btn-ghost', 'Edit');
+    edit.onclick = () => { close(); editWorkout(w, mk, dd); };
+    const del = el('button', 'btn btn-danger', 'Delete');
+    del.onclick = () => {
+      confirmSheet({
+        title: 'Delete this workout?',
+        body: `“${w.name || 'Workout'}” from ${fmtDateFull(dateKey)} will be removed from your log. This cannot be undone.`,
+        confirmLabel: 'Delete workout',
+        danger: true,
+        onConfirm: async () => {
+          delete monthCache[mk][dd][w.id];
+          if (!Object.keys(monthCache[mk][dd]).length) delete monthCache[mk][dd];
+          await saveMonth(mk);
+          await rebuildHistoryFromLog();
+          close();
+          toast('Workout deleted');
+          render();
+        }
+      });
+    };
+    acts.append(edit, del);
+    c.appendChild(acts);
+
     sh.appendChild(c);
   });
 
-  const close = () => { back.remove(); sh.remove(); };
-  back.onclick = close;
   const btn = el('button', 'btn btn-ghost btn-block', 'Close');
+  btn.style.marginTop = '12px';
   btn.onclick = close;
-  btn.style.marginTop = '8px';
   sh.appendChild(btn);
-
-  document.body.append(back, sh);
 }
 
 /* ================= SESSION ================= */
@@ -285,6 +346,29 @@ function startWorkout(preset) {
   render();
 }
 
+// Reopen a finished session for editing. Sets are marked done because a saved
+// record only ever contains completed sets.
+function editWorkout(record, mk, dd) {
+  session = {
+    id: record.id,
+    name: record.name || 'Workout',
+    startedAt: record.startedAt,
+    exercises: (record.exercises || []).map(ex => ({
+      exId: ex.exId, name: ex.name, group: ex.group, equipment: ex.equipment,
+      sets: (ex.sets || []).map(s => ({ w: s.w, r: s.r, type: s.type || 'N', done: true }))
+    })),
+    _edit: {
+      mk, dd,
+      dateKey: `${mk}-${dd}`,
+      endedAt: record.endedAt || record.startedAt,
+      durationSec: record.durationSec || 0
+    }
+  };
+  // Deliberately NOT persisted to fit:activeSession — an edit in progress
+  // should not be mistaken for a live workout after a refresh.
+  render();
+}
+
 function defaultName() {
   const h = new Date().getHours();
   if (h < 11) return 'Morning session';
@@ -292,35 +376,47 @@ function defaultName() {
   return 'Evening session';
 }
 
-function persistSession() { LS.set('activeSession', session); }
+function persistSession() {
+  if (session && session._edit) return;
+  LS.set('activeSession', session);
+}
 
 function renderSession() {
+  const editing = !!session._edit;
   const wrap = el('div');
 
   // sticky bar
   const bar = el('div', 'wk-bar');
-  const lt = el('div');
-  const nameIn = el('input');
+  const lt = el('div', 'wk-bar-left');
+  const nameIn = el('input', 'wk-name');
   nameIn.value = session.name;
-  nameIn.style.cssText = 'background:none;border:none;color:var(--chalk);font-size:14px;font-variation-settings:"wdth" 88,"wght" 700;padding:0;width:100%';
   nameIn.oninput = e => { session.name = e.target.value; persistSession(); };
   lt.appendChild(nameIn);
-  const clock = el('div', 'timer num', '0:00');
-  clock.id = 'wkClock';
-  lt.appendChild(clock);
+
+  if (editing) {
+    lt.appendChild(el('div', 'timer num', fmtDateFull(session._edit.dateKey) + ' · ' + fmtDuration(session._edit.durationSec)));
+  } else {
+    const clock = el('div', 'timer num', '0:00');
+    clock.id = 'wkClock';
+    lt.appendChild(clock);
+  }
   bar.appendChild(lt);
 
-  const fin = el('button', 'btn btn-primary', 'Finish');
-  fin.onclick = finishWorkout;
+  const fin = el('button', 'btn btn-primary', editing ? 'Save' : 'Finish');
+  fin.onclick = editing ? saveEdit : finishWorkout;
   bar.appendChild(fin);
   wrap.appendChild(bar);
 
   const body = el('div', 'screen-pad');
 
+  if (editing) body.appendChild(renderEditMeta());
+
   if (!session.exercises.length) {
     const es = el('div', 'empty-state');
-    es.appendChild(el('h3', null, 'Empty session'));
-    es.appendChild(el('p', null, 'Add your first exercise to start logging sets.'));
+    es.appendChild(el('h3', null, editing ? 'No exercises left' : 'Empty session'));
+    es.appendChild(el('p', null, editing
+      ? 'Add one back, or delete the workout from the calendar.'
+      : 'Add your first exercise to start logging sets.'));
     body.appendChild(es);
   }
 
@@ -330,23 +426,70 @@ function renderSession() {
   add.onclick = () => openPicker(chosen => {
     chosen.forEach(x => session.exercises.push({
       exId: x.id, name: x.name, group: x.group, equipment: x.equipment,
-      sets: [{ w: '', r: '', type: 'N', done: false }]
+      sets: [{ w: '', r: '', type: 'N', done: editing }]
     }));
     persistSession(); render();
   });
   body.appendChild(add);
 
-  const cancel = el('button', 'btn btn-danger btn-block', 'Discard workout');
+  const cancel = el('button', 'btn btn-danger btn-block', editing ? 'Cancel editing' : 'Discard workout');
   cancel.style.marginTop = '10px';
   cancel.onclick = () => {
-    if (!confirm('Discard this workout? Nothing will be saved.')) return;
-    session = null; LS.del('activeSession'); releaseWakeLock(); clearRest(); render();
+    if (editing) { session = null; render(); return; }
+    confirmSheet({
+      title: 'Discard this workout?',
+      body: 'Nothing will be saved.',
+      confirmLabel: 'Discard',
+      danger: true,
+      onConfirm: () => {
+        session = null; LS.del('activeSession'); releaseWakeLock(); clearRest(); render();
+      }
+    });
   };
   body.appendChild(cancel);
 
   wrap.appendChild(body);
-  setTimeout(paintClock, 0);
+  if (!editing) setTimeout(paintClock, 0);
   return wrap;
+}
+
+// Date + duration editor, shown only when reworking a past session.
+function renderEditMeta() {
+  const card = el('div', 'card');
+  const hd = el('div', 'card-hd');
+  hd.appendChild(el('div', 'eyebrow', 'Editing a past workout'));
+  card.appendChild(hd);
+
+  const grid = el('div', 'row-split');
+
+  const dWrap = el('div', 'field');
+  dWrap.appendChild(el('label', null, 'Date'));
+  const dIn = el('input');
+  dIn.type = 'date';
+  dIn.value = session._edit.dateKey;
+  dIn.onchange = e => {
+    const v = e.target.value;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) { e.target.value = session._edit.dateKey; return; }
+    session._edit.newDateKey = v;
+  };
+  dWrap.appendChild(dIn);
+
+  const tWrap = el('div', 'field');
+  tWrap.appendChild(el('label', null, 'Duration (min)'));
+  const tIn = el('input');
+  tIn.type = 'number'; tIn.inputMode = 'numeric';
+  tIn.value = Math.round((session._edit.durationSec || 0) / 60);
+  tIn.onchange = e => {
+    const m = Math.max(0, parseInt(e.target.value) || 0);
+    session._edit.durationSec = m * 60;
+    e.target.value = m;
+  };
+  tWrap.appendChild(tIn);
+
+  grid.append(dWrap, tWrap);
+  card.appendChild(grid);
+  card.appendChild(noteEl('Changing the date moves this workout to a different day on the calendar.'));
+  return card;
 }
 
 function renderExercise(ex, exIdx) {
@@ -357,21 +500,25 @@ function renderExercise(ex, exIdx) {
   const tag = el('i', 'ex-tag'); tag.style.background = color;
   hd.appendChild(tag);
   hd.appendChild(el('div', 'ex-name', ex.name));
-  const menu = el('button', 'ex-menu', '\u22ef');
+  const menu = el('button', 'ex-menu', '⋯');
+  menu.setAttribute('aria-label', 'Remove ' + ex.name);
   menu.onclick = () => {
-    if (confirm(`Remove ${ex.name} from this workout?`)) {
-      session.exercises.splice(exIdx, 1); persistSession(); render();
-    }
+    confirmSheet({
+      title: 'Remove ' + ex.name + '?',
+      body: 'It will be taken out of this workout along with its sets.',
+      confirmLabel: 'Remove',
+      danger: true,
+      onConfirm: () => { session.exercises.splice(exIdx, 1); persistSession(); render(); }
+    });
   };
   hd.appendChild(menu);
   block.appendChild(hd);
 
   // previous performance — the single most useful thing on the screen
-  const prev = (history[ex.exId] || [])[0];
+  const prev = (history[ex.exId] || []).find(h => !session._edit || h.date !== session._edit.dateKey);
   if (prev) {
-    const txt = prev.sets.map(s => `${s.w}\u00d7${s.r}`).join('  ');
-    const p = el('div', 'ex-prev', `Last \u00b7 ${fmtDate(prev.date)}   ${txt}`);
-    block.appendChild(p);
+    const txt = prev.sets.map(s => `${s.w}×${s.r}`).join('  ');
+    block.appendChild(el('div', 'ex-prev', `Last · ${fmtDate(prev.date)}   ${txt}`));
   } else {
     block.appendChild(el('div', 'ex-prev', 'No previous record'));
   }
@@ -382,17 +529,17 @@ function renderExercise(ex, exIdx) {
 
   ex.sets.forEach((s, i) => block.appendChild(renderSet(ex, exIdx, s, i)));
 
+  if (ex.sets.length) block.appendChild(el('div', 'swipe-hint', 'Swipe a set left to delete it'));
+
   // plate math for the heaviest entered load
   const heaviest = Math.max(0, ...ex.sets.map(s => parseFloat(s.w) || 0));
-  if (heaviest >= 45 && ex.equipment === 'barbell') {
-    block.appendChild(renderPlates(heaviest));
-  }
+  if (heaviest >= 45 && ex.equipment === 'barbell') block.appendChild(renderPlates(heaviest));
 
   const acts = el('div', 'ex-actions');
   const addSet = el('button', 'btn btn-ghost', '+ Set');
   addSet.onclick = () => {
     const last = ex.sets[ex.sets.length - 1] || {};
-    ex.sets.push({ w: last.w || '', r: last.r || '', type: 'N', done: false });
+    ex.sets.push({ w: last.w || '', r: last.r || '', type: 'N', done: !!session._edit });
     persistSession(); render();
   };
   acts.appendChild(addSet);
@@ -414,37 +561,39 @@ function renderSet(ex, exIdx, s, i) {
   };
   row.appendChild(idx);
 
-  const w = el('input'); w.type = 'number'; w.inputMode = 'decimal'; w.placeholder = '\u2013';
+  const w = el('input'); w.type = 'number'; w.inputMode = 'decimal'; w.placeholder = '–';
   w.value = s.w; w.onchange = e => { s.w = e.target.value; persistSession(); render(); };
   row.appendChild(w);
 
-  const r = el('input'); r.type = 'number'; r.inputMode = 'numeric'; r.placeholder = '\u2013';
+  const r = el('input'); r.type = 'number'; r.inputMode = 'numeric'; r.placeholder = '–';
   r.value = s.r; r.onchange = e => { s.r = e.target.value; persistSession(); render(); };
   row.appendChild(r);
 
   const e1 = e1rm(s.w, s.r);
   row.appendChild(el('div', 'set-e1rm num', s.type === 'W' || !e1 ? '' : String(e1)));
 
-  const chk = el('button', 'set-check' + (s.done ? ' on' : ''), s.done ? '\u2713' : '');
+  const chk = el('button', 'set-check' + (s.done ? ' on' : ''), s.done ? '✓' : '');
   chk.setAttribute('aria-label', s.done ? 'Mark set incomplete' : 'Mark set complete');
   chk.onclick = () => {
     s.done = !s.done;
     persistSession();
-    if (s.done) {
+    const wasDone = s.done;
+    render();
+    if (wasDone && !session._edit) {
       startRest();
-      const rows = document.querySelectorAll('.set-row');
-      render();
-      // flash the row that was just completed
-      const all = document.querySelectorAll('.ex-block')[exIdx];
-      if (all) {
-        const target = all.querySelectorAll('.set-row')[i];
-        if (target) { target.classList.add('flash'); setTimeout(() => target.classList.remove('flash'), 600); }
-      }
-    } else render();
+      const block = document.querySelectorAll('.ex-block')[exIdx];
+      const target = block && block.querySelectorAll('.set-row')[i];
+      if (target) { target.classList.add('flash'); setTimeout(() => target.classList.remove('flash'), 600); }
+    }
   };
   row.appendChild(chk);
 
-  return row;
+  // Drag the row left to reveal a delete action. Solves overshooting when you
+  // add sets before knowing how many you'll actually do.
+  return swipeToDelete(row, {
+    label: 'Delete',
+    onDelete: () => { ex.sets.splice(i, 1); persistSession(); render(); }
+  });
 }
 
 /* ---------- plate math ---------- */
@@ -462,14 +611,11 @@ function renderPlates(total, barWeight = 45) {
     let n = Math.floor(side / p.w);
     if (n <= 0) return;
     side = +(side - n * p.w).toFixed(2);
-    const chip = el('span', 'plate-chip', `${n}\u00d7${p.w}`);
+    const chip = el('span', 'plate-chip', `${n}×${p.w}`);
     chip.style.background = p.c;
     strip.appendChild(chip);
   });
-  if (side > 0.01) {
-    const rem = el('span', 'lbl', `+${side} left over`);
-    strip.appendChild(rem);
-  }
+  if (side > 0.01) strip.appendChild(el('span', 'lbl', `+${side} left over`));
   return strip;
 }
 
@@ -479,11 +625,6 @@ function e1rm(w, r) {
   if (!W || !R || R < 1) return 0;
   if (R === 1) return Math.round(W);
   return Math.round(W * (1 + R / 30)); // Epley
-}
-
-function fmtDate(iso) {
-  const d = new Date(iso + 'T12:00:00');
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
 /* ---------- clock ---------- */
@@ -550,25 +691,39 @@ function beep() {
   } catch {}
 }
 
-/* ---------- finish ---------- */
-async function finishWorkout() {
-  const done = session.exercises
+/* ---------- collect ---------- */
+// Keeps only sets that are marked done and carry both a weight and reps.
+function collectDone() {
+  return session.exercises
     .map(ex => ({ ...ex, sets: ex.sets.filter(s => s.done && s.w !== '' && s.r !== '') }))
     .filter(ex => ex.sets.length);
+}
+
+function computeVolume(done) {
+  return Math.round(done.reduce((s, ex) =>
+    s + ex.sets.filter(isWorking).reduce((a, x) => a + (parseFloat(x.w) || 0) * (parseInt(x.r) || 0), 0), 0));
+}
+
+/* ---------- finish ---------- */
+async function finishWorkout() {
+  const done = collectDone();
 
   if (!done.length) {
-    if (!confirm('No completed sets. Discard this workout?')) return;
-    session = null; LS.del('activeSession'); releaseWakeLock(); clearRest(); render(); return;
+    confirmSheet({
+      title: 'No completed sets',
+      body: 'There is nothing to save. Discard this workout?',
+      confirmLabel: 'Discard',
+      danger: true,
+      onConfirm: () => {
+        session = null; LS.del('activeSession'); releaseWakeLock(); clearRest(); render();
+      }
+    });
+    return;
   }
 
-  const volume = done.reduce((s, ex) =>
-    s + ex.sets.filter(x => x.type !== 'W')
-               .reduce((a, x) => a + (parseFloat(x.w) || 0) * (parseInt(x.r) || 0), 0), 0);
-
-  const groups = [...new Set(done.map(e => e.group))];
-  const dateK  = todayKey(new Date(session.startedAt));
-  const mk     = dateK.slice(0, 7);
-  const dd     = dateK.slice(8, 10);
+  const dateK = todayKey(new Date(session.startedAt));
+  const mk    = dateK.slice(0, 7);
+  const dd    = dateK.slice(8, 10);
 
   const record = {
     id: session.id,
@@ -576,33 +731,103 @@ async function finishWorkout() {
     startedAt: session.startedAt,
     endedAt: Date.now(),
     durationSec: Math.round((Date.now() - session.startedAt) / 1000),
-    volume: Math.round(volume),
-    groups,
+    volume: computeVolume(done),
+    groups: [...new Set(done.map(e => e.group))],
     exercises: done
   };
+
+  // Records are judged against everything logged BEFORE this session.
+  let prs = [], firsts = [], milestones = [], priorSessions = [];
+  try {
+    const all = await allSessions();
+    priorSessions = all.filter(s => s.startedAt < record.startedAt);
+    const found = detectPRs(record, priorSessions);
+    prs = found.prs; firsts = found.firsts;
+    milestones = sessionMilestones(record, priorSessions);
+  } catch {}
 
   await write(`workouts/${mk}/${dd}/${session.id}`, record);
 
   // update per-exercise history for the "last time" line
   done.forEach(ex => {
-    const entry = { date: dateK, sets: ex.sets.filter(s => s.type !== 'W').map(s => ({ w: s.w, r: s.r, type: s.type })) };
+    const entry = { date: dateK, sets: ex.sets.filter(isWorking).map(s => ({ w: s.w, r: s.r, type: s.type })) };
     if (!entry.sets.length) return;
-    history[ex.exId] = [entry, ...(history[ex.exId] || [])].slice(0, 20);
+    history[ex.exId] = [entry, ...(history[ex.exId] || []).filter(h => h.date !== dateK)].slice(0, 20);
   });
   await write('history', history);
 
   monthCache[mk] = monthCache[mk] || {};
   monthCache[mk][dd] = monthCache[mk][dd] || {};
   monthCache[mk][dd][session.id] = record;
+  invalidate();
 
-  await pushFeed(record);
+  await pushFeed();
 
-  session = null; LS.del('activeSession'); releaseWakeLock(); clearRest();
-  toast('Workout saved');
+  summary = { record, prs, firsts, milestones, prior: priorSessions };
+  session = null;
+  LS.del('activeSession');
+  releaseWakeLock();
+  clearRest();
   render();
 }
 
-async function pushFeed(latest) {
+/* ---------- save an edit ---------- */
+async function saveEdit() {
+  const meta = session._edit;
+  const done = collectDone();
+
+  if (!done.length) {
+    toast('Add at least one completed set, or delete the workout');
+    return;
+  }
+
+  const oldMk = meta.mk, oldDd = meta.dd;
+  let startedAt = session.startedAt;
+  let dateK = meta.dateKey;
+
+  if (meta.newDateKey && meta.newDateKey !== meta.dateKey) {
+    dateK = meta.newDateKey;
+    const old = new Date(session.startedAt);
+    const [Y, M, D] = dateK.split('-').map(Number);
+    startedAt = new Date(Y, M - 1, D, old.getHours(), old.getMinutes(), old.getSeconds()).getTime();
+  }
+
+  const mk = dateK.slice(0, 7), dd = dateK.slice(8, 10);
+
+  const record = {
+    id: session.id,
+    name: session.name || 'Workout',
+    startedAt,
+    endedAt: startedAt + (meta.durationSec || 0) * 1000,
+    durationSec: meta.durationSec || 0,
+    volume: computeVolume(done),
+    groups: [...new Set(done.map(e => e.group))],
+    exercises: done
+  };
+
+  // remove from the old slot
+  if (monthCache[oldMk] && monthCache[oldMk][oldDd]) {
+    delete monthCache[oldMk][oldDd][session.id];
+    if (!Object.keys(monthCache[oldMk][oldDd]).length) delete monthCache[oldMk][oldDd];
+  }
+  // write into the new slot
+  await loadMonth(mk);
+  monthCache[mk] = monthCache[mk] || {};
+  monthCache[mk][dd] = monthCache[mk][dd] || {};
+  monthCache[mk][dd][record.id] = record;
+
+  await saveMonth(oldMk);
+  if (mk !== oldMk) await saveMonth(mk);
+
+  await rebuildHistoryFromLog();
+  await pushFeed();
+
+  session = null;
+  toast('Workout updated');
+  render();
+}
+
+async function pushFeed() {
   const recent = [];
   Object.keys(monthCache).sort().reverse().forEach(mk => {
     Object.keys(monthCache[mk]).sort().reverse().forEach(dd => {
@@ -615,11 +840,11 @@ async function pushFeed(latest) {
     workouts: recent.slice(0, 3).map(w => ({
       date: todayKey(new Date(w.startedAt)),
       name: w.name,
-      minutes: Math.round(w.durationSec / 60),
+      minutes: Math.round((w.durationSec || 0) / 60),
       volume: w.volume,
       groups: w.groups,
       topSets: (w.exercises || []).map(ex => {
-        const best = ex.sets.filter(s => s.type !== 'W')
+        const best = (ex.sets || []).filter(isWorking)
           .sort((a, b) => e1rm(b.w, b.r) - e1rm(a.w, a.r))[0];
         return best ? `${ex.name} ${best.w}x${best.r}` : null;
       }).filter(Boolean)
@@ -627,11 +852,153 @@ async function pushFeed(latest) {
   });
 }
 
+/* ================= POST-WORKOUT SUMMARY ================= */
+function renderSummary() {
+  const { record, prs, firsts, milestones, prior } = summary;
+  const wrap = el('div', 'screen-pad summary-page');
+
+  const hero = el('div', 'summary-hero');
+  hero.appendChild(el('div', 'eyebrow', 'Session complete'));
+  hero.appendChild(el('h1', null, record.name || 'Workout'));
+  hero.appendChild(el('div', 'summary-date', fmtDateFull(todayKey(new Date(record.startedAt)))));
+  wrap.appendChild(hero);
+
+  const workingSets = record.exercises.reduce((a, ex) => a + ex.sets.filter(isWorking).length, 0);
+  const totalReps = record.exercises.reduce((a, ex) =>
+    a + ex.sets.filter(isWorking).reduce((b, s) => b + (parseInt(s.r) || 0), 0), 0);
+
+  const row = el('div', 'stat-row');
+  [[fmtDuration(record.durationSec), 'Duration'],
+   [compact(record.volume), 'Volume lb'],
+   [workingSets, 'Working sets']].forEach(([v, l]) => {
+    const s = el('div', 'stat');
+    s.appendChild(el('div', 'stat-val num', String(v)));
+    s.appendChild(el('div', 'stat-lbl', l));
+    row.appendChild(s);
+  });
+  wrap.appendChild(row);
+
+  /* ---- PRs ---- */
+  if (prs.length) {
+    const card = el('div', 'card pr-card');
+    const hd = el('div', 'card-hd');
+    hd.appendChild(el('div', 'eyebrow', prs.length === 1 ? 'New personal record' : prs.length + ' new personal records'));
+    card.appendChild(hd);
+    prs.forEach(p => {
+      const r = el('div', 'pr-hit');
+      const tag = el('i', 'pr-tag');
+      tag.style.background = groupColor(p.group);
+      r.appendChild(tag);
+      const body = el('div', 'pr-body');
+      body.appendChild(el('div', 'pr-name', p.name));
+      body.appendChild(el('div', 'pr-sub',
+        (p.kind === 'e1rm' ? 'Estimated 1RM' : p.kind === 'weight' ? 'Heaviest ever' : 'Best session volume') +
+        (p.detail ? '  ·  ' + p.detail : '') +
+        (p.prev ? '  ·  previous ' + Math.round(p.prev) : '')));
+      r.appendChild(body);
+      const right = el('div', 'pr-right');
+      right.appendChild(el('div', 'pr-val num', Math.round(p.value) + ''));
+      right.appendChild(el('div', 'pr-delta num', '+' + Math.round(p.delta)));
+      r.appendChild(right);
+      card.appendChild(r);
+    });
+    wrap.appendChild(card);
+  }
+
+  /* ---- session milestones ---- */
+  if (milestones.length) {
+    const card = el('div', 'card');
+    const hd = el('div', 'card-hd');
+    hd.appendChild(el('div', 'eyebrow', 'Session milestones'));
+    card.appendChild(hd);
+    milestones.forEach(m => {
+      const r = el('div', 'pb-row');
+      const body = el('div');
+      body.appendChild(el('div', 'pb-lbl', m.label));
+      body.appendChild(el('div', 'pb-sub', 'previous best ' + m.prev));
+      r.appendChild(body);
+      r.appendChild(el('div', 'pb-val num', m.value));
+      card.appendChild(r);
+    });
+    wrap.appendChild(card);
+  }
+
+  /* ---- first time ---- */
+  if (firsts.length) {
+    const card = el('div', 'card');
+    const hd = el('div', 'card-hd');
+    hd.appendChild(el('div', 'eyebrow', 'First time logged'));
+    card.appendChild(hd);
+    firsts.forEach(f => {
+      const r = el('div', 'pb-row');
+      const body = el('div');
+      body.appendChild(el('div', 'pb-lbl', f.name));
+      body.appendChild(el('div', 'pb-sub', 'baseline set — beat it next time'));
+      r.appendChild(body);
+      r.appendChild(el('div', 'pb-val num', f.set ? f.set.w + ' × ' + f.set.r : ''));
+      card.appendChild(r);
+    });
+    wrap.appendChild(card);
+  }
+
+  /* ---- comparison ---- */
+  const recent = prior.filter(s => s.startedAt > Date.now() - 28 * 864e5);
+  if (recent.length >= 2) {
+    const avg = recent.reduce((a, s) => a + (s.volume || 0), 0) / recent.length;
+    const diff = record.volume - avg;
+    const pct = avg ? Math.round(diff / avg * 100) : 0;
+    const card = el('div', 'card');
+    const hd = el('div', 'card-hd');
+    hd.appendChild(el('div', 'eyebrow', 'Against your last 4 weeks'));
+    card.appendChild(hd);
+    const big = el('div', 'load-num num', (pct >= 0 ? '+' : '') + pct + '%');
+    big.style.fontSize = '34px';
+    big.style.color = pct >= 0 ? 'var(--good)' : 'var(--steel)';
+    card.appendChild(big);
+    card.appendChild(noteEl(
+      compact(record.volume) + ' lb today against a ' + compact(Math.round(avg)) +
+      ' lb average across ' + recent.length + ' sessions.'));
+    wrap.appendChild(card);
+  }
+
+  /* ---- what you did ---- */
+  const recap = el('div', 'card');
+  const rhd = el('div', 'card-hd');
+  rhd.appendChild(el('div', 'eyebrow', 'What you did'));
+  rhd.appendChild(el('div', 'card-sub num', totalReps + ' reps'));
+  recap.appendChild(rhd);
+  record.exercises.forEach(ex => {
+    const r = el('div', 'day-ex');
+    const tag = el('i', 'day-ex-tag');
+    tag.style.background = groupColor(ex.group);
+    const body = el('div', 'day-ex-body');
+    body.appendChild(el('div', 'day-ex-name', ex.name));
+    body.appendChild(el('div', 'day-ex-sets num',
+      ex.sets.map(s => `${s.w}×${s.r}${s.type !== 'N' ? s.type : ''}`).join('   ')));
+    r.append(tag, body);
+    recap.appendChild(r);
+  });
+  wrap.appendChild(recap);
+
+  const done = el('button', 'btn btn-primary btn-block btn-lg', 'Done');
+  done.onclick = () => { summary = null; render(); };
+  wrap.appendChild(done);
+
+  const toStats = el('button', 'btn btn-ghost btn-block', 'See statistics');
+  toStats.style.marginTop = '10px';
+  toStats.onclick = async () => {
+    summary = null;
+    await refreshStats();
+    await openStats(() => { render(); });
+  };
+  wrap.appendChild(toStats);
+
+  return wrap;
+}
+
 /* ================= PICKER ================= */
 function openPicker(onPick) {
-  const back = el('div', 'sheet-backdrop');
-  const sh   = el('div', 'sheet');
-  sh.appendChild(el('div', 'sheet-grab'));
+  const { sh, close } = sheet();
 
   const selected = [];
   let filter = 'all', q = '';
@@ -651,23 +1018,17 @@ function openPicker(onPick) {
   search.appendChild(chips);
   sh.appendChild(search);
 
-  const list = el('div');
+  const list = el('div', 'ex-list');
   sh.appendChild(list);
 
-  const foot = el('div');
-  foot.style.cssText = 'position:sticky;bottom:0;background:var(--bar);padding-top:10px;display:flex;gap:8px';
+  const foot = el('div', 'picker-foot');
   const custom = el('button', 'btn btn-ghost', 'New');
-  custom.onclick = () => {
-    const name = prompt('Exercise name');
-    if (!name) return;
-    const g = prompt('Muscle group — chest, back, legs, shoulders, arms, core', 'chest');
-    if (!GROUPS[g]) { alert('Not a valid group.'); return; }
-    const eq = prompt('Equipment — barbell, dumbbell, machine, cable, bodyweight', 'barbell') || 'barbell';
-    const x = makeCustomExercise(name, g, eq);
+  custom.onclick = () => openCustomExercise(x => {
     customEx.push(x);
     write('exercises/custom', customEx);
-    selected.push(x); paint();
-  };
+    selected.push(x);
+    paint();
+  });
   const addBtn = el('button', 'btn btn-primary', 'Add');
   addBtn.style.flex = '1';
   addBtn.onclick = () => { if (selected.length) { close(); onPick(selected); } };
@@ -707,20 +1068,78 @@ function openPicker(onPick) {
   }
 
   inp.oninput = e => { q = e.target.value.toLowerCase().trim(); paint(); };
-
-  function close() { back.remove(); sh.remove(); }
-  back.onclick = close;
-
   paint();
-  document.body.append(back, sh);
 }
 
-/* ================= TOAST ================= */
-export function toast(msg) {
-  document.querySelector('.toast')?.remove();
-  const t = el('div', 'toast', msg);
-  document.body.appendChild(t);
-  setTimeout(() => t.remove(), 2200);
+/* ---------- custom exercise ---------- */
+// Replaces the old three-prompt() flow. Group and equipment are now chips, so
+// there is nothing to spell and nothing to get the capitalisation wrong on.
+function openCustomExercise(onCreate) {
+  const { sh, close } = sheet();
+  sh.appendChild(el('h2', null, 'New exercise'));
+  sh.appendChild(noteEl('It gets saved to your library and stays available for future workouts.'));
+
+  const nameWrap = el('div', 'field');
+  nameWrap.style.marginTop = '14px';
+  nameWrap.appendChild(el('label', null, 'Name'));
+  const nameIn = el('input');
+  nameIn.type = 'text';
+  nameIn.placeholder = 'e.g. Zercher Squat';
+  nameIn.autocapitalize = 'words';
+  nameWrap.appendChild(nameIn);
+  sh.appendChild(nameWrap);
+
+  let group = 'chest';
+  sh.appendChild(el('div', 'field-lbl', 'Muscle group'));
+  const gRow = el('div', 'filter-row');
+  GROUP_ORDER.forEach(g => {
+    const c = el('button', 'chip' + (g === group ? ' on' : ''), GROUPS[g].label);
+    c.onclick = () => {
+      group = g;
+      gRow.querySelectorAll('.chip').forEach(x => x.classList.remove('on'));
+      c.classList.add('on');
+    };
+    gRow.appendChild(c);
+  });
+  sh.appendChild(gRow);
+
+  let equipment = 'barbell';
+  sh.appendChild(el('div', 'field-lbl', 'Equipment'));
+  const eRow = el('div', 'filter-row');
+  EQUIPMENT.forEach(q => {
+    const label = q.charAt(0).toUpperCase() + q.slice(1);
+    const c = el('button', 'chip' + (q === equipment ? ' on' : ''), label);
+    c.onclick = () => {
+      equipment = q;
+      eRow.querySelectorAll('.chip').forEach(x => x.classList.remove('on'));
+      c.classList.add('on');
+    };
+    eRow.appendChild(c);
+  });
+  sh.appendChild(eRow);
+
+  const go = el('button', 'btn btn-primary btn-block btn-lg', 'Create');
+  go.style.marginTop = '16px';
+  go.onclick = () => {
+    const name = nameIn.value.trim();
+    if (!name) { toast('Give it a name'); nameIn.focus(); return; }
+    const dupe = allExercises().find(x => x.name.toLowerCase() === name.toLowerCase());
+    if (dupe) { toast('“' + dupe.name + '” already exists'); return; }
+    close();
+    onCreate(makeCustomExercise(name, group, equipment));
+    toast('Added ' + name);
+  };
+  sh.appendChild(go);
+
+  const cancel = el('button', 'btn btn-ghost btn-block', 'Cancel');
+  cancel.style.marginTop = '8px';
+  cancel.onclick = close;
+  sh.appendChild(cancel);
+
+  setTimeout(() => nameIn.focus(), 80);
 }
 
-export function hasActiveSession() { return !!session; }
+/* ================= EXPORTS ================= */
+// Re-exported so older imports of `toast` from this module keep working.
+export { toast } from './ui.js';
+export function hasActiveSession() { return !!session && !session._edit; }
