@@ -15,3 +15,7 @@ export const firebaseConfig = {
 // Public read-only feed path. Anyone with this exact string can READ your
 // summary. Nobody can write to it except your signed-in account.
 export const FEED_TOKEN = "wH7lqHV7y15z4EMq9T2UZi";
+
+// The account that owns this install. Decides who gets the pre-seeded
+// reference foods. Everything else is already scoped per-account by store.js.
+export const OWNER_UID = "aXSDfnZK8IMT9wRVhBbEgkDHpsj2";
