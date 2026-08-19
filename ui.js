@@ -46,6 +46,41 @@ export function toast(msg) {
   setTimeout(() => t.remove(), 2200);
 }
 
+/* ---------- clipboard ----------
+   navigator.clipboard needs a secure context and, on iOS, a gesture it still
+   believes in. When it refuses, fall back to a sheet with the text already
+   selected — a long-press away rather than a dead end. */
+export async function copyText(text, okMsg) {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      toast(okMsg || 'Copied');
+      return true;
+    }
+  } catch {}
+  const { sh, close } = sheet();
+  sh.appendChild(el('h2', null, 'Copy this'));
+  sh.appendChild(noteEl('Your browser wouldn\u2019t hand over the clipboard. Select it all and copy.'));
+  const ta = document.createElement('textarea');
+  ta.className = 'paste-box';
+  ta.value = text;
+  ta.readOnly = true;
+  sh.appendChild(ta);
+  setTimeout(() => { ta.focus(); ta.select(); }, 60);
+  const done = el('button', 'btn btn-ghost btn-block', 'Done');
+  done.style.marginTop = '10px';
+  done.onclick = close;
+  sh.appendChild(done);
+  return false;
+}
+
+export async function readClipboard() {
+  try {
+    if (navigator.clipboard && navigator.clipboard.readText) return await navigator.clipboard.readText();
+  } catch {}
+  return null;
+}
+
 /* ---------- small text block ---------- */
 export function noteEl(txt) {
   return el('div', 'note', txt);

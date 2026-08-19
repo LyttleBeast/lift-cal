@@ -1,5 +1,5 @@
 import { GROUPS, GROUP_ORDER, EXERCISES, EQUIPMENT, makeCustomExercise } from './exercises.js';
-import { read, write, writeFeed, LS, todayKey, monthKey } from './store.js';
+import { read, write, writeFeed, watch, LS, todayKey, monthKey } from './store.js';
 import {
   $, el, sheet, toast, noteEl, confirmSheet, swipeToDelete,
   fmtDate, fmtDateFull, fmtDuration, compact, parseKey
@@ -20,6 +20,7 @@ let restEnd    = null;
 let restTotal  = 0;
 let wakeLock   = null;
 let tickHandle = null;
+let peek       = false;     // live session parked out of sight, calendar on top
 
 export function allExercises() { return [...EXERCISES, ...customEx]; }
 
@@ -61,10 +62,30 @@ function releaseWakeLock() { try { wakeLock && wakeLock.release(); } catch {} wa
 
 /* ================= DATA ================= */
 async function loadMonth(mk) {
-  if (monthCache[mk]) return monthCache[mk];
+  if (monthCache[mk]) { watchMonth(mk); return monthCache[mk]; }
   const data = (await read(`workouts/${mk}`, null)) || {};
   monthCache[mk] = data;
+  watchMonth(mk);
   return data;
+}
+
+// Keep the month on screen subscribed, so a session written straight to the
+// database (an agent over REST, or this app on another device) shows up without
+// a refresh — and, more importantly, so the whole-month writes below never
+// overwrite it from a stale cache.
+let unwatchMonth = null;
+let watchedMk = null;
+function watchMonth(mk) {
+  if (watchedMk === mk) return;
+  if (unwatchMonth) unwatchMonth();
+  watchedMk = mk;
+  unwatchMonth = watch(`workouts/${mk}`, val => {
+    const next = val || {};
+    if (JSON.stringify(next) === JSON.stringify(monthCache[mk] || {})) return;
+    monthCache[mk] = next;
+    invalidate();
+    if (!session && !summary) render();
+  });
 }
 
 // Whole-month write. Used whenever a session is edited, moved or deleted,
@@ -99,11 +120,51 @@ async function rebuildHistoryFromLog() {
 export function render() {
   const root = $('#view-workout');
   if (!root) return;
-  if (summary)       { root.innerHTML = ''; root.appendChild(renderSummary()); return; }
-  if (session)       { root.innerHTML = ''; root.appendChild(renderSession()); return; }
-  if (isStatsOpen()) { renderStats(); return; }
+  paintPeekBar();
+  if (summary)              { root.innerHTML = ''; root.appendChild(renderSummary()); return; }
+  if (session && !peek)     { root.innerHTML = ''; root.appendChild(renderSession()); return; }
+  if (isStatsOpen())        { renderStats(); return; }
   root.innerHTML = '';
   root.appendChild(renderCalendar());
+}
+
+/* ================= PEEK ================= */
+// A workout in progress used to own the Train tab outright — the calendar was
+// unreachable until you finished or discarded. Peeking parks the session
+// (nothing is lost; it's still in memory and in localStorage) and puts the
+// calendar back, with a bar pinned above the dock to climb back in.
+export function setPeek(on) {
+  if (!session || session._edit) return;
+  peek = !!on;
+  if (!peek) {
+    const dock = document.getElementById('dock');
+    const btn = dock && dock.querySelector('button[data-view="workout"]');
+    if (btn && !btn.classList.contains('active')) btn.click();
+  }
+  render();
+}
+
+function paintPeekBar() {
+  const want = !!session && !session._edit && peek && !summary;
+  let bar = document.getElementById('peekBar');
+  document.body.classList.toggle('peeking', want);
+  if (!want) { bar && bar.remove(); return; }
+  if (!bar) {
+    bar = el('div', 'peek-bar');
+    bar.id = 'peekBar';
+    const lt = el('div', 'peek-left');
+    lt.appendChild(el('div', 'peek-name', ''));
+    const cl = el('div', 'timer num', '0:00');
+    cl.id = 'peekClock';
+    lt.appendChild(cl);
+    bar.appendChild(lt);
+    const back = el('button', 'btn btn-primary', 'Resume');
+    back.onclick = () => setPeek(false);
+    bar.appendChild(back);
+    document.body.appendChild(bar);
+  }
+  bar.querySelector('.peek-name').textContent = session.name || 'Workout';
+  paintClock();
 }
 
 /* ================= CALENDAR ================= */
@@ -186,9 +247,13 @@ function renderCalendar() {
   wrap.appendChild(renderMonthStats(days));
   wrap.appendChild(renderWeekVolume());
 
-  const start = el('button', 'btn btn-primary btn-block btn-lg', 'Start workout');
-  start.onclick = () => startWorkout();
-  wrap.appendChild(start);
+  // While a session is parked the Resume bar above the dock is the way back in,
+  // so a second button saying the same thing would just be noise.
+  if (!(hasActiveSession() && peek)) {
+    const start = el('button', 'btn btn-primary btn-block btn-lg', 'Start workout');
+    start.onclick = () => startWorkout();
+    wrap.appendChild(start);
+  }
 
   const stats = el('button', 'btn btn-ghost btn-block btn-lg', 'Statistics');
   stats.style.marginTop = '10px';
@@ -302,7 +367,12 @@ function openDay(mk, dd) {
 
     const acts = el('div', 'day-actions');
     const edit = el('button', 'btn btn-ghost', 'Edit');
-    edit.onclick = () => { close(); editWorkout(w, mk, dd); };
+    edit.onclick = () => {
+      // Editing reuses the session slot, and there's a live one parked.
+      if (hasActiveSession()) { toast('Finish your workout first'); return; }
+      close();
+      editWorkout(w, mk, dd);
+    };
     const del = el('button', 'btn btn-danger', 'Delete');
     del.onclick = () => {
       confirmSheet({
@@ -402,6 +472,17 @@ function renderSession() {
   }
   bar.appendChild(lt);
 
+  if (!editing) {
+    const cal = el('button', 'wk-cal-btn');
+    cal.setAttribute('aria-label', 'Look at the calendar');
+    cal.title = 'Calendar';
+    cal.innerHTML =
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' +
+      '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>';
+    cal.onclick = () => setPeek(true);
+    bar.appendChild(cal);
+  }
+
   const fin = el('button', 'btn btn-primary', editing ? 'Save' : 'Finish');
   fin.onclick = editing ? saveEdit : finishWorkout;
   bar.appendChild(fin);
@@ -442,7 +523,7 @@ function renderSession() {
       confirmLabel: 'Discard',
       danger: true,
       onConfirm: () => {
-        session = null; LS.del('activeSession'); releaseWakeLock(); clearRest(); render();
+        session = null; peek = false; LS.del('activeSession'); releaseWakeLock(); clearRest(); render();
       }
     });
   };
@@ -629,12 +710,14 @@ function e1rm(w, r) {
 
 /* ---------- clock ---------- */
 function paintClock() {
-  const c = document.getElementById('wkClock');
-  if (!c || !session) return;
+  if (!session) return;
+  const targets = [document.getElementById('wkClock'), document.getElementById('peekClock')].filter(Boolean);
+  if (!targets.length) return;
   const s = Math.floor((Date.now() - session.startedAt) / 1000);
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = s % 60;
-  c.textContent = h ? `${h}:${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`
-                    : `${m}:${String(ss).padStart(2,'0')}`;
+  const txt = h ? `${h}:${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`
+                : `${m}:${String(ss).padStart(2,'0')}`;
+  targets.forEach(c => c.textContent = txt);
 }
 
 /* ---------- rest timer ---------- */
@@ -715,7 +798,7 @@ async function finishWorkout() {
       confirmLabel: 'Discard',
       danger: true,
       onConfirm: () => {
-        session = null; LS.del('activeSession'); releaseWakeLock(); clearRest(); render();
+        session = null; peek = false; LS.del('activeSession'); releaseWakeLock(); clearRest(); render();
       }
     });
     return;
@@ -765,6 +848,7 @@ async function finishWorkout() {
 
   summary = { record, prs, firsts, milestones, prior: priorSessions };
   session = null;
+  peek = false;
   LS.del('activeSession');
   releaseWakeLock();
   clearRest();

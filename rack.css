@@ -318,6 +318,40 @@ h2 { font-size: 18px; }
 .vol-val { font-size: 11px; color: var(--dim); width: 42px; text-align: right;
   font-variant-numeric: tabular-nums; }
 
+/* ---- parked-workout bar (calendar peek) ---- */
+.peek-bar {
+  position: fixed;
+  left: var(--pad); right: var(--pad);
+  bottom: calc(var(--dock-h) + env(safe-area-inset-bottom) + 10px);
+  z-index: 60;
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 10px 9px 13px;
+  background: var(--collar);
+  border: 1px solid var(--knurl);
+  border-radius: var(--r);
+  box-shadow: 0 10px 30px rgba(0,0,0,.45);
+}
+.peek-left { min-width: 0; flex: 1; }
+.peek-name {
+  font-size: 13px; color: var(--chalk);
+  font-variation-settings: 'wdth' 92, 'wght' 700;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.peek-bar .btn { padding: 8px 16px; flex-shrink: 0; }
+.peek-bar .timer { font-size: 12px; color: var(--steel); margin-top: 1px; }
+body.peeking .view.active { padding-bottom: 58px; }
+.wk-cal-btn {
+  flex-shrink: 0;
+  width: 38px; height: 38px;
+  display: grid; place-items: center;
+  background: transparent;
+  border: 1px solid var(--collar);
+  border-radius: var(--r-sm);
+  color: var(--steel);
+}
+.wk-cal-btn svg { width: 19px; height: 19px; }
+.wk-cal-btn:active { color: var(--chalk); border-color: var(--knurl); }
+
 /* ============ ACTIVE WORKOUT ============ */
 .wk-bar {
   position: sticky; top: 0; z-index: 50;
@@ -833,6 +867,57 @@ h2 { font-size: 18px; }
    ============ FUEL TWEAKS ============
    ================================================================ */
 .fuel-top { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; }
+
+/* ---- calorie meter: deficit / maintenance / surplus ---- */
+.btn-split { display: flex; gap: 8px; }
+.btn-split > .btn { flex: 1; }
+
+.cal-meter { margin: 0 0 16px; }
+.cal-track {
+  position: relative;
+  height: 18px;
+  border-radius: 4px;
+  background: var(--collar);
+  overflow: hidden;
+}
+.cal-zone { position: absolute; top: 0; bottom: 0; }
+.cal-zone.cut  { background: rgba(46,127,217,.16); }
+.cal-zone.hold { background: rgba(240,190,30,.18); }
+.cal-zone.gain { background: rgba(214,37,43,.16); }
+.cal-fill {
+  position: absolute; left: 0; top: 0; bottom: 0;
+  border-radius: 4px 0 0 4px;
+  opacity: .92;
+  transition: width 500ms var(--ease);
+}
+.cal-tick {
+  position: absolute; top: -1px; bottom: -1px; width: 2px;
+  margin-left: -1px;
+  background: var(--chalk);
+  opacity: .85;
+  box-shadow: 0 0 0 1px rgba(20,22,26,.55);
+}
+.cal-head {
+  position: absolute; top: -2px; bottom: -2px; width: 3px;
+  margin-left: -1.5px; border-radius: 2px;
+  background: var(--chalk);
+  transition: left 500ms var(--ease);
+}
+.cal-bands { position: relative; height: 13px; margin-top: 5px; }
+.cal-band-lab {
+  position: absolute; top: 0;
+  font-size: 9.5px; text-align: center; color: var(--dim);
+  text-transform: uppercase; letter-spacing: .08em;
+  font-variation-settings: 'wdth' 86, 'wght' 650;
+  white-space: nowrap; overflow: hidden;
+}
+.cal-status {
+  display: flex; align-items: center; gap: 6px;
+  margin-top: 7px; font-size: 11.5px; color: var(--steel);
+}
+.cal-status i { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.cal-status .cal-maint { margin-left: auto; color: var(--dim); font-size: 11px; }
+
 .fuel-eaten { font-size: 12px; color: var(--dim); }
 
 .meal-right { display: flex; align-items: center; gap: 8px; }

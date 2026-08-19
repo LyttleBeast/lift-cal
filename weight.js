@@ -1,8 +1,9 @@
 // Weight — body-weight log, trend math, and the app's settings card.
 //   weight/entries -> { id: { lb, t } }
 
-import { read, write, writeFeed, LS, todayKey, feedUrl, logout } from './store.js';
+import { read, write, writeFeed, watch, LS, todayKey, feedUrl, logout } from './store.js';
 import { hasActiveSession } from './workout.js';
+import { weightStats, dailyMeans as meansOf, movingAvg, maintenance } from './tdee.js';
 import { openImport } from './importer.js';
 import { lineChart } from './analytics.js';
 import { $, el, toast, noteEl, confirmSheet, r1, parseKey, fmtDateFull } from './ui.js';
@@ -13,58 +14,29 @@ let summaries = {};    // dateKey -> {cal,...} for TDEE
 
 export async function initWeight() {
   entries = (await read('weight/entries', null)) || {};
+  // Stay subscribed: this node is written whole, so a stale copy in memory
+  // would silently drop a weigh-in logged elsewhere (another device, or an
+  // agent writing over REST) the next time you stepped on the scale.
+  watch('weight/entries', val => {
+    const next = val || {};
+    if (JSON.stringify(next) === JSON.stringify(entries)) return;
+    entries = next;
+    pushWeightFeed();
+    render();
+  });
   render();
 }
 
 /* ================= MATH ================= */
+// The arithmetic lives in tdee.js so Fuel's calorie bar and this screen can
+// never disagree about what "maintenance" means.
 function sorted() {
   return Object.entries(entries)
     .map(([id, e]) => ({ id, ...e }))
     .sort((a, b) => a.t - b.t);
 }
-
-// mean weight per calendar day
-function dailyMeans() {
-  const by = {};
-  sorted().forEach(e => {
-    const k = todayKey(new Date(e.t));
-    (by[k] = by[k] || []).push(e.lb);
-  });
-  return Object.entries(by)
-    .map(([d, lbs]) => ({ d, lb: lbs.reduce((s, x) => s + x, 0) / lbs.length }))
-    .sort((a, b) => a.d < b.d ? -1 : 1);
-}
-
-// trailing 7-day moving average at each day
-function movingAvg(days) {
-  return days.map((pt, i) => {
-    const t0 = parseKey(pt.d).getTime() - 6.5 * 864e5;
-    const win = days.filter((q, j) => j <= i && parseKey(q.d).getTime() >= t0);
-    return { d: pt.d, lb: win.reduce((s, x) => s + x.lb, 0) / win.length };
-  });
-}
-
-function windowAvg(days, fromAgo, toAgo) {
-  const now = Date.now();
-  const win = days.filter(p => {
-    const t = parseKey(p.d).getTime();
-    return t <= now - toAgo * 864e5 && t > now - fromAgo * 864e5;
-  });
-  if (win.length < 3) return null;
-  return win.reduce((s, x) => s + x.lb, 0) / win.length;
-}
-
-function stats() {
-  const list = sorted();
-  const days = dailyMeans();
-  const latest = list[list.length - 1] || null;
-  const avg7 = windowAvg(days, 7, 0);
-  const prev7 = windowAvg(days, 14, 7);
-  const rateWk = avg7 != null && prev7 != null ? avg7 - prev7 : null;
-  const d30 = days.filter(p => parseKey(p.d).getTime() > Date.now() - 30 * 864e5);
-  const change30 = d30.length >= 2 ? d30[d30.length - 1].lb - d30[0].lb : null;
-  return { latest, avg7, rateWk, change30, days };
-}
+function dailyMeans() { return meansOf(entries); }
+function stats() { return weightStats(entries); }
 
 /* ================= FEED ================= */
 async function pushWeightFeed() {
@@ -238,28 +210,20 @@ async function renderTDEE(s) {
   card.appendChild(hd);
 
   summaries = (await read('food/daySummaries', null)) || {};
-  const today = todayKey();
-  const calDays = Object.entries(summaries)
-    .filter(([d, v]) => d !== today && v && v.cal > 0)
-    .filter(([d]) => parseKey(d).getTime() > Date.now() - 15 * 864e5);
+  const m = maintenance(entries, summaries);
 
-  if (s.rateWk == null || calDays.length < 7) {
-    const need = [];
-    if (calDays.length < 7) need.push((7 - calDays.length) + ' more day' + (7 - calDays.length === 1 ? '' : 's') + ' of food logging');
-    if (s.rateWk == null) need.push('two weeks of weigh-ins');
-    card.appendChild(noteEl('Needs ' + need.join(' and ') + '. Then the math does itself: average intake corrected by the scale’s direction.'));
+  if (m.tdee == null) {
+    card.appendChild(noteEl('Needs ' + m.need.join(' and ') +
+      '. Then the math does itself: average intake corrected by the scale\u2019s direction.'));
     return card;
   }
 
-  const avgIntake = calDays.reduce((sum, [, v]) => sum + v.cal, 0) / calDays.length;
-  const tdee = Math.round((avgIntake - s.rateWk * 500) / 10) * 10;
-
-  const big = el('div', 'load-num num', '≈ ' + tdee.toLocaleString());
+  const big = el('div', 'load-num num', '\u2248 ' + m.tdee.toLocaleString());
   big.style.fontSize = '32px';
   card.appendChild(big);
   card.appendChild(noteEl(
-    'kcal/day to hold steady — from ' + Math.round(avgIntake).toLocaleString() + ' avg intake over ' + calDays.length +
-    ' logged days and a ' + (s.rateWk > 0 ? '+' : '') + r1(s.rateWk) + ' lb/week trend.'));
+    'kcal/day to hold steady \u2014 from ' + Math.round(m.avgIntake).toLocaleString() + ' avg intake over ' + m.days +
+    ' logged days and a ' + (m.rateWk > 0 ? '+' : '') + r1(m.rateWk) + ' lb/week trend. Fuel uses this to place the cut / maintain / gain marks on the calorie bar.'));
   return card;
 }
 

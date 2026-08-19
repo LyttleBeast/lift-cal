@@ -10,9 +10,10 @@
 // with users/{uid}/. The only thing that used to leak between accounts was
 // the hard-coded starter foods, which are now owner-only (see seedItems).
 
-import { read, write, writeFeed, LS, todayKey, uid } from './store.js';
+import { read, write, writeFeed, watch, LS, todayKey, uid } from './store.js';
+import { maintenance, calorieZones, zoneOf } from './tdee.js';
 import { OWNER_UID } from './firebase-config.js';
-import { $, el, sheet, toast, noteEl, confirmSheet, r1, trimNum } from './ui.js';
+import { $, el, sheet, toast, noteEl, confirmSheet, copyText, readClipboard, r1, trimNum } from './ui.js';
 
 const MEALS = [
   ['breakfast', 'Breakfast'],
@@ -34,14 +35,18 @@ let viewDate = new Date();
 let dayLog   = {};      // entryId -> entry for viewDate
 let items    = {};      // itemId  -> library item
 let meals    = {};      // mealId  -> saved meal
-let targets  = { cal: 2700, p: 215, f: 80 };
+let targets  = { cal: 2700, p: 215, f: 80, maint: null };
 let feedTimer = null;
+let weighIns = {};      // weight/entries — only for the maintenance estimate
+let summaries = {};     // food/daySummaries — ditto
+let unwatchDay = null;  // live listener on the day being viewed
 
 /* ================= INIT ================= */
 export async function initFood() {
   targets = (await read('food/targets', null)) || targets;
   items   = (await read('food/items',   null)) || {};
   meals   = (await read('food/meals',   null)) || {};
+  await loadMaintInputs();
   await seedItems();
   await loadDay();
 
@@ -52,6 +57,30 @@ export async function initFood() {
 
 async function loadDay() {
   dayLog = (await read('food/log/' + dk(viewDate), null)) || {};
+  watchDay();
+}
+
+// Live listener on whichever day is on screen. Anything that edits the log
+// from outside the app — Claude writing straight to the database — shows up
+// here without a refresh. Rollups are recomputed locally so the TDEE math and
+// the public feed stay honest no matter who did the writing.
+function watchDay() {
+  if (unwatchDay) { unwatchDay(); unwatchDay = null; }
+  const key = dk(viewDate);
+  unwatchDay = watch('food/log/' + key, val => {
+    const next = val || {};
+    if (JSON.stringify(next) === JSON.stringify(dayLog)) return;
+    dayLog = next;
+    render();
+    const t = totals();
+    write('food/daySummaries/' + key, { cal: t.cal, p: Math.round(t.p), c: Math.round(t.c), f: Math.round(t.f) });
+    queueFeed();
+  });
+}
+
+async function loadMaintInputs() {
+  weighIns  = (await read('weight/entries',     null)) || {};
+  summaries = (await read('food/daySummaries',  null)) || {};
 }
 
 function dk(d) { return todayKey(d); }
@@ -183,6 +212,32 @@ function newEntryId() {
   return 'f' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
 }
 
+/* ---------- entry <-> JSON ----------
+   The shape the paste importer already understands, so anything you copy out
+   of the log can go straight back in on another day. */
+function entryJson(e) {
+  const o = {
+    name: e.name,
+    qty: e.qty || '',
+    cal: e.cal || 0,
+    p: r1(e.p || 0), c: r1(e.c || 0), f: r1(e.f || 0),
+    meal: e.meal || defaultMeal()
+  };
+  if (e.micro && Object.keys(e.micro).length) o.micro = e.micro;
+  return JSON.stringify({ items: [o] }, null, 2);
+}
+
+// Write entries onto today's log whatever day is on screen, then land there.
+async function logOnToday(entries) {
+  if (!isToday()) { viewDate = new Date(); await loadDay(); }
+  entries.forEach(e => {
+    const id = newEntryId();
+    dayLog[id] = { id, t: Date.now(), ...e };
+  });
+  await saveDay();
+  render();
+}
+
 function addEntry(entry) {
   const id = newEntryId();
   dayLog[id] = { id, t: Date.now(), ...entry };
@@ -287,6 +342,8 @@ function renderSummary() {
   top.appendChild(sub);
   card.appendChild(top);
 
+  card.appendChild(renderCalMeter(t.cal));
+
   const rows = [
     ['Protein', t.p, targets.p,      'var(--p-red)'],
     ['Carbs',   t.c, carbsTarget(),  'var(--p-yellow)'],
@@ -305,6 +362,96 @@ function renderSummary() {
     card.appendChild(row);
   });
   return card;
+}
+
+/* ---------- maintenance ----------
+   A number you typed always wins; otherwise the estimate off the weight
+   trend. Null means we genuinely don't know yet and shouldn't pretend. */
+function maintInfo() {
+  if (targets.maint > 0) return { cal: Math.round(targets.maint), auto: false };
+  const m = maintenance(weighIns, summaries);
+  if (m.tdee) return { cal: m.tdee, auto: true };
+  return null;
+}
+
+/* ---------- the calorie bar ----------
+   Bigger than the macro rows because it matters more. Two ticks split it into
+   three bands: everything left of the first tick is a deficit, between the two
+   is holding, past the second you're gaining. The dashed mark is the day's
+   calorie target, wherever you've set it. */
+function renderCalMeter(cal) {
+  const wrap = el('div', 'cal-meter');
+  const mi = maintInfo();
+  const z  = mi ? calorieZones(mi.cal) : null;
+
+  // Scale: always leave headroom past the gain tick so the third band is real
+  // estate you can actually land in, and never clip the day you overshot.
+  const headroom = z ? Math.max(350, z.gainFrom * 0.12) : targets.cal * 0.15;
+  const top = (z ? z.gainFrom : targets.cal) + headroom;
+  // A wild day would otherwise stretch the axis until the three bands are
+  // slivers, so the scale stops growing well before that. Past the end the bar
+  // just pins full — the number above it says how far over you went.
+  const ceiling = (z ? z.gainFrom : targets.cal) * 1.35;
+  const max = Math.ceil(Math.min(Math.max(top, targets.cal * 1.08, cal * 1.06, 1), ceiling) / 100) * 100;
+  const pct = v => Math.max(0, Math.min(100, v / max * 100));
+
+  const track = el('div', 'cal-track');
+  if (z) {
+    const band = (cls, from, to) => {
+      const d = el('div', 'cal-zone ' + cls);
+      d.style.left = pct(from) + '%';
+      d.style.width = (pct(to) - pct(from)) + '%';
+      return d;
+    };
+    track.append(band('cut', 0, z.cutTop), band('hold', z.cutTop, z.gainFrom), band('gain', z.gainFrom, max));
+  }
+
+  const zone = zoneOf(cal, z);
+  const fill = el('div', 'cal-fill');
+  fill.style.width = pct(cal) + '%';
+  fill.style.background = !z ? 'var(--p-white)'
+    : zone === 'cut' ? 'var(--p-blue)'
+    : zone === 'maintain' ? 'var(--p-yellow)' : 'var(--p-red)';
+  track.appendChild(fill);
+
+  if (z) [z.cutTop, z.gainFrom].forEach(v => {
+    const tk = el('div', 'cal-tick');
+    tk.style.left = pct(v) + '%';
+    track.appendChild(tk);
+  });
+
+  const head = el('div', 'cal-head');
+  head.style.left = pct(cal) + '%';
+  track.appendChild(head);
+  wrap.appendChild(track);
+
+  if (z) {
+    const legend = el('div', 'cal-bands');
+    const lab = (txt, from, to) => {
+      const w = pct(to) - pct(from);
+      const d = el('div', 'cal-band-lab', w < 9 ? '' : txt);   // too narrow to read
+      d.style.left = pct(from) + '%';
+      d.style.width = w + '%';
+      return d;
+    };
+    legend.append(lab('cut', 0, z.cutTop), lab('hold', z.cutTop, z.gainFrom), lab('gain', z.gainFrom, max));
+    wrap.appendChild(legend);
+
+    const gap = Math.round(cal - z.maint);
+    const msg = zone === 'cut'   ? 'In a deficit \u00b7 ' + Math.abs(gap).toLocaleString() + ' under maintenance'
+              : zone === 'gain'  ? 'Gaining \u00b7 ' + gap.toLocaleString() + ' over maintenance'
+              :                    'Holding \u00b7 within ' + z.band + ' of maintenance';
+    const line = el('div', 'cal-status');
+    const dot = el('i');
+    dot.style.background = fill.style.background;
+    line.append(dot, el('span', null, msg));
+    line.appendChild(el('span', 'cal-maint num',
+      'maint ' + z.maint.toLocaleString() + (mi.auto ? ' est.' : '')));
+    wrap.appendChild(line);
+  } else {
+    wrap.appendChild(noteEl('Set your maintenance calories in \u2699 Settings \u2014 or log a week of food alongside your weigh-ins \u2014 to mark the cut / maintain / gain lines on this bar.'));
+  }
+  return wrap;
 }
 
 function renderMeal(mealId, label) {
@@ -418,6 +565,30 @@ function openEntry(e) {
       toast('Logged again');
     };
     body.appendChild(again);
+
+    /* ---- reuse this food on another day ----
+       Copy hands you the same JSON shape the paste importer eats, so an old
+       entry can be lifted onto today (or into a chat with Claude). If you're
+       looking at a past day the direct route is right there too. */
+    const reuse = el('div', 'btn-split');
+    reuse.style.marginTop = '8px';
+
+    const cp = el('button', 'btn btn-ghost', 'Copy JSON');
+    cp.onclick = () => copyText(entryJson(e), 'JSON copied \u2014 paste it in \u2699 \u203a Paste food JSON');
+    reuse.appendChild(cp);
+
+    if (!isToday()) {
+      const toToday = el('button', 'btn btn-ghost', 'Log on today');
+      toToday.onclick = async () => {
+        const copy = { ...e };
+        delete copy.id; delete copy.t;
+        await logOnToday([{ ...copy, src: 'repeat' }]);
+        close();
+        toast('Logged on today');
+      };
+      reuse.appendChild(toToday);
+    }
+    body.appendChild(reuse);
 
     /* ---- precise editing ---- */
     body.appendChild(el('div', 'field-lbl', item ? 'Exact portion' : 'Exact numbers'));
@@ -923,8 +1094,10 @@ function openFuelSettings() {
   sh.appendChild(el('h2', null, 'Settings'));
 
   const summary = el('div', 'settings-summary num');
+  const mNow = maintInfo();
   summary.textContent = targets.cal.toLocaleString() + ' kcal  ·  P ' + targets.p +
-    '  ·  C ' + carbsTarget() + '  ·  F ' + targets.f;
+    '  ·  C ' + carbsTarget() + '  ·  F ' + targets.f +
+    (mNow ? '   ·   maint ' + mNow.cal.toLocaleString() + (mNow.auto ? ' est.' : '') : '');
   sh.appendChild(summary);
 
   const tBtn = el('button', 'btn btn-ghost btn-block', 'Daily targets');
@@ -932,7 +1105,7 @@ function openFuelSettings() {
   tBtn.onclick = () => { close(); openTargets(); };
   sh.appendChild(tBtn);
 
-  const iBtn = el('button', 'btn btn-ghost btn-block', 'Import from Claude');
+  const iBtn = el('button', 'btn btn-ghost btn-block', 'Paste food JSON');
   iBtn.style.marginTop = '10px';
   iBtn.onclick = () => { close(); openImportPaste(); };
   sh.appendChild(iBtn);
@@ -963,6 +1136,7 @@ function openTargets() {
   const tc = mkT('cal', 'Calories'), tp = mkT('p', 'Protein g'), tf = mkT('f', 'Fat g');
   sh.append(tc, tp, tf);
 
+
   const carbs = el('div', 'eyebrow');
   const paintCarbs = () => {
     const cal = parseInt(tc.input.value) || 0, p = parseInt(tp.input.value) || 0, f = parseInt(tf.input.value) || 0;
@@ -971,6 +1145,20 @@ function openTargets() {
   [tc, tp, tf].forEach(w => w.input.oninput = paintCarbs);
   paintCarbs();
   sh.appendChild(carbs);
+  // Maintenance: optional. Blank means "use the estimate off my weight trend".
+  const est = maintenance(weighIns, summaries);
+  const tm = el('div', 'field');
+  tm.style.marginTop = '10px';
+  tm.appendChild(el('label', null, 'Maintenance kcal'));
+  const mi = el('input');
+  mi.type = 'number'; mi.inputMode = 'numeric';
+  mi.value = targets.maint > 0 ? targets.maint : '';
+  mi.placeholder = est.tdee ? String(est.tdee) + ' (estimated)' : 'leave blank to estimate';
+  tm.appendChild(mi);
+  sh.appendChild(tm);
+  sh.appendChild(noteEl(est.tdee
+    ? 'Your weight trend puts maintenance around ' + est.tdee.toLocaleString() + ' kcal. Leave this blank to keep following that estimate, or type your own number to pin the cut / maintain / gain marks.'
+    : 'The estimate needs ' + est.need.join(' and ') + '. Type a number here to draw the zones in the meantime.'));
 
   const save = el('button', 'btn btn-primary btn-block', 'Save');
   save.style.marginTop = '14px';
@@ -978,7 +1166,8 @@ function openTargets() {
     targets = {
       cal: parseInt(tc.input.value) || 2700,
       p: parseInt(tp.input.value) || 215,
-      f: parseInt(tf.input.value) || 80
+      f: parseInt(tf.input.value) || 80,
+      maint: parseInt(mi.value) > 0 ? parseInt(mi.value) : null
     };
     await write('food/targets', targets);
     queueFeed();
@@ -1010,13 +1199,22 @@ function handleHash() {
 
 function openImportPaste() {
   const { sh, close } = sheet();
-  sh.appendChild(el('h2', null, 'Import from Claude'));
-  sh.appendChild(noteEl('Paste the JSON Claude gave you. Nothing is logged until you confirm.'));
+  sh.appendChild(el('h2', null, 'Paste food JSON'));
+  sh.appendChild(noteEl('From Claude, or copied off any food already in your log \u2014 tap an entry \u203a Copy JSON. Lands on today. Nothing is logged until you confirm.'));
 
   const ta = document.createElement('textarea');
   ta.className = 'paste-box';
   ta.placeholder = '{"items":[{"name":"Chicken and rice","cal":650,"p":52,"c":78,"f":12}]}';
   sh.appendChild(ta);
+
+  const paste = el('button', 'btn btn-ghost btn-block', 'Paste from clipboard');
+  paste.style.marginTop = '8px';
+  paste.onclick = async () => {
+    const txt = await readClipboard();
+    if (txt == null) { toast('Your browser won\u2019t share the clipboard \u2014 long-press the box'); ta.focus(); return; }
+    ta.value = txt.trim();
+  };
+  sh.appendChild(paste);
 
   const go = el('button', 'btn btn-primary btn-block', 'Preview');
   go.style.marginTop = '10px';
@@ -1087,13 +1285,8 @@ function confirmImport(entries, sourceLabel) {
   go.style.marginTop = '12px';
   go.onclick = async () => {
     // imports always land on TODAY regardless of the day being viewed
-    if (!isToday()) { viewDate = new Date(); await loadDay(); }
-    entries.forEach(e => {
-      const id = newEntryId();
-      dayLog[id] = { id, t: Date.now(), ...e };
-    });
-    await saveDay();
-    close(); render();
+    await logOnToday(entries);
+    close();
     toast('Logged ' + entries.length + ' food' + (entries.length > 1 ? 's' : ''));
   };
   sh.appendChild(go);

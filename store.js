@@ -93,6 +93,25 @@ export async function read(path, fallback = null) {
   }
 }
 
+/* ---------- live listener ----------
+   read() is a one-shot snapshot, which is fine when the app is the only thing
+   writing. It isn't any more — the database is reachable over REST, so an
+   agent can log a food or a weigh-in while the app sits open. watch() keeps a
+   node subscribed so those edits land on screen without a refresh.
+   Returns an unsubscribe function. */
+export function watch(path, cb) {
+  if (!UID) return () => {};
+  try {
+    return onValue(ref(db, userPath(path)), snap => {
+      const v = snap.exists() ? snap.val() : null;
+      LS.set('mirror:' + path, v);
+      cb(v);
+    }, () => {});
+  } catch {
+    return () => {};
+  }
+}
+
 export async function mergeUpdate(path, obj) {
   if (!UID) return;
   try { await update(ref(db, userPath(path)), obj); } catch {}
