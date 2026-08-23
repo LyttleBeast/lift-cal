@@ -559,15 +559,6 @@ export function heatStrip(sessions, days = 91) {
     const k = s._date;
     byDay[k] = (byDay[k] || 0) + (s.volume || 0);
   });
-  return heatMap(byDay, { days });
-}
-
-/**
- * The same grid over any { dateKey: number } map, so anything with a daily
- * value can draw one — training volume, steps, whatever comes next.
- */
-export function heatMap(byDay, opts = {}) {
-  const { days = 91, color = 'var(--p-yellow)' } = opts;
   const max = Math.max(1, ...Object.values(byDay));
 
   const cols = Math.ceil(days / 7);
@@ -591,7 +582,7 @@ export function heatMap(byDay, opts = {}) {
       svg.appendChild(svgEl('rect', {
         x: (c * (CELL + GAP)).toFixed(1), y: (row * (CELL + GAP)).toFixed(1),
         width: CELL, height: CELL, rx: 2.5,
-        fill: v ? color : 'var(--collar)',
+        fill: v ? 'var(--p-yellow)' : 'var(--collar)',
         'fill-opacity': v ? op.toFixed(2) : '1'
       }));
     }

@@ -16,7 +16,12 @@
 
 import { read, write, watch, todayKey } from './store.js';
 import { firebaseConfig } from './firebase-config.js';
-import { barChart, heatMap, emptyChart } from './analytics.js';
+// Only long-standing exports are imported from analytics.js. A brand-new
+// module must never depend on a brand-new export in an OLD shared file: if a
+// browser is holding even one stale file, the import fails and this whole tab
+// renders blank with no error the user can see. That is exactly what happened
+// on the first deploy of this tab. The heat map below is therefore local.
+import { barChart, emptyChart } from './analytics.js';
 import { $, el, svgEl, sheet, toast, noteEl, confirmSheet, swipeToDelete,
          segmented, compact, copyText, parseKey, fmtDate, fmtDateFull } from './ui.js';
 
@@ -43,6 +48,40 @@ export async function initSteps() {
     render();
   });
   render();
+}
+
+/* ---------- heat map ----------
+   Same grid as the training one in analytics.js, over any {dateKey: number}.
+   Deliberately duplicated rather than shared — see the import note above. */
+function heatMap(byDay, opts = {}) {
+  const { days = 91, color = 'var(--p-green)' } = opts;
+  const max = Math.max(1, ...Object.values(byDay));
+  const cols = Math.ceil(days / 7);
+  const CELL = 9, GAP = 2.5;
+  const W = cols * (CELL + GAP), H = 7 * (CELL + GAP);
+  const svg = svgEl('svg', { viewBox: '0 0 ' + W + ' ' + H, class: 'chart heat' });
+
+  const start = new Date();
+  start.setHours(12, 0, 0, 0);
+  start.setDate(start.getDate() - (days - 1));
+  start.setDate(start.getDate() - start.getDay());   // align to a Sunday
+
+  for (let c = 0; c < cols; c++) {
+    for (let row = 0; row < 7; row++) {
+      const d = new Date(start);
+      d.setDate(d.getDate() + c * 7 + row);
+      if (d.getTime() > Date.now() + DAY) continue;
+      const v = byDay[todayKey(d)] || 0;
+      const op = v ? (0.28 + 0.72 * Math.min(1, v / max)) : 0;
+      svg.appendChild(svgEl('rect', {
+        x: (c * (CELL + GAP)).toFixed(1), y: (row * (CELL + GAP)).toFixed(1),
+        width: CELL, height: CELL, rx: 2.5,
+        fill: v ? color : 'var(--collar)',
+        'fill-opacity': v ? op.toFixed(2) : '1'
+      }));
+    }
+  }
+  return svg;
 }
 
 /* ================= HELPERS ================= */
