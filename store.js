@@ -1,5 +1,5 @@
 // Data layer: Firebase RTDB + localStorage mirror + public feed snapshot.
-import { firebaseConfig, FEED_TOKEN } from './firebase-config.js';
+import { firebaseConfig, FEED_TOKEN, OWNER_UID } from './firebase-config.js';
 
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
 import {
@@ -34,20 +34,56 @@ export async function login(email, password) {
 }
 export function logout() { return signOut(auth); }
 export function watchAuth(cb) {
-  return onAuthStateChanged(auth, u => { UID = u ? u.uid : null; cb(u); });
+  return onAuthStateChanged(auth, u => {
+    UID = u ? u.uid : null;
+    if (UID) migrateLegacyKeys();
+    cb(u);
+  });
 }
 export function uid() { return UID; }
 
-/* ---------- local mirror ---------- */
+/* ---------- local mirror ----------
+   Every key is namespaced by account. It used to be a flat `fit:` prefix, which
+   is fine with one account and quietly wrong with two: sign out, sign in as
+   somebody else on the same phone, and the mirror serves the previous user's
+   food log whenever the network is slow or absent, initWorkout() hands them the
+   previous user's in-progress workout, and the offline queue still holds writes
+   addressed to a subtree this account isn't allowed to touch — which then fail
+   permission and retry on every single reconnect, forever.
+
+   The prefix changed from `fit:` to `rack:` deliberately, so legacy keys are
+   unambiguous and can be swept exactly once. */
+function lsKey(k) { return 'rack:' + (UID || 'anon') + ':' + k; }
+
 const LS = {
   get(k, fallback) {
-    try { const v = localStorage.getItem('fit:' + k); return v ? JSON.parse(v) : fallback; }
+    try { const v = localStorage.getItem(lsKey(k)); return v ? JSON.parse(v) : fallback; }
     catch { return fallback; }
   },
-  set(k, v) { try { localStorage.setItem('fit:' + k, JSON.stringify(v)); } catch {} },
-  del(k)    { try { localStorage.removeItem('fit:' + k); } catch {} }
+  set(k, v) { try { localStorage.setItem(lsKey(k), JSON.stringify(v)); } catch {} },
+  del(k)    { try { localStorage.removeItem(lsKey(k)); } catch {} }
 };
 export { LS };
+
+// Runs once per device, for whoever signs in first after this update — which on
+// every existing install is the account that wrote those keys. Carries the cache
+// and any in-progress workout across the rename instead of dropping them.
+function migrateLegacyKeys() {
+  try {
+    if (!UID || localStorage.getItem('rack:migrated')) return;
+    const old = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith('fit:')) old.push(k);
+    }
+    old.forEach(k => {
+      const v = localStorage.getItem(k);
+      if (v != null) localStorage.setItem('rack:' + UID + ':' + k.slice(4), v);
+    });
+    old.forEach(k => localStorage.removeItem(k));
+    localStorage.setItem('rack:migrated', '1');
+  } catch {}
+}
 
 /* ---------- write queue (survives offline) ---------- */
 function queue() { return LS.get('queue', []); }
@@ -121,6 +157,11 @@ export async function mergeUpdate(path, obj) {
    Written to /feed/{token}. World-readable, owner-write-only.
    Carries a summary only — never the full history. */
 export async function writeFeed(patch) {
+  // One node, one hard-coded token, owner-write-only in the rules. Every other
+  // account writing to it just earns a permission denial three times a session.
+  // More to the point, the feed is a public summary of ONE person — a second
+  // account must never publish into it.
+  if (UID !== OWNER_UID) return;
   if (!UID || !online.value) return;
   try {
     await update(ref(db, `feed/${FEED_TOKEN}`), {
@@ -129,6 +170,8 @@ export async function writeFeed(patch) {
     });
   } catch {}
 }
+
+export function isOwner() { return UID === OWNER_UID; }
 
 export function feedUrl() {
   const host = (firebaseConfig.databaseURL || '').replace(/\/$/, '');

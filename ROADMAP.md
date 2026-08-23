@@ -12,24 +12,23 @@ A `designed` item has an agreed shape and no code.
 
 | # | Change | Size | Status |
 |---|---|---|---|
-| 1 | [Steps — a fourth tab](#1-steps--a-fourth-tab) | medium | designed |
+| 1 | [Steps — a fourth tab](#1-steps--a-fourth-tab) | medium | **shipped** |
 | 2 | [Fuel — make the deficit the headline](#2-fuel--make-the-deficit-the-headline) | **small** | **shipped** |
 | 3 | [Train — pre-planned routines](#3-train--pre-planned-routines) | large | **shipped** |
 | 4 | [Water — goal and tracker](#4-water--goal-and-tracker) | medium | **shipped** |
 | 5 | [The maintenance algorithm — overhaul](#5-the-maintenance-algorithm--overhaul) | **largest** | **shipped** |
 | 6 | [Targets that follow the scale](#6-targets-that-follow-the-scale) | medium | **shipped** |
+| 7 | [Account isolation](#7-account-isolation) | medium | **shipped** |
 
-2 through 5 were built on 2026-08-23. **1 (Steps) is still the open one** — it
-needs a Shortcut set up on the phone rather than code in the repo, so it waits
-on the watch.
-
-Where the shipped designs departed from the plan, the section says so inline.
+All seven built on 2026-08-23. Where the shipped version departed from the
+plan, the section says so inline — §1 in particular was redesigned once the
+multi-user requirement landed.
 
 ---
 
 ## 1. Steps — a fourth tab
 
-**Status:** designed · discussed 2026-08-23 · not started
+**Status:** **shipped** 2026-08-23
 
 ### The constraint that decides the design
 
@@ -57,6 +56,31 @@ anywhere appears on the phone in about a second, no refresh.
 Nothing about this is watch-specific. Whatever watch gets bought syncs to Apple
 Health, and the Health data is what gets pushed. **Buy the watch on its merits;
 the plumbing does not care.**
+
+### What changed when a second account appeared
+
+The design below originally had the **agent account** pushing steps into one
+subtree. That was wrong the moment more than one person existed: the published
+rules let the agent write to exactly one UID, so it could never have worked for
+a tester, and handing out the agent password would have been worse.
+
+The replacement is simpler and needed no rule change at all, because the rules
+already said the important thing:
+
+```
+".write": "$uid === auth.uid || (…)"
+```
+
+Every account can already write its own subtree. So the automation **signs in as
+that person**. Better: the sign-in response carries `localId`, which *is* their
+UID — so one recipe works for every account unmodified. Nobody types an account
+id, nobody shares a credential, nothing is per-person except the email and
+password they already have.
+
+Manual entry is not the fallback, it is the floor: it works on any phone with no
+setup, it is the only thing an Android tester gets without installing something,
+and it covers the days an automation misses. Both write the same node, so
+automation is a pure upgrade with nothing to migrate.
 
 ### Two ways to push
 
@@ -746,6 +770,61 @@ with 101 g of carbs, not 900 kcal with none, and the preview says why.
 weigh-in on the Weight tab left Fuel drawing its cut/maintain/gain marks off a
 stale maintenance number until the app was reloaded. It's a `watch()` now —
 which is also what triggers the auto re-check.
+
+---
+
+## 7. Account isolation
+
+**Status:** **shipped** 2026-08-23
+
+Found while auditing for the multi-account phase. None of it mattered with one
+user; all of it would have mattered with four.
+
+### The real one: localStorage was not namespaced
+
+Every key was `fit:<key>` with no account in it. With two accounts on one phone
+— which happens the first time you sign in as a test account on your own device
+— that meant:
+
+- `mirror:food/log/…` served the **previous user's food log** any time the
+  network was slow or absent, because `read()` falls back to the mirror.
+- `activeSession` handed the new account the **previous user's in-progress
+  workout**.
+- `queue` held offline writes addressed to `users/{other uid}/…`. Absolute
+  paths, so they kept resolving to a subtree this account isn't allowed to
+  touch: permission denied, back in the queue, retried on **every reconnect,
+  forever**.
+
+Keys are now `rack:{uid}:{key}`. The prefix changed from `fit:` deliberately so
+legacy keys are unambiguous and can be swept exactly once, migrating the cache
+and any live workout across rather than dropping them.
+
+### Sign-out now reloads
+
+Every module holds the last account's data in module-level state — `dayLog`,
+`entries`, `monthCache`, `routines`, the fitted weight model — and none of it
+was torn down. `booted` distinguishes a real sign-out from the initial null
+before auth resolves, so this doesn't loop on a signed-out first load.
+
+### The feed leaked
+
+`feed/wH7l…` is one hard-coded world-readable path belonging to one account.
+
+- `writeFeed()` had no owner guard, so every food log, weigh-in and finished
+  workout on any other account fired a write at it, earned a permission denial
+  and swallowed it.
+- Worse, **"Copy Claude link" in Weight → Settings was unguarded too** — a
+  tester tapping it would have copied *someone else's* data URL.
+
+Both are owner-only now.
+
+### Verified
+
+An 18-check browser test signs in as the owner, logs water and a weigh-in,
+switches to a second account on the same device, and asserts the second account
+sees none of it — not the water, not the targets, not the workout, no feed
+write, no inherited session — then switches back and confirms the owner's data
+survived intact.
 
 ---
 

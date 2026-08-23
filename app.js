@@ -2,6 +2,7 @@ import { login, logout, watchAuth, flushQueue, syncPip, LS } from './store.js';
 import { initWorkout, render as renderWorkout, hasActiveSession } from './workout.js';
 import { initFood, render as renderFood } from './food.js';
 import { initWeight, render as renderWeight } from './weight.js';
+import { initSteps, render as renderSteps } from './steps.js';
 
 const $ = s => document.querySelector(s);
 
@@ -48,9 +49,17 @@ watchAuth(async user => {
       await initWorkout();
       await initFood();
       await initWeight();
+      await initSteps();
       restoreView();
     }
   } else {
+    // A real sign-out, not the initial null before auth resolves. Every module
+    // holds the last account's data in module-level state — dayLog, entries,
+    // monthCache, routines, the fitted weight model — and none of it is torn
+    // down. Reloading is the only way to be certain the next account starts
+    // clean. `booted` distinguishes the two cases; without that check this
+    // would reload forever on a signed-out first load.
+    if (booted) { location.reload(); return; }
     authEl.classList.remove('hidden');
     booted = false;
     const btn = $('#authBtn');
@@ -68,6 +77,7 @@ function switchView(name) {
   if (name === 'workout') renderWorkout();
   if (name === 'food')    renderFood();
   if (name === 'weight')  renderWeight();
+  if (name === 'steps')   renderSteps();
 }
 
 dock.addEventListener('click', e => {

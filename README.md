@@ -8,6 +8,7 @@ Live at **https://lyttlebeast.github.io/lift-cal/**
 - **Fuel** — nutrition: macro targets, saved-food library, barcode scanning via Open Food Facts, manual entry, saved meals, one-tap portion multiplying, micronutrient floors, Claude import.
 - **Weight** — body-weight log: 7-day moving average chart, weekly rate, a learned time-of-day curve, and a maintenance (TDEE) estimate built on normalised weigh-ins with a stated confidence interval.
 - **Water** — daily intake against a goal, in the Fuel tab: a filling bottle, one-tap common sizes, any unit you like, stored in millilitres.
+- **Steps** — its own tab: goal ring, 7-day / 30-day / 12-month trend, streaks, a 13-week heat map, day-of-week breakdown, and either manual entry or an automation pushing them from your phone.
 
 ---
 
@@ -72,6 +73,16 @@ clause and republish. Nothing else changes.
 The `firebaseConfig` values in `firebase-config.js` are public by design. They identify the
 project; they authorize nothing. Security lives entirely in the rules above.
 
+**Account isolation.** Every localStorage key is namespaced by UID (`rack:{uid}:…`).
+It used to be a flat `fit:` prefix, which is fine with one account and quietly wrong
+with two — signing out and into a second account on the same phone served the previous
+user's cached food log whenever the network was slow, handed them the previous user's
+in-progress workout, and left the offline queue holding writes addressed to a subtree
+the new account isn't allowed to touch, failing and retrying forever. Signing out now
+reloads the app, because every module holds the last account's data in module state and
+reloading is the only way to be sure. The public `feed/` node is owner-write-only and
+the button that copies its link is owner-only.
+
 **Everything is per-account.** Workouts, weight, food logs, the saved-food library, saved
 meals and macro targets all live under `users/{uid}/`. A second signed-in account writes to
 its own subtree and sees none of this one's.
@@ -84,7 +95,7 @@ crusts, the wings, the whey); those are now seeded only for `OWNER_UID`.
 
 | File | What it is |
 |---|---|
-| `index.html` | The only markup: auth gate, three empty views, bottom dock |
+| `index.html` | The only markup: auth gate, four empty views, bottom dock |
 | `app.js` | Shell — sign-in, boot order, tab router, service worker |
 | `store.js` | Data layer — Firebase + localStorage mirror + offline queue + feed |
 | `firebase-config.js` | Public project keys, feed token, owner UID |
@@ -97,6 +108,7 @@ crusts, the wings, the whey); those are now seeded only for `OWNER_UID`.
 | `food.js` | Fuel tab |
 | `water.js` | Water card, log sheet, goal and sizes |
 | `weight.js` | Weight tab and app settings |
+| `steps.js` | Steps tab — ring, trend, streaks, heat map, and the setup walkthrough |
 | `tdee.js` | Public face of the weight math — trend, maintenance, calorie zones |
 | `weightmodel.js` | Weigh-in normalisation: gut-load model, coefficient fit, robust slope |
 | `exercises.js` | Static 231-exercise library |
@@ -116,6 +128,7 @@ app.js → workout.js → stats.js ──→ analytics.js → ui.js
                     → routines.js → picker.js
       → food.js   → water.js ────────────────────→ ui.js
                   → tdee.js → weightmodel.js ────→ ui.js
+      → steps.js  → analytics.js
       → weight.js → importer.js ─────────────────→ ui.js
                   → tdee.js
                   → workout.js (hasActiveSession only)
@@ -262,6 +275,25 @@ entirely.
   is a log you cannot sum. 16.9 fl oz — the supermarket flat-of-40 bottle — is 500 ml.
 - Water is also the cleanest input the maintenance model gets: 500 ml is exactly 1.1 lb,
   known to the millilitre, with none of the guesswork food mass carries.
+
+## Steps details
+
+- **Manual is the floor, automatic is an upgrade.** Both write the same
+  `steps/{date}` node, so there is nothing to migrate when someone sets up an
+  automation later, and nothing breaks when it misses a day.
+- Tap **Set total** for the whole day's number, or `+500 / +1k / +2.5k` to nudge
+  it. Any of the last 14 days is tappable to correct, swipe-left to clear.
+- **⚙ → Log steps automatically** is a walkthrough built into the app, with an
+  iPhone / Android switch, so a new tester can set themselves up without being
+  talked through it. It ends on a card showing the two exact requests.
+- The automation signs in **as that person**, and the sign-in response carries
+  their own `localId`, so the same recipe works for every account unmodified —
+  nobody types an account id and no shared credential exists anywhere.
+- Neither platform lets any app read health data while the phone is locked. The
+  count lands on the next unlock. That is Apple and Google's rule, not a
+  limitation of this approach — a paid app hits exactly the same wall.
+- The ring is an arc, Fuel is a bar, Water is a filling vessel. Three different
+  shapes on purpose: you should know which screen you're on at a glance.
 
 ## Weight details
 

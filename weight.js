@@ -1,7 +1,7 @@
 // Weight — body-weight log, trend math, and the app's settings card.
 //   weight/entries -> { id: { lb, t } }
 
-import { read, write, writeFeed, watch, LS, todayKey, feedUrl, logout } from './store.js';
+import { read, write, writeFeed, watch, LS, todayKey, feedUrl, logout, isOwner } from './store.js';
 import { hasActiveSession } from './workout.js';
 import { weightStats, dailyMeans as meansOf, movingAvg, maintenance,
          refreshModel, modelState, adjustedDays, peakOffset, trendRate } from './tdee.js';
@@ -361,12 +361,16 @@ function renderSettings() {
   hd.appendChild(el('div', 'eyebrow', 'Settings'));
   card.appendChild(hd);
 
-  const linkBtn = el('button', 'btn btn-ghost btn-block', 'Copy Claude link');
-  linkBtn.onclick = async () => {
-    try { await navigator.clipboard.writeText(feedUrl()); toast('Link copied'); }
-    catch { prompt('Copy this:', feedUrl()); }
-  };
-  card.appendChild(linkBtn);
+  // The feed is one hard-coded world-readable path belonging to one account.
+  // Showing this button to anyone else hands them somebody else's data.
+  if (isOwner()) {
+    const linkBtn = el('button', 'btn btn-ghost btn-block', 'Copy Claude link');
+    linkBtn.onclick = async () => {
+      try { await navigator.clipboard.writeText(feedUrl()); toast('Link copied'); }
+      catch { prompt('Copy this:', feedUrl()); }
+    };
+    card.appendChild(linkBtn);
+  }
 
   const restRow = el('div', 'field');
   restRow.style.marginTop = '12px';

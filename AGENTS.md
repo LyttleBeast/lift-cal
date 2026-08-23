@@ -293,6 +293,31 @@ can't end up in the log as a number you lifted.
 
 `groups` is not stored. Derive it from the exercises, the way sessions do.
 
+## `steps/{YYYY-MM-DD}` → one day
+
+```json
+{ "steps": 11482, "mi": 5.1, "t": 1756000000000, "src": "shortcut" }
+```
+
+| field | |
+|---|---|
+| `steps` | whole-day total as of `t`, not an increment |
+| `mi` | optional distance in miles |
+| `t` | ms epoch — when the count was taken, not when the day ended |
+| `src` | `manual` \| `shortcut` \| `hae` \| `agent` |
+
+`PUT steps/{date}` — the day node is a whole record and a later reading for the
+same day legitimately replaces an earlier one. **Never `PUT` the `steps`
+container**, per house rule 4.
+
+Steps are **not** an input to the maintenance estimate and must not become one.
+That estimate is empirical — it reads intake against the real scale trend, so
+activity is already inside it. A step term would count the same walking twice.
+
+## `settings/steps` → `{ goal }`
+
+Daily step goal. Drives the ring, the streak and the green bars.
+
 ## `exercises/custom` → `[ { id, name, group, equipment }, … ]`
 
 Exercises beyond the built-in 231 in `exercises.js`. `group` is one of
@@ -305,6 +330,18 @@ nutrition, latest weight. Handy for a quick glance without pulling the tree.
 The app writes it; you don't need to.
 
 ---
+
+# Multiple accounts
+
+Everything under `users/{uid}/` is that account's alone. The published rules give
+each account read and write on its own subtree and nothing else — one account
+cannot see another's food, weight, workouts, water or steps. Micah's subtree is
+additionally world-**readable** on purpose (that is what makes the unauthenticated
+GET above work); no other account's is, and no account but his can write to
+`feed/`.
+
+So an agent holding Micah's credentials can only ever touch Micah's data. There
+is no cross-account anything, by design and by rules.
 
 # House rules
 
