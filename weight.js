@@ -3,17 +3,20 @@
 
 import { read, write, writeFeed, watch, LS, todayKey, feedUrl, logout } from './store.js';
 import { hasActiveSession } from './workout.js';
-import { weightStats, dailyMeans as meansOf, movingAvg, maintenance } from './tdee.js';
+import { weightStats, dailyMeans as meansOf, movingAvg, maintenance,
+         refreshModel, modelState, adjustedDays, peakOffset, trendRate } from './tdee.js';
 import { openImport } from './importer.js';
 import { lineChart } from './analytics.js';
 import { $, el, toast, noteEl, confirmSheet, r1, parseKey, fmtDateFull } from './ui.js';
 
 let entries = {};      // id -> { lb, t }
 let range   = 30;      // chart window, days
+let adjusted = true;   // chart shows normalised weigh-ins, not raw ones
 let summaries = {};    // dateKey -> {cal,...} for TDEE
 
 export async function initWeight() {
   entries = (await read('weight/entries', null)) || {};
+  await refit();
   // Stay subscribed: this node is written whole, so a stale copy in memory
   // would silently drop a weigh-in logged elsewhere (another device, or an
   // agent writing over REST) the next time you stepped on the scale.
@@ -22,9 +25,15 @@ export async function initWeight() {
     if (JSON.stringify(next) === JSON.stringify(entries)) return;
     entries = next;
     pushWeightFeed();
-    render();
+    refit().then(render);
   });
   render();
+}
+
+// The normalisation model reads the food and water logs back, so it is async.
+// Fit it whenever the weigh-ins change; every render then reads the cache.
+async function refit() {
+  try { await refreshModel(entries); } catch {}
 }
 
 /* ================= MATH ================= */
@@ -82,6 +91,7 @@ export async function render() {
     const id = 'wt' + Date.now().toString(36);
     entries[id] = { lb: r1(lb), t: Date.now() };
     await write('weight/entries', entries);
+    await refit();
     await pushWeightFeed();
     inp.value = '';
     toast('Logged ' + r1(lb) + ' lb');
@@ -105,10 +115,11 @@ export async function render() {
     };
     sr.appendChild(cell(r1(s.latest.lb) + '', 'Latest lb'));
     sr.appendChild(cell(s.avg7 != null ? String(r1(s.avg7)) : '–', '7-day avg'));
-    const rate = s.rateWk;
+    const tr = trendRate(entries);
+    const rate = tr.rateWk;
     sr.appendChild(cell(
       rate != null ? (rate > 0 ? '+' : '') + r1(rate) : '–',
-      'lb / week',
+      tr.model ? 'lb / week ✓' : 'lb / week',
       rate != null ? (rate <= 0 ? 'var(--good)' : 'var(--warn)') : null
     ));
     sr.style.marginBottom = '12px';
@@ -138,16 +149,34 @@ function renderChart(s) {
   hd.appendChild(chips);
   card.appendChild(hd);
 
+  const m = modelState();
+  const adj = adjustedDays();
+  const useAdj = adjusted && adj && adj.length >= 2;
+
+  if (adj && adj.length >= 2) {
+    const t = el('div', 'chip-row');
+    t.style.marginBottom = '8px';
+    [['Adjusted', true], ['Raw', false]].forEach(([label, val]) => {
+      const c = el('button', 'chip' + (adjusted === val ? ' on' : ''), label);
+      c.onclick = () => { adjusted = val; render(); };
+      t.appendChild(c);
+    });
+    card.appendChild(t);
+  }
+
   const since = Date.now() - range * 864e5;
-  const days = s.days.filter(p => parseKey(p.d).getTime() > since);
-  const raw = sorted().filter(e => e.t > since);
+  const source = useAdj ? adj : s.days;
+  const days = source.filter(p => parseKey(p.d).getTime() > since);
+  const raw = useAdj
+    ? (m ? m.entries.filter(e => e.t > since).map(e => ({ t: e.t, lb: e.adj })) : [])
+    : sorted().filter(e => e.t > since);
 
   if (days.length < 2) {
     card.appendChild(noteEl('Two days of data draws the first line. Keep logging.'));
     return card;
   }
 
-  const avg = movingAvg(s.days).filter(p => parseKey(p.d).getTime() > since);
+  const avg = movingAvg(source).filter(p => parseKey(p.d).getTime() > since);
 
   card.appendChild(lineChart(
     avg.map(p => ({ t: parseKey(p.d).getTime(), v: p.lb })),
@@ -165,7 +194,9 @@ function renderChart(s) {
   const hi = Math.max(...raw.map(e => e.lb), ...avg.map(a => a.lb));
   const foot = el('div', 'chart-foot');
   foot.appendChild(el('span', 'num', r1(hi) + ' – ' + r1(lo) + ' lb'));
-  foot.appendChild(el('span', null, 'dots raw · line 7-day avg'));
+  foot.appendChild(el('span', null, useAdj
+    ? 'dots normalised · line 7-day avg'
+    : 'dots raw · line 7-day avg'));
   card.appendChild(foot);
   return card;
 }
@@ -186,6 +217,42 @@ function renderTOD() {
   const any = Object.values(buckets).some(b => b.length);
   if (!any) {
     card.appendChild(noteEl('Weigh-ins will sort themselves here by clock time.'));
+    return card;
+  }
+
+  // Once the model has fitted, this stops being "averages per window" and
+  // becomes the actual learned curve: how much heavier the scale reads at each
+  // hour because of what is still inside you.
+  const m = modelState();
+  const pk = peakOffset();
+  if (m && pk && m.hourly.length >= 3) {
+    const peakMax = Math.max(...m.hourly.map(x => x.lb), 0.1);
+    const strip = el('div', 'tod-strip');
+    for (let h = 0; h < 24; h++) {
+      const pt = m.hourly.find(x => x.h === h);
+      const col = el('div', 'tod-col' + (pt ? '' : ' empty'));
+      const bar = el('i');
+      bar.style.height = pt ? Math.max(3, pt.lb / peakMax * 100) + '%' : '2px';
+      col.appendChild(bar);
+      if (h % 6 === 0) col.appendChild(el('span', 'tod-h', h === 0 ? '12a' : h === 12 ? '12p' : (h % 12) + (h < 12 ? 'a' : 'p')));
+      strip.appendChild(col);
+    }
+    card.appendChild(strip);
+
+    const hr = pk.h === 0 ? '12am' : pk.h === 12 ? '12pm' : (pk.h % 12) + (pk.h < 12 ? 'am' : 'pm');
+    const big = el('div', 'load-num num', '+' + r1(pk.lb));
+    big.style.fontSize = '28px';
+    big.style.color = 'var(--p-yellow)';
+    card.appendChild(big);
+    card.appendChild(el('div', 'eyebrow', 'lb heavier by ' + hr));
+
+    const parts = ['Every weigh-in is corrected by its own number before it counts toward the trend'];
+    if (m.spread != null) parts.push('your readings span ' + r1(m.spread) + ' lb within a day on average');
+    card.appendChild(noteEl(parts.join(' — ') + '.'));
+
+    if (m.anchorDays < 5) {
+      card.appendChild(noteEl(m.anchorDays + ' of the last 7 days has a fasted morning weigh-in. Those need the least correction, so they carry the most weight — one before breakfast is worth several after dinner.'));
+    }
     return card;
   }
 
@@ -221,9 +288,29 @@ async function renderTDEE(s) {
   const big = el('div', 'load-num num', '\u2248 ' + m.tdee.toLocaleString());
   big.style.fontSize = '32px';
   card.appendChild(big);
+
+  // The interval is the feature. A single number invites chasing 40 kcal of
+  // noise; \u00b1 95 says plainly how much of this is measurement.
+  if (m.se) {
+    const ci = Math.round(1.96 * m.se / 5) * 5;
+    card.appendChild(el('div', 'eyebrow', '\u00b1 ' + ci.toLocaleString() + ' kcal'));
+  }
+
   card.appendChild(noteEl(
     'kcal/day to hold steady \u2014 from ' + Math.round(m.avgIntake).toLocaleString() + ' avg intake over ' + m.days +
-    ' logged days and a ' + (m.rateWk > 0 ? '+' : '') + r1(m.rateWk) + ' lb/week trend. Fuel uses this to place the cut / maintain / gain marks on the calorie bar.'));
+    ' logged days and a ' + (m.rateWk > 0 ? '+' : '') + r1(m.rateWk) + ' lb/week trend' +
+    (m.trendDays ? ' measured over ' + m.trendDays + ' days' : '') +
+    '. Fuel uses this to place the cut / maintain / gain marks on the calorie bar.'));
+
+  if (m.model && m.coef) {
+    card.appendChild(noteEl(m.coef.learned
+      ? 'Weigh-ins are normalised before the trend is fitted, using ' + m.coef.pairs +
+        ' same-day pairs across ' + m.coef.pairDays + ' days to learn what food and water do to your scale.'
+      : 'Still on the default correction — ' + m.coef.pairs + ' same-day pairs so far, and it takes ' +
+        '30 across 14 days to learn your own. Weighing twice in a day is what builds that up.'));
+  } else {
+    card.appendChild(noteEl('Using the older estimate: this one averages every weigh-in in a day together, so it moves when your weighing habit does. It sharpens up once there are enough same-day weigh-ins to normalise them.'));
+  }
   return card;
 }
 

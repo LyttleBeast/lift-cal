@@ -5,11 +5,18 @@
 // copies of the same arithmetic is exactly how two screens start disagreeing
 // with each other. So it lives here, as pure functions over the raw nodes.
 //
-// Imports nothing but store.js (date keys) and ui.js (number helpers), so it
-// can never create a cycle.
+// Imports store.js (date keys), ui.js (number helpers) and weightmodel.js (the
+// normalisation), none of which import back, so it can never create a cycle.
 
 import { todayKey } from './store.js';
 import { parseKey } from './ui.js';
+import { refreshModel, modelState, maintenanceFromModel,
+         adjustedDays, peakOffset, trendWeight, PRIOR } from './weightmodel.js';
+
+// Re-exported so callers only ever import from one place. weightmodel.js owns
+// the normalisation; this file stays the public face of "what does the scale
+// mean".
+export { refreshModel, modelState, adjustedDays, peakOffset, trendWeight, PRIOR };
 
 /* ---------- weight trend ---------- */
 
@@ -69,7 +76,33 @@ export function weightStats(entries) {
 
 export const TDEE_MIN_DAYS = 7;
 
+/* The normalised model is preferred whenever it has enough to say something.
+   It removes the composition bias — the one where logging more evening
+   weigh-ins one week than the last reads as weight gained — which is worth
+   ~150 kcal/day routinely and far more when the habit really shifts.
+
+   When it can't answer (too few weigh-ins, no food logged, a cold start) this
+   falls back to the original arithmetic rather than refusing. Degrading to the
+   old answer is fine. A confident wrong answer is not. */
 export function maintenance(weightEntries, daySummaries) {
+  const m = maintenanceFromModel(daySummaries);
+  if (m && m.tdee != null) return { ...m, model: true };
+  return { ...legacyMaintenance(weightEntries, daySummaries), model: false };
+}
+
+/* The weekly rate to show the user: the model's when it has one, because it is
+   measured over 21 days with the intraday noise taken out rather than
+   differenced between two 7-day means. */
+export function trendRate(weightEntries) {
+  const m = modelState();
+  if (m && m.rateWk != null) {
+    return { rateWk: m.rateWk, seWk: m.rateSeWk, days: m.trendDays, model: true };
+  }
+  const s = weightStats(weightEntries);
+  return { rateWk: s.rateWk, seWk: null, days: null, model: false };
+}
+
+function legacyMaintenance(weightEntries, daySummaries) {
   const s = weightStats(weightEntries);
   const today = todayKey();
   const calDays = Object.entries(daySummaries || {})
@@ -93,6 +126,7 @@ export function maintenance(weightEntries, daySummaries) {
 
   out.avgIntake = calDays.reduce((sum, [, v]) => sum + v.cal, 0) / calDays.length;
   out.tdee = Math.round((out.avgIntake - s.rateWk * 500) / 10) * 10;
+  out.se = null;
   return out;
 }
 
@@ -119,4 +153,43 @@ export function zoneOf(cal, z) {
   if (cal < z.cutTop) return 'cut';
   if (cal <= z.gainFrom) return 'maintain';
   return 'gain';
+}
+
+
+/* ---------- auto targets ----------
+   Macros that follow the scale instead of sitting where you last typed them.
+
+   Protein and fat are grams per pound of bodyweight, so they track the trend
+   weight — not the latest weigh-in, which swings by pounds depending on what
+   time of day it was taken. Calories are maintenance shifted by the goal rate
+   (3500 kcal per pound, so a pound a week is 500 a day). Carbs stay what they
+   have always been: the remainder.
+
+   The floor is not decoration. Because carbs are the remainder, calories
+   falling below protein×4 + fat×9 doesn't produce a warning — it silently
+   produces zero carbs, because carbsTarget() clamps at 0. So the floor is
+   whichever is higher: the number he set, or protein and fat plus enough
+   carbohydrate to train on. */
+
+export const MIN_CARB_G = 100;
+
+export function autoTargets(goal, maint, lb) {
+  if (!goal || !(maint > 0) || !(lb > 0)) return null;
+
+  const p = Math.max(0, Math.round(lb * (goal.pPerLb || 0)));
+  const f = Math.max(0, Math.round(lb * (goal.fPerLb || 0)));
+
+  const wanted = Math.round((maint + (goal.rateWk || 0) * 500) / 10) * 10;
+  const hard = Math.ceil((p * 4 + f * 9 + MIN_CARB_G * 4) / 10) * 10;
+  const floor = Math.max(goal.floor > 0 ? goal.floor : 0, hard);
+
+  const cal = Math.max(wanted, floor);
+  return {
+    cal, p, f,
+    c: Math.max(0, Math.round((cal - p * 4 - f * 9) / 4)),
+    wanted, floor, hard,
+    floored: cal > wanted,
+    lb: Math.round(lb * 10) / 10,
+    maint
+  };
 }

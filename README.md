@@ -4,9 +4,10 @@ Personal training, nutrition and body weight log. Phone-first, installs to the i
 
 Live at **https://lyttlebeast.github.io/lift-cal/**
 
-- **Train** — full workout tracker: plate-colored calendar, session timer, W/F/D set tags, 231-exercise library, last-time numbers, rest timer, per-side plate math, e1RM, swipe-to-delete sets, editable history, a post-workout recap with personal records, and a full statistics page.
+- **Train** — full workout tracker: saved routines, plate-colored calendar, session timer, W/F/D set tags, 231-exercise library, last-time numbers, rest timer, per-side plate math, e1RM, swipe-to-delete sets, editable history, a post-workout recap with personal records, and a full statistics page.
 - **Fuel** — nutrition: macro targets, saved-food library, barcode scanning via Open Food Facts, manual entry, saved meals, one-tap portion multiplying, micronutrient floors, Claude import.
-- **Weight** — body-weight log: 7-day moving average chart, weekly rate, time-of-day breakdown, maintenance (TDEE) estimate.
+- **Weight** — body-weight log: 7-day moving average chart, weekly rate, a learned time-of-day curve, and a maintenance (TDEE) estimate built on normalised weigh-ins with a stated confidence interval.
+- **Water** — daily intake against a goal, in the Fuel tab: a filling bottle, one-tap common sizes, any unit you like, stored in millilitres.
 
 ---
 
@@ -91,27 +92,38 @@ crusts, the wings, the whey); those are now seeded only for `OWNER_UID`.
 | `analytics.js` | Training aggregates, personal-record detection, SVG chart builders |
 | `stats.js` | The statistics page |
 | `workout.js` | Train tab — calendar, live session, editing, post-workout recap |
+| `picker.js` | Exercise library (static + custom) and the two picking sheets |
+| `routines.js` | Pre-planned routines — list, editor, start, save-a-session-as |
 | `food.js` | Fuel tab |
+| `water.js` | Water card, log sheet, goal and sizes |
 | `weight.js` | Weight tab and app settings |
-| `tdee.js` | Shared weight-trend + maintenance math, used by Weight and Fuel |
+| `tdee.js` | Public face of the weight math — trend, maintenance, calorie zones |
+| `weightmodel.js` | Weigh-in normalisation: gut-load model, coefficient fit, robust slope |
 | `exercises.js` | Static 231-exercise library |
 | `importer.js` | One-time Liftoff history migration |
 | `rack.css` | The stylesheet |
 | `404.html` | Branded not-found page |
-| `sw.js` | Service worker, network-first, cache `rack-v4` |
+| `sw.js` | Service worker, network-first, cache `rack-v5` |
 | `AGENTS.md` | The database schema and REST recipes, written for Claude |
-| `tools/rack.mjs` | CLI over the same endpoints — read, log, edit, delete |
+| `rack.mjs` | CLI over the same endpoints — read, log, edit, delete |
 | `app.css` | **Dead file** — the abandoned "IRONLOG" design, not referenced anywhere |
 
 Import direction is strictly one-way, no cycles:
 
 ```
-app.js → workout.js → stats.js → analytics.js → ui.js
-      → food.js   ────────────→ tdee.js ────→ ui.js
-      → weight.js → importer.js ────────────→ ui.js
+app.js → workout.js → stats.js ──→ analytics.js → ui.js
+                    → picker.js ─────────────────→ ui.js
+                    → routines.js → picker.js
+      → food.js   → water.js ────────────────────→ ui.js
+                  → tdee.js → weightmodel.js ────→ ui.js
+      → weight.js → importer.js ─────────────────→ ui.js
                   → tdee.js
                   → workout.js (hasActiveSession only)
 ```
+
+`picker.js` exists so `routines.js` and `workout.js` can share the exercise
+picker without importing each other. `workout.js` hands its `startWorkout` to
+`routines.js` as a callback; routines never imports back.
 
 ---
 
@@ -125,13 +137,13 @@ https://lift-cal-default-rtdb.firebaseio.com/users/aXSDfnZK8IMT9wRVhBbEgkDHpsj2.
 
 Narrower is usually better — `…/food/log/2026-08-19.json`, `…/weight/entries.json`,
 `…/workouts/2026-08.json`. **[AGENTS.md](AGENTS.md) is the map**: every path, every
-field, and the REST calls to add, edit and delete. `tools/rack.mjs` wraps the same
+field, and the REST calls to add, edit and delete. `rack.mjs` wraps the same
 endpoints so an agent doesn’t have to hand-roll tokens or ids:
 
 ```bash
-node tools/rack.mjs today
-node tools/rack.mjs food add '{"name":"Chicken and rice","cal":650,"p":52,"c":78,"f":12,"meal":"lunch"}'
-node tools/rack.mjs weigh 214.6
+node rack.mjs today
+node rack.mjs food add '{"name":"Chicken and rice","cal":650,"p":52,"c":78,"f":12,"meal":"lunch"}'
+node rack.mjs weigh 214.6
 ```
 
 The app keeps live listeners on the day’s food log, the month of workouts and the
@@ -195,6 +207,11 @@ entirely.
   a PR timeline, and a per-exercise breakdown with e1RM and heaviest-set trends.
 - New exercises are created with a proper sheet — muscle group and equipment are chips, so
   there is no spelling or capitalisation to get wrong.
+- **Routines** (below Start workout) are pre-planned workouts — name, exercises, target
+  weight and reps per set. Starting one fills the session out, but targets appear as
+  *placeholder* text and never as pre-filled values: a number you forgot to change is a lie
+  in the log. Finishing any workout offers **Save as routine**, which is usually the fastest
+  way to make one, because it captures what you actually did.
 - Records are **derived from the log**, never stored. There is no `records` node in the
   database; every statistic is computed from the workouts themselves.
 
@@ -202,6 +219,19 @@ entirely.
 
 - Targets default 2,700 kcal / 215 g protein / 80 g fat; **carbs are the remainder**.
   Targets, maintenance and the JSON paste box live behind the ⚙ in the Fuel header.
+- **Targets can follow the scale.** Fuel → ⚙ → Daily targets has a switch: *Set them*
+  keeps the old behaviour, *Follow my weight* means you set a goal rate and grams-per-pound
+  instead of numbers. Protein and fat then track your **trend** bodyweight — normalised, not
+  the last weigh-in — and calories track the live maintenance estimate, so a cut doesn't
+  quietly stall as maintenance falls toward a target you set six weeks ago. Carbs stay the
+  remainder. It moves at most once a week and at most 100 kcal at a time, and it floors
+  itself at protein + fat + 100 g of carbs, because carbs being the remainder means calories
+  falling too low produces zero carbs rather than a warning.
+- **The big number is the deficit**, not calories left. The whole point of a cut is how
+  far under maintenance the day is; the daily target is a number you typed into settings
+  once. So `633 under maintenance` gets the 40px and `893 left · 1,807 / 2,700` gets the
+  small print. With no maintenance number pinned and not enough logged to estimate one,
+  there is no deficit to show and it falls back to calories-left.
 - **The calorie bar** is the one that matters, so it's the big one. Two ticks cut it into
   three bands: left of the first is a deficit, between them is holding, right of the second
   you're gaining — and the fill takes the colour of the band you're standing in. The ticks sit
@@ -221,13 +251,48 @@ entirely.
   floors, not truth.
 - Per-day rollups are written to `food/daySummaries/{date}` to power the TDEE estimate.
 
+## Water details
+
+- Goal, display unit and the quick-add sizes live behind the ⚙ in the Fuel header. The
+  goal can be suggested from bodyweight at roughly half an ounce per pound.
+- The card sits above Micronutrients: a bottle that fills, one pip per standard bottle, and
+  a fat button for your default size. `⋯` opens every size, a custom amount in any unit,
+  and today's entries with swipe-to-delete.
+- **Millilitres are the only thing stored.** A log that stores whichever unit was on screen
+  is a log you cannot sum. 16.9 fl oz — the supermarket flat-of-40 bottle — is 500 ml.
+- Water is also the cleanest input the maintenance model gets: 500 ml is exactly 1.1 lb,
+  known to the millilitre, with none of the guesswork food mass carries.
+
 ## Weight details
 
-- Dots are raw weigh-ins; the yellow line is the trailing 7-day average of daily means.
-- Weekly rate = this week's average minus last week's.
-- TDEE ≈ average logged intake corrected by the scale trend (needs 7+ logged food days and
-  two weeks of weigh-ins). The arithmetic lives in `tdee.js` because Fuel's calorie bar needs
-  the same number, and two copies of it is how two screens start disagreeing.
+- Dots are weigh-ins, the yellow line is the trailing 7-day average. **Adjusted / Raw**
+  switches between normalised readings and what the scale actually said.
+- **Weigh-ins are normalised before anything is fitted.** A 7am fasted reading and a 9pm
+  post-dinner one differ by pounds, so averaging them together means the daily number
+  depends on what time you happened to stand on the scale — and a change in *weighing
+  habit* becomes indistinguishable from a change in *body weight*, then gets multiplied by
+  500 on its way into the maintenance estimate. Simulated over 120 runs, the old
+  arithmetic was off by an average of 378 kcal/day and by 752 when the habit shifted
+  inside a fortnight; normalised, that average is 47.
+- The model treats each reading as true weight plus **gut load** — food and water eaten and
+  not yet cleared, on an exponential decay, from the timestamps already in the food and
+  water logs. Its two coefficients are fitted on **within-day pairs**: two weigh-ins from
+  the same day share the same true weight, so differencing them cancels it exactly. Fitting
+  against a smoothed trend instead does not work — the smoother absorbs the average gut
+  load and the coefficient collapses (measured at 0.00087 against a true 0.00160). It is
+  the one thing in `weightmodel.js` not to "simplify" later.
+- Weekly rate is a Huber-weighted least-squares slope over 21 days of normalised dailies,
+  not this week's mean minus last week's, and it carries its standard error — which is why
+  maintenance reads **≈ 2,850 ± 95** rather than a number with false precision.
+- Until there are 30 same-day pairs across 14 days it uses physical defaults and says so,
+  and if it can't answer at all it falls back to the original arithmetic. Degrading to the
+  old answer is fine; a confident wrong answer is not.
+- **Time of day** is the learned curve, not bucket averages: "+3.8 lb heavier by 8pm" is the
+  correction the model is applying, stated back to you.
+- Steps are deliberately **not** an input. This estimator is empirical — activity is already
+  inside the scale trend, and adding a step term would double-count it.
+- The public API lives in `tdee.js` because Fuel's calorie bar needs the same number, and
+  two copies of it is how two screens start disagreeing. `weightmodel.js` holds the math.
 
 ---
 
@@ -236,7 +301,7 @@ entirely.
 - Flat file layout — GitHub Pages serves it directly from the repo root.
 - Timers are timestamp-based, so iOS background throttling doesn't cause drift.
 - Writes queue in `localStorage` when offline and flush on reconnect.
-- Service worker is network-first with cache fallback (`rack-v3`). Bump the cache name in
+- Service worker is network-first with cache fallback (`rack-v5`). Bump the cache name in
   `sw.js` when you need to force-evict old assets.
 - If a deploy looks stuck, edit `.nojekyll` (bump the "redeploy N") and push — that forces
   GitHub Pages to rebuild.

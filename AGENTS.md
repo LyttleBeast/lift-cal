@@ -65,20 +65,20 @@ container, or `PUT` the individual child.
 
 ## Use the helper instead
 
-`tools/rack.mjs` does the token dance, generates ids in the app's format, and
+`rack.mjs` does the token dance, generates ids in the app's format, and
 keeps the derived rollups correct. Prefer it.
 
 ```bash
-node tools/rack.mjs today
-node tools/rack.mjs food list 2026-08-19
-node tools/rack.mjs food add '{"name":"Chicken and rice","qty":"1 bowl","cal":650,"p":52,"c":78,"f":12,"meal":"lunch"}'
-node tools/rack.mjs food add '{"items":[…]}' --date=2026-08-18
-node tools/rack.mjs food rm 2026-08-19 f1a2b3c
-node tools/rack.mjs weigh 214.6
-node tools/rack.mjs workouts 2026-08
-node tools/rack.mjs get food/items
-node tools/rack.mjs patch <path> '<json>'
-node tools/rack.mjs del <path>
+node rack.mjs today
+node rack.mjs food list 2026-08-19
+node rack.mjs food add '{"name":"Chicken and rice","qty":"1 bowl","cal":650,"p":52,"c":78,"f":12,"meal":"lunch"}'
+node rack.mjs food add '{"items":[…]}' --date=2026-08-18
+node rack.mjs food rm 2026-08-19 f1a2b3c
+node rack.mjs weigh 214.6
+node rack.mjs workouts 2026-08
+node rack.mjs get food/items
+node rack.mjs patch <path> '<json>'
+node rack.mjs del <path>
 ```
 
 ---
@@ -125,7 +125,7 @@ To log a food: `PATCH food/log/{date}` with `{ "<newId>": { … } }`.
 To remove one: `DELETE food/log/{date}/{entryId}`.
 To correct one: `PATCH food/log/{date}/{entryId}` with just the changed fields.
 
-**Then update the rollup** (`tools/rack.mjs` does this for you):
+**Then update the rollup** (`rack.mjs` does this for you):
 
 ## `food/daySummaries/{YYYY-MM-DD}` → `{ cal, p, c, f }`
 
@@ -133,11 +133,34 @@ Integer sums of that day's log. The maintenance estimate reads this, not the
 raw log, so a day whose summary is stale gets weighted wrong. Recompute and
 `PUT` it after any change to `food/log/{date}`.
 
-## `food/targets` → `{ cal, p, f, maint }`
+## `food/targets` → `{ cal, p, f, maint, auto }`
 
 Daily goals. Carbs are the remainder: `(cal − p×4 − f×9) / 4`, never stored.
 `maint` is the maintenance-calorie number that anchors the cut / maintain / gain
 marks on the calorie bar — `null` means "estimate it from the weight trend".
+
+`cal`, `p` and `f` are **always** the live numbers, whether they were typed in
+or computed. Nothing downstream needs to know which.
+
+```json
+{ "cal": 2300, "p": 210, "f": 74, "maint": null,
+  "auto": { "on": true, "rateWk": -1, "pPerLb": 1.0, "fPerLb": 0.35,
+            "floor": 0, "lastAdj": 1756000000000 } }
+```
+
+`auto.on` means the app recomputes `cal` / `p` / `f` itself: protein and fat as
+grams per pound of **trend** weight (not the last weigh-in), calories as the
+maintenance estimate shifted by `rateWk × 500`. It moves at most once every 7
+days and at most 100 kcal at a time.
+
+**If you are writing targets while `auto.on` is true, set `auto.on` to false in
+the same PATCH**, or the app will overwrite your numbers the next time the
+weigh-ins move.
+
+`floor` of 0 means "work it out": protein and fat plus 100 g of carbs. That
+floor is load-bearing — carbs are the remainder and `carbsTarget()` clamps at
+zero, so calories dropping below `p×4 + f×9` would silently produce a zero-carb
+target rather than an error.
 
 ## `food/items` → `{ itemId: item }` — the saved-food library
 
@@ -171,6 +194,17 @@ Flat list of every weigh-in, ids prefixed `wt`. `lb` is pounds to one decimal,
 `PATCH weight/entries` with `{ "wtNEW": { "lb": 214.6, "t": … } }` to add.
 `DELETE weight/entries/{id}` to remove.
 
+**`t` is not decoration.** The maintenance estimate normalises every weigh-in
+back to a fasted-morning equivalent before it fits a trend, using the food and
+water logged before that moment to work out how much of the reading is
+breakfast. A weigh-in stamped with the wrong time is worse than a missing one:
+it gets corrected by the wrong amount and then counted with confidence. If you
+are back-filling a weigh-in, stamp it with when he actually stood on the scale.
+
+Two weigh-ins on the same day are what let the model learn his personal
+coefficients at all — the pair cancels the unknown true weight between them —
+so several readings a day is a feature, not noise.
+
 ## `workouts/{YYYY-MM}/{DD}/{sessionId}` → one finished session
 
 ```json
@@ -202,6 +236,62 @@ record it. If you must, also update:
 - `history/{exId}` → `[ { date, sets: [ {w,r,type} ] }, … ]`, newest first, 20
   max — this is the per-exercise "last time" index.
 - Personal records are **derived**, never stored. Don't look for a records node.
+
+## `water/log/{YYYY-MM-DD}` → `{ entryId: entry }`
+
+One node per calendar day, same shape as the food log. Ids are `wa` + base36
+timestamp + 3 random chars.
+
+```json
+{ "wam3k9x2ab": { "ml": 500, "t": 1755600000000, "src": "preset" } }
+```
+
+| field | |
+|---|---|
+| `ml` | **millilitres, always.** The display unit is a setting; the log is never in it |
+| `t` | ms epoch — the weight model uses this, so a plausible time matters |
+| `src` | `preset` \| `manual` \| `agent` |
+
+There is **no rollup node** for water and there should not be one. Sum the day
+on read. `food/daySummaries` exists because the TDEE math needed it; house rule
+3 exists because that rollup goes stale. One of those is enough.
+
+To log: `PATCH water/log/{date}` with `{ "<newId>": { … } }`. 16.9 fl oz — the
+supermarket flat-of-40 bottle — is 500 ml. A US gallon is 3785 ml.
+
+## `settings/water` → `{ goalMl, unit, presets }`
+
+```json
+{ "goalMl": 3785, "unit": "floz",
+  "presets": [ { "label": "Bottle", "ml": 500 } ] }
+```
+
+`unit` ∈ `floz` | `ml` | `L` | `cup`, display only. `presets` null means the
+standard sizes; the first entry is the big button on the card.
+
+## `routines/{routineId}` → one pre-planned workout
+
+```json
+{
+  "id": "rm3k9x2",
+  "name": "Push A",
+  "note": "heavy bench, back off on incline",
+  "exercises": [
+    { "exId": "bench-press", "name": "Barbell Bench Press",
+      "group": "chest", "equipment": "barbell",
+      "sets": [ { "tw": 225, "tr": 5, "type": "N" } ] }
+  ],
+  "created": 1756000000000, "lastUsed": 1756400000000, "uses": 6
+}
+```
+
+`tw` / `tr` are **target** weight and reps, both optional — a routine that says
+"three sets of bench, figure out the weight there" is a legitimate routine.
+They are deliberately not `w` / `r`: starting a routine puts them in as
+placeholder text, never as pre-filled values, so a number you forgot to change
+can't end up in the log as a number you lifted.
+
+`groups` is not stored. Derive it from the exercises, the way sessions do.
 
 ## `exercises/custom` → `[ { id, name, group, equipment }, … ]`
 

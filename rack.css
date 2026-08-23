@@ -954,3 +954,109 @@ body.peeking .view.active { padding-bottom: 58px; }
 
 /* keep the calendar nav row tidy now that it can hold a gear too */
 .cal-nav { display: flex; align-items: center; gap: 6px; }
+
+/* ============================================================
+   WATER
+   ============================================================ */
+.water-pct { font-size: 12px; color: var(--steel); font-variation-settings: 'wdth' 92, 'wght' 700; }
+
+.water-row { display: flex; align-items: center; gap: 16px; margin-top: 4px; }
+.water-vessel { width: 76px; height: auto; flex: 0 0 76px; display: block; }
+.water-right { flex: 1; min-width: 0; }
+.water-left { font-size: 13px; color: var(--steel); margin-top: 6px;
+  font-variation-settings: 'wdth' 96, 'wght' 600; }
+
+.water-pips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
+.water-pip {
+  width: 13px; height: 13px; border-radius: 4px;
+  background: var(--collar); border: 1px solid var(--knurl);
+  position: relative; overflow: hidden;
+}
+.water-pip.on { background: var(--p-blue); border-color: var(--p-blue); }
+.water-pip.part::after {
+  content: ''; position: absolute; inset: 0 auto 0 0;
+  width: var(--fill, 50%); background: var(--p-blue);
+}
+
+.water-ctl { display: flex; gap: 8px; margin-top: 14px; }
+.water-ctl .water-add { flex: 1; font-size: 13px; }
+.water-ctl .water-mini { flex: 0 0 48px; padding: 10px 0; font-size: 17px; }
+
+.water-preset-grid {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 12px 0 4px;
+}
+.water-preset {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  padding: 11px 12px; border-radius: var(--r-sm);
+  background: var(--bar); border: 1px solid var(--collar); color: var(--chalk);
+  text-align: left; cursor: pointer;
+}
+.water-preset:active { border-color: var(--p-blue); }
+.wp-label { font-size: 12px; font-variation-settings: 'wdth' 92, 'wght' 700; }
+.wp-amt { font-size: 12px; color: var(--steel); }
+
+.water-entries { margin-top: 8px; }
+.water-entry {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 12px; background: var(--bar); border-top: 1px solid var(--collar);
+}
+.we-time { font-size: 11px; color: var(--dim); }
+
+.water-preset-edit { margin-top: 8px; }
+.wpe-row { display: grid; grid-template-columns: 1fr 92px 34px; gap: 6px; margin-bottom: 6px; }
+.wpe-row input {
+  padding: 9px 10px; background: var(--rack); border: 1px solid var(--collar);
+  border-radius: var(--r-sm); color: var(--chalk); font-size: 13px; min-width: 0;
+}
+.wpe-row input:focus { border-color: var(--p-blue); outline: none; }
+.wpe-amt { text-align: center; font-variation-settings: 'wdth' 100, 'wght' 700; }
+.wpe-del {
+  background: none; border: 1px solid var(--collar); border-radius: var(--r-sm);
+  color: var(--dim); font-size: 17px; cursor: pointer;
+}
+.wpe-del:active { color: var(--bad); border-color: var(--bad); }
+
+/* ============================================================
+   TIME-OF-DAY CURVE
+   ============================================================ */
+.tod-strip {
+  display: flex; align-items: flex-end; gap: 2px;
+  height: 74px; margin: 6px 0 14px; padding-bottom: 14px; position: relative;
+}
+.tod-col { flex: 1; height: 100%; display: flex; align-items: flex-end; justify-content: center; position: relative; }
+.tod-col i { display: block; width: 100%; border-radius: 2px 2px 0 0; background: var(--p-yellow); }
+.tod-col.empty i { background: var(--collar); }
+.tod-h {
+  position: absolute; bottom: -14px; left: 50%; transform: translateX(-50%);
+  font-size: 8px; color: var(--dim); letter-spacing: .04em; white-space: nowrap;
+}
+
+/* ============================================================
+   ROUTINES
+   ============================================================ */
+.rt-list { margin-top: 6px; }
+.rt-item {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  padding: 12px; margin-bottom: 8px; text-align: left; cursor: pointer;
+  background: var(--bar); border: 1px solid var(--collar);
+  border-radius: var(--r); color: var(--chalk);
+}
+.rt-item:active { border-color: var(--knurl); }
+.rt-dots { display: flex; flex-direction: column; gap: 3px; flex: 0 0 6px; }
+.rt-dots i { width: 6px; height: 6px; border-radius: 2px; display: block; }
+.rt-mid { flex: 1; min-width: 0; }
+.rt-name { font-size: 15px; font-variation-settings: 'wdth' 96, 'wght' 700; }
+.rt-meta { font-size: 11px; color: var(--steel); margin-top: 3px; }
+.rt-go { color: var(--dim); font-size: 20px; }
+
+.rt-preview { margin-top: 10px; }
+.rt-pv-row {
+  display: flex; align-items: center; gap: 9px;
+  padding: 9px 0; border-top: 1px solid var(--collar);
+}
+.rt-pv-name { flex: 1; min-width: 0; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rt-pv-sets { font-size: 11px; color: var(--steel); flex: 0 0 auto; }
+
+.rt-edit { margin-top: 14px; }
+/* Four columns instead of five — no e1RM, nothing to tick off. */
+.rt-sets .set-hd, .rt-sets .set-row { grid-template-columns: 30px 1fr 1fr 38px; }

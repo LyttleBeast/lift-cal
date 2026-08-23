@@ -11,9 +11,12 @@
 // the hard-coded starter foods, which are now owner-only (see seedItems).
 
 import { read, write, writeFeed, watch, LS, todayKey, uid } from './store.js';
-import { maintenance, calorieZones, zoneOf } from './tdee.js';
+import { maintenance, calorieZones, zoneOf, refreshModel,
+         autoTargets, trendWeight } from './tdee.js';
+import { initWater, loadWaterDay, renderWater, openWaterSettings } from './water.js';
 import { OWNER_UID } from './firebase-config.js';
-import { $, el, sheet, toast, noteEl, confirmSheet, copyText, readClipboard, r1, trimNum } from './ui.js';
+import { $, el, sheet, toast, noteEl, confirmSheet, copyText, readClipboard,
+         segmented, r1, trimNum } from './ui.js';
 
 const MEALS = [
   ['breakfast', 'Breakfast'],
@@ -35,7 +38,13 @@ let viewDate = new Date();
 let dayLog   = {};      // entryId -> entry for viewDate
 let items    = {};      // itemId  -> library item
 let meals    = {};      // mealId  -> saved meal
-let targets  = { cal: 2700, p: 215, f: 80, maint: null };
+let targets  = { cal: 2700, p: 215, f: 80, maint: null, auto: null };
+
+// Auto targets: macros that follow the scale instead of sitting where you last
+// typed them. Off by default — nothing changes for anyone who doesn't turn it on.
+const AUTO_DEFAULTS = { on: false, rateWk: -1, pPerLb: 1, fPerLb: 0.35, floor: 0, lastAdj: 0 };
+const AUTO_EVERY_DAYS = 7;    // how often it may move at all
+const AUTO_MAX_STEP   = 100;  // biggest single calorie change
 let feedTimer = null;
 let weighIns = {};      // weight/entries — only for the maintenance estimate
 let summaries = {};     // food/daySummaries — ditto
@@ -46,7 +55,9 @@ export async function initFood() {
   targets = (await read('food/targets', null)) || targets;
   items   = (await read('food/items',   null)) || {};
   meals   = (await read('food/meals',   null)) || {};
+  await initWater(() => render());
   await loadMaintInputs();
+  await applyAuto();
   await seedItems();
   await loadDay();
 
@@ -57,6 +68,7 @@ export async function initFood() {
 
 async function loadDay() {
   dayLog = (await read('food/log/' + dk(viewDate), null)) || {};
+  await loadWaterDay(dk(viewDate));
   watchDay();
 }
 
@@ -81,10 +93,68 @@ function watchDay() {
 async function loadMaintInputs() {
   weighIns  = (await read('weight/entries',     null)) || {};
   summaries = (await read('food/daySummaries',  null)) || {};
+  // Stay subscribed. This used to be read once at boot, so a weigh-in logged
+  // on the Weight tab left Fuel drawing its cut / maintain / gain marks off a
+  // stale maintenance number until the app was reloaded.
+  watch('weight/entries', async val => {
+    const next = val || {};
+    if (JSON.stringify(next) === JSON.stringify(weighIns)) return;
+    weighIns = next;
+    try { await refreshModel(weighIns); } catch {}
+    if (!(await applyAuto())) render();
+  });
+  // The normalised model is async (it reads back the food and water logs to
+  // work out what was in you at each weigh-in). Fit it once here so every
+  // synchronous render can just read the cached answer.
+  try { await refreshModel(weighIns); } catch {}
+}
+
+/* ---------- auto targets ----------
+   Recompute against the trend weight and the live maintenance estimate, and
+   write only if the move is worth making. Rate-limited two ways: no more than
+   once a week, and no more than AUTO_MAX_STEP kcal at a time — one bad
+   fortnight of data should never yank the target somewhere silly.
+   Returns true if it wrote (and re-rendered). */
+async function applyAuto() {
+  const a = targets.auto;
+  if (!a || !a.on) return false;
+
+  const mi = maintInfo();
+  const lb = trendWeight();
+  if (!mi || !(lb > 0)) return false;
+
+  const next = autoTargets(a, mi.cal, lb);
+  if (!next) return false;
+
+  const moved = Math.abs(next.cal - targets.cal) >= 25 ||
+                Math.abs(next.p - targets.p) >= 4 ||
+                Math.abs(next.f - targets.f) >= 3;
+  if (!moved) return false;
+  if (a.lastAdj && Date.now() - a.lastAdj < AUTO_EVERY_DAYS * 864e5) return false;
+
+  const step = Math.max(-AUTO_MAX_STEP, Math.min(AUTO_MAX_STEP, next.cal - targets.cal));
+  const cal  = Math.max(next.floor, targets.cal + step);
+
+  targets = { ...targets, cal, p: next.p, f: next.f,
+              auto: { ...a, lastAdj: Date.now() } };
+  await write('food/targets', targets);
+  queueFeed();
+  render();
+  toast('Targets moved with your trend \u2014 ' + cal.toLocaleString() + ' kcal, ' + next.p + 'g protein');
+  return true;
+}
+
+function latestLb() {
+  let best = null;
+  Object.values(weighIns || {}).forEach(e => {
+    if (e && e.lb > 0 && e.t > 0 && (!best || e.t > best.t)) best = e;
+  });
+  return best ? best.lb : 0;
 }
 
 function dk(d) { return todayKey(d); }
 function isToday() { return dk(viewDate) === todayKey(); }
+function isFuture() { return dk(viewDate) > todayKey(); }
 
 /* ---------- starter foods ----------
    These are personal reference values (work pizza crusts, the wings, the
@@ -321,6 +391,7 @@ export function render() {
 
   MEALS.forEach(([id, label]) => wrap.appendChild(renderMeal(id, label)));
 
+  wrap.appendChild(renderWater(!isFuture()));
   wrap.appendChild(renderMicros());
   root.appendChild(wrap);
 }
@@ -331,15 +402,36 @@ function renderSummary() {
 
   const top = el('div', 'fuel-top');
   const remain = targets.cal - t.cal;
-  const big = el('div', 'load-num num', String(Math.abs(remain).toLocaleString()));
+  const mi = maintInfo();
+  const z  = mi ? calorieZones(mi.cal) : null;
+
+  const big = el('div', 'load-num num');
   big.style.fontSize = '40px';
-  big.style.color = remain < 0 ? 'var(--bad)' : 'var(--chalk)';
-  top.appendChild(big);
   const sub = el('div');
-  sub.appendChild(el('div', 'eyebrow', remain < 0 ? 'kcal over' : 'kcal left'));
-  const eaten = el('div', 'num fuel-eaten', t.cal.toLocaleString() + ' / ' + targets.cal.toLocaleString());
-  sub.appendChild(eaten);
-  top.appendChild(sub);
+
+  if (z) {
+    // The deficit is the entire point of the cut. The daily target is a number
+    // typed into settings once. So the deficit gets the 40px and the target
+    // gets the small print, not the other way round.
+    const zone = zoneOf(t.cal, z);
+    const gap  = Math.round(t.cal - z.maint);
+    big.textContent = Math.abs(gap).toLocaleString();
+    big.style.color = zoneColor(zone);
+    sub.appendChild(el('div', 'eyebrow', gap <= 0 ? 'under maintenance' : 'over maintenance'));
+    sub.appendChild(el('div', 'num fuel-eaten',
+      (remain < 0 ? Math.abs(remain).toLocaleString() + ' over target'
+                  : remain.toLocaleString() + ' left') +
+      '  ·  ' + t.cal.toLocaleString() + ' / ' + targets.cal.toLocaleString()));
+  } else {
+    // No maintenance number pinned and not enough logged to estimate one, so
+    // there is no deficit to headline. Keep the old layout exactly.
+    big.textContent = Math.abs(remain).toLocaleString();
+    big.style.color = remain < 0 ? 'var(--bad)' : 'var(--chalk)';
+    sub.appendChild(el('div', 'eyebrow', remain < 0 ? 'kcal over' : 'kcal left'));
+    sub.appendChild(el('div', 'num fuel-eaten',
+      t.cal.toLocaleString() + ' / ' + targets.cal.toLocaleString()));
+  }
+  top.append(big, sub);
   card.appendChild(top);
 
   card.appendChild(renderCalMeter(t.cal));
@@ -362,6 +454,13 @@ function renderSummary() {
     card.appendChild(row);
   });
   return card;
+}
+
+function zoneColor(zone) {
+  return zone === 'cut'      ? 'var(--p-blue)'
+       : zone === 'maintain' ? 'var(--p-yellow)'
+       : zone === 'gain'     ? 'var(--p-red)'
+       :                       'var(--p-white)';
 }
 
 /* ---------- maintenance ----------
@@ -409,9 +508,7 @@ function renderCalMeter(cal) {
   const zone = zoneOf(cal, z);
   const fill = el('div', 'cal-fill');
   fill.style.width = pct(cal) + '%';
-  fill.style.background = !z ? 'var(--p-white)'
-    : zone === 'cut' ? 'var(--p-blue)'
-    : zone === 'maintain' ? 'var(--p-yellow)' : 'var(--p-red)';
+  fill.style.background = zoneColor(z ? zone : null);
   track.appendChild(fill);
 
   if (z) [z.cutTop, z.gainFrom].forEach(v => {
@@ -437,10 +534,10 @@ function renderCalMeter(cal) {
     legend.append(lab('cut', 0, z.cutTop), lab('hold', z.cutTop, z.gainFrom), lab('gain', z.gainFrom, max));
     wrap.appendChild(legend);
 
-    const gap = Math.round(cal - z.maint);
-    const msg = zone === 'cut'   ? 'In a deficit \u00b7 ' + Math.abs(gap).toLocaleString() + ' under maintenance'
-              : zone === 'gain'  ? 'Gaining \u00b7 ' + gap.toLocaleString() + ' over maintenance'
-              :                    'Holding \u00b7 within ' + z.band + ' of maintenance';
+    // The number moved up to the headline, so this is just the word for it.
+    const msg = zone === 'cut'  ? 'In a deficit'
+              : zone === 'gain' ? 'Gaining'
+              :                   'Holding \u00b7 within ' + z.band + ' of maintenance';
     const line = el('div', 'cal-status');
     const dot = el('i');
     dot.style.background = fill.style.background;
@@ -1105,6 +1202,11 @@ function openFuelSettings() {
   tBtn.onclick = () => { close(); openTargets(); };
   sh.appendChild(tBtn);
 
+  const wBtn = el('button', 'btn btn-ghost btn-block', 'Water goal and sizes');
+  wBtn.style.marginTop = '10px';
+  wBtn.onclick = () => { close(); openWaterSettings(latestLb(), () => render()); };
+  sh.appendChild(wBtn);
+
   const iBtn = el('button', 'btn btn-ghost btn-block', 'Paste food JSON');
   iBtn.style.marginTop = '10px';
   iBtn.onclick = () => { close(); openImportPaste(); };
@@ -1122,33 +1224,136 @@ function openFuelSettings() {
 function openTargets() {
   const { sh, close } = sheet();
   sh.appendChild(el('h2', null, 'Daily targets'));
-  sh.appendChild(noteEl('Carbs are whatever calories remain after protein and fat.'));
 
-  const mkT = (key, label) => {
+  let auto = { ...AUTO_DEFAULTS, ...(targets.auto || {}) };
+  let mode = auto.on ? 'auto' : 'manual';
+
+  sh.appendChild(segmented([['manual', 'Set them'], ['auto', 'Follow my weight']], mode, v => {
+    mode = v;
+    manualPane.style.display = v === 'manual' ? '' : 'none';
+    autoPane.style.display   = v === 'auto'   ? '' : 'none';
+    paintAuto();
+  }));
+
+  const field = (label, value, opts = {}) => {
     const w = el('div', 'field');
     w.style.marginTop = '10px';
     w.appendChild(el('label', null, label));
-    const i = el('input'); i.type = 'number'; i.inputMode = 'numeric'; i.value = targets[key];
+    const i = el('input');
+    i.type = 'number';
+    i.inputMode = opts.decimal ? 'decimal' : 'numeric';
+    if (opts.step) i.step = opts.step;
+    if (opts.placeholder) i.placeholder = opts.placeholder;
+    i.value = value;
     w.appendChild(i);
     w.input = i;
     return w;
   };
-  const tc = mkT('cal', 'Calories'), tp = mkT('p', 'Protein g'), tf = mkT('f', 'Fat g');
-  sh.append(tc, tp, tf);
 
-
+  /* ---------- manual ---------- */
+  const manualPane = el('div', 'tg-manual');
+  const tc = field('Calories', targets.cal);
+  const tp = field('Protein g', targets.p);
+  const tf = field('Fat g', targets.f);
+  manualPane.append(tc, tp, tf);
   const carbs = el('div', 'eyebrow');
+  carbs.style.marginTop = '8px';
   const paintCarbs = () => {
-    const cal = parseInt(tc.input.value) || 0, p = parseInt(tp.input.value) || 0, f = parseInt(tf.input.value) || 0;
-    carbs.textContent = 'Carbs → ' + Math.max(0, Math.round((cal - p * 4 - f * 9) / 4)) + ' g';
+    const cal = parseInt(tc.input.value) || 0,
+          pp  = parseInt(tp.input.value) || 0,
+          ff  = parseInt(tf.input.value) || 0;
+    carbs.textContent = 'Carbs \u2192 ' + Math.max(0, Math.round((cal - pp * 4 - ff * 9) / 4)) + ' g';
   };
   [tc, tp, tf].forEach(w => w.input.oninput = paintCarbs);
   paintCarbs();
-  sh.appendChild(carbs);
-  // Maintenance: optional. Blank means "use the estimate off my weight trend".
+  manualPane.appendChild(carbs);
+  manualPane.appendChild(noteEl('Carbs are whatever calories remain after protein and fat.'));
+  sh.appendChild(manualPane);
+
+  /* ---------- auto ---------- */
+  const autoPane = el('div', 'tg-auto');
+  autoPane.appendChild(noteEl(
+    'You set the goal; the numbers follow the scale. Protein and fat are grams ' +
+    'per pound of bodyweight, so they track your weight down as you cut. Calories ' +
+    'are your maintenance estimate shifted by the rate you pick. Carbs stay the remainder.'));
+
+  const ra = field('Goal lb / week', auto.rateWk, { decimal: true, step: '0.25' });
+  const pl = field('Protein g per lb', auto.pPerLb, { decimal: true, step: '0.05' });
+  const fl = field('Fat g per lb', auto.fPerLb, { decimal: true, step: '0.05' });
+  const fo = field('Never go below (kcal)', auto.floor > 0 ? auto.floor : '',
+                   { placeholder: 'auto' });
+  autoPane.append(ra, pl, fl, fo);
+  autoPane.appendChild(noteEl('Negative loses weight, positive gains. Leave the floor blank and it protects itself \u2014 protein and fat plus 100 g of carbs, so carbs can never be squeezed to nothing.'));
+
+  const preview = el('div', 'card');
+  preview.style.marginTop = '12px';
+  autoPane.appendChild(preview);
+
+  const readAuto = () => ({
+    on: true,
+    rateWk: parseFloat(ra.input.value) || 0,
+    pPerLb: Math.max(0, parseFloat(pl.input.value) || 0),
+    fPerLb: Math.max(0, parseFloat(fl.input.value) || 0),
+    floor:  parseInt(fo.input.value) || 0,
+    lastAdj: auto.lastAdj || 0
+  });
+
+  function paintAuto() {
+    if (mode !== 'auto') return;
+    preview.innerHTML = '';
+    preview.appendChild(el('div', 'eyebrow', 'What that works out to'));
+
+    const mi = maintInfo();
+    const lb = trendWeight();
+    if (!mi || !(lb > 0)) {
+      preview.appendChild(noteEl(
+        !mi ? 'Needs a maintenance number first \u2014 either type one below, or log a week of food alongside your weigh-ins and it estimates itself.'
+            : 'Needs enough weigh-ins to fit a trend. Your bodyweight has to come off the trend line, not the last reading \u2014 that one swings by pounds depending on the time of day.'));
+      return;
+    }
+    const n = autoTargets(readAuto(), mi.cal, lb);
+    if (!n) { preview.appendChild(noteEl('Not enough to compute yet.')); return; }
+
+    const big = el('div', 'load-num num', n.cal.toLocaleString());
+    big.style.fontSize = '30px';
+    preview.appendChild(big);
+    preview.appendChild(el('div', 'eyebrow', 'kcal / day'));
+
+    const row = el('div', 'stat-row');
+    row.style.marginTop = '10px';
+    [[n.p, 'Protein g'], [n.c, 'Carbs g'], [n.f, 'Fat g']].forEach(([v, l]) => {
+      const c = el('div', 'stat');
+      c.appendChild(el('div', 'stat-val num', String(v)));
+      c.appendChild(el('div', 'stat-lbl', l));
+      row.appendChild(c);
+    });
+    preview.appendChild(row);
+
+    preview.appendChild(noteEl(
+      'From maintenance ' + mi.cal.toLocaleString() + (mi.auto ? ' (estimated)' : ' (pinned)') +
+      ' at a trend weight of ' + n.lb + ' lb.'));
+
+    if (n.floored) {
+      preview.appendChild(noteEl(
+        '\u26a0 That rate would put you at ' + n.wanted.toLocaleString() +
+        ', below the ' + n.floor.toLocaleString() + ' floor, so it holds at the floor instead. ' +
+        'Ease the rate off, or drop the fat grams if you want to go lower honestly.'));
+    }
+    preview.appendChild(noteEl(
+      'Re-checked when you weigh in, moves at most once a week and never more than ' +
+      AUTO_MAX_STEP + ' kcal at a time.'));
+  }
+  [ra, pl, fl, fo].forEach(w => w.input.oninput = paintAuto);
+  sh.appendChild(autoPane);
+
+  manualPane.style.display = mode === 'manual' ? '' : 'none';
+  autoPane.style.display   = mode === 'auto'   ? '' : 'none';
+  paintAuto();
+
+  /* ---------- maintenance (shared) ---------- */
   const est = maintenance(weighIns, summaries);
   const tm = el('div', 'field');
-  tm.style.marginTop = '10px';
+  tm.style.marginTop = '14px';
   tm.appendChild(el('label', null, 'Maintenance kcal'));
   const mi = el('input');
   mi.type = 'number'; mi.inputMode = 'numeric';
@@ -1156,18 +1361,46 @@ function openTargets() {
   mi.placeholder = est.tdee ? String(est.tdee) + ' (estimated)' : 'leave blank to estimate';
   tm.appendChild(mi);
   sh.appendChild(tm);
+  mi.oninput = paintAuto;
   sh.appendChild(noteEl(est.tdee
-    ? 'Your weight trend puts maintenance around ' + est.tdee.toLocaleString() + ' kcal. Leave this blank to keep following that estimate, or type your own number to pin the cut / maintain / gain marks.'
+    ? 'Your weight trend puts maintenance around ' + est.tdee.toLocaleString() +
+      ' kcal' + (est.se ? ' \u00b1 ' + Math.round(1.96 * est.se / 5) * 5 : '') +
+      '. Leave this blank to keep following that estimate, or type your own number to pin the cut / maintain / gain marks.'
     : 'The estimate needs ' + est.need.join(' and ') + '. Type a number here to draw the zones in the meantime.'));
 
+  /* ---------- save ---------- */
   const save = el('button', 'btn btn-primary btn-block', 'Save');
   save.style.marginTop = '14px';
   save.onclick = async () => {
+    const maint = parseInt(mi.value) > 0 ? parseInt(mi.value) : null;
+
+    if (mode === 'auto') {
+      const a = readAuto();
+      targets = { ...targets, maint, auto: a };
+      // Apply straight away rather than waiting out the weekly gate — he just
+      // asked for these numbers.
+      const m2 = maintInfo();
+      const lb = trendWeight();
+      const n  = m2 && lb > 0 ? autoTargets(a, m2.cal, lb) : null;
+      if (n) {
+        targets = { ...targets, cal: n.cal, p: n.p, f: n.f,
+                    auto: { ...a, lastAdj: Date.now() } };
+      }
+      await write('food/targets', targets);
+      queueFeed();
+      close(); render();
+      toast(n ? 'Following your weight \u2014 ' + n.cal.toLocaleString() + ' kcal, ' + n.p + 'g protein'
+              : 'Saved \u2014 targets will follow once there is enough data');
+      return;
+    }
+
     targets = {
+      ...targets,
       cal: parseInt(tc.input.value) || 2700,
       p: parseInt(tp.input.value) || 215,
       f: parseInt(tf.input.value) || 80,
-      maint: parseInt(mi.value) > 0 ? parseInt(mi.value) : null
+      maint,
+      auto: { ...auto, on: false }
     };
     await write('food/targets', targets);
     queueFeed();

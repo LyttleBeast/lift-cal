@@ -1,4 +1,4 @@
-import { GROUPS, GROUP_ORDER, EXERCISES, EQUIPMENT, makeCustomExercise } from './exercises.js';
+import { GROUPS, GROUP_ORDER } from './exercises.js';
 import { read, write, writeFeed, watch, LS, todayKey, monthKey } from './store.js';
 import {
   $, el, sheet, toast, noteEl, confirmSheet, swipeToDelete,
@@ -9,8 +9,11 @@ import {
 } from './analytics.js';
 // One-way dependency: this file imports stats.js, stats.js never imports back.
 import { openStats, isStatsOpen, renderStats, refresh as refreshStats } from './stats.js';
+// The exercise library and its two sheets live in picker.js so routines.js can
+// use them without importing this file back.
+import { initPicker, allExercises, openPicker } from './picker.js';
+import { initRoutines, openRoutines, saveSessionAsRoutine } from './routines.js';
 
-let customEx   = [];
 let monthCache = {};        // 'YYYY-MM' -> { 'DD': { sessionId: record } }
 let viewMonth  = new Date();
 let history    = {};        // exId -> [{date, sets}]
@@ -22,11 +25,12 @@ let wakeLock   = null;
 let tickHandle = null;
 let peek       = false;     // live session parked out of sight, calendar on top
 
-export function allExercises() { return [...EXERCISES, ...customEx]; }
+export { allExercises } from './picker.js';
 
 /* ================= INIT ================= */
 export async function initWorkout() {
-  customEx = (await read('exercises/custom', null)) || [];
+  await initPicker();
+  await initRoutines();
   history  = (await read('history', null)) || {};
 
   const saved = LS.get('activeSession', null);
@@ -253,6 +257,13 @@ function renderCalendar() {
     const start = el('button', 'btn btn-primary btn-block btn-lg', 'Start workout');
     start.onclick = () => startWorkout();
     wrap.appendChild(start);
+
+    // Routines pass startWorkout in as a callback — routines.js never imports
+    // this file, so the dependency stays one-way.
+    const rt = el('button', 'btn btn-ghost btn-block btn-lg', 'Routines');
+    rt.style.marginTop = '10px';
+    rt.onclick = () => openRoutines(preset => startWorkout(preset));
+    wrap.appendChild(rt);
   }
 
   const stats = el('button', 'btn btn-ghost btn-block btn-lg', 'Statistics');
@@ -407,7 +418,7 @@ function openDay(mk, dd) {
 function startWorkout(preset) {
   session = {
     id: 'w' + Date.now().toString(36),
-    name: defaultName(),
+    name: (preset && preset.name) || defaultName(),
     startedAt: Date.now(),
     exercises: (preset && preset.exercises) || []
   };
@@ -642,11 +653,15 @@ function renderSet(ex, exIdx, s, i) {
   };
   row.appendChild(idx);
 
-  const w = el('input'); w.type = 'number'; w.inputMode = 'decimal'; w.placeholder = '–';
+  // A set carried in from a routine shows its target greyed out. Filling the
+  // box in would be a number you forgot to change reading as a number you lifted.
+  const w = el('input'); w.type = 'number'; w.inputMode = 'decimal';
+  w.placeholder = s.tw ? String(s.tw) : '–';
   w.value = s.w; w.onchange = e => { s.w = e.target.value; persistSession(); render(); };
   row.appendChild(w);
 
-  const r = el('input'); r.type = 'number'; r.inputMode = 'numeric'; r.placeholder = '–';
+  const r = el('input'); r.type = 'number'; r.inputMode = 'numeric';
+  r.placeholder = s.tr ? String(s.tr) : '–';
   r.value = s.r; r.onchange = e => { s.r = e.target.value; persistSession(); render(); };
   row.appendChild(r);
 
@@ -778,7 +793,12 @@ function beep() {
 // Keeps only sets that are marked done and carry both a weight and reps.
 function collectDone() {
   return session.exercises
-    .map(ex => ({ ...ex, sets: ex.sets.filter(s => s.done && s.w !== '' && s.r !== '') }))
+    .map(ex => ({
+      ...ex,
+      // tw/tr are routine targets — live-session scaffolding, not part of the record.
+      sets: ex.sets.filter(s => s.done && s.w !== '' && s.r !== '')
+                   .map(({ tw, tr, ...keep }) => keep)
+    }))
     .filter(ex => ex.sets.length);
 }
 
@@ -1068,6 +1088,11 @@ function renderSummary() {
   done.onclick = () => { summary = null; render(); };
   wrap.appendChild(done);
 
+  const asRt = el('button', 'btn btn-ghost btn-block', 'Save as routine');
+  asRt.style.marginTop = '10px';
+  asRt.onclick = () => saveSessionAsRoutine(record);
+  wrap.appendChild(asRt);
+
   const toStats = el('button', 'btn btn-ghost btn-block', 'See statistics');
   toStats.style.marginTop = '10px';
   toStats.onclick = async () => {
@@ -1078,149 +1103,6 @@ function renderSummary() {
   wrap.appendChild(toStats);
 
   return wrap;
-}
-
-/* ================= PICKER ================= */
-function openPicker(onPick) {
-  const { sh, close } = sheet();
-
-  const selected = [];
-  let filter = 'all', q = '';
-
-  const search = el('div', 'picker-search');
-  const inp = el('input');
-  inp.placeholder = 'Search exercises';
-  inp.type = 'search';
-  search.appendChild(inp);
-
-  const chips = el('div', 'filter-row');
-  const mkChip = (id, label) => {
-    const c = el('button', 'chip' + (filter === id ? ' on' : ''), label);
-    c.onclick = () => { filter = id; paint(); };
-    return c;
-  };
-  search.appendChild(chips);
-  sh.appendChild(search);
-
-  const list = el('div', 'ex-list');
-  sh.appendChild(list);
-
-  const foot = el('div', 'picker-foot');
-  const custom = el('button', 'btn btn-ghost', 'New');
-  custom.onclick = () => openCustomExercise(x => {
-    customEx.push(x);
-    write('exercises/custom', customEx);
-    selected.push(x);
-    paint();
-  });
-  const addBtn = el('button', 'btn btn-primary', 'Add');
-  addBtn.style.flex = '1';
-  addBtn.onclick = () => { if (selected.length) { close(); onPick(selected); } };
-  const closeBtn = el('button', 'btn btn-ghost', 'Cancel');
-  closeBtn.onclick = () => close();
-  foot.append(closeBtn, custom, addBtn);
-  sh.appendChild(foot);
-
-  function paint() {
-    chips.innerHTML = '';
-    chips.appendChild(mkChip('all', 'All'));
-    GROUP_ORDER.forEach(g => chips.appendChild(mkChip(g, GROUPS[g].label)));
-
-    list.innerHTML = '';
-    const pool = allExercises()
-      .filter(x => filter === 'all' || x.group === filter)
-      .filter(x => !q || x.name.toLowerCase().includes(q))
-      .sort((a, b) => a.name.localeCompare(b.name));
-
-    pool.slice(0, 260).forEach(x => {
-      const on = selected.some(s => s.id === x.id);
-      const b = el('button', 'ex-item' + (on ? ' sel' : ''));
-      const dot = el('i', 'dot'); dot.style.background = GROUPS[x.group].color;
-      b.appendChild(dot);
-      b.appendChild(el('span', 'nm', x.name));
-      b.appendChild(el('span', 'eq', x.equipment));
-      b.onclick = () => {
-        const i = selected.findIndex(s => s.id === x.id);
-        if (i >= 0) selected.splice(i, 1); else selected.push(x);
-        paint();
-      };
-      list.appendChild(b);
-    });
-
-    addBtn.textContent = selected.length ? `Add ${selected.length}` : 'Add';
-    addBtn.disabled = !selected.length;
-  }
-
-  inp.oninput = e => { q = e.target.value.toLowerCase().trim(); paint(); };
-  paint();
-}
-
-/* ---------- custom exercise ---------- */
-// Replaces the old three-prompt() flow. Group and equipment are now chips, so
-// there is nothing to spell and nothing to get the capitalisation wrong on.
-function openCustomExercise(onCreate) {
-  const { sh, close } = sheet();
-  sh.appendChild(el('h2', null, 'New exercise'));
-  sh.appendChild(noteEl('It gets saved to your library and stays available for future workouts.'));
-
-  const nameWrap = el('div', 'field');
-  nameWrap.style.marginTop = '14px';
-  nameWrap.appendChild(el('label', null, 'Name'));
-  const nameIn = el('input');
-  nameIn.type = 'text';
-  nameIn.placeholder = 'e.g. Zercher Squat';
-  nameIn.autocapitalize = 'words';
-  nameWrap.appendChild(nameIn);
-  sh.appendChild(nameWrap);
-
-  let group = 'chest';
-  sh.appendChild(el('div', 'field-lbl', 'Muscle group'));
-  const gRow = el('div', 'filter-row');
-  GROUP_ORDER.forEach(g => {
-    const c = el('button', 'chip' + (g === group ? ' on' : ''), GROUPS[g].label);
-    c.onclick = () => {
-      group = g;
-      gRow.querySelectorAll('.chip').forEach(x => x.classList.remove('on'));
-      c.classList.add('on');
-    };
-    gRow.appendChild(c);
-  });
-  sh.appendChild(gRow);
-
-  let equipment = 'barbell';
-  sh.appendChild(el('div', 'field-lbl', 'Equipment'));
-  const eRow = el('div', 'filter-row');
-  EQUIPMENT.forEach(q => {
-    const label = q.charAt(0).toUpperCase() + q.slice(1);
-    const c = el('button', 'chip' + (q === equipment ? ' on' : ''), label);
-    c.onclick = () => {
-      equipment = q;
-      eRow.querySelectorAll('.chip').forEach(x => x.classList.remove('on'));
-      c.classList.add('on');
-    };
-    eRow.appendChild(c);
-  });
-  sh.appendChild(eRow);
-
-  const go = el('button', 'btn btn-primary btn-block btn-lg', 'Create');
-  go.style.marginTop = '16px';
-  go.onclick = () => {
-    const name = nameIn.value.trim();
-    if (!name) { toast('Give it a name'); nameIn.focus(); return; }
-    const dupe = allExercises().find(x => x.name.toLowerCase() === name.toLowerCase());
-    if (dupe) { toast('“' + dupe.name + '” already exists'); return; }
-    close();
-    onCreate(makeCustomExercise(name, group, equipment));
-    toast('Added ' + name);
-  };
-  sh.appendChild(go);
-
-  const cancel = el('button', 'btn btn-ghost btn-block', 'Cancel');
-  cancel.style.marginTop = '8px';
-  cancel.onclick = close;
-  sh.appendChild(cancel);
-
-  setTimeout(() => nameIn.focus(), 80);
 }
 
 /* ================= EXPORTS ================= */
