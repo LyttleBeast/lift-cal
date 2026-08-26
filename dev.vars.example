@@ -1,0 +1,4 @@
+# Copy to .dev.vars for `wrangler dev`. .dev.vars is gitignored — keep it that way.
+# In production this value is set with `wrangler secret put ANTHROPIC_API_KEY`
+# and never appears in a file at all.
+ANTHROPIC_API_KEY=sk-ant-api03-REPLACE-ME

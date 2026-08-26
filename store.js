@@ -42,6 +42,18 @@ export function watchAuth(cb) {
 }
 export function uid() { return UID; }
 
+/* ---------- ID token ----------
+   A short-lived, Google-signed proof that this browser really is signed in as
+   this uid. It is what the AI proxy checks before it will spend a cent of the
+   Anthropic balance — see worker/src/index.js. Firebase refreshes it on its own
+   when it is close to expiring, so ask for a fresh one on every call rather
+   than caching it here. */
+export async function idToken() {
+  const u = auth.currentUser;
+  if (!u) return null;
+  try { return await u.getIdToken(); } catch { return null; }
+}
+
 /* ---------- local mirror ----------
    Every key is namespaced by account. It used to be a flat `fit:` prefix, which
    is fine with one account and quietly wrong with two: sign out, sign in as

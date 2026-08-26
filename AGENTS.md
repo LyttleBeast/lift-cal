@@ -6,6 +6,13 @@ So you can read the training log, the food log and the weigh-ins directly, and �
 once the agent credentials are in your environment — log, edit and delete
 without going anywhere near the paste-JSON flow.
 
+Since the Fuel redesign the app can also estimate a meal itself — photograph the
+plate or describe it, and it calls Claude through its own Cloudflare Worker (see
+`worker/`). That is a separate path with its own key; it does not change anything
+below. Entries it writes carry `src: "ai-photo"` or `src: "ai-text"`, which is a
+useful signal when reading the log: those numbers are an estimate somebody eyeballed
+and accepted, not a label he read off a package.
+
 The app keeps live listeners on the day's food log, the month of workouts and
 the weigh-in list, so anything you write shows up on his phone within a second,
 no refresh.
@@ -117,7 +124,7 @@ chars; any unique string works, but keep the `f` prefix.
 | `qty` | free text — "1 bowl", "150 g", "2 × scoop (88 g)" |
 | `cal` `p` `c` `f` | kcal and grams, for the amount actually eaten |
 | `meal` | `breakfast` \| `lunch` \| `dinner` \| `snack` |
-| `src` | provenance — use `agent` |
+| `src` | provenance — use `agent`. The app writes `manual`, `lib`, `barcode`, `meal`, `copy`, `repeat`, `claude` (pasted JSON), `ai-photo` and `ai-text` (the in-app estimator) |
 | `micro` | optional, any subset of the six keys above |
 | `itemId` `amt` `unit` | only on entries linked to the saved-food library — leave off |
 

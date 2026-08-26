@@ -1,0 +1,15 @@
+{
+  "name": "rack-ai",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Cloudflare Worker that holds the Anthropic key for Rack's AI food estimator",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail",
+    "secret": "wrangler secret put ANTHROPIC_API_KEY"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}

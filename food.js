@@ -15,8 +15,10 @@ import { maintenance, calorieZones, zoneOf, refreshModel,
          autoTargets, trendWeight } from './tdee.js';
 import { initWater, loadWaterDay, renderWater, openWaterSettings } from './water.js';
 import { OWNER_UID } from './firebase-config.js';
-import { $, el, sheet, toast, noteEl, confirmSheet, copyText, readClipboard,
+import { $, el, svgEl, sheet, toast, noteEl, confirmSheet, copyText, readClipboard,
          segmented, r1, trimNum } from './ui.js';
+import { shrinkImage, estimatePhoto, estimateText, quota,
+         proxyUrl, setProxyUrl, hasProxy } from './ai.js';
 
 const MEALS = [
   ['breakfast', 'Breakfast'],
@@ -394,6 +396,25 @@ export function render() {
   wrap.appendChild(renderWater(!isFuture()));
   wrap.appendChild(renderMicros());
   root.appendChild(wrap);
+  root.appendChild(renderFab());
+}
+
+/* ---------- the button ----------
+   Logging food is the thing this tab exists for, and it used to be four taps
+   down inside a meal card. It floats above the dock now, at thumb height, so it
+   is reachable one-handed with a fork in the other. Fixed rather than in the
+   flow, so it is still there at the bottom of a long day. */
+let fabSeen = false;
+function renderFab() {
+  // render() rebuilds the whole tab on every edit, so the entrance animation
+  // would replay each time a number changed. It plays once a session instead.
+  const fab = el('button', 'fuel-fab' + (fabSeen ? ' settled' : ''));
+  fabSeen = true;
+  fab.setAttribute('aria-label', 'Log food');
+  fab.appendChild(icon('plus', '2.6'));
+  fab.appendChild(el('span', null, 'Log food'));
+  fab.onclick = () => openAdd(null);
+  return fab;
 }
 
 function renderSummary() {
@@ -749,30 +770,119 @@ function openEntry(e) {
   paint();
 }
 
-/* ================= ADD FLOW ================= */
+/* ================= ADD FLOW =================
+   One button on the tab opens this. Everything that puts food in the log starts
+   here, ordered by how often it actually gets reached for rather than by the
+   order it was built: photo, words, barcode, typed numbers. The saved library
+   and saved meals sit below a rule — genuinely useful, but not what you want in
+   front of you while a plate goes cold. */
+
+const ICON_PATHS = {
+  plus:    ['M12 5v14', 'M5 12h14'],
+  camera:  ['M4 9a2 2 0 0 1 2-2h1.5l1.2-2h6.6l1.2 2H18a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z',
+            'M12 16.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4z'],
+  pen:     ['M4 20h4L18.5 9.5a2.6 2.6 0 0 0-3.7-3.7L4 16.3z', 'M13.6 7.1l3.7 3.7'],
+  barcode: ['M3 6v12', 'M6.5 6v12', 'M10 6v8', 'M13.5 6v12', 'M17 6v8', 'M20.5 6v12'],
+  keypad:  ['M4 5h16v14H4z', 'M8 9h.01', 'M12 9h.01', 'M16 9h.01', 'M8 13h.01', 'M12 13h.01', 'M16 13h.01', 'M8.5 17h7'],
+  book:    ['M5 5a2 2 0 0 1 2-2h12v18H7a2 2 0 0 1-2-2z', 'M5 17h14'],
+  stack:   ['M12 3l8 4.3-8 4.3-8-4.3z', 'M4 11.8L12 16l8-4.2', 'M4 16.2L12 20.5l8-4.3'],
+  spark:   ['M12 3.5l1.7 4.6 4.6 1.7-4.6 1.7L12 16.1l-1.7-4.6L5.7 9.8l4.6-1.7z']
+};
+
+function icon(name, width) {
+  const svg = svgEl('svg', {
+    viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor',
+    'stroke-width': width || '1.8', 'stroke-linecap': 'round', 'stroke-linejoin': 'round'
+  });
+  (ICON_PATHS[name] || []).forEach(d => svg.appendChild(svgEl('path', { d })));
+  return svg;
+}
+
+function mealChips(current, onPick) {
+  const row = el('div', 'filter-row');
+  MEALS.forEach(([id, label]) => {
+    const c = el('button', 'chip' + (current === id ? ' on' : ''), label);
+    c.onclick = () => {
+      row.querySelectorAll('.chip').forEach(x => x.classList.remove('on'));
+      c.classList.add('on');
+      onPick(id);
+    };
+    row.appendChild(c);
+  });
+  return row;
+}
+
+function fmtViewDate() {
+  return viewDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
 function openAdd(mealId) {
   const { sh, close } = sheet();
+  let meal = mealId || defaultMeal();
+
+  sh.appendChild(el('div', 'eyebrow', isToday() ? 'Add to' : 'Add to ' + fmtViewDate()));
+  sh.appendChild(mealChips(meal, v => { meal = v; }));
+
+  const grid = el('div', 'add-grid');
+  const tile = (cls, ic, title, desc, tag, fn) => {
+    const b = el('button', 'add-tile' + (cls ? ' ' + cls : ''));
+    const box = el('div', 'ic');
+    box.appendChild(icon(ic));
+    b.append(box, el('div', 't', title), el('div', 'd', desc));
+    if (tag) b.appendChild(el('div', 'tag', tag));
+    b.onclick = () => { close(); fn(meal); };
+    grid.appendChild(b);
+  };
+
+  tile('hero', 'camera',  'Photo',    'Snap the plate. Claude reads the macros off it.', 'ai', openPhotoFlow);
+  tile('lit',  'pen',     'Describe', 'Just say what you ate. Cheapest way in.',         'ai', openDescribeFlow);
+  tile(null,   'barcode', 'Barcode',  'Scan a package label.',                           null, m => openScanner(code => lookupBarcode(code, m)));
+  tile(null,   'keypad',  'Manual',   'You already know the numbers.',                   null, m => openManual(m));
+  sh.appendChild(grid);
+
+  if (!hasProxy()) {
+    const warn = el('button', 'ai-warn');
+    warn.append(icon('spark', '1.6'), el('span', null, 'Photo and Describe need the estimator connected — set it up'));
+    warn.onclick = () => { close(); openAiSettings(); };
+    sh.appendChild(warn);
+  }
+
+  sh.appendChild(el('div', 'add-rule'));
+  sh.appendChild(el('div', 'field-lbl', 'Saved'));
+
+  const sec = el('div', 'add-secondary');
+
+  const foodsBtn = el('button', 'btn btn-ghost');
+  foodsBtn.append(icon('book'), el('span', null, 'Foods'), el('span', 'cnt num', String(Object.keys(items).length)));
+  foodsBtn.onclick = () => { close(); openLibrary(meal); };
+
+  const mealsBtn = el('button', 'btn btn-ghost');
+  mealsBtn.append(icon('stack'), el('span', null, 'Meals'), el('span', 'cnt num', String(Object.keys(meals).length)));
+  mealsBtn.onclick = () => { close(); openMealsSheet(meal); };
+
+  sec.append(foodsBtn, mealsBtn);
+  sh.appendChild(sec);
+
+  const cancel = el('button', 'btn btn-ghost btn-block', 'Cancel');
+  cancel.style.marginTop = '12px';
+  cancel.onclick = close;
+  sh.appendChild(cancel);
+}
+
+/* ---------- saved foods ----------
+   Deleting was the missing half of this screen: everything scanned or typed
+   piled up here forever, including the one-off protein bar from a gas station
+   in March. A food leaves the library without touching anything already logged
+   with it — those entries carry their own numbers. */
+function openLibrary(mealId) {
+  const { sh, close } = sheet();
+  sh.appendChild(el('h2', null, 'My foods'));
 
   const search = el('div', 'picker-search');
   const inp = el('input');
-  inp.placeholder = 'Search foods';
   inp.type = 'search';
+  inp.placeholder = 'Search saved foods';
   search.appendChild(inp);
-
-  const actions = el('div', 'filter-row');
-  const scanBtn = el('button', 'chip', '▣ Scan barcode');
-  scanBtn.onclick = () => { close(); openScanner(code => lookupBarcode(code, mealId)); };
-  const manBtn = el('button', 'chip', '+ Manual');
-  manBtn.onclick = () => { close(); openManual(mealId); };
-  actions.append(scanBtn, manBtn);
-
-  let tab = 'foods';
-  const foodsChip = el('button', 'chip on', 'Foods');
-  const mealsChip = el('button', 'chip', 'Meals');
-  foodsChip.onclick = () => { tab = 'foods'; foodsChip.classList.add('on'); mealsChip.classList.remove('on'); paint(); };
-  mealsChip.onclick = () => { tab = 'meals'; mealsChip.classList.add('on'); foodsChip.classList.remove('on'); paint(); };
-  actions.append(foodsChip, mealsChip);
-  search.appendChild(actions);
   sh.appendChild(search);
 
   const list = el('div', 'ex-list');
@@ -783,55 +893,534 @@ function openAdd(mealId) {
 
   function paint() {
     list.innerHTML = '';
-    if (tab === 'meals') {
-      const pool = Object.values(meals).filter(m => !q || m.name.toLowerCase().includes(q));
-      if (!pool.length) list.appendChild(noteEl(q ? 'No saved meals match.' : 'No saved meals yet. Log a meal, then ⋯ → save.'));
-      pool.forEach(m => {
-        const kcal = m.items.reduce((s, i) => s + (i.cal || 0), 0);
-        const b = el('button', 'ex-item');
-        b.appendChild(el('span', 'nm', m.name));
-        b.appendChild(el('span', 'eq num', m.items.length + ' items · ' + kcal + ' kcal'));
-        b.onclick = () => {
-          m.items.forEach(i => addEntry({ ...i, meal: mealId, src: 'meal' }));
-          close(); toast('Added ' + m.name);
-        };
-        const x = el('span', 'eq ex-del', '✕');
-        x.onclick = ev => {
-          ev.stopPropagation();
-          confirmSheet({
-            title: 'Delete saved meal?',
-            body: '“' + m.name + '” will be removed from your meal library.',
-            confirmLabel: 'Delete',
-            danger: true,
-            onConfirm: () => { delete meals[m.id]; write('food/meals', meals); paint(); }
-          });
-        };
-        b.appendChild(x);
-        list.appendChild(b);
-      });
-      return;
-    }
     const pool = Object.values(items)
       .filter(it => !q || it.name.toLowerCase().includes(q) || (it.brand || '').toLowerCase().includes(q))
       .sort((a, b) => (b.last || 0) - (a.last || 0) || (b.uses || 0) - (a.uses || 0) || a.name.localeCompare(b.name));
 
-    if (!pool.length) list.appendChild(noteEl('Nothing saved matches. Scan it or add it manually.'));
-    pool.slice(0, 80).forEach(it => {
+    if (!pool.length) {
+      list.appendChild(noteEl(q
+        ? 'Nothing saved matches that.'
+        : 'Nothing saved yet. Anything you scan, type by hand, or keep off an estimate lands here.'));
+      return;
+    }
+
+    pool.slice(0, 120).forEach(it => {
       const b = el('button', 'ex-item');
       b.appendChild(el('span', 'nm', it.name));
       const per = it.base === '100g' ? 'per 100 g' : 'per ' + ((it.serv && it.serv.label) || 'serving');
       b.appendChild(el('span', 'eq num', it.n.cal + ' kcal ' + per));
       b.onclick = () => { close(); openPortion(it, mealId); };
+
+      const x = el('span', 'eq ex-del', '✕');
+      x.setAttribute('aria-label', 'Delete ' + it.name);
+      x.onclick = ev => {
+        ev.stopPropagation();
+        confirmSheet({
+          title: 'Delete this food?',
+          body: '“' + it.name + '” leaves your library. Anything already logged with it stays exactly as it is.',
+          confirmLabel: 'Delete',
+          danger: true,
+          onConfirm: async () => {
+            delete items[it.id];
+            await write('food/items', items);
+            paint();
+            toast('Deleted');
+          }
+        });
+      };
+      b.appendChild(x);
       list.appendChild(b);
     });
   }
-
   paint();
 
   const cancel = el('button', 'btn btn-ghost btn-block', 'Cancel');
   cancel.style.marginTop = '10px';
   cancel.onclick = close;
   sh.appendChild(cancel);
+}
+
+/* ---------- saved meals ---------- */
+function openMealsSheet(mealId) {
+  const { sh, close } = sheet();
+  sh.appendChild(el('h2', null, 'My meals'));
+
+  const list = el('div', 'ex-list');
+  sh.appendChild(list);
+
+  function paint() {
+    list.innerHTML = '';
+    const pool = Object.values(meals);
+    if (!pool.length) {
+      list.appendChild(noteEl('No saved meals yet. Log one, then tap ⋯ on the meal card to keep it as a single tap.'));
+      return;
+    }
+    pool.forEach(m => {
+      const kcal = m.items.reduce((s, i) => s + (i.cal || 0), 0);
+      const b = el('button', 'ex-item');
+      b.appendChild(el('span', 'nm', m.name));
+      b.appendChild(el('span', 'eq num', m.items.length + ' items · ' + kcal + ' kcal'));
+      b.onclick = () => {
+        m.items.forEach(i => addEntry({ ...i, meal: mealId || defaultMeal(), src: 'meal' }));
+        close();
+        toast('Added ' + m.name);
+      };
+      const x = el('span', 'eq ex-del', '✕');
+      x.setAttribute('aria-label', 'Delete ' + m.name);
+      x.onclick = ev => {
+        ev.stopPropagation();
+        confirmSheet({
+          title: 'Delete saved meal?',
+          body: '“' + m.name + '” is removed from your meal library. Days you already logged it on keep their food.',
+          confirmLabel: 'Delete',
+          danger: true,
+          onConfirm: async () => {
+            delete meals[m.id];
+            await write('food/meals', meals);
+            paint();
+            toast('Deleted');
+          }
+        });
+      };
+      b.appendChild(x);
+      list.appendChild(b);
+    });
+  }
+  paint();
+
+  const cancel = el('button', 'btn btn-ghost btn-block', 'Cancel');
+  cancel.style.marginTop = '10px';
+  cancel.onclick = close;
+  sh.appendChild(cancel);
+}
+
+/* ================= AI ESTIMATOR =================
+   The whole point of this update: no more photographing a plate in one app,
+   copying JSON out of a chat, and pasting it into this one. Picture goes in
+   here, macros come back, you check them, you log.
+
+   The app holds no API key. It sends the picture to the Worker in worker/,
+   which holds the key and decides whether this sign-in is allowed to spend
+   anything. worker/src/index.js is where the security actually lives. */
+
+/* A file input, not getUserMedia. On iOS this opens the real camera app with
+   the real capture UI and hands back a proper still; a hand-rolled viewfinder
+   gets a worse picture and an extra permission prompt. Without `capture` the
+   same input offers the photo library instead. */
+function pickImage(useCamera) {
+  return new Promise(resolve => {
+    const inp = document.createElement('input');
+    inp.type = 'file';
+    inp.accept = 'image/*';
+    if (useCamera) inp.capture = 'environment';
+    inp.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
+    document.body.appendChild(inp);
+
+    let settled = false;
+    const finish = f => { if (settled) return; settled = true; inp.remove(); resolve(f || null); };
+
+    inp.onchange = () => finish(inp.files && inp.files[0]);
+    // There is no cross-browser "picker cancelled" event. Coming back to the
+    // window with nothing chosen is the only signal we get.
+    window.addEventListener('focus', () => {
+      setTimeout(() => { if (!(inp.files && inp.files.length)) finish(null); }, 900);
+    }, { once: true });
+
+    inp.click();
+  });
+}
+
+async function openPhotoFlow(mealId) {
+  const file = await pickImage(true);
+  if (!file) return;
+  let shot;
+  try { shot = await shrinkImage(file); }
+  catch (e) { toast(e.message || 'Couldn’t read that picture.'); return; }
+  openShotSheet(shot, mealId, '');
+}
+
+/* The picture is taken; this is the "want to tell it anything?" step. The
+   sentence is worth more than the megapixels — it is what turns "some kind of
+   beef bowl" into the right cut, the right rice and the right amount of oil. */
+function openShotSheet(shot, mealId, prefill) {
+  const { sh, close } = sheet();
+  let meal = mealId || defaultMeal();
+
+  sh.appendChild(el('div', 'eyebrow', 'Photo'));
+  sh.appendChild(el('h2', null, 'Anything to add?'));
+
+  const img = document.createElement('img');
+  img.className = 'ai-shot';
+  img.src = shot.dataUrl;
+  img.alt = 'The food you photographed';
+  sh.appendChild(img);
+
+  const ta = document.createElement('textarea');
+  ta.className = 'paste-box ai-text';
+  ta.rows = 3;
+  ta.placeholder = 'Optional — “6 oz sirloin, jasmine rice, cooked in butter”';
+  ta.value = prefill || '';
+  sh.appendChild(ta);
+  sh.appendChild(noteEl('Skip it and it guesses from the picture alone. One line about portions or how it was cooked is usually the difference between close and right.'));
+
+  sh.appendChild(el('div', 'field-lbl', 'Meal'));
+  sh.appendChild(mealChips(meal, v => { meal = v; }));
+
+  const go = el('button', 'btn btn-primary btn-block btn-lg', 'Estimate macros');
+  go.style.marginTop = '12px';
+  go.onclick = () => {
+    const note = ta.value.trim();
+    close();
+    runEstimate({
+      meal,
+      busy: 'Reading your plate…',
+      run: () => estimatePhoto(shot, note),
+      retry: text => openShotSheet(shot, meal, text),
+      text: note
+    });
+  };
+  sh.appendChild(go);
+
+  const other = el('button', 'btn btn-ghost btn-block', 'Use a different picture');
+  other.style.marginTop = '8px';
+  other.onclick = async () => {
+    const f = await pickImage(false);
+    if (!f) return;
+    let next;
+    try { next = await shrinkImage(f); }
+    catch (e) { toast(e.message || 'Couldn’t read that picture.'); return; }
+    close();
+    openShotSheet(next, meal, ta.value.trim());
+  };
+  sh.appendChild(other);
+
+  const cancel = el('button', 'btn btn-ghost btn-block', 'Cancel');
+  cancel.style.marginTop = '8px';
+  cancel.onclick = close;
+  sh.appendChild(cancel);
+}
+
+/* Words only. Roughly a tenth of what a photo costs, and for anything you
+   cooked yourself and can describe precisely it is often the better answer —
+   a picture cannot see the oil that already went into the pan. */
+function openDescribeFlow(mealId, prefill) {
+  const { sh, close } = sheet();
+  let meal = mealId || defaultMeal();
+
+  sh.appendChild(el('div', 'eyebrow', 'Describe'));
+  sh.appendChild(el('h2', null, 'What did you eat?'));
+
+  const ta = document.createElement('textarea');
+  ta.className = 'paste-box ai-text';
+  ta.rows = 4;
+  ta.placeholder = 'Two eggs fried in butter, three strips of bacon, a slice of sourdough';
+  ta.value = prefill || '';
+  sh.appendChild(ta);
+  sh.appendChild(noteEl('Portions help most — “a cup”, “two palms”, “half the box”. Weights beat guesses, but a guess beats not logging it.'));
+
+  sh.appendChild(el('div', 'field-lbl', 'Meal'));
+  sh.appendChild(mealChips(meal, v => { meal = v; }));
+
+  const go = el('button', 'btn btn-primary btn-block btn-lg', 'Estimate macros');
+  go.style.marginTop = '12px';
+  go.onclick = () => {
+    const text = ta.value.trim();
+    if (!text) { toast('Tell it what you ate'); ta.focus(); return; }
+    close();
+    runEstimate({
+      meal,
+      busy: 'Working out the macros…',
+      run: () => estimateText(text),
+      retry: t => openDescribeFlow(meal, t),
+      text
+    });
+  };
+  sh.appendChild(go);
+
+  const cancel = el('button', 'btn btn-ghost btn-block', 'Cancel');
+  cancel.style.marginTop = '8px';
+  cancel.onclick = close;
+  sh.appendChild(cancel);
+}
+
+async function runEstimate(ctx) {
+  const done = openEstimating(ctx.busy);
+  let res;
+  try {
+    res = await ctx.run();
+  } catch (e) {
+    done();
+    openAiError(e, ctx);
+    return;
+  }
+  done();
+  openAiReview(res, ctx);
+}
+
+function openEstimating(label) {
+  const { back, sh, close } = sheet();
+  back.onclick = null;   // a stray tap on the backdrop shouldn't abandon a paid call
+  const row = el('div', 'ai-busy');
+  row.appendChild(el('div', 'ai-spin'));
+  const txt = el('div');
+  txt.appendChild(el('div', 'ai-busy-t', label));
+  txt.appendChild(el('div', 'note', 'A couple of seconds.'));
+  row.appendChild(txt);
+  sh.appendChild(row);
+  return close;
+}
+
+/* Never a dead end. Whatever went wrong, there is still a way to get the food
+   into the log from this screen. */
+function openAiError(e, ctx) {
+  const { sh, close } = sheet();
+  sh.appendChild(el('div', 'eyebrow', 'Estimate failed'));
+  sh.appendChild(el('h2', null, e.message || 'That didn’t work.'));
+
+  if (e.code === 'no_proxy') {
+    const set = el('button', 'btn btn-primary btn-block btn-lg', 'Set it up');
+    set.style.marginTop = '14px';
+    set.onclick = () => { close(); openAiSettings(); };
+    sh.appendChild(set);
+  } else if (ctx && ctx.retry) {
+    const again = el('button', 'btn btn-primary btn-block btn-lg', 'Try again');
+    again.style.marginTop = '14px';
+    again.onclick = () => { close(); ctx.retry(ctx.text || ''); };
+    sh.appendChild(again);
+  }
+
+  const manual = el('button', 'btn btn-ghost btn-block', 'Enter it by hand instead');
+  manual.style.marginTop = '8px';
+  manual.onclick = () => { close(); openManual(ctx && ctx.meal); };
+  sh.appendChild(manual);
+
+  const cancel = el('button', 'btn btn-ghost btn-block', 'Close');
+  cancel.style.marginTop = '8px';
+  cancel.onclick = close;
+  sh.appendChild(cancel);
+}
+
+const CONF = {
+  high:   ['var(--good)', 'confident'],
+  medium: ['var(--warn)', 'a fair guess'],
+  low:    ['var(--bad)',  'a rough guess']
+};
+
+/* The check-before-you-log screen. Every row is editable and removable, because
+   an estimate you cannot correct is an estimate you stop trusting — and one
+   wrong item shouldn't mean redoing the whole meal. */
+function openAiReview(res, ctx) {
+  const src = /haiku/.test(res.model || '') ? 'ai-text' : 'ai-photo';
+  const entries = normalizeImport({ items: res.items }).map(e => ({ ...e, src }));
+  if (!entries.length) { openAiError({ message: 'Nothing came back for that one.' }, ctx); return; }
+
+  const { sh, close } = sheet();
+  let meal = ctx.meal || defaultMeal();
+  entries.forEach(e => { e.meal = meal; });
+
+  const body = el('div');
+  sh.appendChild(body);
+
+  function paint() {
+    body.innerHTML = '';
+    const tot = entries.reduce((s, e) => ({
+      cal: s.cal + (e.cal || 0), p: s.p + (e.p || 0), c: s.c + (e.c || 0), f: s.f + (e.f || 0)
+    }), { cal: 0, p: 0, c: 0, f: 0 });
+
+    body.appendChild(el('div', 'eyebrow', 'Claude’s estimate'));
+    body.appendChild(el('h2', null, tot.cal.toLocaleString() + ' kcal  ·  ' +
+      entries.length + ' item' + (entries.length > 1 ? 's' : '')));
+    body.appendChild(el('div', 'entry-readout num',
+      'P ' + trimNum(tot.p) + '   C ' + trimNum(tot.c) + '   F ' + trimNum(tot.f)));
+
+    const conf = CONF[res.confidence] || CONF.medium;
+    const pill = el('div', 'conf');
+    const dot = el('i');
+    dot.style.background = conf[0];
+    pill.append(dot, el('span', null, conf[1]));
+    body.appendChild(pill);
+
+    if (res.note) body.appendChild(noteEl(res.note));
+
+    const list = el('div', 'import-list');
+    entries.forEach((e, i) => {
+      const row = el('div', 'food-entry pe-row');
+      const b = el('button', 'pe-body');
+      b.appendChild(el('div', 'fe-name', e.name));
+      b.appendChild(el('div', 'fe-sub num',
+        (e.qty ? e.qty + '  ·  ' : '') + 'P ' + trimNum(e.p) + '  C ' + trimNum(e.c) + '  F ' + trimNum(e.f)));
+      b.onclick = () => openProposedEdit(e, paint);
+      row.appendChild(b);
+      row.appendChild(el('div', 'fe-cal num', String(e.cal)));
+
+      const x = el('button', 'ex-del pe-x', '✕');
+      x.setAttribute('aria-label', 'Remove ' + e.name);
+      x.onclick = () => {
+        entries.splice(i, 1);
+        if (!entries.length) { close(); toast('Nothing left to log'); return; }
+        paint();
+      };
+      row.appendChild(x);
+      list.appendChild(row);
+    });
+    body.appendChild(list);
+    body.appendChild(noteEl('Tap any line to fix the numbers or the portion before it goes in.'));
+
+    body.appendChild(el('div', 'field-lbl', 'Meal'));
+    body.appendChild(mealChips(meal, v => { meal = v; entries.forEach(e => { e.meal = v; }); }));
+
+    const go = el('button', 'btn btn-primary btn-block btn-lg',
+      'Log ' + (isToday() ? 'it' : 'on ' + fmtViewDate()));
+    go.style.marginTop = '12px';
+    go.onclick = async () => {
+      entries.forEach(e => {
+        const id = newEntryId();
+        dayLog[id] = { id, t: Date.now(), ...e };
+      });
+      await saveDay();
+      close();
+      render();
+      toast('Logged ' + entries.length + ' food' + (entries.length > 1 ? 's' : ''));
+    };
+    body.appendChild(go);
+
+    if (ctx.retry) {
+      const again = el('button', 'btn btn-ghost btn-block', 'Not right — add detail and retry');
+      again.style.marginTop = '8px';
+      again.onclick = () => { close(); ctx.retry(ctx.text || ''); };
+      body.appendChild(again);
+    }
+
+    const cancel = el('button', 'btn btn-ghost btn-block', 'Discard');
+    cancel.style.marginTop = '8px';
+    cancel.onclick = close;
+    body.appendChild(cancel);
+
+    if (res.usage) {
+      const bits = ['$' + Number(res.usage.usd || 0).toFixed(4) + ' of credit'];
+      if (res.left && res.left.day != null) bits.push(res.left.day + ' left today');
+      body.appendChild(el('div', 'ai-cost num', bits.join('   ·   ')));
+    }
+  }
+
+  paint();
+}
+
+/* Correcting one line of an estimate, plus the option to keep it as a saved
+   food so the same thing never has to be guessed at twice. */
+function openProposedEdit(e, onDone) {
+  const { sh, close } = sheet(onDone);
+  sh.appendChild(el('h2', null, 'Fix this item'));
+
+  const f = (label, val, type) => {
+    const w = el('div', 'field');
+    w.appendChild(el('label', null, label));
+    const i = el('input');
+    i.type = type || 'number';
+    if (i.type === 'number') i.inputMode = 'decimal';
+    if (val != null) i.value = val;
+    w.appendChild(i);
+    w.input = i;
+    return w;
+  };
+
+  const name = f('Name', e.name, 'text');
+  const qty  = f('Amount', e.qty, 'text');
+  sh.append(name, qty);
+
+  const g1 = el('div', 'row-split');
+  const cal = f('kcal', e.cal), p = f('Protein g', e.p);
+  g1.append(cal, p); sh.appendChild(g1);
+
+  const g2 = el('div', 'row-split');
+  const c = f('Carbs g', e.c), fat = f('Fat g', e.f);
+  g2.append(c, fat); sh.appendChild(g2);
+
+  const saveWrap = el('label', 'save-check');
+  const chk = el('input'); chk.type = 'checkbox';
+  saveWrap.append(chk, document.createTextNode(' Also keep this in my foods'));
+  sh.appendChild(saveWrap);
+
+  const done = el('button', 'btn btn-primary btn-block btn-lg', 'Done');
+  done.style.marginTop = '12px';
+  done.onclick = () => {
+    e.name = name.input.value.trim() || e.name;
+    e.qty  = qty.input.value.trim();
+    e.cal  = Math.round(parseFloat(cal.input.value) || 0);
+    e.p    = r1(parseFloat(p.input.value) || 0);
+    e.c    = r1(parseFloat(c.input.value) || 0);
+    e.f    = r1(parseFloat(fat.input.value) || 0);
+    if (chk.checked) {
+      const id = 'u' + Date.now().toString(36);
+      items[id] = { id, ...mkItem(e.name, '', 'serv', { label: e.qty || 'serving' },
+        { cal: e.cal, p: e.p, c: e.c, f: e.f }, e.micro || null), uses: 1, last: Date.now() };
+      write('food/items', items);
+      toast('Kept in your foods');
+    }
+    close();
+  };
+  sh.appendChild(done);
+
+  const cancel = el('button', 'btn btn-ghost btn-block', 'Cancel');
+  cancel.style.marginTop = '8px';
+  cancel.onclick = close;
+  sh.appendChild(cancel);
+}
+
+/* ---------- estimator setup ----------
+   The Worker URL is not a secret — the Worker verifies your sign-in before it
+   spends anything, so knowing the address gets a stranger a 401 and nothing
+   else. Keeping it settable from the phone means the estimator can be pointed
+   somewhere new without shipping a new version of the app. */
+function openAiSettings() {
+  const { sh, close } = sheet();
+  sh.appendChild(el('div', 'eyebrow', 'Fuel'));
+  sh.appendChild(el('h2', null, 'AI estimator'));
+  sh.appendChild(noteEl('Photos and descriptions go to your own Cloudflare Worker, which holds the Anthropic key and enforces the rate limits and the monthly spend cap. The app itself never sees the key.'));
+
+  const w = el('div', 'field');
+  w.style.marginTop = '14px';
+  w.appendChild(el('label', null, 'Worker URL'));
+  const i = el('input');
+  i.type = 'url';
+  i.autocapitalize = 'off';
+  i.spellcheck = false;
+  i.placeholder = 'https://rack-ai.you.workers.dev';
+  i.value = proxyUrl();
+  w.appendChild(i);
+  sh.appendChild(w);
+
+  const status = el('div', 'note');
+  sh.appendChild(status);
+
+  const test = el('button', 'btn btn-ghost btn-block', 'Save and test');
+  test.style.marginTop = '10px';
+  test.onclick = async () => {
+    setProxyUrl(i.value);
+    if (!proxyUrl()) { status.style.color = ''; status.textContent = 'Paste the URL wrangler printed when you deployed.'; return; }
+    status.style.color = '';
+    status.textContent = 'Checking…';
+    test.disabled = true;
+    try {
+      const q = await quota();
+      status.style.color = 'var(--good)';
+      status.textContent = 'Connected. ' + q.left.day + ' of ' + q.limits.perDay +
+        ' estimates left today · $' + Number(q.spend.monthUsd).toFixed(3) +
+        ' of $' + q.spend.capUsd + ' used this month.';
+    } catch (err) {
+      status.style.color = 'var(--bad)';
+      status.textContent = err.message || 'Could not reach it.';
+    }
+    test.disabled = false;
+  };
+  sh.appendChild(test);
+
+  sh.appendChild(noteEl('Setup is in worker/README.md — create the key, deploy the Worker, paste the URL it prints here.'));
+
+  const done = el('button', 'btn btn-ghost btn-block', 'Close');
+  done.style.marginTop = '14px';
+  done.onclick = close;
+  sh.appendChild(done);
 }
 
 /* ---------- portion picker ---------- */
@@ -1206,6 +1795,11 @@ function openFuelSettings() {
   wBtn.style.marginTop = '10px';
   wBtn.onclick = () => { close(); openWaterSettings(latestLb(), () => render()); };
   sh.appendChild(wBtn);
+
+  const aBtn = el('button', 'btn btn-ghost btn-block', 'AI estimator');
+  aBtn.style.marginTop = '10px';
+  aBtn.onclick = () => { close(); openAiSettings(); };
+  sh.appendChild(aBtn);
 
   const iBtn = el('button', 'btn btn-ghost btn-block', 'Paste food JSON');
   iBtn.style.marginTop = '10px';

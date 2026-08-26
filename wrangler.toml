@@ -1,0 +1,42 @@
+# Rack — AI food estimator proxy
+#
+# Nothing secret belongs in this file. It is committed to a public repo.
+# The API key is set with:  npx wrangler secret put ANTHROPIC_API_KEY
+# and lives encrypted in Cloudflare, readable only by the running Worker.
+
+name = "rack-ai"
+main = "src/index.js"
+compatibility_date = "2026-08-01"
+
+# Public settings. Change one, run `npx wrangler deploy`, it is live in seconds.
+[vars]
+# Who may call this from a browser. Add http://localhost:8000 while developing.
+ALLOWED_ORIGINS = "https://lyttlebeast.github.io"
+
+# Which Rack accounts may spend your credits. Comma-separated Firebase uids.
+# Leave it empty and ANY verified Rack account can — don't.
+ALLOWED_UIDS = "aXSDfnZK8IMT9wRVhBbEgkDHpsj2"
+
+# The Firebase project whose ID tokens count as valid here.
+FIREBASE_PROJECT_ID = "lift-cal"
+
+# Rate limits, per account. Tuned to 2-3 photos a day with room to spare —
+# five times the real usage still leaves a loop nowhere to go.
+RATE_PER_MINUTE = "5"
+RATE_PER_DAY    = "15"
+
+# The one that actually protects the money. Dollars of Anthropic usage per
+# calendar month, counted from Anthropic's own token numbers.
+#
+# Set to 1 deliberately: the whole balance is $5, so a cap of $5 would let one
+# bad month take all of it. At $1 the worst possible month still leaves four
+# more, and normal use is about $0.60 — so this only ever bites if something
+# has gone wrong. Raise it when the balance is bigger.
+MONTHLY_USD_CAP = "1"
+
+# Counter storage. Create it once with:
+#   npx wrangler kv namespace create RACK_AI
+# then paste the id it prints here.
+[[kv_namespaces]]
+binding = "RACK_AI"
+id = "0799c27cab1549458c3d66a1e5707121"
