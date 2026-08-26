@@ -135,12 +135,22 @@ export function confirmSheet({ title, body, confirmLabel = 'Confirm', danger = f
 
 /* ---------- segmented control ---------- */
 // options: [[value, label], ...]. Calls onPick(value) when a segment changes.
+//
+// `sel` has to be a live variable, not the `current` argument. `current` is
+// whatever was selected when the control was BUILT, and it never changes — so
+// the "don't fire for the segment already chosen" guard used to compare against
+// a frozen value and permanently deadlock that one segment. In the water sheet,
+// which opens on fl oz, that meant fl oz → ml worked, ml → L worked, and
+// nothing could ever get back to fl oz without closing and reopening the sheet.
+// Same bug sat in Daily targets and the steps walkthrough, less visibly.
 export function segmented(options, current, onPick) {
   const wrap = el('div', 'seg');
+  let sel = current;
   options.forEach(([val, label]) => {
-    const b = el('button', 'seg-btn' + (val === current ? ' on' : ''), label);
+    const b = el('button', 'seg-btn' + (val === sel ? ' on' : ''), label);
     b.onclick = () => {
-      if (val === current) return;
+      if (val === sel) return;
+      sel = val;
       wrap.querySelectorAll('.seg-btn').forEach(x => x.classList.remove('on'));
       b.classList.add('on');
       onPick(val);

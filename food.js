@@ -572,13 +572,18 @@ function renderCalMeter(cal) {
   return wrap;
 }
 
+/* A meal card is a read-out, nothing more. The per-meal "+ Add food" button
+   left with the redesign — one Log food button does that job now, and four
+   copies of the same action down the page were three too many. An empty meal
+   collapses to a single header line rather than sitting there as a hollow box,
+   so a fresh morning is four tidy rows instead of a wall of empty cards. */
 function renderMeal(mealId, label) {
-  const card = el('div', 'card');
-  const hd = el('div', 'card-hd');
-  hd.appendChild(el('div', 'eyebrow', label));
-
   const entries = Object.values(dayLog).filter(e => e.meal === mealId).sort((a, b) => (a.t || 0) - (b.t || 0));
   const kcal = entries.reduce((s, e) => s + (e.cal || 0), 0);
+
+  const card = el('div', 'card' + (entries.length ? '' : ' meal-blank'));
+  const hd = el('div', 'card-hd');
+  hd.appendChild(el('div', 'eyebrow', label));
 
   const right = el('div', 'meal-right');
   if (entries.length) {
@@ -587,16 +592,13 @@ function renderMeal(mealId, label) {
     save.title = 'Save as meal';
     save.onclick = () => saveAsMeal(label, entries);
     right.appendChild(save);
+  } else {
+    right.appendChild(el('div', 'meal-kcal', 'nothing yet'));
   }
   hd.appendChild(right);
   card.appendChild(hd);
 
   entries.forEach(e => card.appendChild(renderEntry(e)));
-
-  const add = el('button', 'btn btn-ghost btn-block', '+ Add food');
-  add.style.marginTop = entries.length ? '10px' : '0';
-  add.onclick = () => openAdd(mealId);
-  card.appendChild(add);
   return card;
 }
 

@@ -26,6 +26,15 @@
   --bad:     #d6252b;
 
   --dock-h: 64px;
+  /* The notch / status bar. Zero in Safari, where the browser chrome already
+     sits above the page — and 47-59px once the app is installed to the home
+     screen, because `apple-mobile-web-app-status-bar-style: black-translucent`
+     plus `viewport-fit=cover` hands us the whole screen, notch included. The
+     bottom inset was handled everywhere; this one was only ever handled by the
+     sync pip and the workout bar, which is why an installed Rack had its
+     header cropped into the top of the screen. Named so it can be faked in a
+     desktop browser for testing. */
+  --safe-top: env(safe-area-inset-top, 0px);
   --pad: 16px;
   --r: 12px;
   --r-sm: 8px;
@@ -73,6 +82,7 @@ input, select, textarea { font-family: inherit; font-size: 16px; } /* 16px stops
   max-width: 560px;
   margin: 0 auto;
   min-height: 100dvh;
+  padding-top: var(--safe-top);
   padding-bottom: calc(var(--dock-h) + env(safe-area-inset-bottom));
   position: relative;
 }
@@ -288,7 +298,7 @@ h2 { font-size: 18px; }
   position: fixed; bottom: 0; left: 50%;
   transform: translateX(-50%);
   width: 100%; max-width: 560px;
-  max-height: 86dvh; overflow-y: auto;
+  max-height: calc(86dvh - var(--safe-top)); overflow-y: auto;
   background: var(--bar);
   border-radius: 18px 18px 0 0;
   border-top: 1px solid var(--knurl);
@@ -360,7 +370,8 @@ body.peeking .view.active { padding-bottom: 58px; }
   -webkit-backdrop-filter: blur(16px);
   border-bottom: 1px solid var(--collar);
   padding: 10px var(--pad);
-  padding-top: calc(10px + env(safe-area-inset-top));
+  margin-top: calc(-1 * var(--safe-top));
+  padding-top: calc(10px + var(--safe-top));
   display: flex; align-items: center; justify-content: space-between;
 }
 .timer {
@@ -526,7 +537,7 @@ body.peeking .view.active { padding-bottom: 58px; }
 
 /* ============ SYNC PIP ============ */
 .sync-pip {
-  position: fixed; top: calc(8px + env(safe-area-inset-top)); right: 10px;
+  position: fixed; top: calc(8px + var(--safe-top)); right: 10px;
   z-index: 80; font-size: 9px; letter-spacing: .1em; text-transform: uppercase;
   color: var(--dim); display: flex; align-items: center; gap: 5px;
   font-variation-settings: 'wdth' 88, 'wght' 700;
@@ -1158,34 +1169,29 @@ body.peeking .view.active { padding-bottom: 58px; }
   display: inline-flex; align-items: center; gap: 9px;
   padding: 15px 30px 15px 25px;
   border-radius: 999px;
-  background: linear-gradient(135deg, #ffdf62 0%, var(--p-yellow) 46%, #d19f0c 100%);
+  /* Flat plate yellow, the same face as every other primary button. The
+     gradient, the inner highlight and the yellow halo all came off — nothing
+     else in Rack is lit from within, and a glowing button in a room of stamped
+     metal read like it came from a different app. What is left doing the work
+     is a hard drop shadow, which is depth rather than shine: it lifts the
+     button off the cards without pretending to emit light. */
+  background: var(--p-yellow);
   color: #141414;
   font-size: 14px;
   letter-spacing: .09em;
   text-transform: uppercase;
   font-variation-settings: 'wdth' 92, 'wght' 800;
-  box-shadow:
-    0 12px 30px rgba(0, 0, 0, .55),
-    0 0 26px rgba(240, 190, 30, .26),
-    inset 0 1px 0 rgba(255, 255, 255, .45);
+  box-shadow: 0 8px 26px rgba(0, 0, 0, .58), 0 1px 0 rgba(0, 0, 0, .35);
   animation: fabIn 340ms var(--ease) both;
-  transition: transform var(--fast) var(--ease), box-shadow var(--fast) var(--ease);
-  overflow: hidden;
+  transition: transform var(--fast) var(--ease), box-shadow var(--fast) var(--ease),
+              background var(--fast) var(--ease);
 }
 .fuel-fab svg { width: 19px; height: 19px; }
+/* Pressed, it sits down into the page instead of flashing. */
 .fuel-fab:active {
   transform: translateX(-50%) scale(.955);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, .5), inset 0 1px 0 rgba(255, 255, 255, .45);
-}
-/* A slow sheen across the plate. Once every eight seconds is decoration;
-   any faster is a distraction on a screen you look at while eating. */
-.fuel-fab::after {
-  content: '';
-  position: absolute; top: 0; bottom: 0; width: 42%;
-  left: -60%;
-  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, .55), transparent);
-  animation: fabSheen 8s var(--ease) 1.4s infinite;
-  pointer-events: none;
+  background: #d9a90f;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, .5);
 }
 .fuel-fab.settled { animation: none; opacity: 1; }
 
@@ -1193,10 +1199,11 @@ body.peeking .view.active { padding-bottom: 58px; }
   from { opacity: 0; transform: translate(-50%, 16px) scale(.9); }
   to   { opacity: 1; transform: translate(-50%, 0) scale(1); }
 }
-@keyframes fabSheen {
-  0%, 82%  { left: -60%; }
-  96%,100% { left: 120%; }
-}
+
+/* An empty meal is one line, not a hollow box. */
+.meal-blank { padding-bottom: 12px; }
+.meal-blank .card-hd { margin-bottom: 0; }
+.meal-blank .meal-kcal { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--knurl); }
 
 /* ---------- the menu ---------- */
 .add-grid {
