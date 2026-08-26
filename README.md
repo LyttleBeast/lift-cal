@@ -118,7 +118,7 @@ crusts, the wings, the whey); those are now seeded only for `OWNER_UID`.
 | `importer.js` | One-time Liftoff history migration |
 | `rack.css` | The stylesheet |
 | `404.html` | Branded not-found page |
-| `sw.js` | Service worker, network-first, cache `rack-v9` |
+| `sw.js` | Service worker, network-first, cache `rack-v10` |
 | `AGENTS.md` | The database schema and REST recipes, written for Claude |
 | `rack.mjs` | CLI over the same endpoints — read, log, edit, delete |
 | `app.css` | **Dead file** — the abandoned "IRONLOG" design, not referenced anywhere |

@@ -35,6 +35,10 @@
      header cropped into the top of the screen. Named so it can be faked in a
      desktop browser for testing. */
   --safe-top: env(safe-area-inset-top, 0px);
+  /* Breathing room between the status bar and the first line of the page.
+     Nudge this one number if the header still sits too close. */
+  --top-gap: 10px;
+  --app-top: calc(var(--safe-top) + var(--top-gap));
   --pad: 16px;
   --r: 12px;
   --r-sm: 8px;
@@ -82,7 +86,7 @@ input, select, textarea { font-family: inherit; font-size: 16px; } /* 16px stops
   max-width: 560px;
   margin: 0 auto;
   min-height: 100dvh;
-  padding-top: var(--safe-top);
+  padding-top: var(--app-top);
   padding-bottom: calc(var(--dock-h) + env(safe-area-inset-bottom));
   position: relative;
 }
@@ -90,9 +94,18 @@ input, select, textarea { font-family: inherit; font-size: 16px; } /* 16px stops
 .view { display: none; animation: viewIn var(--med) var(--ease); }
 .view.active { display: block; }
 
+/* Fade, no slide. The 6px translate this used to run promoted the whole view
+   to its own GPU layer, and Safari does not always hand it back afterwards —
+   text on a leftover composited layer is rasterised half a pixel off and reads
+   very slightly soft, which is exactly what "Training log" was doing in the
+   top-left corner. Nothing else on the page shows it because nothing else is
+   small, bold and letter-spaced enough to give the softness away.
+   The Fuel tab was already on a fade for a different reason (its fixed Log food
+   button can't live inside a transformed ancestor); this brings the other three
+   into line and fixes both problems with one rule. */
 @keyframes viewIn {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: none; }
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
 .screen-pad { padding: var(--pad); }
@@ -370,8 +383,8 @@ body.peeking .view.active { padding-bottom: 58px; }
   -webkit-backdrop-filter: blur(16px);
   border-bottom: 1px solid var(--collar);
   padding: 10px var(--pad);
-  margin-top: calc(-1 * var(--safe-top));
-  padding-top: calc(10px + var(--safe-top));
+  margin-top: calc(-1 * var(--app-top));
+  padding-top: calc(10px + var(--app-top));
   display: flex; align-items: center; justify-content: space-between;
 }
 .timer {
@@ -1147,14 +1160,6 @@ body.peeking .view.active { padding-bottom: 58px; }
    that puts food in the log lives in that menu. Nothing above this
    line was changed except .ex-del, which grew a real tap target.
    ================================================================ */
-
-/* The Fuel view fades instead of sliding. The 6px translate the other
-   tabs use creates a containing block for the length of the animation,
-   which would drag the fixed-position button along with it — it would
-   sit at the bottom of the scroll content for 240ms on every tab
-   switch, then snap. A fade has no transform and no such problem. */
-#view-food { animation: fuelIn var(--med) var(--ease); }
-@keyframes fuelIn { from { opacity: 0; } to { opacity: 1; } }
 
 /* Room under the last card so the button never covers a number. */
 #view-food .screen-pad { padding-bottom: 104px; }
