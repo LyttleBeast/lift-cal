@@ -11,7 +11,7 @@ import {
 import { openStats, isStatsOpen, renderStats, refresh as refreshStats } from './stats.js';
 // The exercise library and its two sheets live in picker.js so routines.js can
 // use them without importing this file back.
-import { initPicker, allExercises, openPicker } from './picker.js';
+import { initPicker, allExercises, openPicker, openExerciseManager } from './picker.js';
 import { initRoutines, openRoutines, saveSessionAsRoutine } from './routines.js';
 
 let monthCache = {};        // 'YYYY-MM' -> { 'DD': { sessionId: record } }
@@ -265,6 +265,14 @@ function renderCalendar() {
     rt.onclick = () => openRoutines(preset => startWorkout(preset));
     wrap.appendChild(rt);
   }
+
+  // The library itself — what exists, what it is called, what should not be
+  // in the picker at all. Deliberately not Statistics: nothing here is about
+  // how much you lifted.
+  const exBtn = el('button', 'btn btn-ghost btn-block btn-lg', 'Exercises');
+  exBtn.style.marginTop = '10px';
+  exBtn.onclick = () => openExerciseManager(() => render());
+  wrap.appendChild(exBtn);
 
   const stats = el('button', 'btn btn-ghost btn-block btn-lg', 'Statistics');
   stats.style.marginTop = '10px';

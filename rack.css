@@ -1330,3 +1330,35 @@ body.peeking .view.active { padding-bottom: 58px; }
   letter-spacing: .08em; text-transform: uppercase;
   text-align: center; margin-top: 12px;
 }
+
+/* ============================================================
+   FUEL — saved foods, the meal builder, the food memory
+   ============================================================ */
+
+/* Editing a saved food sits on the row next to deleting it, so the two need
+   to read as different actions before they are pressed, not after. */
+.ex-edit:active { color: var(--p-yellow); background: rgba(240, 190, 30, .12); }
+
+/* The count pill was scoped to the add sheet; the settings rows want it too. */
+.cnt {
+  font-size: 10px; color: var(--dim);
+  border: 1px solid var(--collar); border-radius: 999px;
+  padding: 1px 7px; margin-left: 2px;
+  font-variant-numeric: tabular-nums;
+}
+.btn .cnt { margin-left: auto; }
+
+/* A saved meal is a row you open, so it gets the routine treatment — with the
+   delete pushed out to the end where it can't be hit by accident. */
+.rt-item .ex-del { flex: 0 0 auto; margin-left: 4px; }
+
+/* ============================================================
+   TRAIN — the exercise library manager
+   ============================================================ */
+
+.ex-go { color: var(--dim); font-size: 16px; margin-left: 6px; }
+
+/* Hidden exercises still appear in the manager — that is where you put them
+   back — but they should not look available. */
+.ex-off { opacity: .5; }
+.ex-off .nm { text-decoration: line-through; text-decoration-color: var(--dim); }

@@ -19,6 +19,9 @@ import { $, el, svgEl, sheet, toast, noteEl, confirmSheet, copyText, readClipboa
          segmented, r1, trimNum } from './ui.js';
 import { shrinkImage, estimatePhoto, estimateText, quota,
          proxyUrl, setProxyUrl, hasProxy } from './ai.js';
+import { initRecall, lookup as recallLookup, remember as recallRemember,
+         rememberEntry, recallList, recallCount,
+         forget as recallForget, forgetAll as recallForgetAll } from './recall.js';
 
 const MEALS = [
   ['breakfast', 'Breakfast'],
@@ -58,6 +61,7 @@ export async function initFood() {
   items   = (await read('food/items',   null)) || {};
   meals   = (await read('food/meals',   null)) || {};
   await initWater(() => render());
+  await initRecall();
   await loadMaintInputs();
   await applyAuto();
   await seedItems();
@@ -305,17 +309,26 @@ async function logOnToday(entries) {
   entries.forEach(e => {
     const id = newEntryId();
     dayLog[id] = { id, t: Date.now(), ...e };
+    rememberEntry(e);
   });
   await saveDay();
   render();
 }
 
-function addEntry(entry) {
-  const id = newEntryId();
-  dayLog[id] = { id, t: Date.now(), ...entry };
+function addEntries(list) {
+  const now = Date.now();
+  list.forEach((entry, i) => {
+    const id = newEntryId();
+    // The offset keeps a six-ingredient meal in the order it was built rather
+    // than in whatever order equal timestamps happen to sort.
+    dayLog[id] = { id, t: now + i, ...entry };
+    rememberEntry(entry);
+  });
   saveDay();
   render();
 }
+
+function addEntry(entry) { addEntries([entry]); }
 
 function touchItem(id) {
   if (!items[id]) return;
@@ -324,13 +337,55 @@ function touchItem(id) {
   write('food/items', items);
 }
 
-/* ---------- portion scaling on an already-logged entry ----------
-   "I ate that twice" shouldn't mean re-typing four numbers. `factor` is
-   relative to what is currently showing, so tapping ×2 twice gives 4×. */
+/* ---------- portion maths on an already-logged entry ----------
+   Two kinds of entry, two kinds of arithmetic. One linked to a saved food
+   scales by amount, so 1.5 scoops is recomputed from the item and the gram
+   maths stays honest. Anything else scales against the numbers it was logged
+   with — which means the original has to be remembered, or ×2 then ×0.5
+   quietly rounds the entry away from where it started. `baseN` is that memory:
+   one portion's worth, whatever the entry currently shows. */
+function stripMult(qty) {
+  return String(qty || '').replace(/\s*×\s*[\d.]+\s*$/, '').trim();
+}
+
+function entryBase(e) {
+  if (!e.baseN) {
+    // An entry scaled by the old chips carries `mult` but no base. Unwind it
+    // rather than treating the doubled numbers as one portion.
+    const m = e.mult || 1;
+    e.baseN = {
+      cal: Math.round((e.cal || 0) / m),
+      p: r1((e.p || 0) / m), c: r1((e.c || 0) / m), f: r1((e.f || 0) / m)
+    };
+    if (e.micro) {
+      e.baseN.micro = {};
+      for (const k of Object.keys(e.micro)) e.baseN.micro[k] = r1(e.micro[k] / m);
+    }
+    if (e.qtyBase == null) e.qtyBase = stripMult(e.qty);
+  }
+  return e.baseN;
+}
+
+// Absolute, not relative. setEntryMult(e, 2) means twice the original however
+// many times it has already been scaled.
+function setEntryMult(e, mult) {
+  const b = entryBase(e);
+  const m = Math.max(0, r1(mult));
+  e.cal = Math.round(b.cal * m);
+  e.p = r1(b.p * m); e.c = r1(b.c * m); e.f = r1(b.f * m);
+  if (b.micro) {
+    e.micro = {};
+    for (const k of Object.keys(b.micro)) e.micro[k] = r1(b.micro[k] * m);
+  }
+  e.mult = m;
+  e.qty = m === 1 ? (e.qtyBase || '')
+    : (e.qtyBase ? e.qtyBase + ' × ' + trimNum(m) : '× ' + trimNum(m));
+}
+
+// Relative, for the ×2 / ×3 / ×4 / Half chips.
 function scaleEntry(e, factor) {
   const item = e.itemId ? items[e.itemId] : null;
 
-  // Library-linked entries scale by amount so the gram maths stays honest.
   if (item && e.amt) {
     const amt = r1(e.amt * factor);
     const m = macrosFor(item, amt, e.unit || 'serv');
@@ -339,18 +394,50 @@ function scaleEntry(e, factor) {
       return;
     }
   }
+  setEntryMult(e, (e.mult || 1) * factor);
+}
 
-  e.cal = Math.round((e.cal || 0) * factor);
-  e.p = r1((e.p || 0) * factor);
-  e.c = r1((e.c || 0) * factor);
-  e.f = r1((e.f || 0) * factor);
-  if (e.micro) for (const k of Object.keys(e.micro)) e.micro[k] = r1(e.micro[k] * factor);
+function macroLine(e) {
+  return (e.cal || 0) + ' kcal   ·   P ' + trimNum(e.p || 0) +
+    '   C ' + trimNum(e.c || 0) + '   F ' + trimNum(e.f || 0);
+}
 
-  if (e.qtyBase == null) { e.qtyBase = e.qty || ''; e.mult = 1; }
-  e.mult = r1((e.mult || 1) * factor);
-  e.qty = e.mult === 1
-    ? e.qtyBase
-    : (e.qtyBase ? e.qtyBase + ' × ' + trimNum(e.mult) : '× ' + trimNum(e.mult));
+function macroTotals(list) {
+  return list.reduce((s, e) => ({
+    cal: s.cal + (e.cal || 0), p: r1(s.p + (e.p || 0)),
+    c: r1(s.c + (e.c || 0)), f: r1(s.f + (e.f || 0))
+  }), { cal: 0, p: 0, c: 0, f: 0 });
+}
+
+/* A food already in the library under this exact name. What makes "save this"
+   an update rather than a second copy of the same thing. */
+function libraryMatch(name) {
+  const n = String(name || '').trim().toLowerCase();
+  if (!n) return null;
+  return Object.values(items).find(it => (it.name || '').trim().toLowerCase() === n) || null;
+}
+
+/* One tap from a logged food to a saved one. The serving IS the portion that
+   was eaten — the entry's numbers are already for that much — so the label
+   carries the portion text and logging it again at ×1 needs no arithmetic.
+   The entry is then linked to the new item, which upgrades its amount control
+   from a multiplier to a real portion picker. */
+function saveEntryAsItem(e) {
+  const base = entryBase(e);
+  const mult = e.mult || 1;
+  const id = 'u' + Date.now().toString(36);
+  items[id] = {
+    id,
+    ...mkItem(e.name, '', 'serv', { label: stripMult(e.qty) || 'serving' },
+      { cal: base.cal, p: base.p, c: base.c, f: base.f }, base.micro || null),
+    uses: 1, last: Date.now()
+  };
+  write('food/items', items);
+
+  e.itemId = id; e.amt = mult; e.unit = 'serv';
+  e.qty = qtyLabel(items[id], mult, 'serv');
+  delete e.baseN; delete e.qtyBase; delete e.mult;
+  return items[id];
 }
 
 /* ================= RENDER ================= */
@@ -589,8 +676,13 @@ function renderMeal(mealId, label) {
   if (entries.length) {
     right.appendChild(el('div', 'num meal-kcal', kcal + ' kcal'));
     const save = el('button', 'ex-menu', '⋯');
-    save.title = 'Save as meal';
-    save.onclick = () => saveAsMeal(label, entries);
+    save.title = 'Turn this into a meal';
+    save.onclick = () => openMealBuilder({
+      id: 'm' + Date.now().toString(36),
+      name: label + ' — ' + fmtViewDate(),
+      items: entries.map(e => ({ ...cleanIng(e) })),
+      saved: false
+    }, mealId);
     right.appendChild(save);
   } else {
     right.appendChild(el('div', 'meal-kcal', 'nothing yet'));
@@ -655,15 +747,19 @@ function openEntry(e) {
     body.appendChild(el('h2', null, e.name));
     body.appendChild(el('div', 'eyebrow', e.qty || ''));
 
-    const readout = el('div', 'entry-readout num',
-      (e.cal || 0) + ' kcal   ·   P ' + trimNum(e.p || 0) +
-      '   C ' + trimNum(e.c || 0) + '   F ' + trimNum(e.f || 0));
+    const readout = el('div', 'entry-readout num', macroLine(e));
     body.appendChild(readout);
+    const repaint = () => { readout.textContent = macroLine(e); };
 
-    /* ---- ate more than one? ---- */
-    body.appendChild(el('div', 'field-lbl', 'Ate more than one?'));
+    /* ---- amount ----
+       The chips are the fast path, because most corrections really are “I ate
+       two of those”. The selector under them is the exact one, for the times it
+       was a serving and a half, or 180 g, and no multiple of the original
+       comes close. */
+    body.appendChild(el('div', 'field-lbl', 'Amount'));
+
     const multRow = el('div', 'filter-row');
-    [['×2', 2], ['×3', 3], ['×4', 4], ['Half', 0.5]].forEach(([label, factor]) => {
+    [['\u00d72', 2], ['\u00d73', 3], ['\u00d74', 4], ['Half', 0.5]].forEach(([label, factor]) => {
       const c = el('button', 'chip', label);
       c.onclick = () => {
         scaleEntry(e, factor);
@@ -675,8 +771,37 @@ function openEntry(e) {
     });
     body.appendChild(multRow);
 
+    if (item) {
+      let first = true;
+      body.appendChild(portionControl(item, e.amt || 1, e.unit || 'serv', (amt, unit, m) => {
+        if (first) { first = false; return; }   // the control paints once on build
+        Object.assign(e, m, { amt, unit, qty: qtyLabel(item, amt, unit) });
+        delete e.qtyBase; delete e.mult; delete e.baseN;
+        saveDay();
+        repaint();
+      }));
+    } else {
+      body.appendChild(multControl(e, () => { saveDay(); repaint(); }));
+    }
+
+    /* ---- keep it ----
+       Saving is one tap from here rather than something you have to have
+       thought about at the moment you logged it. */
+    const known = item || libraryMatch(e.name);
+    const keep = el('button', 'btn btn-ghost btn-block',
+      known ? 'Edit “' + known.name + '” in my foods' : 'Save to my foods');
+    keep.style.marginTop = '12px';
+    keep.onclick = () => {
+      if (known) { close(); openItemEdit(known, () => render()); return; }
+      saveEntryAsItem(e);
+      saveDay();
+      paint();
+      toast('Saved to my foods');
+    };
+    body.appendChild(keep);
+
     const again = el('button', 'btn btn-ghost btn-block', 'Log this again separately');
-    again.style.marginTop = '10px';
+    again.style.marginTop = '8px';
     again.onclick = () => {
       const copy = { ...e };
       delete copy.id; delete copy.t;
@@ -710,20 +835,12 @@ function openEntry(e) {
     }
     body.appendChild(reuse);
 
-    /* ---- precise editing ---- */
-    body.appendChild(el('div', 'field-lbl', item ? 'Exact portion' : 'Exact numbers'));
-
-    if (item) {
-      let first = true;
-      body.appendChild(portionControl(item, e.amt || 1, e.unit || 'serv', (amt, unit, m) => {
-        if (first) { first = false; return; }   // the control paints once on build
-        Object.assign(e, m, { amt, unit, qty: qtyLabel(item, amt, unit) });
-        delete e.qtyBase; delete e.mult;
-        saveDay();
-        readout.textContent = (e.cal || 0) + ' kcal   ·   P ' + trimNum(e.p || 0) +
-          '   C ' + trimNum(e.c || 0) + '   F ' + trimNum(e.f || 0);
-      }));
-    } else {
+    /* ---- raw numbers ----
+       Only for an entry with no saved food behind it. When there is one, the
+       portion picker above is already the exact control and typing a fifth
+       number here would just contradict it. */
+    if (!item) {
+      body.appendChild(el('div', 'field-lbl', 'Exact numbers'));
       const mkNum = (key, label) => {
         const f = el('div', 'field');
         f.appendChild(el('label', null, label));
@@ -732,8 +849,9 @@ function openEntry(e) {
           e[key] = key === 'cal'
             ? Math.round(parseFloat(ev.target.value) || 0)
             : r1(parseFloat(ev.target.value) || 0);
-          // a manual override invalidates the multiplier bookkeeping
-          delete e.qtyBase; delete e.mult;
+          // A typed number is the new truth, so the multiplier bookkeeping
+          // that was tracking the old one has to go.
+          delete e.qtyBase; delete e.mult; delete e.baseN;
           saveDay();
           paint();
         };
@@ -770,6 +888,40 @@ function openEntry(e) {
   }
 
   paint();
+}
+
+/* The exact-amount control for a food with nothing saved behind it. There is
+   no serving size to count in, so it counts in multiples of what was logged —
+   0.5, 1.5, 2.25 — and shows what that comes to in calories. Typing 1.75 is
+   the whole reason this exists; the stepper is there for thumbs. */
+function multControl(e, onChange) {
+  const box = el('div');
+  entryBase(e);
+  let m = e.mult || 1;
+
+  const row = el('div', 'qty-row');
+  const minus = el('button', 'btn btn-ghost', '\u2212');
+  const inp = el('input');
+  inp.type = 'number'; inp.inputMode = 'decimal'; inp.step = '0.25'; inp.min = '0';
+  const plus = el('button', 'btn btn-ghost', '+');
+  row.append(minus, inp, plus);
+
+  const preview = el('div', 'num portion-preview');
+
+  const show = () => {
+    inp.value = trimNum(m);
+    preview.textContent = '\u00d7 ' + trimNum(m) + ' of what you logged   \u00b7   ' +
+      (e.cal || 0) + ' kcal';
+  };
+  const apply = () => { setEntryMult(e, m); show(); onChange(); };
+
+  minus.onclick = () => { m = Math.max(0.25, r1(m - 0.25)); apply(); };
+  plus.onclick  = () => { m = r1(m + 0.25); apply(); };
+  inp.onchange  = ev => { m = Math.max(0.05, parseFloat(ev.target.value) || 1); apply(); };
+
+  box.append(row, preview);
+  show();   // opening the sheet changes nothing, so don't write on build
+  return box;
 }
 
 /* ================= ADD FLOW =================
@@ -876,7 +1028,7 @@ function openAdd(mealId) {
    piled up here forever, including the one-off protein bar from a gas station
    in March. A food leaves the library without touching anything already logged
    with it — those entries carry their own numbers. */
-function openLibrary(mealId) {
+function openLibrary(mealId, onPick) {
   const { sh, close } = sheet();
   sh.appendChild(el('h2', null, 'My foods'));
 
@@ -893,6 +1045,8 @@ function openLibrary(mealId) {
   let q = '';
   inp.oninput = ev => { q = ev.target.value.toLowerCase().trim(); paint(); };
 
+  const reopen = () => openLibrary(mealId, onPick);
+
   function paint() {
     list.innerHTML = '';
     const pool = Object.values(items)
@@ -902,7 +1056,7 @@ function openLibrary(mealId) {
     if (!pool.length) {
       list.appendChild(noteEl(q
         ? 'Nothing saved matches that.'
-        : 'Nothing saved yet. Anything you scan, type by hand, or keep off an estimate lands here.'));
+        : 'Nothing saved yet. Anything you scan, type by hand, or keep off an estimate lands here \u2014 or build one below.'));
       return;
     }
 
@@ -911,15 +1065,26 @@ function openLibrary(mealId) {
       b.appendChild(el('span', 'nm', it.name));
       const per = it.base === '100g' ? 'per 100 g' : 'per ' + ((it.serv && it.serv.label) || 'serving');
       b.appendChild(el('span', 'eq num', it.n.cal + ' kcal ' + per));
-      b.onclick = () => { close(); openPortion(it, mealId); };
+      b.onclick = () => { close(); openPortion(it, mealId, onPick); };
 
-      const x = el('span', 'eq ex-del', '✕');
+      // Editing lives on the row rather than one level down, because the
+      // reason you came here is usually that the numbers are wrong.
+      const ed = el('span', 'eq ex-del ex-edit', '\u270e');
+      ed.setAttribute('aria-label', 'Edit ' + it.name);
+      ed.onclick = ev => {
+        ev.stopPropagation();
+        close();
+        openItemEdit(it, reopen);
+      };
+      b.appendChild(ed);
+
+      const x = el('span', 'eq ex-del', '\u2715');
       x.setAttribute('aria-label', 'Delete ' + it.name);
       x.onclick = ev => {
         ev.stopPropagation();
         confirmSheet({
           title: 'Delete this food?',
-          body: '“' + it.name + '” leaves your library. Anything already logged with it stays exactly as it is.',
+          body: '\u201c' + it.name + '\u201d leaves your library. Anything already logged with it stays exactly as it is.',
           confirmLabel: 'Delete',
           danger: true,
           onConfirm: async () => {
@@ -936,44 +1101,234 @@ function openLibrary(mealId) {
   }
   paint();
 
-  const cancel = el('button', 'btn btn-ghost btn-block', 'Cancel');
-  cancel.style.marginTop = '10px';
+  const add = el('button', 'btn btn-primary btn-block', '+  New food');
+  add.style.marginTop = '12px';
+  add.onclick = () => { close(); openItemEdit(null, reopen); };
+  sh.appendChild(add);
+
+  const cancel = el('button', 'btn btn-ghost btn-block', 'Close');
+  cancel.style.marginTop = '8px';
   cancel.onclick = close;
   sh.appendChild(cancel);
 }
 
-/* ---------- saved meals ---------- */
+/* ---------- one saved food ----------
+   The library used to be write-once: whatever a barcode or an estimate put in
+   was what it said forever. This is the other half of it \u2014 the name was
+   wrong, the serving is 44 g and not 40, the brand quietly changed the recipe.
+
+   Editing here never rewrites history. Every logged entry carries its own
+   numbers, and going back to correct days that have already been summed would
+   move the maintenance estimate under you without saying so. */
+function openItemEdit(item, onDone) {
+  const isNew = !item;
+  const draft = item
+    ? JSON.parse(JSON.stringify(item))
+    : {
+        id: 'u' + Date.now().toString(36), name: '', brand: '', base: 'serv',
+        serv: { label: 'serving', grams: null },
+        n: { cal: 0, p: 0, c: 0, f: 0 }, micro: null, uses: 0, last: 0
+      };
+
+  const { sh, close } = sheet();
+  sh.appendChild(el('div', 'eyebrow', isNew ? 'My foods' : 'Saved food'));
+  sh.appendChild(el('h2', null, isNew ? 'New food' : draft.name));
+
+  const f = (label, val, type) => {
+    const w = el('div', 'field');
+    w.appendChild(el('label', null, label));
+    const i = el('input');
+    i.type = type || 'number';
+    if (i.type === 'number') i.inputMode = 'decimal';
+    if (val != null && val !== '') i.value = val;
+    w.appendChild(i);
+    w.input = i;
+    return w;
+  };
+
+  const name  = f('Name', draft.name, 'text');
+  const brand = f('Brand (optional)', draft.brand, 'text');
+  sh.append(name, brand);
+
+  /* What the four numbers below are FOR. Per serving is how a package reads;
+     per 100 g is how a scale reads. Both convert, as long as the grams are in. */
+  let base = draft.base === '100g' ? '100g' : 'serv';
+  sh.appendChild(el('div', 'field-lbl', 'The numbers are'));
+  sh.appendChild(segmented([['serv', 'Per serving'], ['100g', 'Per 100 g']], base, v => { base = v; }));
+
+  const servRow = el('div', 'row-split');
+  servRow.style.marginTop = '10px';
+  const label = f('Serving is called', (draft.serv && draft.serv.label) || '', 'text');
+  const grams = f('Grams per serving', draft.serv && draft.serv.grams);
+  servRow.append(label, grams);
+  sh.appendChild(servRow);
+  sh.appendChild(noteEl('Grams per serving is what lets the portion picker switch between servings and the scale. Leave it blank if you don\u2019t know it.'));
+
+  sh.appendChild(el('div', 'field-lbl', 'Macros'));
+  const g1 = el('div', 'row-split');
+  const cal = f('kcal', draft.n.cal), pr = f('Protein g', draft.n.p);
+  g1.append(cal, pr); sh.appendChild(g1);
+  const g2 = el('div', 'row-split');
+  const cb = f('Carbs g', draft.n.c), ft = f('Fat g', draft.n.f);
+  g2.append(cb, ft); sh.appendChild(g2);
+
+  sh.appendChild(el('div', 'field-lbl', 'Micronutrients (optional)'));
+  const microIn = {};
+  for (let i = 0; i < MICROS.length; i += 2) {
+    const row = el('div', 'row-split');
+    MICROS.slice(i, i + 2).forEach(([k, lbl, unit]) => {
+      const w = f(lbl + ' ' + unit, draft.micro && draft.micro[k] != null ? draft.micro[k] : '');
+      microIn[k] = w.input;
+      row.appendChild(w);
+    });
+    sh.appendChild(row);
+  }
+
+  const go = el('button', 'btn btn-primary btn-block btn-lg', isNew ? 'Save food' : 'Save changes');
+  go.style.marginTop = '16px';
+  go.onclick = async () => {
+    const nm = name.input.value.trim();
+    if (!nm) { toast('Give it a name'); name.input.focus(); return; }
+
+    const kcal = Math.round(parseFloat(cal.input.value) || 0);
+    if (!kcal) { toast('It needs calories'); cal.input.focus(); return; }
+
+    const gramsVal = parseFloat(grams.input.value);
+    const lbl = label.input.value.trim();
+
+    const micro = {};
+    MICROS.forEach(([k]) => {
+      const v = parseFloat(microIn[k].value);
+      if (!isNaN(v)) micro[k] = r1(v);
+    });
+
+    items[draft.id] = {
+      ...draft,
+      id: draft.id,
+      name: nm,
+      brand: brand.input.value.trim(),
+      base,
+      serv: (lbl || gramsVal > 0)
+        ? { label: lbl || 'serving', grams: gramsVal > 0 ? gramsVal : null }
+        : null,
+      n: {
+        cal: kcal,
+        p: r1(parseFloat(pr.input.value) || 0),
+        c: r1(parseFloat(cb.input.value) || 0),
+        f: r1(parseFloat(ft.input.value) || 0)
+      },
+      micro: Object.keys(micro).length ? micro : null,
+      last: draft.last || Date.now()
+    };
+    await write('food/items', items);
+    close();
+    toast(isNew ? 'Saved to my foods' : 'Updated');
+    if (onDone) onDone();
+  };
+  sh.appendChild(go);
+
+  if (!isNew) {
+    const del = el('button', 'btn btn-danger btn-block', 'Delete food');
+    del.style.marginTop = '8px';
+    del.onclick = () => {
+      confirmSheet({
+        title: 'Delete this food?',
+        body: '\u201c' + draft.name + '\u201d leaves your library. Anything already logged with it stays exactly as it is.',
+        confirmLabel: 'Delete',
+        danger: true,
+        onConfirm: async () => {
+          delete items[draft.id];
+          await write('food/items', items);
+          close();
+          toast('Deleted');
+          if (onDone) onDone();
+        }
+      });
+    };
+    sh.appendChild(del);
+  }
+
+  const cancel = el('button', 'btn btn-ghost btn-block', 'Cancel');
+  cancel.style.marginTop = '8px';
+  cancel.onclick = close;
+  sh.appendChild(cancel);
+
+  if (isNew) setTimeout(() => name.input.focus(), 80);
+}
+
+/* ================= MEALS =================
+   Chick-fil-A, Panda Express, the build-your-own-bowl place: the same short
+   list of components every time, in different amounts. So a meal here is an
+   ingredient list you can re-price, not a frozen total — open it, change the
+   rice from one scoop to two, log it.
+
+   Saving is opt-out, not opt-in. Most meals are eaten once and the library
+   should not fill up with them; the ones worth keeping get the tick. */
+
+function blankMeal() {
+  return { id: 'm' + Date.now().toString(36), name: '', items: [], saved: false };
+}
+
+// What goes into food/meals: the ingredient as it stands, without the
+// multiplier bookkeeping. Saving means "keep it at these amounts", and the
+// stored numbers become the baseline the next time it is opened.
+function cleanIng(i) {
+  const o = {
+    name: i.name, qty: i.qty || '',
+    cal: i.cal || 0, p: r1(i.p || 0), c: r1(i.c || 0), f: r1(i.f || 0)
+  };
+  if (i.micro && Object.keys(i.micro).length) o.micro = i.micro;
+  if (i.itemId) { o.itemId = i.itemId; o.amt = i.amt; o.unit = i.unit || 'serv'; }
+  return o;
+}
+
 function openMealsSheet(mealId) {
   const { sh, close } = sheet();
+  sh.appendChild(el('div', 'eyebrow', 'Fuel'));
   sh.appendChild(el('h2', null, 'My meals'));
 
-  const list = el('div', 'ex-list');
+  const list = el('div', 'rt-list');
   sh.appendChild(list);
 
   function paint() {
     list.innerHTML = '';
-    const pool = Object.values(meals);
+    const pool = Object.values(meals).filter(m => m && m.id);
     if (!pool.length) {
-      list.appendChild(noteEl('No saved meals yet. Log one, then tap ⋯ on the meal card to keep it as a single tap.'));
+      const es = el('div', 'empty-state');
+      es.appendChild(el('h3', null, 'No meals yet'));
+      es.appendChild(el('p', null,
+        'A meal is an ingredient list with amounts you can change before you log it. Build one below, or tap \u22ef on a meal card to keep what you already ate.'));
+      list.appendChild(es);
       return;
     }
+
+    pool.sort((a, b) => (b.last || 0) - (a.last || 0) || (a.name || '').localeCompare(b.name || ''));
     pool.forEach(m => {
-      const kcal = m.items.reduce((s, i) => s + (i.cal || 0), 0);
-      const b = el('button', 'ex-item');
-      b.appendChild(el('span', 'nm', m.name));
-      b.appendChild(el('span', 'eq num', m.items.length + ' items · ' + kcal + ' kcal'));
-      b.onclick = () => {
-        m.items.forEach(i => addEntry({ ...i, meal: mealId || defaultMeal(), src: 'meal' }));
+      const t = macroTotals(m.items || []);
+      const row = el('button', 'rt-item');
+      const mid = el('div', 'rt-mid');
+      mid.appendChild(el('div', 'rt-name', m.name || 'Untitled meal'));
+      const n = (m.items || []).length;
+      mid.appendChild(el('div', 'rt-meta num',
+        n + (n === 1 ? ' ingredient' : ' ingredients') + '  \u00b7  ' + t.cal + ' kcal  \u00b7  P ' + trimNum(t.p)));
+      row.appendChild(mid);
+      row.appendChild(el('span', 'rt-go', '\u203a'));
+      row.onclick = () => {
         close();
-        toast('Added ' + m.name);
+        openMealBuilder({
+          id: m.id, name: m.name,
+          items: (m.items || []).map(i => ({ ...i })),
+          saved: true
+        }, mealId);
       };
-      const x = el('span', 'eq ex-del', '✕');
+
+      const x = el('span', 'ex-del', '\u2715');
       x.setAttribute('aria-label', 'Delete ' + m.name);
       x.onclick = ev => {
         ev.stopPropagation();
         confirmSheet({
           title: 'Delete saved meal?',
-          body: '“' + m.name + '” is removed from your meal library. Days you already logged it on keep their food.',
+          body: '\u201c' + m.name + '\u201d is removed from your meals. Days you already logged it on keep their food.',
           confirmLabel: 'Delete',
           danger: true,
           onConfirm: async () => {
@@ -984,16 +1339,273 @@ function openMealsSheet(mealId) {
           }
         });
       };
-      b.appendChild(x);
-      list.appendChild(b);
+      row.appendChild(x);
+      list.appendChild(row);
     });
   }
   paint();
 
-  const cancel = el('button', 'btn btn-ghost btn-block', 'Cancel');
-  cancel.style.marginTop = '10px';
+  const add = el('button', 'btn btn-primary btn-block btn-lg', '+  New meal');
+  add.style.marginTop = '12px';
+  add.onclick = () => { close(); openMealBuilder(blankMeal(), mealId); };
+  sh.appendChild(add);
+
+  const cancel = el('button', 'btn btn-ghost btn-block', 'Close');
+  cancel.style.marginTop = '8px';
   cancel.onclick = close;
   sh.appendChild(cancel);
+}
+
+/* ---------- the builder ---------- */
+function openMealBuilder(draft, mealId) {
+  const { sh, close } = sheet();
+  let meal = mealId || defaultMeal();
+  let asOne = false;
+  let keep = !!draft.saved;
+
+  const body = el('div');
+  sh.appendChild(body);
+
+  const rebuild = () => paint();
+
+  function paint() {
+    body.innerHTML = '';
+    const t = macroTotals(draft.items);
+
+    body.appendChild(el('div', 'eyebrow', draft.saved ? 'Saved meal' : 'New meal'));
+
+    const nameWrap = el('div', 'field');
+    nameWrap.appendChild(el('label', null, 'Name'));
+    const nameIn = el('input');
+    nameIn.type = 'text';
+    nameIn.placeholder = 'Chick-fil-A, bowl, Sunday breakfast\u2026';
+    nameIn.autocapitalize = 'words';
+    nameIn.value = draft.name || '';
+    nameIn.oninput = ev => { draft.name = ev.target.value; };
+    nameWrap.appendChild(nameIn);
+    body.appendChild(nameWrap);
+
+    body.appendChild(el('div', 'entry-readout num',
+      t.cal.toLocaleString() + ' kcal   \u00b7   P ' + trimNum(t.p) +
+      '   C ' + trimNum(t.c) + '   F ' + trimNum(t.f)));
+
+    /* ---- ingredients ---- */
+    body.appendChild(el('div', 'field-lbl',
+      draft.items.length ? draft.items.length + ' ingredients' : 'Ingredients'));
+
+    if (!draft.items.length) {
+      body.appendChild(noteEl('Add the components one at a time \u2014 from your saved foods, a barcode, a description, or straight off the receipt. Amounts are adjustable afterwards.'));
+    }
+
+    const list = el('div', 'import-list');
+    draft.items.forEach((ing, idx) => {
+      const row = el('div', 'food-entry pe-row');
+      const b = el('button', 'pe-body');
+      b.appendChild(el('div', 'fe-name', ing.name));
+      b.appendChild(el('div', 'fe-sub num',
+        (ing.qty ? ing.qty + '  \u00b7  ' : '') +
+        'P ' + trimNum(ing.p || 0) + '  C ' + trimNum(ing.c || 0) + '  F ' + trimNum(ing.f || 0)));
+      b.onclick = () => openIngredient(ing, rebuild, () => { draft.items.splice(idx, 1); rebuild(); });
+      row.appendChild(b);
+      row.appendChild(el('div', 'fe-cal num', String(ing.cal || 0)));
+
+      const x = el('button', 'ex-del pe-x', '\u2715');
+      x.setAttribute('aria-label', 'Remove ' + ing.name);
+      x.onclick = () => { draft.items.splice(idx, 1); rebuild(); };
+      row.appendChild(x);
+      list.appendChild(row);
+    });
+    body.appendChild(list);
+
+    const add = el('button', 'btn btn-ghost btn-block', '+  Add ingredient');
+    add.style.marginTop = '10px';
+    add.onclick = () => openIngredientSource(ing => { draft.items.push(ing); rebuild(); });
+    body.appendChild(add);
+
+    if (draft.items.length) {
+      body.appendChild(el('div', 'field-lbl', 'Meal'));
+      body.appendChild(mealChips(meal, v => { meal = v; }));
+
+      /* One bowl is one thing you ate, and four lines in the log for it is
+         four lines of noise. Six separate components you might correct one by
+         one is the opposite. So it's a choice, defaulting to how the app has
+         always logged a saved meal. */
+      body.appendChild(el('div', 'field-lbl', 'Log it as'));
+      body.appendChild(segmented(
+        [['items', 'Separate items'], ['one', 'One entry']],
+        asOne ? 'one' : 'items',
+        v => { asOne = v === 'one'; }
+      ));
+
+      const keepWrap = el('label', 'save-check');
+      keepWrap.style.marginTop = '14px';
+      const chk = el('input');
+      chk.type = 'checkbox';
+      chk.checked = keep;
+      chk.onchange = ev => { keep = ev.target.checked; };
+      keepWrap.append(chk, document.createTextNode(
+        draft.saved ? ' Keep these changes in my meals' : ' Also save this to my meals'));
+      body.appendChild(keepWrap);
+
+      const go = el('button', 'btn btn-primary btn-block btn-lg',
+        'Log meal' + (isToday() ? '' : ' on ' + fmtViewDate()));
+      go.style.marginTop = '4px';
+      go.onclick = async () => {
+        if (keep) await persistMeal(draft);
+        logMeal(draft, meal, asOne);
+        close();
+        toast('Logged ' + (draft.name || 'meal'));
+      };
+      body.appendChild(go);
+
+      const only = el('button', 'btn btn-ghost btn-block', 'Save without logging');
+      only.style.marginTop = '8px';
+      only.onclick = async () => {
+        if (!draft.name.trim()) { toast('Give it a name first'); nameIn.focus(); return; }
+        await persistMeal(draft);
+        close();
+        toast('Saved to my meals');
+      };
+      body.appendChild(only);
+    }
+
+    const cancel = el('button', 'btn btn-ghost btn-block', 'Cancel');
+    cancel.style.marginTop = '8px';
+    cancel.onclick = close;
+    body.appendChild(cancel);
+  }
+
+  paint();
+}
+
+async function persistMeal(draft) {
+  const name = (draft.name || '').trim() || 'Meal — ' + todayKey();
+  draft.name = name;
+  draft.saved = true;
+  meals[draft.id] = {
+    id: draft.id, name,
+    items: draft.items.map(cleanIng),
+    last: Date.now()
+  };
+  await write('food/meals', meals);
+}
+
+function logMeal(draft, meal, asOne) {
+  const name = (draft.name || '').trim() || 'Meal';
+  if (asOne) {
+    const t = macroTotals(draft.items);
+    const micro = {};
+    draft.items.forEach(i => {
+      if (!i.micro) return;
+      for (const [k] of MICROS) if (i.micro[k] != null) micro[k] = r1((micro[k] || 0) + i.micro[k]);
+    });
+    const one = {
+      name, qty: draft.items.length + ' ingredients',
+      cal: t.cal, p: t.p, c: t.c, f: t.f, meal, src: 'meal'
+    };
+    if (Object.keys(micro).length) one.micro = micro;
+    addEntries([one]);
+  } else {
+    addEntries(draft.items.map(i => ({ ...cleanIng(i), meal, src: 'meal' })));
+  }
+  // The whole meal under its own name, so describing it next time is free.
+  if (draft.name.trim()) recallRemember(draft.name, draft.items.map(cleanIng), 'log');
+}
+
+/* ---------- where an ingredient comes from ---------- */
+function openIngredientSource(onPick) {
+  const { sh, close } = sheet();
+  sh.appendChild(el('div', 'eyebrow', 'Add to meal'));
+  sh.appendChild(el('h2', null, 'What went in?'));
+
+  const grid = el('div', 'add-grid');
+  const tile = (cls, ic, title, desc, tag, fn) => {
+    const b = el('button', 'add-tile' + (cls ? ' ' + cls : ''));
+    const box = el('div', 'ic');
+    box.appendChild(icon(ic));
+    b.append(box, el('div', 't', title), el('div', 'd', desc));
+    if (tag) b.appendChild(el('div', 'tag', tag));
+    b.onclick = () => { close(); fn(); };
+    grid.appendChild(b);
+  };
+
+  tile('hero', 'book',    'My foods',  'The things you eat over and over.', null,
+    () => openLibrary(null, onPick));
+  tile('lit',  'pen',     'Describe',  'One line, Claude does the macros.', 'ai',
+    () => openDescribeFlow(null, '', onPick));
+  tile(null,   'barcode', 'Barcode',   'Scan the package.', null,
+    () => openScanner(code => lookupBarcode(code, null, onPick)));
+  tile(null,   'keypad',  'By hand',   'Numbers off the menu board.', null,
+    () => openManual(null, null, onPick));
+  sh.appendChild(grid);
+
+  const cancel = el('button', 'btn btn-ghost btn-block', 'Cancel');
+  cancel.style.marginTop = '12px';
+  cancel.onclick = close;
+  sh.appendChild(cancel);
+}
+
+/* ---------- one ingredient's amount ----------
+   The same two controls the entry sheet uses, because it is the same question:
+   a saved food scales by portion, everything else by multiple. */
+function openIngredient(ing, onDone, onRemove) {
+  const { sh, close } = sheet(onDone);
+  const body = el('div');
+  sh.appendChild(body);
+
+  function paint() {
+    body.innerHTML = '';
+    const item = ing.itemId ? items[ing.itemId] : null;
+
+    body.appendChild(el('h2', null, ing.name));
+    body.appendChild(el('div', 'eyebrow', ing.qty || ''));
+    const readout = el('div', 'entry-readout num', macroLine(ing));
+    body.appendChild(readout);
+    const repaint = () => { readout.textContent = macroLine(ing); };
+
+    body.appendChild(el('div', 'field-lbl', 'Amount'));
+    const chips = el('div', 'filter-row');
+    [['\u00d72', 2], ['\u00d73', 3], ['\u00d74', 4], ['Half', 0.5]].forEach(([label, factor]) => {
+      const c = el('button', 'chip', label);
+      c.onclick = () => { scaleEntry(ing, factor); paint(); };
+      chips.appendChild(c);
+    });
+    body.appendChild(chips);
+
+    if (item) {
+      let first = true;
+      body.appendChild(portionControl(item, ing.amt || 1, ing.unit || 'serv', (amt, unit, m) => {
+        if (first) { first = false; return; }
+        Object.assign(ing, m, { amt, unit, qty: qtyLabel(item, amt, unit) });
+        delete ing.qtyBase; delete ing.mult; delete ing.baseN;
+        repaint();
+      }));
+    } else {
+      body.appendChild(multControl(ing, repaint));
+    }
+
+    const nameWrap = el('div', 'field');
+    nameWrap.style.marginTop = '14px';
+    nameWrap.appendChild(el('label', null, 'Name'));
+    const nameIn = el('input');
+    nameIn.type = 'text';
+    nameIn.value = ing.name;
+    nameIn.oninput = ev => { ing.name = ev.target.value; };
+    nameWrap.appendChild(nameIn);
+    body.appendChild(nameWrap);
+
+    const rm = el('button', 'btn btn-danger btn-block', 'Remove from meal');
+    rm.style.marginTop = '10px';
+    rm.onclick = () => { close(); onRemove(); };
+    body.appendChild(rm);
+
+    const done = el('button', 'btn btn-ghost btn-block', 'Done');
+    done.style.marginTop = '8px';
+    done.onclick = close;
+    body.appendChild(done);
+  }
+
+  paint();
 }
 
 /* ================= AI ESTIMATOR =================
@@ -1105,12 +1717,12 @@ function openShotSheet(shot, mealId, prefill) {
 /* Words only. Roughly a tenth of what a photo costs, and for anything you
    cooked yourself and can describe precisely it is often the better answer —
    a picture cannot see the oil that already went into the pan. */
-function openDescribeFlow(mealId, prefill) {
+function openDescribeFlow(mealId, prefill, onPick) {
   const { sh, close } = sheet();
   let meal = mealId || defaultMeal();
 
   sh.appendChild(el('div', 'eyebrow', 'Describe'));
-  sh.appendChild(el('h2', null, 'What did you eat?'));
+  sh.appendChild(el('h2', null, onPick ? 'What went in?' : 'What did you eat?'));
 
   const ta = document.createElement('textarea');
   ta.className = 'paste-box ai-text';
@@ -1120,22 +1732,29 @@ function openDescribeFlow(mealId, prefill) {
   sh.appendChild(ta);
   sh.appendChild(noteEl('Portions help most — “a cup”, “two palms”, “half the box”. Weights beat guesses, but a guess beats not logging it.'));
 
-  sh.appendChild(el('div', 'field-lbl', 'Meal'));
-  sh.appendChild(mealChips(meal, v => { meal = v; }));
+  if (!onPick) {
+    sh.appendChild(el('div', 'field-lbl', 'Meal'));
+    sh.appendChild(mealChips(meal, v => { meal = v; }));
+  }
 
   const go = el('button', 'btn btn-primary btn-block btn-lg', 'Estimate macros');
   go.style.marginTop = '12px';
   go.onclick = () => {
     const text = ta.value.trim();
     if (!text) { toast('Tell it what you ate'); ta.focus(); return; }
-    close();
-    runEstimate({
-      meal,
+    const ctx = {
+      meal, onPick, mode: 'text',
       busy: 'Working out the macros…',
       run: () => estimateText(text),
-      retry: t => openDescribeFlow(meal, t),
+      retry: t => openDescribeFlow(meal, t, onPick),
       text
-    });
+    };
+    close();
+    // Your own log is free and instant. Check it before spending a request on
+    // a sentence you have already paid to have read once.
+    const hit = recallLookup(text);
+    if (hit) { openRecallHit(hit, ctx); return; }
+    runEstimate(ctx);
   };
   sh.appendChild(go);
 
@@ -1272,16 +1891,20 @@ function openAiReview(res, ctx) {
     body.appendChild(mealChips(meal, v => { meal = v; entries.forEach(e => { e.meal = v; }); }));
 
     const go = el('button', 'btn btn-primary btn-block btn-lg',
-      'Log ' + (isToday() ? 'it' : 'on ' + fmtViewDate()));
+      ctx.onPick ? 'Add to meal' : 'Log ' + (isToday() ? 'it' : 'on ' + fmtViewDate()));
     go.style.marginTop = '12px';
     go.onclick = async () => {
-      entries.forEach(e => {
-        const id = newEntryId();
-        dayLog[id] = { id, t: Date.now(), ...e };
-      });
-      await saveDay();
+      // Whatever it did with them, this question has now been answered once.
+      // Only the words are kept — the picture never goes anywhere.
+      if (ctx.mode === 'text' && ctx.text) recallRemember(ctx.text, entries, 'ai');
+
+      if (ctx.onPick) {
+        close();
+        entries.forEach(e => ctx.onPick({ ...e }));
+        return;
+      }
+      addEntries(entries);
       close();
-      render();
       toast('Logged ' + entries.length + ' food' + (entries.length > 1 ? 's' : ''));
     };
     body.appendChild(go);
@@ -1303,6 +1926,100 @@ function openAiReview(res, ctx) {
       if (res.left && res.left.day != null) bits.push(res.left.day + ' left today');
       body.appendChild(el('div', 'ai-cost num', bits.join('   ·   ')));
     }
+  }
+
+  paint();
+}
+
+/* ---------- the free answer ----------
+   Shown instead of an estimate when the same thing has already been through
+   here. It says so plainly, because a number that appears without being asked
+   for is a number nobody trusts — and the way to the paid answer is right
+   there, one tap, for the times it really is a different plate. */
+function openRecallHit(hit, ctx) {
+  const entries = normalizeImport({ items: hit.items })
+    .map(e => ({ ...e, src: 'recall', meal: ctx.meal }));
+  if (!entries.length) { runEstimate(ctx); return; }
+
+  const { sh, close } = sheet();
+  const body = el('div');
+  sh.appendChild(body);
+
+  function paint() {
+    body.innerHTML = '';
+    const t = macroTotals(entries);
+
+    body.appendChild(el('div', 'eyebrow', 'Found in your log'));
+    body.appendChild(el('h2', null, t.cal.toLocaleString() + ' kcal  ·  ' +
+      entries.length + ' item' + (entries.length > 1 ? 's' : '')));
+    body.appendChild(el('div', 'entry-readout num',
+      'P ' + trimNum(t.p) + '   C ' + trimNum(t.c) + '   F ' + trimNum(t.f)));
+
+    const when = hit.last ? new Date(hit.last).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+    const pill = el('div', 'conf');
+    const dot = el('i');
+    dot.style.background = hit.exact ? 'var(--good)' : 'var(--warn)';
+    pill.append(dot, el('span', null,
+      (hit.exact ? 'exact match' : 'close match') +
+      (hit.n > 1 ? ' · logged ' + hit.n + ' times' : '') +
+      (when ? ' · last ' + when : '')));
+    body.appendChild(pill);
+
+    body.appendChild(noteEl('Searched what you have already logged before asking Claude — this one cost nothing. It came from “' + hit.q + '”.'));
+
+    const list = el('div', 'import-list');
+    entries.forEach((e, i) => {
+      const row = el('div', 'food-entry pe-row');
+      const b = el('button', 'pe-body');
+      b.appendChild(el('div', 'fe-name', e.name));
+      b.appendChild(el('div', 'fe-sub num',
+        (e.qty ? e.qty + '  ·  ' : '') + 'P ' + trimNum(e.p) + '  C ' + trimNum(e.c) + '  F ' + trimNum(e.f)));
+      b.onclick = () => openProposedEdit(e, paint);
+      row.appendChild(b);
+      row.appendChild(el('div', 'fe-cal num', String(e.cal)));
+
+      const x = el('button', 'ex-del pe-x', '✕');
+      x.setAttribute('aria-label', 'Remove ' + e.name);
+      x.onclick = () => {
+        entries.splice(i, 1);
+        if (!entries.length) { close(); toast('Nothing left to log'); return; }
+        paint();
+      };
+      row.appendChild(x);
+      list.appendChild(row);
+    });
+    body.appendChild(list);
+    body.appendChild(noteEl('Tap a line to fix it before it goes in.'));
+
+    if (!ctx.onPick) {
+      body.appendChild(el('div', 'field-lbl', 'Meal'));
+      body.appendChild(mealChips(ctx.meal, v => { entries.forEach(e => { e.meal = v; }); }));
+    }
+
+    const go = el('button', 'btn btn-primary btn-block btn-lg',
+      ctx.onPick ? 'Add to meal' : 'Log ' + (isToday() ? 'it' : 'on ' + fmtViewDate()));
+    go.style.marginTop = '12px';
+    go.onclick = () => {
+      // Using the answer counts as asking the question again: it keeps the row
+      // fresh so it survives the prune, and if any line was corrected on the
+      // way past, the correction is what gets remembered.
+      recallRemember(hit.q, entries, hit.kind);
+      if (ctx.onPick) { close(); entries.forEach(e => ctx.onPick({ ...e })); return; }
+      addEntries(entries);
+      close();
+      toast('Logged from your log — no request used');
+    };
+    body.appendChild(go);
+
+    const ask = el('button', 'btn btn-ghost btn-block', 'Not this — ask Claude');
+    ask.style.marginTop = '8px';
+    ask.onclick = () => { close(); runEstimate(ctx); };
+    body.appendChild(ask);
+
+    const cancel = el('button', 'btn btn-ghost btn-block', 'Cancel');
+    cancel.style.marginTop = '8px';
+    cancel.onclick = close;
+    body.appendChild(cancel);
   }
 
   paint();
@@ -1480,7 +2197,7 @@ function portionControl(item, startAmt, startUnit, onChange) {
   return box;
 }
 
-function openPortion(item, mealId) {
+function openPortion(item, mealId, onPick) {
   const { sh, close } = sheet();
   sh.appendChild(el('div', 'eyebrow', item.brand || 'Food'));
   sh.appendChild(el('h2', null, item.name));
@@ -1492,26 +2209,32 @@ function openPortion(item, mealId) {
     current = { amt, unit, m };
   }));
 
+  // Building a meal? The meal it belongs to was chosen on the builder, so
+  // asking again here would be a second answer to the same question.
   let meal = mealId || defaultMeal();
-  const mealRow = el('div', 'filter-row');
-  MEALS.forEach(([id, label]) => {
-    const c = el('button', 'chip' + (meal === id ? ' on' : ''), label);
-    c.onclick = () => { meal = id; mealRow.querySelectorAll('.chip').forEach(x => x.classList.remove('on')); c.classList.add('on'); };
-    mealRow.appendChild(c);
-  });
-  sh.appendChild(mealRow);
+  if (!onPick) {
+    const mealRow = el('div', 'filter-row');
+    MEALS.forEach(([id, label]) => {
+      const c = el('button', 'chip' + (meal === id ? ' on' : ''), label);
+      c.onclick = () => { meal = id; mealRow.querySelectorAll('.chip').forEach(x => x.classList.remove('on')); c.classList.add('on'); };
+      mealRow.appendChild(c);
+    });
+    sh.appendChild(mealRow);
+  }
 
-  const addBtn = el('button', 'btn btn-primary btn-block btn-lg', 'Add');
+  const addBtn = el('button', 'btn btn-primary btn-block btn-lg', onPick ? 'Add to meal' : 'Add');
   addBtn.style.marginTop = '12px';
   addBtn.onclick = () => {
     if (!current.m) return;
-    addEntry({
+    const ing = {
       name: item.name, itemId: item.id, amt: current.amt, unit: current.unit,
       qty: qtyLabel(item, current.amt, current.unit),
-      ...current.m, meal, src: 'lib'
-    });
+      ...current.m
+    };
     touchItem(item.id);
     close();
+    if (onPick) { onPick(ing); return; }
+    addEntry({ ...ing, meal, src: 'lib' });
   };
   sh.appendChild(addBtn);
 
@@ -1522,9 +2245,9 @@ function openPortion(item, mealId) {
 }
 
 /* ---------- manual entry ---------- */
-function openManual(mealId, prefill) {
+function openManual(mealId, prefill, onPick) {
   const { sh, close } = sheet();
-  sh.appendChild(el('h2', null, prefill ? 'Confirm food' : 'Manual entry'));
+  sh.appendChild(el('h2', null, onPick ? 'Add an ingredient' : (prefill ? 'Confirm food' : 'Manual entry')));
 
   const f = (label, val, type) => {
     const w = el('div', 'field');
@@ -1555,15 +2278,17 @@ function openManual(mealId, prefill) {
   sh.appendChild(saveWrap);
 
   let meal = mealId || defaultMeal();
-  const mealRow = el('div', 'filter-row');
-  MEALS.forEach(([id, label]) => {
-    const ch = el('button', 'chip' + (meal === id ? ' on' : ''), label);
-    ch.onclick = () => { meal = id; mealRow.querySelectorAll('.chip').forEach(x => x.classList.remove('on')); ch.classList.add('on'); };
-    mealRow.appendChild(ch);
-  });
-  sh.appendChild(mealRow);
+  if (!onPick) {
+    const mealRow = el('div', 'filter-row');
+    MEALS.forEach(([id, label]) => {
+      const ch = el('button', 'chip' + (meal === id ? ' on' : ''), label);
+      ch.onclick = () => { meal = id; mealRow.querySelectorAll('.chip').forEach(x => x.classList.remove('on')); ch.classList.add('on'); };
+      mealRow.appendChild(ch);
+    });
+    sh.appendChild(mealRow);
+  }
 
-  const add = el('button', 'btn btn-primary btn-block btn-lg', 'Add');
+  const add = el('button', 'btn btn-primary btn-block btn-lg', onPick ? 'Add to meal' : 'Add');
   add.style.marginTop = '12px';
   add.onclick = () => {
     const nm = name.input.value.trim();
@@ -1584,8 +2309,9 @@ function openManual(mealId, prefill) {
       write('food/items', items);
       entry.itemId = id; entry.amt = 1; entry.unit = 'serv';
     }
-    addEntry(entry);
     close();
+    if (onPick) { onPick(entry); return; }
+    addEntry(entry);
   };
   sh.appendChild(add);
 
@@ -1672,20 +2398,20 @@ function openScanner(onCode) {
   })();
 }
 
-async function lookupBarcode(code, mealId) {
+async function lookupBarcode(code, mealId, onPick) {
   toast('Looking up ' + code + '…');
   try {
     const r = await fetch('https://world.openfoodfacts.org/api/v2/product/' + encodeURIComponent(code) + '.json');
     const j = await r.json();
     if (!j || j.status !== 1 || !j.product) {
       toast('Not in Open Food Facts — add it manually');
-      openManual(mealId, { name: '', qty: '', src: 'barcode' });
+      openManual(mealId, { name: '', qty: '', src: 'barcode' }, onPick);
       return;
     }
     const item = itemFromOFF(j.product, code);
     if (!item) {
       toast('Product found but no nutrition data');
-      openManual(mealId, { name: j.product.product_name || '', src: 'barcode' });
+      openManual(mealId, { name: j.product.product_name || '', src: 'barcode' }, onPick);
       return;
     }
     // upsert into library keyed by barcode
@@ -1693,10 +2419,10 @@ async function lookupBarcode(code, mealId) {
     const id = existing ? existing.id : 'b' + code;
     items[id] = { ...(existing || {}), id, ...item, uses: (existing && existing.uses) || 0, last: Date.now() };
     await write('food/items', items);
-    openPortion(items[id], mealId);
+    openPortion(items[id], mealId, onPick);
   } catch {
     toast('Lookup failed — no connection?');
-    openManual(mealId, { name: '', src: 'barcode' });
+    openManual(mealId, { name: '', src: 'barcode' }, onPick);
   }
 }
 
@@ -1732,46 +2458,6 @@ function itemFromOFF(prod, code) {
   };
 }
 
-/* ================= SAVED MEALS ================= */
-function saveAsMeal(defaultLabel, entries) {
-  const { sh, close } = sheet();
-  sh.appendChild(el('h2', null, 'Save as a meal'));
-  sh.appendChild(noteEl('These ' + entries.length + ' items become one entry you can add in a single tap.'));
-
-  const w = el('div', 'field');
-  w.style.marginTop = '14px';
-  w.appendChild(el('label', null, 'Name'));
-  const i = el('input');
-  i.type = 'text';
-  i.value = defaultLabel + ' — ' + todayKey();
-  w.appendChild(i);
-  sh.appendChild(w);
-
-  const go = el('button', 'btn btn-primary btn-block btn-lg', 'Save meal');
-  go.style.marginTop = '14px';
-  go.onclick = () => {
-    const name = i.value.trim();
-    if (!name) { toast('Give it a name'); return; }
-    const id = 'm' + Date.now().toString(36);
-    meals[id] = {
-      id, name,
-      items: entries.map(e => ({
-        name: e.name, qty: e.qty || '', cal: e.cal || 0, p: e.p || 0, c: e.c || 0, f: e.f || 0,
-        micro: e.micro || null, itemId: e.itemId || null, amt: e.amt || null, unit: e.unit || null
-      }))
-    };
-    write('food/meals', meals);
-    close();
-    toast('Meal saved');
-  };
-  sh.appendChild(go);
-
-  const cancel = el('button', 'btn btn-ghost btn-block', 'Cancel');
-  cancel.style.marginTop = '8px';
-  cancel.onclick = close;
-  sh.appendChild(cancel);
-}
-
 /* ================= FUEL SETTINGS ================= */
 // Targets and the Claude importer used to sit as chips above the meal cards.
 // They are one-off setup actions, not daily controls, so they live behind the
@@ -1803,6 +2489,12 @@ function openFuelSettings() {
   aBtn.onclick = () => { close(); openAiSettings(); };
   sh.appendChild(aBtn);
 
+  const mBtn = el('button', 'btn btn-ghost btn-block');
+  mBtn.style.marginTop = '10px';
+  mBtn.append(el('span', null, 'Food memory'), el('span', 'cnt num', String(recallCount())));
+  mBtn.onclick = () => { close(); openRecallList(); };
+  sh.appendChild(mBtn);
+
   const iBtn = el('button', 'btn btn-ghost btn-block', 'Paste food JSON');
   iBtn.style.marginTop = '10px';
   iBtn.onclick = () => { close(); openImportPaste(); };
@@ -1812,6 +2504,86 @@ function openFuelSettings() {
 
   const done = el('button', 'btn btn-ghost btn-block', 'Close');
   done.style.marginTop = '14px';
+  done.onclick = close;
+  sh.appendChild(done);
+}
+
+/* ================= FOOD MEMORY =================
+   Everything already logged or already estimated, kept so the same question
+   never gets asked twice. It is a cache, so it is allowed to be wrong — which
+   is why it is browsable and every row can be thrown away. */
+function openRecallList() {
+  const { sh, close } = sheet();
+  sh.appendChild(el('div', 'eyebrow', 'Fuel'));
+  sh.appendChild(el('h2', null, 'Food memory'));
+  sh.appendChild(noteEl('Every food you log and every description Claude works out is kept here. The next time you describe the same thing the answer comes from this list instead of costing a request. Pictures are never stored.'));
+
+  const search = el('div', 'picker-search');
+  const inp = el('input');
+  inp.type = 'search';
+  inp.placeholder = 'Search what you have logged';
+  search.appendChild(inp);
+  sh.appendChild(search);
+
+  const list = el('div', 'ex-list');
+  sh.appendChild(list);
+
+  let q = '';
+  inp.oninput = ev => { q = ev.target.value.toLowerCase().trim(); paint(); };
+
+  function paint() {
+    list.innerHTML = '';
+    const pool = recallList().filter(r => !q || r.q.toLowerCase().includes(q));
+
+    if (!pool.length) {
+      list.appendChild(noteEl(q ? 'Nothing here matches that.'
+        : 'Nothing remembered yet. It fills itself up as you log.'));
+      return;
+    }
+
+    pool.slice(0, 150).forEach(r => {
+      const t = macroTotals(r.items || []);
+      const b = el('button', 'ex-item');
+      const dot = el('i', 'dot');
+      dot.style.background = r.kind === 'ai' ? 'var(--p-yellow)' : 'var(--dim)';
+      b.appendChild(dot);
+      b.appendChild(el('span', 'nm', r.q));
+      b.appendChild(el('span', 'eq num', t.cal + ' kcal' + (r.n > 1 ? '  ·  ×' + r.n : '')));
+      b.onclick = () => {
+        close();
+        openRecallHit({ ...r, exact: true }, { meal: defaultMeal(), mode: 'text', text: r.q,
+          busy: 'Working out the macros…',
+          run: () => estimateText(r.q),
+          retry: t2 => openDescribeFlow(defaultMeal(), t2) });
+      };
+
+      const x = el('span', 'eq ex-del', '✕');
+      x.setAttribute('aria-label', 'Forget ' + r.q);
+      x.onclick = ev => {
+        ev.stopPropagation();
+        recallForget(r.key);
+        paint();
+        toast('Forgotten');
+      };
+      b.appendChild(x);
+      list.appendChild(b);
+    });
+  }
+  paint();
+
+  const clear = el('button', 'btn btn-danger btn-block', 'Forget everything');
+  clear.style.marginTop = '12px';
+  clear.onclick = () => confirmSheet({
+    title: 'Clear the food memory?',
+    body: 'Nothing you have logged is deleted — only the shortcuts. Descriptions will go to Claude again until it fills back up.',
+    confirmLabel: 'Clear it',
+    danger: true,
+    onConfirm: () => { recallForgetAll(); paint(); toast('Cleared'); }
+  });
+  sh.appendChild(clear);
+
+  const done = el('button', 'btn btn-ghost btn-block', 'Close');
+  done.style.marginTop = '8px';
   done.onclick = close;
   sh.appendChild(done);
 }

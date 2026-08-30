@@ -124,9 +124,10 @@ chars; any unique string works, but keep the `f` prefix.
 | `qty` | free text — "1 bowl", "150 g", "2 × scoop (88 g)" |
 | `cal` `p` `c` `f` | kcal and grams, for the amount actually eaten |
 | `meal` | `breakfast` \| `lunch` \| `dinner` \| `snack` |
-| `src` | provenance — use `agent`. The app writes `manual`, `lib`, `barcode`, `meal`, `copy`, `repeat`, `claude` (pasted JSON), `ai-photo` and `ai-text` (the in-app estimator) |
+| `src` | provenance — use `agent`. The app writes `manual`, `lib`, `barcode`, `meal`, `copy`, `repeat`, `claude` (pasted JSON), `ai-photo` and `ai-text` (the in-app estimator), and `recall` (answered out of `food/recall` without spending a request) |
 | `micro` | optional, any subset of the six keys above |
 | `itemId` `amt` `unit` | only on entries linked to the saved-food library — leave off |
+| `baseN` `qtyBase` `mult` | the app's portion bookkeeping for entries with no library item behind them: `baseN` is one portion's macros, `mult` what it was scaled by. Leave them off — and if you rewrite `cal`/`p`/`c`/`f` on an existing entry, delete all three, or the next tap of a ×2 chip scales the numbers you replaced |
 
 To log a food: `PATCH food/log/{date}` with `{ "<newId>": { … } }`.
 To remove one: `DELETE food/log/{date}/{entryId}`.
@@ -189,9 +190,47 @@ know it. Ids: `u` + base36 timestamp for hand-made items.
 Only add to the library when he asks for a food he'll log repeatedly. A one-off
 meal belongs in the day's log, not the library.
 
-## `food/meals` → `{ mealId: { name, items: [ … ] } }`
+## `food/meals` → `{ mealId: { name, items, last } }`
 
-Saved multi-item meals. `items` are entry-shaped objects without `id`/`t`.
+A saved meal is an **ingredient list**, not a total — the builder reopens it and
+each component can be re-portioned before it is logged. `items` are entry-shaped
+objects without `id`/`t`; ones carrying `itemId`/`amt`/`unit` stay linked to the
+saved-food library and get a real portion picker, the rest get a multiplier.
+Logging writes one entry per ingredient (`src: "meal"`), or a single summed
+entry named after the meal if the "one entry" option was used. Saving is opt-in
+— most meals are logged once and never kept.
+
+## `food/recall` → `{ key: { q, kind, items, n, last } }`
+
+The lookup cache in front of the AI estimator. Every food logged and every
+description it has worked out is kept here, so the same sentence is never paid
+for twice: typing one into Describe searches this first and offers the stored
+answer, saying that it did, with a one-tap route to Claude if it is wrong.
+
+```json
+{ "2-eggs-toast": {
+    "q": "2 eggs and toast", "kind": "ai", "n": 3, "last": 1756000000000,
+    "items": [ { "name": "Eggs", "qty": "2", "cal": 140, "p": 12, "c": 1, "f": 10 } ]
+} }
+```
+
+| field | |
+|---|---|
+| `key` | the question normalised (filler words dropped, number words digitised) then slugged. This IS the deduplication — the same question always lands on the same key |
+| `q` | the question as it was actually typed |
+| `kind` | `ai` if the answer came from the estimator, `log` if the food got in another way |
+| `items` | entry-shaped, no `id`/`t`/`meal` |
+| `n` | times this answer has been used — also the prune order |
+| `last` | ms epoch of the last use |
+
+Capped at 400 rows; least-used and oldest go first. **Numbers in the key are
+load-bearing** — "2 slices" and "3 slices" must never share a row, and a
+near-miss whose numbers disagree is rejected however similar the words are.
+No image is ever stored; a photo estimate contributes only the sentence typed
+beside it.
+
+Seeding this is a reasonable thing to do for foods he eats constantly: write the
+key in the same shape and it will be found.
 
 ## `weight/entries` → `{ id: { lb, t } }`
 
@@ -224,7 +263,7 @@ so several readings a day is a feature, not noise.
   "volume": 41250,
   "groups": ["chest", "shoulders", "arms"],
   "exercises": [
-    { "exId": "bench-press", "name": "Barbell Bench Press",
+    { "exId": "barbell-bench-press", "name": "Barbell Bench Press",
       "group": "chest", "equipment": "barbell",
       "sets": [ { "w": 135, "r": 10, "type": "W", "done": true },
                 { "w": 225, "r": 5,  "type": "N", "done": true } ] }
@@ -235,7 +274,9 @@ so several readings a day is a feature, not noise.
 Set `type`: `W` warm-up, `N` normal, `F` failure, `D` drop. Warm-ups are excluded
 from volume, records and history. `volume` is the sum of `w × r` over non-warm-up
 sets. `exId` must match an exercise in `exercises.js` or one in
-`exercises/custom` — a mismatched id breaks the "last time" line.
+`exercises/custom` — a mismatched id breaks the "last time" line. Ids are slugs
+of the full name (`barbell-bench-press`), and a rename in `exercises/overrides`
+never changes one.
 
 Writing a workout by hand is the fiddliest thing here. Prefer letting the app
 record it. If you must, also update:
@@ -284,7 +325,7 @@ standard sizes; the first entry is the big button on the card.
   "name": "Push A",
   "note": "heavy bench, back off on incline",
   "exercises": [
-    { "exId": "bench-press", "name": "Barbell Bench Press",
+    { "exId": "barbell-bench-press", "name": "Barbell Bench Press",
       "group": "chest", "equipment": "barbell",
       "sets": [ { "tw": 225, "tr": 5, "type": "N" } ] }
   ],
@@ -325,10 +366,26 @@ activity is already inside it. A step term would count the same walking twice.
 
 Daily step goal. Drives the ring, the streak and the green bars.
 
-## `exercises/custom` → `[ { id, name, group, equipment }, … ]`
+## The exercise library — three nodes
 
-Exercises beyond the built-in 231 in `exercises.js`. `group` is one of
-`chest` `back` `legs` `shoulders` `arms` `core`.
+`exercises.js` holds 231 built-ins. These three make that list editable without
+editing code; the Exercises screen on the Train tab is the UI for all of them.
+
+**`exercises/custom` → `[ { id, name, group, equipment }, … ]`**
+Exercises beyond the built-ins. `group` is one of `chest` `back` `legs`
+`shoulders` `arms` `core`. Ids look like `custom-<slug>-<random>`.
+
+**`exercises/overrides` → `{ exId: { name, group, equipment } }`**
+A renamed or refiled built-in. The **id never changes**, which is the whole
+point: `history/{exId}` and every set ever logged are keyed on it, so renaming
+"Barbell Bench Press" to "Comp Bench" keeps the last-time line and the records
+attached. An override edited back to the built-in's original values is deleted
+rather than stored, so "edited" stays meaningful.
+
+**`exercises/hidden` → `[ exId, … ]`**
+Built-ins taken out of the picker. Hidden rather than deleted for the same
+reason — a missing id orphans the history of everything logged under it. Custom
+exercises are deleted outright, and the sessions that used them keep their sets.
 
 ## `feed/wH7lqHV7y15z4EMq9T2UZi` (outside `ROOT`)
 
