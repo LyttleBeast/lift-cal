@@ -4,8 +4,12 @@ Personal training, nutrition and body weight log. Phone-first, installs to the i
 
 Live at **https://lyttlebeast.github.io/lift-cal/**
 
+Multi-account: every account holds its own training log, food, weight, water and
+steps, and no account can see or touch another's. New people get in with an
+invite code, or by asking the owner and being approved. See *Access* below.
+
 - **Train** — full workout tracker: saved routines, plate-colored calendar, session timer, W/F/D set tags, 231-exercise library, last-time numbers, rest timer, per-side plate math, e1RM, swipe-to-delete sets, editable history, a post-workout recap with personal records, and a full statistics page.
-- **Fuel** — nutrition: **photograph a plate and Claude reads the macros off it**, or just describe what you ate. Plus macro targets, saved-food library, barcode scanning via Open Food Facts, manual entry, saved meals, one-tap portion multiplying, micronutrient floors, Claude import.
+- **Fuel** — nutrition: **photograph a plate and Claude reads the macros off it**, or just describe what you ate. Plus macro targets, saved-food library, barcode scanning via Open Food Facts, manual entry, saved meals, one-tap portion multiplying, micronutrient floors, paste import.
 - **Weight** — body-weight log: 7-day moving average chart, weekly rate, a learned time-of-day curve, and a maintenance (TDEE) estimate built on normalised weigh-ins with a stated confidence interval.
 - **Water** — daily intake against a goal, in the Fuel tab: a filling bottle, one-tap common sizes, any unit you like, stored in millilitres.
 - **Steps** — its own tab: goal ring, 7-day / 30-day / 12-month trend, streaks, a 13-week heat map, day-of-week breakdown, and either manual entry or an automation pushing them from your phone.
@@ -17,88 +21,65 @@ Live at **https://lyttlebeast.github.io/lift-cal/**
 Firebase project **Lift-Cal** (`lift-cal`), Realtime Database in `us-central1`, Spark (free) plan.
 Analytics, Gemini, and the Google Developer Program are all disabled.
 
-Sign-in is Email/Password. Sign-up is not enabled anywhere, so no other account can be
-created from inside the app.
+Sign-in is Email/Password, and **sign-up is on** — it has to be, for a second
+person to get an account at all. Creating an account is not what grants access;
+see *Adding people* below.
 
 ### Published security rules
 
-```json
-{
-  "rules": {
-    "users": {
-      "$uid": {
-        ".read":  "$uid === auth.uid || $uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2'",
-        ".write": "$uid === auth.uid || ($uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' && auth.uid === 'HWwNbi0JPRbtTw0ODHxyq989UJj2')"
-      }
-    },
-    "feed": {
-      "wH7lqHV7y15z4EMq9T2UZi": {
-        ".read":  true,
-        ".write": "auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2'"
-      }
-    },
-    ".read": false,
-    ".write": false
-  }
-}
+The full file is [`database.rules.json`](database.rules.json) — paste it into
+Firebase Console → Realtime Database → Rules → **Publish**. The shape:
+
+```
+users/$uid          read:  own uid, and only while approved
+                    write: same, and only under the nine known sections
+access/approved/$uid the allowlist. Owner writes it; a valid invite code lets
+                     an account write its own, once, atomically with the claim
+access/invites/$code owner-only, except the used-stamp the claimer sets
+access/requests/$uid an account files its own; only the owner reads the queue
+aiAllow/$uid         two booleans. Publicly readable BY KEY so the Worker can
+                     check it without credentials; `blocked` is owner-only
+everything else      denied at the root
 ```
 
-- `users/{uid}` — every account reads and writes its own subtree, as before.
-- `users/aXSD…` — this install's data, and the two extra clauses. Read is open
-  to the world **on purpose** (see *Claude link* below). Write adds exactly one
-  account: the agent, and only against this one subtree.
-- `feed/wH7l…` — summary snapshot. World-readable, owner-write-only.
-- Root defaults are `false`, so nothing else in the database is reachable.
+Four properties worth stating plainly, because they are the point of the
+release:
 
-Public read is a deliberate trade: it makes every screen in this app readable
-by an AI with one unauthenticated GET, and the data is a list of what one
-person ate and lifted. Write is *not* public — it needs one of two accounts.
+- **No public read anywhere.** An unauthenticated `curl` at any user path gets
+  `Permission denied`. That includes the owner's subtree, which used to be open.
+- **No account can reach another's data**, in either direction. There is no
+  admin read: the owner cannot see the roommate's food log through the app or
+  over REST, only who has access.
+- **An unapproved account holds nothing.** It cannot write a byte, so a stranger
+  who signs up costs a row in Authentication and nothing else.
+- **The owner cannot lock himself out.** His uid is exempt from the approval
+  check in the rules themselves, so wiping the whole `access` tree still leaves
+  his app working.
+
+`write` is granted per section (`food`, `weight`, `workouts`, `history`,
+`water`, `steps`, `routines`, `exercises`, `settings`, `profile`, `onboarding`)
+rather than at `users/$uid`. RTDB write rules only ever grant and always cascade
+down, so granting at the parent would make the subtree free storage for anyone
+with an account; granting per section means an unknown key has no grant at all.
 
 ### The agent account
 
-`agent@lift-cal.app`, UID `HWwNbi0JPRbtTw0ODHxyq989UJj2` — one extra
-Email/Password user, created in the console (sign-up is off in the app, so that
-is the only way an account comes into existence). It exists so Claude can log a
-food or a weigh-in without a paste-JSON round trip.
-
-Its password lives wherever the writing happens, as `RACK_AGENT_EMAIL` /
-`RACK_AGENT_PASSWORD` — an environment, never this repo.
-
-To make another one: Authentication → Users → **Add user**, then add its UID to
-the `.write` clause above and republish.
-
-To revoke: delete the user in the console, or drop the `|| auth.uid === …`
-clause and republish. Nothing else changes.
-
-The `firebaseConfig` values in `firebase-config.js` are public by design. They identify the
-project; they authorize nothing. Security lives entirely in the rules above.
-
-**Account isolation.** Every localStorage key is namespaced by UID (`rack:{uid}:…`).
-It used to be a flat `fit:` prefix, which is fine with one account and quietly wrong
-with two — signing out and into a second account on the same phone served the previous
-user's cached food log whenever the network was slow, handed them the previous user's
-in-progress workout, and left the offline queue holding writes addressed to a subtree
-the new account isn't allowed to touch, failing and retrying forever. Signing out now
-reloads the app, because every module holds the last account's data in module state and
-reloading is the only way to be sure. The public `feed/` node is owner-write-only and
-the button that copies its link is owner-only.
-
-**Everything is per-account.** Workouts, weight, food logs, the saved-food library, saved
-meals and macro targets all live under `users/{uid}/`. A second signed-in account writes to
-its own subtree and sees none of this one's.
-The only thing that used to cross accounts was the hard-coded starter foods (the work pizza
-crusts, the wings, the whey); those are now seeded only for `OWNER_UID`.
-
----
+Gone. `agent@lift-cal.app` (`HWwNbi0JPRbtTw0ODHxyq989UJj2`) has no write access
+under the new rules — delete it in Authentication → Users. Same for the `feed/`
+node in the database. See *Access* below for what replaced them, and why.
 
 ## Files
 
 | File | What it is |
 |---|---|
 | `index.html` | The only markup: auth gate, four empty views, bottom dock |
-| `app.js` | Shell — sign-in, boot order, tab router, service worker |
-| `store.js` | Data layer — Firebase + localStorage mirror + offline queue + feed |
-| `firebase-config.js` | Public project keys, feed token, owner UID |
+| `app.js` | Shell — sign-in/sign-up, access gate, boot order, tab router, service worker |
+| `store.js` | Data layer — Firebase + per-account localStorage mirror + offline queue |
+| `firebase-config.js` | Public project keys and the owner UID |
+| `access.js` | Who is allowed in — invite codes, requests, approval, the People sheet |
+| `onboarding.js` | First run — setup questions, starting targets, the four-tab tour |
+| `database.rules.json` | **The security rules.** Paste into the Firebase console |
+| `auth.css` | Styles for the sign-in box, waiting screen, onboarding and People |
 | `ui.js` | Shared primitives — sheets, toasts, confirms, swipe, date/number helpers |
 | `analytics.js` | Training aggregates, personal-record detection, SVG chart builders |
 | `stats.js` | The statistics page |
@@ -118,9 +99,9 @@ crusts, the wings, the whey); those are now seeded only for `OWNER_UID`.
 | `importer.js` | One-time Liftoff history migration |
 | `rack.css` | The stylesheet |
 | `404.html` | Branded not-found page |
-| `sw.js` | Service worker, network-first, cache `rack-v10` |
-| `AGENTS.md` | The database schema and REST recipes, written for Claude |
-| `rack.mjs` | CLI over the same endpoints — read, log, edit, delete |
+| `sw.js` | Service worker, network-first, cache `rack-v12` |
+| `AGENTS.md` | The database schema, node by node |
+| `rack.mjs` | **Dead file** — CLI for the removed agent account, kept as a record |
 | `app.css` | **Dead file** — the abandoned "IRONLOG" design, not referenced anywhere |
 
 Import direction is strictly one-way, no cycles:
@@ -135,8 +116,11 @@ app.js → workout.js → stats.js ──→ analytics.js → ui.js
                   → tdee.js → weightmodel.js ────→ ui.js
       → steps.js  → analytics.js
       → weight.js → importer.js ─────────────────→ ui.js
+                  → access.js ───────────────────→ ui.js
                   → tdee.js
                   → workout.js (hasActiveSession only)
+      → access.js → store.js
+      → onboarding.js → tdee.js
 ```
 
 `picker.js` exists so `routines.js` and `workout.js` can share the exercise
@@ -145,42 +129,76 @@ picker without importing each other. `workout.js` hands its `startWorkout` to
 
 ---
 
-## Claude link
+## Access — who can read this database
 
-The whole tree is one unauthenticated GET:
+Nothing outside the app can, and that is the whole change in this release.
 
-```
-https://lift-cal-default-rtdb.firebaseio.com/users/aXSDfnZK8IMT9wRVhBbEgkDHpsj2.json
-```
+The database used to be world-readable at one URL, with a second account
+holding write credentials so Claude could log a meal from a phone conversation.
+That worked because there was one person in it. It stops working the moment
+there are two: a world-readable tree is world-readable for everybody in it, and
+"the rules let the agent write only to Micah's subtree" is a sentence that has
+to be re-proved every time a node is added.
 
-Narrower is usually better — `…/food/log/2026-08-19.json`, `…/weight/entries.json`,
-`…/workouts/2026-08.json`. **[AGENTS.md](AGENTS.md) is the map**: every path, every
-field, and the REST calls to add, edit and delete. `rack.mjs` wraps the same
-endpoints so an agent doesn’t have to hand-roll tokens or ids:
+So it is gone, replaced by one flat statement enforced in
+[`database.rules.json`](database.rules.json):
 
-```bash
-node rack.mjs today
-node rack.mjs food add '{"name":"Chicken and rice","cal":650,"p":52,"c":78,"f":12,"meal":"lunch"}'
-node rack.mjs weigh 214.6
-```
+> An account can read and write `users/{its own uid}` and nothing else, and only
+> while `access/approved/{its own uid}` exists.
 
-The app keeps live listeners on the day’s food log, the month of workouts and the
-weigh-in list, so an outside write lands on the phone in about a second, and the
-whole-node writes the app makes can never overwrite it from a stale cache.
+Practically:
 
-There is still a small summary feed at
+- `curl` against any user path returns `{"error":"Permission denied"}`. There is
+  no token to add — no account has read access to another's subtree, including
+  the owner's.
+- The `feed/` node is gone. Delete it in the console; nothing writes it.
+- The `agent@lift-cal.app` account can no longer write anywhere. Delete it in
+  Authentication → Users.
+- `rack.mjs` no longer works and is kept only as a record of the old shape.
+- Food still goes in from a conversation the manual way, by paste — see below.
 
-```
-https://lift-cal-default-rtdb.firebaseio.com/feed/wH7lqHV7y15z4EMq9T2UZi.json
-```
+The in-app estimator is **not** affected: it never touched the database from the
+outside. The phone proves who it is with its Firebase ID token, the Cloudflare
+Worker holds the Anthropic key, and barcode lookups go to Open Food Facts. All
+of that is untouched.
 
-carrying the last 3 sessions, today’s macros against target, and the latest
-weigh-in. It predates the public read and is kept because it is cheap to fetch.
+## Adding people
 
-## Claude food import
+Two doors, one allowlist.
 
-Still there, and still the offline path — both routes end in a confirmation card,
-nothing logs without a tap on **Log it**.
+**Invite code.** Weight tab → Settings → **People & access** → *New invite code*.
+Ten characters, `ABCDE-FGHJK`, no ambiguous letters, single use. They enter it on
+the sign-up form and are in immediately.
+
+**Request.** Anyone can create an account without a code. They land on a waiting
+screen holding no data at all, their request appears under People & access, and
+approving it lets them in — the waiting screen unlocks itself within a second,
+no reload.
+
+Both write `access/approved/{uid}`, which is the only node the rules check.
+Removing somebody deletes that node: they lose access immediately and their own
+log is left untouched, so adding them back restores everything.
+
+Creating a Firebase Auth account is deliberately *not* the gate. It cannot be —
+the API key is in this repo, and anyone can call Google's sign-up endpoint by
+hand. An account with no approval record is a name in Authentication and nothing
+else. That is why the gate is a database node the owner controls, checked by the
+rules on every single read and write.
+
+### The AI estimator, per person
+
+`aiAllow/{uid}` decides who may spend the Anthropic balance. An approved account
+switches its own `on` flag; only the owner can set `blocked`, and blocked wins —
+that is the **AI…** button next to each person. Limits are **3 photo and 3
+describe estimates per person per day**, counted separately because a photo
+costs about ten times what the same meal costs described. They live in the
+Worker's settings where no client can reach them, under a shared monthly dollar
+cap that is the thing actually protecting the money.
+
+## Food import by paste
+
+The manual route in, and now the only one from outside the app. Both forms end
+in a confirmation card; nothing logs without a tap on **Log it**.
 
 1. **Link** — `https://lyttlebeast.github.io/lift-cal/#log=BASE64URL_JSON`
 2. **Paste** — Fuel → ⚙ → Paste food JSON

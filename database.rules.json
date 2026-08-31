@@ -1,0 +1,182 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "users": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved').child(auth.uid).exists())",
+        "food": {
+          ".write": "auth != null && auth.uid === $uid && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved').child(auth.uid).exists())"
+        },
+        "weight": {
+          ".write": "auth != null && auth.uid === $uid && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved').child(auth.uid).exists())"
+        },
+        "workouts": {
+          ".write": "auth != null && auth.uid === $uid && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved').child(auth.uid).exists())"
+        },
+        "history": {
+          ".write": "auth != null && auth.uid === $uid && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved').child(auth.uid).exists())"
+        },
+        "water": {
+          ".write": "auth != null && auth.uid === $uid && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved').child(auth.uid).exists())"
+        },
+        "steps": {
+          ".write": "auth != null && auth.uid === $uid && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved').child(auth.uid).exists())"
+        },
+        "routines": {
+          ".write": "auth != null && auth.uid === $uid && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved').child(auth.uid).exists())"
+        },
+        "exercises": {
+          ".write": "auth != null && auth.uid === $uid && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved').child(auth.uid).exists())"
+        },
+        "settings": {
+          ".write": "auth != null && auth.uid === $uid && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved').child(auth.uid).exists())"
+        },
+        "profile": {
+          ".write": "auth != null && auth.uid === $uid && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved').child(auth.uid).exists())",
+          "name": {
+            ".validate": "newData.isString() && newData.val().length <= 60"
+          },
+          "email": {
+            ".validate": "newData.isString() && newData.val().length <= 120"
+          },
+          "sex": {
+            ".validate": "newData.val() === 'm' || newData.val() === 'f' || newData.val() === 'x'"
+          },
+          "heightIn": {
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 120"
+          },
+          "birthYear": {
+            ".validate": "newData.isNumber() && newData.val() >= 1900 && newData.val() <= 2100"
+          },
+          "createdAt": {
+            ".validate": "newData.isNumber()"
+          },
+          "$other": {
+            ".validate": false
+          }
+        },
+        "onboarding": {
+          ".write": "auth != null && auth.uid === $uid && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved').child(auth.uid).exists())",
+          "done": {
+            ".validate": "newData.isBoolean()"
+          },
+          "at": {
+            ".validate": "newData.isNumber()"
+          },
+          "version": {
+            ".validate": "newData.isNumber()"
+          },
+          "skipped": {
+            ".validate": "newData.isBoolean()"
+          },
+          "tourDone": {
+            ".validate": "newData.isBoolean()"
+          },
+          "$other": {
+            ".validate": false
+          }
+        }
+      }
+    },
+    "access": {
+      ".read": false,
+      ".write": false,
+      "approved": {
+        ".read": "auth != null && auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2'",
+        "$uid": {
+          ".read": "auth != null && (auth.uid === $uid || auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2')",
+          ".write": "auth != null && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || (auth.uid === $uid && !data.exists() && newData.child('via').val() === 'invite' && root.child('access/invites').child(newData.child('code').val()).exists() && !root.child('access/invites').child(newData.child('code').val()).child('usedBy').exists() && root.child('access/invites').child(newData.child('code').val()).child('revoked').val() !== true))",
+          ".validate": "newData.hasChildren(['at','via']) && (newData.child('via').val() === 'invite' || newData.child('via').val() === 'owner')",
+          "at": {
+            ".validate": "newData.isNumber()"
+          },
+          "via": {
+            ".validate": "newData.isString()"
+          },
+          "code": {
+            ".validate": "newData.isString() && newData.val().length <= 40"
+          },
+          "email": {
+            ".validate": "newData.isString() && newData.val().length <= 120"
+          },
+          "name": {
+            ".validate": "newData.isString() && newData.val().length <= 60"
+          },
+          "$other": {
+            ".validate": false
+          }
+        }
+      },
+      "invites": {
+        ".read": "auth != null && auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2'",
+        ".write": "auth != null && auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2'",
+        "$code": {
+          ".read": "auth != null",
+          ".validate": "$code.length >= 6 && $code.length <= 40",
+          "at": {
+            ".validate": "newData.isNumber()"
+          },
+          "note": {
+            ".validate": "newData.isString() && newData.val().length <= 80"
+          },
+          "revoked": {
+            ".validate": "newData.isBoolean()"
+          },
+          "usedBy": {
+            ".write": "auth != null && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || (!data.exists() && newData.val() === auth.uid && root.child('access/invites').child($code).exists() && root.child('access/invites').child($code).child('revoked').val() !== true))",
+            ".validate": "newData.isString() && newData.val().length <= 40"
+          },
+          "usedAt": {
+            ".write": "auth != null && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || (!data.exists() && root.child('access/invites').child($code).exists()))",
+            ".validate": "newData.isNumber()"
+          },
+          "$other": {
+            ".validate": false
+          }
+        }
+      },
+      "requests": {
+        ".read": "auth != null && auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2'",
+        "$uid": {
+          ".read": "auth != null && (auth.uid === $uid || auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2')",
+          ".write": "auth != null && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || (auth.uid === $uid && !root.child('access/approved').child($uid).exists()))",
+          ".validate": "newData.hasChildren(['at'])",
+          "at": {
+            ".validate": "newData.isNumber()"
+          },
+          "email": {
+            ".validate": "newData.isString() && newData.val().length <= 120"
+          },
+          "name": {
+            ".validate": "newData.isString() && newData.val().length <= 60"
+          },
+          "note": {
+            ".validate": "newData.isString() && newData.val().length <= 300"
+          },
+          "$other": {
+            ".validate": false
+          }
+        }
+      }
+    },
+    "aiAllow": {
+      ".read": false,
+      ".write": false,
+      "$uid": {
+        ".read": true,
+        "on": {
+          ".write": "auth != null && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || (auth.uid === $uid && root.child('access/approved').child($uid).exists()))",
+          ".validate": "newData.isBoolean()"
+        },
+        "blocked": {
+          ".write": "auth != null && auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2'",
+          ".validate": "newData.isBoolean()"
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    }
+  }
+}

@@ -21,11 +21,19 @@
  *   3. Identity    — the Firebase ID token is verified properly: RS256
  *                    signature against Google's published keys, plus issuer,
  *                    audience and expiry. A forged or expired token dies here.
- *   4. Allowlist   — the verified uid must be one you named. Someone signing up
- *                    for a Rack account of their own still cannot spend your
- *                    credits.
- *   5. Rate limit  — per-minute and per-day counters per uid, so a bug in a
- *                    render loop costs pennies instead of your balance.
+ *   4. Allowlist   — the verified uid must be switched on. That switch is a
+ *                    node in the database (aiAllow/{uid}) that only the owner
+ *                    can set, so approving somebody in the app grants them the
+ *                    estimator without a redeploy — and blocking them takes it
+ *                    away the same way. ALLOWED_UIDS in the settings still
+ *                    works as an override and as the answer of last resort if
+ *                    the database can't be reached.
+ *   5. Rate limit  — per-minute, and separate per-day counters for photos and
+ *                    for text, per uid, so a bug in a render loop costs pennies
+ *                    instead of your balance. Photo and text have their own
+ *                    daily budgets: they cost an order of magnitude apart, and
+ *                    one shared counter means a run of cheap text estimates
+ *                    silently eats the expensive ones.
  *   6. Spend cap   — a running monthly dollar total from Anthropic's own usage
  *                    numbers. When it hits the cap the Worker stops calling out
  *                    entirely. This is the backstop that actually protects the
@@ -65,8 +73,15 @@ const MAX_BODY      = 1400000;   // bytes on the wire, checked before parsing
 const MAX_TOKENS    = 900;       // ceiling on what one answer can cost
 const TIMEOUT_MS    = 45000;
 
-// Defaults if the matching env var is unset.
-const LIMITS = { perMinute: 8, perDay: 60, monthUsd: 5 };
+// Defaults if the matching env var is unset. Per PERSON, per day — every
+// account gets its own counters, so a second user cannot eat the first one's.
+const LIMITS = { perMinute: 5, photoPerDay: 3, textPerDay: 3, monthUsd: 5 };
+
+// Where the allowlist node lives. Reads of aiAllow/{uid} are public by rule —
+// it holds two booleans keyed on an opaque id and nothing else — because this
+// Worker has no Firebase credentials of its own and should not be given any.
+const RTDB_URL = 'https://lift-cal-default-rtdb.firebaseio.com';
+const ALLOW_TTL_MS = 60000;
 
 /* ============ the tool ============
    Asking for "JSON only" in a prompt gets JSON almost every time. A tool with a
@@ -267,10 +282,13 @@ function roll(state, now) {
   const p = periods(now);
   const s = { ...state };
   if (s.minute !== p.minute) { s.minute = p.minute; s.minCount = 0; }
-  if (s.day    !== p.day)    { s.day    = p.day;    s.dayCount = 0; }
+  if (s.day    !== p.day)    { s.day    = p.day;    s.dayCount = 0; s.photoDay = 0; s.textDay = 0; }
   if (s.month  !== p.month)  { s.month  = p.month;  s.monthUsd = 0; }
   return s;
 }
+
+const dayUsed  = (st, mode) => (mode === 'photo' ? st.photoDay : st.textDay) || 0;
+const dayLimit = (cfg, mode) => mode === 'photo' ? cfg.photoPerDay : cfg.textPerDay;
 
 // A second, instant guard inside this isolate. KV needs a round trip; a runaway
 // loop in the app can fire a hundred times before the first write lands. This
@@ -284,6 +302,42 @@ function burstOk(uid, perMinute) {
   burst.set(uid, hits);
   if (burst.size > 500) burst.clear();   // this is a cache, not a ledger
   return true;
+}
+
+/* ============ gate 4: is this account switched on? ============
+   One unauthenticated GET for aiAllow/{uid}.json. `on` is set by the account
+   itself the moment it is approved; `blocked` can only be set by the owner and
+   beats `on`. Answers are cached in KV for a minute so a caller holding a valid
+   token can't turn this into a load generator against Firebase — and the
+   in-memory burst guard runs before it, so they can't get that far anyway.
+
+   Returns true, false, or null for "couldn't tell". Null is not a denial: it
+   hands the decision back to ALLOWED_UIDS, so a Firebase outage degrades to the
+   old behaviour instead of locking the owner out of his own estimator. */
+async function dbAllows(env, uid) {
+  const key = 'allow:' + uid;
+  try {
+    const hit = await env.RACK_AI.get(key, 'json');
+    if (hit && hit.until > Date.now()) return hit.ok;
+  } catch {}
+
+  let ok;
+  try {
+    const base = String(env.RTDB_URL || RTDB_URL).replace(/\/$/, '');
+    const r = await fetch(base + '/aiAllow/' + encodeURIComponent(uid) + '.json',
+                          { signal: AbortSignal.timeout(5000) });
+    if (!r.ok) return null;
+    const j = await r.json();
+    ok = !!(j && j.on === true && j.blocked !== true);
+  } catch {
+    return null;
+  }
+
+  try {
+    await env.RACK_AI.put(key, JSON.stringify({ ok, until: Date.now() + ALLOW_TTL_MS }),
+                          { expirationTtl: 3600 });
+  } catch {}
+  return ok;
 }
 
 async function readState(env, uid) {
@@ -304,9 +358,10 @@ export default {
       allowed:   list(env, 'ALLOWED_ORIGINS', 'https://lyttlebeast.github.io'),
       uids:      list(env, 'ALLOWED_UIDS', ''),
       projectId: String(env.FIREBASE_PROJECT_ID || 'lift-cal'),
-      perMinute: num(env, 'RATE_PER_MINUTE', LIMITS.perMinute),
-      perDay:    num(env, 'RATE_PER_DAY',    LIMITS.perDay),
-      monthUsd:  num(env, 'MONTHLY_USD_CAP', LIMITS.monthUsd)
+      perMinute:   num(env, 'RATE_PER_MINUTE',  LIMITS.perMinute),
+      photoPerDay: num(env, 'AI_PHOTO_PER_DAY', LIMITS.photoPerDay),
+      textPerDay:  num(env, 'AI_TEXT_PER_DAY',  LIMITS.textPerDay),
+      monthUsd:    num(env, 'MONTHLY_USD_CAP',  LIMITS.monthUsd)
     };
     const origin = request.headers.get('Origin');
     const url    = new URL(request.url);
@@ -347,21 +402,45 @@ export default {
     }
 
     const uid = claims.sub;
-    if (cfg.uids.length && !cfg.uids.includes(uid)) {
+
+    // In memory, before anything that costs a round trip. A runaway loop or a
+    // deliberate hammer stops here rather than turning into Firebase reads.
+    if (!burstOk(uid, cfg.perMinute)) {
+      return reply({ error: 'rate_limited', message: 'Slow down a second.' }, 429, { 'Retry-After': '60' });
+    }
+
+    // Named in the settings = always allowed, no lookup. Otherwise ask the
+    // database. A null answer (Firebase unreachable) falls back to the list.
+    let allowed = cfg.uids.includes(uid);
+    if (!allowed) {
+      const db = await dbAllows(env, uid);
+      allowed = db === true;
+      if (db === null && !cfg.uids.length) allowed = false;
+    }
+    if (!allowed) {
       console.log('uid not allowed:', uid);
-      return reply({ error: 'not_allowed', message: 'This account is not allowed to use the AI estimator.' }, 403);
+      return reply({ error: 'not_allowed',
+        message: 'This account doesn\u2019t have the AI estimator switched on.' }, 403);
     }
 
     /* ---- quota probe: what the app shows on the setup screen ---- */
     let state = await readState(env, uid);
     if (wantsQuota) {
+      const photoLeft = Math.max(0, cfg.photoPerDay - dayUsed(state, 'photo'));
+      const textLeft  = Math.max(0, cfg.textPerDay  - dayUsed(state, 'text'));
       return reply({
         ok: true,
         uid,
         left:  { minute: Math.max(0, cfg.perMinute - (state.minCount || 0)),
-                 day:    Math.max(0, cfg.perDay    - (state.dayCount || 0)) },
+                 photo:  photoLeft,
+                 text:   textLeft,
+                 // Kept for older clients that only knew about one number.
+                 day:    photoLeft + textLeft },
         spend: { monthUsd: Number((state.monthUsd || 0).toFixed(4)), capUsd: cfg.monthUsd },
-        limits: { perMinute: cfg.perMinute, perDay: cfg.perDay }
+        limits: { perMinute: cfg.perMinute,
+                  photoPerDay: cfg.photoPerDay,
+                  textPerDay:  cfg.textPerDay,
+                  perDay: cfg.photoPerDay + cfg.textPerDay }
       }, 200);
     }
 
@@ -401,23 +480,30 @@ export default {
     if ((state.monthUsd || 0) >= cfg.monthUsd) {
       return reply({ error: 'spend_cap', message: 'This month’s $' + cfg.monthUsd + ' cap is used up. Raise it in the Worker settings if that was on purpose.' }, 402);
     }
-    if ((state.dayCount || 0) >= cfg.perDay) {
-      return reply({ error: 'rate_limited', message: 'Daily limit reached (' + cfg.perDay + ' estimates). It resets at midnight UTC.' }, 429, { 'Retry-After': '3600' });
+    // Photos and words have their own daily budgets. A photo costs roughly ten
+    // times what the same meal costs described, so one shared counter lets a run
+    // of cheap text estimates quietly spend the expensive ones — and the person
+    // finds out at dinner, holding a plate.
+    if (dayUsed(state, mode) >= dayLimit(cfg, mode)) {
+      const other = mode === 'photo' ? 'text' : 'photo';
+      const spare = Math.max(0, dayLimit(cfg, other) - dayUsed(state, other));
+      return reply({ error: 'rate_limited',
+        message: 'That is your ' + dayLimit(cfg, mode) + ' ' + mode + ' estimates for today.' +
+                 (spare ? ' You still have ' + spare + ' ' + other + ' ' +
+                          (spare === 1 ? 'estimate' : 'estimates') + '.' : '') +
+                 ' Resets at midnight UTC.'
+      }, 429, { 'Retry-After': '3600' });
     }
     if ((state.minCount || 0) >= cfg.perMinute) {
       return reply({ error: 'rate_limited', message: 'That is ' + cfg.perMinute + ' in a minute — give it a moment.' }, 429, { 'Retry-After': '60' });
-    }
-    // Last, because it is the only one that can be wrong: KV is eventually
-    // consistent, so a burst landing faster than a write propagates would slip
-    // past the counter above. This one lives in memory and cannot.
-    if (!burstOk(uid, cfg.perMinute)) {
-      return reply({ error: 'rate_limited', message: 'Slow down a second.' }, 429, { 'Retry-After': '60' });
     }
 
     // Count the attempt BEFORE spending anything. A call that fails still used a
     // slot; the alternative is a failing call you can retry infinitely fast.
     state.minCount = (state.minCount || 0) + 1;
     state.dayCount = (state.dayCount || 0) + 1;
+    if (mode === 'photo') state.photoDay = (state.photoDay || 0) + 1;
+    else                  state.textDay  = (state.textDay  || 0) + 1;
     await saveState(env, uid, state);
 
     /* ---- the actual call ---- */
@@ -506,7 +592,10 @@ export default {
       model,
       usage: { in: inTok, out: used.output_tokens || 0, usd: Number(usd.toFixed(5)) },
       left: { minute: Math.max(0, cfg.perMinute - state.minCount),
-              day:    Math.max(0, cfg.perDay    - state.dayCount) },
+              kind:   mode,
+              photo:  Math.max(0, cfg.photoPerDay - dayUsed(state, 'photo')),
+              text:   Math.max(0, cfg.textPerDay  - dayUsed(state, 'text')),
+              day:    Math.max(0, dayLimit(cfg, mode) - dayUsed(state, mode)) },
       spend: { monthUsd: state.monthUsd, capUsd: cfg.monthUsd }
     }, 200);
   }

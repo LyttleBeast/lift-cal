@@ -1,5 +1,5 @@
 import { GROUPS, GROUP_ORDER } from './exercises.js';
-import { read, write, writeFeed, watch, LS, todayKey, monthKey } from './store.js';
+import { read, write, watch, LS, todayKey, monthKey } from './store.js';
 import {
   $, el, sheet, toast, noteEl, confirmSheet, swipeToDelete,
   fmtDate, fmtDateFull, fmtDuration, compact, parseKey
@@ -872,7 +872,6 @@ async function finishWorkout() {
   monthCache[mk][dd][session.id] = record;
   invalidate();
 
-  await pushFeed();
 
   summary = { record, prs, firsts, milestones, prior: priorSessions };
   session = null;
@@ -932,37 +931,11 @@ async function saveEdit() {
   if (mk !== oldMk) await saveMonth(mk);
 
   await rebuildHistoryFromLog();
-  await pushFeed();
-
   session = null;
   toast('Workout updated');
   render();
 }
 
-async function pushFeed() {
-  const recent = [];
-  Object.keys(monthCache).sort().reverse().forEach(mk => {
-    Object.keys(monthCache[mk]).sort().reverse().forEach(dd => {
-      Object.values(monthCache[mk][dd]).forEach(w => recent.push(w));
-    });
-  });
-  recent.sort((a, b) => b.startedAt - a.startedAt);
-
-  await writeFeed({
-    workouts: recent.slice(0, 3).map(w => ({
-      date: todayKey(new Date(w.startedAt)),
-      name: w.name,
-      minutes: Math.round((w.durationSec || 0) / 60),
-      volume: w.volume,
-      groups: w.groups,
-      topSets: (w.exercises || []).map(ex => {
-        const best = (ex.sets || []).filter(isWorking)
-          .sort((a, b) => e1rm(b.w, b.r) - e1rm(a.w, a.r))[0];
-        return best ? `${ex.name} ${best.w}x${best.r}` : null;
-      }).filter(Boolean)
-    }))
-  });
-}
 
 /* ================= POST-WORKOUT SUMMARY ================= */
 function renderSummary() {

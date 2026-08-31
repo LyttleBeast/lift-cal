@@ -10,13 +10,19 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="stylesheet" href="rack.css">
+<link rel="stylesheet" href="auth.css">
 <title>Rack</title>
 </head>
 <body>
 
-<!-- ===== AUTH GATE ===== -->
+<!-- ===== AUTH GATE =====
+     One box, two modes. `data-mode` on the box is what decides which fields
+     are on screen; auth.css hides the rest. Keeping both modes in the markup
+     rather than building them in JavaScript means the sign-in form is painted
+     with the first frame instead of a step later, which on a cold PWA start is
+     the difference between "an app" and "a web page loading". -->
 <div id="auth">
-  <div class="auth-box">
+  <div class="auth-box" id="authBox" data-mode="in">
     <div class="auth-mark" aria-hidden="true">
       <i style="background:#d6252b;animation-delay:0ms"></i>
       <i style="background:#2e7fd9;animation-delay:60ms"></i>
@@ -25,18 +31,50 @@
       <i style="background:#e8e5de;animation-delay:240ms"></i>
       <i style="background:#a8aeb8;animation-delay:300ms"></i>
     </div>
+
+    <h1 class="auth-title" id="authTitle">Sign in</h1>
+    <p class="auth-sub" id="authSub">Your training log, your account.</p>
+
+    <div class="field only-up">
+      <label for="authName">Name</label>
+      <input id="authName" type="text" autocomplete="name" autocapitalize="words">
+    </div>
+
     <div class="field">
       <label for="authEmail">Email</label>
-      <input id="authEmail" type="email" autocomplete="username" inputmode="email">
+      <input id="authEmail" type="email" autocomplete="username" inputmode="email" autocapitalize="none" spellcheck="false">
     </div>
+
     <div class="field">
       <label for="authPass">Password</label>
       <input id="authPass" type="password" autocomplete="current-password">
+      <div class="field-hint only-up">At least 8 characters.</div>
     </div>
+
+    <div class="field only-up">
+      <label for="authCode">Invite code <span class="opt">optional</span></label>
+      <input id="authCode" class="code-input" type="text" placeholder="ABCDE-FGHJK"
+             autocapitalize="characters" spellcheck="false" maxlength="12">
+      <div class="field-hint">Got a code from Micah? It lets you straight in. Without one he gets a request to approve.</div>
+    </div>
+
     <div class="auth-err" id="authErr"></div>
+    <div class="auth-ok" id="authOk"></div>
+
     <button class="btn btn-primary btn-block btn-lg" id="authBtn">Sign in</button>
+
+    <div class="auth-alt">
+      <button class="linkish only-in" id="authForgot" type="button">Forgot password</button>
+      <button class="linkish" id="authSwap" type="button">Create an account</button>
+    </div>
   </div>
 </div>
+
+<!-- ===== ACCESS GATE (signed in, not approved yet) ===== -->
+<div id="gate" class="hidden"></div>
+
+<!-- ===== ONBOARDING / TOUR ===== -->
+<div id="onboard" class="hidden"></div>
 
 <!-- ===== SYNC STATE ===== -->
 <div class="sync-pip" id="syncPip"><i></i><span>synced</span></div>

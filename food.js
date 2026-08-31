@@ -7,10 +7,12 @@
 //   food/daySummaries/{d}  -> { cal, p, c, f }      tiny per-day rollup (TDEE math)
 //
 // Every one of those paths is already per-account — store.js prefixes them
-// with users/{uid}/. The only thing that used to leak between accounts was
-// the hard-coded starter foods, which are now owner-only (see seedItems).
+// with users/{uid}/ and the database rules refuse anything else. The only
+// thing that ever crossed accounts was the hard-coded starter foods, which are
+// owner-only (see seedItems): they are one person's reference values for a
+// specific job's pizza dough, not a food database.
 
-import { read, write, writeFeed, watch, LS, todayKey, uid } from './store.js';
+import { read, write, watch, LS, todayKey, uid } from './store.js';
 import { maintenance, calorieZones, zoneOf, refreshModel,
          autoTargets, trendWeight } from './tdee.js';
 import { initWater, loadWaterDay, renderWater, openWaterSettings } from './water.js';
@@ -50,7 +52,6 @@ let targets  = { cal: 2700, p: 215, f: 80, maint: null, auto: null };
 const AUTO_DEFAULTS = { on: false, rateWk: -1, pPerLb: 1, fPerLb: 0.35, floor: 0, lastAdj: 0 };
 const AUTO_EVERY_DAYS = 7;    // how often it may move at all
 const AUTO_MAX_STEP   = 100;  // biggest single calorie change
-let feedTimer = null;
 let weighIns = {};      // weight/entries — only for the maintenance estimate
 let summaries = {};     // food/daySummaries — ditto
 let unwatchDay = null;  // live listener on the day being viewed
@@ -78,10 +79,12 @@ async function loadDay() {
   watchDay();
 }
 
-// Live listener on whichever day is on screen. Anything that edits the log
-// from outside the app — Claude writing straight to the database — shows up
-// here without a refresh. Rollups are recomputed locally so the TDEE math and
-// the public feed stay honest no matter who did the writing.
+// Live listener on whichever day is on screen. It keeps a second device — the
+// phone and the laptop open at once — from drifting apart, and it is what makes
+// an estimate accepted on one of them appear on the other. Nothing outside the
+// app can write here any more, so this is now purely about your own devices.
+// The rollup is still recomputed locally on every change, because the
+// maintenance estimate reads the rollup rather than the raw log.
 function watchDay() {
   if (unwatchDay) { unwatchDay(); unwatchDay = null; }
   const key = dk(viewDate);
@@ -92,7 +95,6 @@ function watchDay() {
     render();
     const t = totals();
     write('food/daySummaries/' + key, { cal: t.cal, p: Math.round(t.p), c: Math.round(t.c), f: Math.round(t.f) });
-    queueFeed();
   });
 }
 
@@ -144,7 +146,6 @@ async function applyAuto() {
   targets = { ...targets, cal, p: next.p, f: next.f,
               auto: { ...a, lastAdj: Date.now() } };
   await write('food/targets', targets);
-  queueFeed();
   render();
   toast('Targets moved with your trend \u2014 ' + cal.toLocaleString() + ' kcal, ' + next.p + 'g protein');
   return true;
@@ -247,7 +248,6 @@ async function saveDay() {
   await write('food/log/' + key, dayLog);
   const t = totals();
   await write('food/daySummaries/' + key, { cal: t.cal, p: Math.round(t.p), c: Math.round(t.c), f: Math.round(t.f) });
-  queueFeed();
 }
 
 function totals() {
@@ -263,25 +263,6 @@ function totals() {
   });
   t.p = r1(t.p); t.c = r1(t.c); t.f = r1(t.f);
   return t;
-}
-
-function queueFeed() {
-  clearTimeout(feedTimer);
-  feedTimer = setTimeout(pushFoodFeed, 600);
-}
-
-async function pushFoodFeed() {
-  const t = totals();
-  await writeFeed({
-    nutrition: {
-      date: dk(viewDate),
-      cal: t.cal, p: t.p, c: t.c, f: t.f,
-      targetCal: targets.cal, targetP: targets.p, targetC: carbsTarget(), targetF: targets.f,
-      items: Object.values(dayLog)
-        .sort((a, b) => (a.t || 0) - (b.t || 0))
-        .map(e => ({ n: e.name, q: e.qty || '', cal: e.cal, meal: e.meal }))
-    }
-  });
 }
 
 function newEntryId() {
@@ -1923,7 +1904,10 @@ function openAiReview(res, ctx) {
 
     if (res.usage) {
       const bits = ['$' + Number(res.usage.usd || 0).toFixed(4) + ' of credit'];
-      if (res.left && res.left.day != null) bits.push(res.left.day + ' left today');
+      if (res.left && res.left.day != null) {
+        const kind = res.left.kind === 'photo' ? 'photo' : 'describe';
+        bits.push(res.left.day + ' ' + kind + (res.left.day === 1 ? '' : 's') + ' left today');
+      }
       body.appendChild(el('div', 'ai-cost num', bits.join('   ·   ')));
     }
   }
@@ -2123,8 +2107,14 @@ function openAiSettings() {
     try {
       const q = await quota();
       status.style.color = 'var(--good)';
-      status.textContent = 'Connected. ' + q.left.day + ' of ' + q.limits.perDay +
-        ' estimates left today · $' + Number(q.spend.monthUsd).toFixed(3) +
+      // Photo and describe have separate daily budgets — showing one combined
+      // number would say "4 left" to somebody who has no photos left at all.
+      const photo = q.left.photo != null ? q.left.photo : q.left.day;
+      const text  = q.left.text  != null ? q.left.text  : q.left.day;
+      const pMax  = q.limits.photoPerDay != null ? q.limits.photoPerDay : q.limits.perDay;
+      const tMax  = q.limits.textPerDay  != null ? q.limits.textPerDay  : q.limits.perDay;
+      status.textContent = 'Connected. Today: ' + photo + ' of ' + pMax + ' photos, ' +
+        text + ' of ' + tMax + ' describes left · $' + Number(q.spend.monthUsd).toFixed(3) +
         ' of $' + q.spend.capUsd + ' used this month.';
     } catch (err) {
       status.style.color = 'var(--bad)';
@@ -2134,7 +2124,7 @@ function openAiSettings() {
   };
   sh.appendChild(test);
 
-  sh.appendChild(noteEl('Setup is in worker/README.md — create the key, deploy the Worker, paste the URL it prints here.'));
+  sh.appendChild(noteEl('Limits are per person, per day, and reset at midnight UTC. Setup is in the Worker README \u2014 create the key, deploy the Worker, paste the URL it prints here.'));
 
   const done = el('button', 'btn btn-ghost btn-block', 'Close');
   done.style.marginTop = '14px';
@@ -2755,7 +2745,6 @@ function openTargets() {
                     auto: { ...a, lastAdj: Date.now() } };
       }
       await write('food/targets', targets);
-      queueFeed();
       close(); render();
       toast(n ? 'Following your weight \u2014 ' + n.cal.toLocaleString() + ' kcal, ' + n.p + 'g protein'
               : 'Saved \u2014 targets will follow once there is enough data');
@@ -2771,7 +2760,6 @@ function openTargets() {
       auto: { ...auto, on: false }
     };
     await write('food/targets', targets);
-    queueFeed();
     close(); render(); toast('Targets saved');
   };
   sh.appendChild(save);

@@ -1,0 +1,297 @@
+/* ============================================================================
+   Rack — accounts, access and onboarding.
+   Kept in its own file rather than appended to rack.css because everything
+   here belongs to the doors of the app rather than the rooms: the sign-in box,
+   the waiting screen, the first-run setup, the tour, and the owner's People
+   sheet. rack.css owns the tokens; this file only ever spends them.
+   ========================================================================= */
+
+/* ---------- shared small parts rack.css doesn't have yet ---------- */
+.linkish {
+  background: none; border: none; padding: 4px 2px;
+  color: var(--steel); font-size: 13px;
+  font-variation-settings: 'wdth' 92, 'wght' 600;
+  text-decoration: underline; text-underline-offset: 3px;
+  text-decoration-color: var(--knurl);
+}
+.linkish:active { color: var(--chalk); }
+
+.btn-sm { padding: 8px 12px; font-size: 12px; border-radius: var(--r-sm); }
+
+.badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 18px; height: 18px; padding: 0 5px;
+  border-radius: 9px; background: var(--p-yellow); color: #141414;
+  font-size: 11px; font-variation-settings: 'wdth' 92, 'wght' 800;
+}
+
+.field textarea {
+  width: 100%; padding: 12px; resize: vertical;
+  background: var(--bar); border: 1px solid var(--collar);
+  border-radius: var(--r-sm); color: var(--chalk);
+  transition: border-color var(--fast) var(--ease);
+}
+.field textarea:focus { border-color: var(--p-yellow); outline: none; }
+
+.field-hint { font-size: 11px; color: var(--dim); line-height: 1.45; margin-top: 5px; }
+.field label .opt {
+  letter-spacing: .06em; color: var(--knurl);
+  font-variation-settings: 'wdth' 88, 'wght' 500;
+}
+
+/* Codes are read off one screen and typed into another. Monospace-ish
+   tracking makes a transcription error visible while it is still on screen. */
+.code-input {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  font-variation-settings: 'wdth' 100, 'wght' 700;
+}
+
+/* ---------- sign in / create account ---------- */
+.auth-title {
+  font-size: 22px; margin: 0 0 4px;
+  font-variation-settings: 'wdth' 105, 'wght' 800;
+}
+.auth-sub { margin: 0 0 20px; font-size: 13px; color: var(--dim); line-height: 1.5; }
+
+.auth-ok { color: var(--good); font-size: 13px; min-height: 0; line-height: 1.5; }
+.auth-err:empty, .auth-ok:empty { min-height: 0; }
+.auth-err { min-height: 0; line-height: 1.5; }
+.auth-err:not(:empty), .auth-ok:not(:empty) { margin-bottom: 10px; }
+
+.auth-alt {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; margin-top: 14px;
+}
+.auth-alt:has(> :only-child) { justify-content: center; }
+
+/* One box, two modes. */
+#authBox[data-mode="in"] .only-up { display: none; }
+#authBox[data-mode="up"] .only-in { display: none; }
+
+/* ---------- the waiting screen ---------- */
+#gate {
+  position: fixed; inset: 0; z-index: 205;
+  background: var(--rack);
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+  padding-top: calc(24px + var(--safe-top));
+  overflow-y: auto;
+}
+#gate.hidden { display: none; }
+.gate-box { max-width: 340px; }
+.gate-title {
+  font-size: 22px; margin: 0 0 6px;
+  font-variation-settings: 'wdth' 105, 'wght' 800;
+}
+.gate-body > .note:first-of-type { margin-bottom: 18px; }
+
+.gate-pending {
+  display: flex; align-items: center; gap: 9px;
+  padding: 11px 13px; margin: 14px 0;
+  background: var(--bar); border: 1px solid var(--collar);
+  border-radius: var(--r-sm);
+  font-size: 13px; color: var(--steel);
+}
+.gate-pending .dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--p-yellow); flex: none;
+  animation: gatePulse 1.8s ease-in-out infinite;
+}
+@keyframes gatePulse { 0%,100% { opacity: 1; } 50% { opacity: .25; } }
+
+.gate-sep {
+  display: flex; align-items: center; gap: 10px;
+  margin: 20px 0 14px;
+  font-size: 10px; letter-spacing: .16em; text-transform: uppercase;
+  color: var(--dim); font-variation-settings: 'wdth' 88, 'wght' 700;
+}
+.gate-sep::before, .gate-sep::after {
+  content: ''; flex: 1; height: 1px; background: var(--collar);
+}
+
+.gate-who {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; margin-top: 22px; padding-top: 14px;
+  border-top: 1px solid var(--collar);
+  font-size: 12px; color: var(--dim);
+}
+.gate-who span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---------- onboarding ---------- */
+#onboard {
+  position: fixed; inset: 0; z-index: 210;
+  background: var(--rack);
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+  padding-top: calc(20px + var(--safe-top));
+}
+#onboard.hidden { display: none; }
+
+/* The tour sits over the running app, so the app has to stay visible. */
+#onboard.ob-tour {
+  background: linear-gradient(to bottom, rgba(20,22,26,.55) 0%, rgba(20,22,26,.94) 42%);
+  align-items: flex-end;
+  padding-bottom: calc(var(--dock-h) + env(safe-area-inset-bottom, 0px) + 14px);
+  animation: obFade var(--med) var(--ease);
+}
+@keyframes obFade { from { opacity: 0; } to { opacity: 1; } }
+
+.ob-card {
+  width: 100%; max-width: 380px;
+  max-height: 100%;
+  display: flex; flex-direction: column;
+  background: var(--bar);
+  border: 1px solid var(--collar);
+  border-radius: var(--r);
+  overflow: hidden;
+}
+.ob-tour-card {
+  padding: 18px;
+  animation: obRise var(--med) var(--ease);
+  box-shadow: 0 18px 50px rgba(0,0,0,.55);
+}
+@keyframes obRise { from { transform: translateY(18px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+.ob-bar { height: 3px; background: var(--collar); flex: none; }
+.ob-fill {
+  height: 100%; background: var(--p-yellow);
+  width: 0; transition: width var(--med) var(--ease);
+}
+.ob-body { padding: 22px 18px 6px; overflow-y: auto; flex: 1; }
+.ob-foot { padding: 12px 18px 18px; flex: none; }
+
+.ob-kicker {
+  font-size: 10px; letter-spacing: .16em; text-transform: uppercase;
+  color: var(--dim); font-variation-settings: 'wdth' 88, 'wght' 700;
+  margin-bottom: 6px;
+}
+.ob-title {
+  font-size: 24px; margin: 0 0 10px; line-height: 1.15;
+  font-variation-settings: 'wdth' 108, 'wght' 800;
+}
+.ob-err { color: var(--p-red); font-size: 13px; margin-top: 10px; }
+
+.ob-nav {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; margin-top: 10px;
+}
+.ob-nav:has(> :only-child) { justify-content: center; }
+
+.ob-list { margin: 16px 0 4px; display: grid; gap: 11px; }
+.ob-item { display: grid; grid-template-columns: 62px 1fr; gap: 10px; align-items: baseline; }
+.ob-item-t {
+  font-size: 11px; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--p-yellow); font-variation-settings: 'wdth' 88, 'wght' 800;
+}
+.ob-item-d { font-size: 13px; color: var(--steel); line-height: 1.5; }
+
+.ob-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+.ob-choices { display: grid; gap: 8px; margin: 16px 0 4px; }
+.ob-choice {
+  display: block; width: 100%; text-align: left;
+  padding: 13px 14px;
+  background: var(--rack);
+  border: 1px solid var(--collar);
+  border-radius: var(--r-sm);
+  transition: border-color var(--fast) var(--ease), background var(--fast) var(--ease);
+}
+.ob-choice.on { border-color: var(--p-yellow); background: var(--collar); }
+.ob-choice-t {
+  font-size: 15px; color: var(--chalk);
+  font-variation-settings: 'wdth' 96, 'wght' 700;
+}
+.ob-choice-d { font-size: 12px; color: var(--dim); margin-top: 2px; line-height: 1.4; }
+
+.ob-numbers {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 8px; margin: 18px 0 6px;
+}
+.ob-num {
+  padding: 14px 8px; text-align: center;
+  background: var(--rack); border: 1px solid var(--collar);
+  border-radius: var(--r-sm);
+}
+.ob-num-v {
+  font-size: 22px; line-height: 1;
+  font-variation-settings: 'wdth' 112, 'wght' 800;
+  letter-spacing: -.02em;
+}
+.ob-num-l { font-size: 10px; color: var(--steel); margin-top: 5px; letter-spacing: .04em; }
+.ob-num-s { font-size: 10px; color: var(--dim); margin-top: 2px; }
+
+.ob-adjust { margin-top: 14px; }
+.ob-adjust summary {
+  cursor: pointer; list-style: none;
+  font-size: 12px; color: var(--steel);
+  padding: 8px 0;
+  text-decoration: underline; text-underline-offset: 3px;
+  text-decoration-color: var(--knurl);
+}
+.ob-adjust summary::-webkit-details-marker { display: none; }
+
+.ob-tour-body { font-size: 14px; color: var(--chalk); line-height: 1.6; margin-bottom: 12px; }
+.ob-tip {
+  font-size: 12px; color: var(--steel); line-height: 1.5;
+  padding: 10px 12px; margin-bottom: 16px;
+  background: var(--rack); border-left: 2px solid var(--p-yellow);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+}
+.ob-dots { display: flex; gap: 5px; margin-bottom: 14px; }
+.ob-dots i {
+  width: 18px; height: 3px; border-radius: 2px;
+  background: var(--collar); transition: background var(--fast) var(--ease);
+}
+.ob-dots i.on { background: var(--p-yellow); }
+
+/* The dock button for the tab being described.
+   The dock sits at z-index 60 and the tour overlay at 210, so a child of the
+   dock cannot climb over the scrim on its own — the dock's own stacking
+   context caps it. The body class lifts the whole dock above the scrim for the
+   length of the tour, and makes it inert so a stray tap can't navigate out
+   from under the card. */
+body.tour-on #dock { z-index: 212; pointer-events: none; }
+
+#dock button.tour-lit {
+  color: var(--p-yellow);
+  position: relative;
+}
+#dock button.tour-lit::after {
+  content: ''; position: absolute; inset: 2px 6px;
+  border-radius: var(--r-sm);
+  box-shadow: 0 0 0 2px var(--p-yellow);
+  animation: tourPulse 1.6s ease-in-out infinite;
+}
+@keyframes tourPulse { 0%,100% { opacity: .95; } 50% { opacity: .35; } }
+
+/* ---------- the owner's People sheet ---------- */
+.people-head { display: flex; align-items: center; gap: 8px; margin: 14px 0 8px; }
+.people-gap { margin: 22px 0 8px; }
+
+.person {
+  display: flex; align-items: center; gap: 10px;
+  padding: 11px 12px; margin-bottom: 8px;
+  background: var(--bar); border: 1px solid var(--collar);
+  border-radius: var(--r-sm);
+}
+.person-main { flex: 1; min-width: 0; }
+.person-name {
+  font-size: 14px; color: var(--chalk);
+  font-variation-settings: 'wdth' 96, 'wght' 700;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.person-sub {
+  font-size: 11px; color: var(--dim); margin-top: 2px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.person-sub.live { color: var(--good); }
+.person-note { font-size: 12px; color: var(--steel); margin-top: 5px; line-height: 1.45; }
+.person-acts { display: flex; gap: 6px; flex: none; }
+
+@media (max-width: 380px) {
+  .person { flex-wrap: wrap; }
+  .person-acts { width: 100%; }
+  .person-acts .btn { flex: 1; }
+}

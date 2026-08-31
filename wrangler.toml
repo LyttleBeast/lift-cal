@@ -13,28 +13,42 @@ compatibility_date = "2026-08-01"
 # Who may call this from a browser. Add http://localhost:8000 while developing.
 ALLOWED_ORIGINS = "https://lyttlebeast.github.io"
 
-# Which Rack accounts may spend your credits. Comma-separated Firebase uids.
-# Leave it empty and ANY verified Rack account can — don't.
+# Who may spend your credits.
+#
+# The everyday answer is not here any more — it is the aiAllow/{uid} node in the
+# database, which the app writes when an account is approved and which only the
+# owner can block. That means adding a person to Rack gives them the estimator
+# without touching this file, and taking it away from them is a tap in the app.
+#
+# This list is now an OVERRIDE and a safety net: any uid named here is allowed
+# with no database lookup at all, so put your own uid here and the estimator
+# keeps working even if Firebase is unreachable. Comma-separated.
 ALLOWED_UIDS = "aXSDfnZK8IMT9wRVhBbEgkDHpsj2"
 
 # The Firebase project whose ID tokens count as valid here.
 FIREBASE_PROJECT_ID = "lift-cal"
 
-# Rate limits, per account. Tuned to 2-3 photos a day with room to spare —
-# five times the real usage still leaves a loop nowhere to go.
-RATE_PER_MINUTE = "5"
-RATE_PER_DAY    = "15"
+# Rate limits — PER ACCOUNT, per day. Every person gets their own counters, so
+# a second user can never eat the first one's allowance.
+#
+# Photo and text are counted separately on purpose. A photo costs roughly ten
+# times what the same meal costs described, so a single shared counter lets a
+# run of cheap text estimates quietly spend the expensive ones — and you find
+# out at dinner, holding a plate. Using one of each in a day counts one against
+# each, not two against one.
+RATE_PER_MINUTE   = "5"
+AI_PHOTO_PER_DAY  = "3"
+AI_TEXT_PER_DAY   = "3"
 
 # The one that actually protects the money. Dollars of Anthropic usage per
-# calendar month, counted from Anthropic's own token numbers.
-#
-# Set to 1 deliberately: the whole balance is $5, so a cap of $5 would let one
-# bad month take all of it. At $1 the worst possible month still leaves four
-# more, and normal use is about $0.60 — so this only ever bites if something
-# has gone wrong. Raise it when the balance is bigger.
+# calendar month, counted from Anthropic's own token numbers, shared across
+# everybody. Two people at 3 photos + 3 describes a day is roughly $0.55 a
+# month of photos and pennies of text, so $1 still only bites if something has
+# gone wrong. Raise it when the balance is bigger, or when a third person joins.
 MONTHLY_USD_CAP = "1"
 
-# Counter storage. Create it once with:
+# Counter storage — also caches the aiAllow lookup for a minute per uid.
+# Create it once with:
 #   npx wrangler kv namespace create RACK_AI
 # then paste the id it prints here.
 [[kv_namespaces]]

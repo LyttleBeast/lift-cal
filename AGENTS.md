@@ -1,101 +1,134 @@
-# Rack — for Claude (and any other agent)
+# Rack — the database, node by node
 
-Everything the app knows lives in one Firebase Realtime Database tree. It is
-readable by anyone, writable by two accounts: Micah's, and an agent account.
-So you can read the training log, the food log and the weigh-ins directly, and —
-once the agent credentials are in your environment — log, edit and delete
-without going anywhere near the paste-JSON flow.
+Everything the app knows lives in one Firebase Realtime Database tree.
 
-Since the Fuel redesign the app can also estimate a meal itself — photograph the
-plate or describe it, and it calls Claude through its own Cloudflare Worker (see
-`worker/`). That is a separate path with its own key; it does not change anything
-below. Entries it writes carry `src: "ai-photo"` or `src: "ai-text"`, which is a
-useful signal when reading the log: those numbers are an estimate somebody eyeballed
-and accepted, not a label he read off a package.
+**Nothing outside the app can read or write any of it.** That is new, and it is
+the first thing to know if you have seen an older copy of this file. There is no
+public read URL, no `feed/` node, and no agent account. The REST recipes that
+used to be here have been removed rather than corrected, because a half-working
+recipe is worse than none.
 
-The app keeps live listeners on the day's food log, the month of workouts and
-the weigh-in list, so anything you write shows up on his phone within a second,
-no refresh.
+What replaced them:
+
+- Photograph or describe a meal **in the app**. That path goes out through the
+  Cloudflare Worker with the phone's Firebase ID token, never through the
+  database, and is unaffected by any of this.
+- To get numbers in from a conversation, paste them: **Fuel → ⚙ → Paste food
+  JSON**, or a `#log=` link. Format at the bottom of this file. Nothing is
+  written until it is confirmed on screen.
+
+This file is now a schema reference for working *on* the app.
 
 ```
 BASE = https://lift-cal-default-rtdb.firebaseio.com
-ROOT = users/aXSDfnZK8IMT9wRVhBbEgkDHpsj2
 ```
 
-Everything below is a path under `ROOT`. Append `.json` to any of them to get a
-REST URL: `$BASE/$ROOT/food/log/2026-08-19.json`.
+---
 
-## Reading — no credentials at all
+# Access — the part that decides everything else
 
-```bash
-BASE=https://lift-cal-default-rtdb.firebaseio.com
-ROOT=users/aXSDfnZK8IMT9wRVhBbEgkDHpsj2
+Three trees at the root, and they do not overlap.
 
-curl -s "$BASE/$ROOT/food/log/2026-08-19.json"     # one day of food
-curl -s "$BASE/$ROOT/food/targets.json"            # calorie + macro targets
-curl -s "$BASE/$ROOT/weight/entries.json"          # every weigh-in
-curl -s "$BASE/$ROOT/workouts/2026-08.json"        # one month of training
-curl -s "$BASE/$ROOT.json?shallow=true"            # what top-level nodes exist
+## `users/{uid}` — one account's data
+
+Readable and writable by that uid alone, and only while
+`access/approved/{uid}` exists. Not by the owner, not by an admin, not by an
+unauthenticated GET. Everything in the schema section below hangs off here.
+
+Write is granted per section, never at `users/{uid}` itself:
+
+```
+food  weight  workouts  history  water  steps  routines  exercises
+settings  profile  onboarding
 ```
 
-`curl -s "$BASE/$ROOT.json"` is the whole thing in one response — every workout
-since the beginning, every food, every weigh-in. It is a few megabytes. Prefer a
-narrower path unless you actually want all of it.
+RTDB write rules only grant, and they always cascade downward — so a grant at
+`users/{uid}` would make the whole subtree writable under any key at all, which
+turns a fitness log into free file storage for anybody with an account. Granting
+per section means an unrecognised key has no grant and the write fails. **If you
+add a new top-level section, add it to the rules too, or it will silently fail
+to save.**
 
-## Writing — needs the agent account
+## `access/*` — who is allowed in
 
-Two environment variables carry the credentials. They are never committed:
-
-```bash
-export RACK_AGENT_EMAIL='…'
-export RACK_AGENT_PASSWORD='…'
+```
+access/approved/{uid}   { at, via: "invite"|"owner", code?, name?, email? }
+access/invites/{CODE}   { at, note?, revoked?, usedBy?, usedAt? }
+access/requests/{uid}   { at, name, email, note? }
 ```
 
-Trade them for a one-hour ID token, then hang `?auth=$TOKEN` off any write:
+`access/approved/{uid}` is the whole gate. Only the owner can write one — with
+one exception, which is the invite flow:
 
-```bash
-TOKEN=$(curl -s -X POST \
-  "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=AIzaSyBzDbv7fNVWFDw2Wdfgshyts3y8q61voS8" \
-  -H 'Content-Type: application/json' \
-  -d "{\"email\":\"$RACK_AGENT_EMAIL\",\"password\":\"$RACK_AGENT_PASSWORD\",\"returnSecureToken\":true}" \
-  | python3 -c 'import json,sys; print(json.load(sys.stdin)["idToken"])')
+An account with a valid code sends **one atomic multi-path update**:
+
+```js
+update(ref(db), {
+  ['access/approved/' + uid]:            { at, via: 'invite', code, name, email },
+  ['access/invites/' + code + '/usedBy']: uid,
+  ['access/invites/' + code + '/usedAt']: Date.now()
+});
 ```
 
-- `PATCH` merges keys into a node — use it to **add** without disturbing what is
-  already there.
-- `PUT` replaces a node outright — only for nodes you mean to overwrite whole.
-- `DELETE` removes a node.
+The rules allow the approval only if, *before* the write, that code exists, is
+unclaimed and is not revoked — and allow the used-stamp only if it is unset and
+names the caller. Both paths pass or the whole update fails, so there is no
+window where a code is spent without letting anyone in, or someone is let in
+without spending the code.
 
-**Never `PUT` a container node** (`food/log/{date}`, `weight/entries`,
-`workouts/{month}`). You will erase everything else inside it. `PATCH` the
-container, or `PUT` the individual child.
+`access/invites/{CODE}` is readable by any signed-in account that knows the
+exact code, and the parent is not listable — the standard unguessable-child
+pattern. Codes are ten characters from a 31-letter alphabet with no `0 O 1 I L`.
 
-## Use the helper instead
+`access/requests/{uid}` is written by the account itself and read only by the
+owner. Approving deletes the request and writes the approval in one update.
 
-`rack.mjs` does the token dance, generates ids in the app's format, and
-keeps the derived rollups correct. Prefer it.
+Removing somebody deletes `access/approved/{uid}` **and nothing else**. Their
+data stays exactly where it is; adding them back restores all of it.
 
-```bash
-node rack.mjs today
-node rack.mjs food list 2026-08-19
-node rack.mjs food add '{"name":"Chicken and rice","qty":"1 bowl","cal":650,"p":52,"c":78,"f":12,"meal":"lunch"}'
-node rack.mjs food add '{"items":[…]}' --date=2026-08-18
-node rack.mjs food rm 2026-08-19 f1a2b3c
-node rack.mjs weigh 214.6
-node rack.mjs workouts 2026-08
-node rack.mjs get food/items
-node rack.mjs patch <path> '<json>'
-node rack.mjs del <path>
+## `aiAllow/{uid}` — the AI estimator switch
+
 ```
+aiAllow/{uid}  { on: bool, blocked?: bool }
+```
+
+Two booleans and nothing else. This one node is readable **by key** without
+authentication, because the Cloudflare Worker has no Firebase credentials and
+should not be given any — it does a plain GET on
+`aiAllow/{uid}.json` and allows the call when `on === true && blocked !== true`.
+The parent is not listable, and the value carries no personal data.
+
+An approved account may set its own `on`; only the owner can set `blocked`, and
+blocked wins. That split is what lets somebody who claimed an invite code get
+the estimator immediately, while leaving the owner a switch they cannot flip
+back.
+
+The per-day limits are deliberately **not** here — a client could rewrite them.
+They live in the Worker's settings: 3 photo and 3 describe estimates per person
+per day, counted separately, under a shared monthly dollar cap.
 
 ---
 
 # The schema
 
+Everything below is a path under `users/{uid}`.
+
+## `profile` → `{ name, email, sex, heightIn, birthYear, createdAt }`
+
+Written by onboarding. `sex` is `m` | `f` | `x` and feeds the Mifflin-St Jeor
+starting estimate; nothing else reads it.
+
+## `onboarding` → `{ done, at, version, skipped, tourDone }`
+
+Why it is in the database and not localStorage: a new phone would otherwise
+greet an existing account as a stranger. `done` gates the setup questions,
+`tourDone` gates the four-tab walkthrough, and the walkthrough can be replayed
+from Weight → Settings.
+
 ## `food/log/{YYYY-MM-DD}` → `{ entryId: entry }`
 
-One node per calendar day. Entry ids look like `f` + base36 timestamp + 3 random
-chars; any unique string works, but keep the `f` prefix.
+One node per calendar day. Entry ids are `f` + base36 timestamp + 3 random
+chars.
 
 ```json
 {
@@ -104,12 +137,9 @@ chars; any unique string works, but keep the `f` prefix.
     "t":    1755600000000,
     "name": "Chicken and rice",
     "qty":  "1 bowl",
-    "cal":  650,
-    "p":    52,
-    "c":    78,
-    "f":    12,
+    "cal":  650, "p": 52, "c": 78, "f": 12,
     "meal": "lunch",
-    "src":  "agent",
+    "src":  "manual",
     "micro": { "fiber": 4, "sugar": 2, "satfat": 3,
                "sodium": 900, "potassium": 800, "cholesterol": 150 }
   }
@@ -124,31 +154,24 @@ chars; any unique string works, but keep the `f` prefix.
 | `qty` | free text — "1 bowl", "150 g", "2 × scoop (88 g)" |
 | `cal` `p` `c` `f` | kcal and grams, for the amount actually eaten |
 | `meal` | `breakfast` \| `lunch` \| `dinner` \| `snack` |
-| `src` | provenance — use `agent`. The app writes `manual`, `lib`, `barcode`, `meal`, `copy`, `repeat`, `claude` (pasted JSON), `ai-photo` and `ai-text` (the in-app estimator), and `recall` (answered out of `food/recall` without spending a request) |
+| `src` | provenance — `manual`, `lib`, `barcode`, `meal`, `copy`, `repeat`, `claude` (pasted JSON), `ai-photo` and `ai-text` (the in-app estimator), `recall` (answered from `food/recall` without spending a request) |
 | `micro` | optional, any subset of the six keys above |
-| `itemId` `amt` `unit` | only on entries linked to the saved-food library — leave off |
-| `baseN` `qtyBase` `mult` | the app's portion bookkeeping for entries with no library item behind them: `baseN` is one portion's macros, `mult` what it was scaled by. Leave them off — and if you rewrite `cal`/`p`/`c`/`f` on an existing entry, delete all three, or the next tap of a ×2 chip scales the numbers you replaced |
-
-To log a food: `PATCH food/log/{date}` with `{ "<newId>": { … } }`.
-To remove one: `DELETE food/log/{date}/{entryId}`.
-To correct one: `PATCH food/log/{date}/{entryId}` with just the changed fields.
-
-**Then update the rollup** (`rack.mjs` does this for you):
+| `itemId` `amt` `unit` | only on entries linked to the saved-food library |
+| `baseN` `qtyBase` `mult` | portion bookkeeping for entries with no library item behind them: `baseN` is one portion's macros, `mult` what it was scaled by. If you rewrite `cal`/`p`/`c`/`f` on an existing entry, delete all three, or the next tap of a ×2 chip scales the numbers you replaced |
 
 ## `food/daySummaries/{YYYY-MM-DD}` → `{ cal, p, c, f }`
 
-Integer sums of that day's log. The maintenance estimate reads this, not the
-raw log, so a day whose summary is stale gets weighted wrong. Recompute and
-`PUT` it after any change to `food/log/{date}`.
+Integer sums of that day's log. The maintenance estimate reads this, not the raw
+log, so a stale summary skews the TDEE number for two weeks. The app recomputes
+it on every change to a day.
 
 ## `food/targets` → `{ cal, p, f, maint, auto }`
 
 Daily goals. Carbs are the remainder: `(cal − p×4 − f×9) / 4`, never stored.
-`maint` is the maintenance-calorie number that anchors the cut / maintain / gain
-marks on the calorie bar — `null` means "estimate it from the weight trend".
-
-`cal`, `p` and `f` are **always** the live numbers, whether they were typed in
-or computed. Nothing downstream needs to know which.
+`maint` anchors the cut / maintain / gain marks on the calorie bar; `null` means
+"estimate it from the weight trend". Onboarding writes a Mifflin-St Jeor number
+here so day one is not a blank guess, and the measured estimate takes over on
+its own once there are two weeks of real data.
 
 ```json
 { "cal": 2300, "p": 210, "f": 74, "maint": null,
@@ -157,18 +180,13 @@ or computed. Nothing downstream needs to know which.
 ```
 
 `auto.on` means the app recomputes `cal` / `p` / `f` itself: protein and fat as
-grams per pound of **trend** weight (not the last weigh-in), calories as the
-maintenance estimate shifted by `rateWk × 500`. It moves at most once every 7
-days and at most 100 kcal at a time.
-
-**If you are writing targets while `auto.on` is true, set `auto.on` to false in
-the same PATCH**, or the app will overwrite your numbers the next time the
-weigh-ins move.
+grams per pound of **trend** weight, calories as maintenance shifted by
+`rateWk × 500`. At most once every 7 days, at most 100 kcal at a time.
 
 `floor` of 0 means "work it out": protein and fat plus 100 g of carbs. That
 floor is load-bearing — carbs are the remainder and `carbsTarget()` clamps at
-zero, so calories dropping below `p×4 + f×9` would silently produce a zero-carb
-target rather than an error.
+zero, so calories below `p×4 + f×9` would silently produce a zero-carb target
+rather than an error.
 
 ## `food/items` → `{ itemId: item }` — the saved-food library
 
@@ -183,84 +201,45 @@ target rather than an error.
 } }
 ```
 
-`base` is `serv` (the `n` numbers are per serving) or `100g` (per 100 grams).
-`serv.grams` is what lets the app convert between the two — include it when you
-know it. Ids: `u` + base36 timestamp for hand-made items.
+`base` is `serv` (the `n` numbers are per serving) or `100g`. `serv.grams` is
+what lets the app convert between the two. Ids: `u` + base36 timestamp.
 
-Only add to the library when he asks for a food he'll log repeatedly. A one-off
-meal belongs in the day's log, not the library.
+The half-dozen starter items are seeded **only** into the owner's account — they
+are one person's reference values for a specific job's pizza dough, not a food
+database. Everyone else starts empty and fills it from barcodes and estimates.
 
 ## `food/meals` → `{ mealId: { name, items, last } }`
 
 A saved meal is an **ingredient list**, not a total — the builder reopens it and
 each component can be re-portioned before it is logged. `items` are entry-shaped
-objects without `id`/`t`; ones carrying `itemId`/`amt`/`unit` stay linked to the
-saved-food library and get a real portion picker, the rest get a multiplier.
-Logging writes one entry per ingredient (`src: "meal"`), or a single summed
-entry named after the meal if the "one entry" option was used. Saving is opt-in
-— most meals are logged once and never kept.
+objects without `id`/`t`.
 
 ## `food/recall` → `{ key: { q, kind, items, n, last } }`
 
-The lookup cache in front of the AI estimator. Every food logged and every
-description it has worked out is kept here, so the same sentence is never paid
-for twice: typing one into Describe searches this first and offers the stored
-answer, saying that it did, with a one-tap route to Claude if it is wrong.
-
-```json
-{ "2-eggs-toast": {
-    "q": "2 eggs and toast", "kind": "ai", "n": 3, "last": 1756000000000,
-    "items": [ { "name": "Eggs", "qty": "2", "cal": 140, "p": 12, "c": 1, "f": 10 } ]
-} }
-```
-
-| field | |
-|---|---|
-| `key` | the question normalised (filler words dropped, number words digitised) then slugged. This IS the deduplication — the same question always lands on the same key |
-| `q` | the question as it was actually typed |
-| `kind` | `ai` if the answer came from the estimator, `log` if the food got in another way |
-| `items` | entry-shaped, no `id`/`t`/`meal` |
-| `n` | times this answer has been used — also the prune order |
-| `last` | ms epoch of the last use |
-
-Capped at 400 rows; least-used and oldest go first. **Numbers in the key are
-load-bearing** — "2 slices" and "3 slices" must never share a row, and a
-near-miss whose numbers disagree is rejected however similar the words are.
-No image is ever stored; a photo estimate contributes only the sentence typed
-beside it.
-
-Seeding this is a reasonable thing to do for foods he eats constantly: write the
-key in the same shape and it will be found.
+The lookup cache in front of the AI estimator, so the same sentence is never
+paid for twice. `key` is the question normalised (filler words dropped, number
+words digitised) then slugged — that IS the deduplication. **Numbers in the key
+are load-bearing**: "2 slices" and "3 slices" must never share a row. Capped at
+400 rows; least-used and oldest go first. No image is ever stored.
 
 ## `weight/entries` → `{ id: { lb, t } }`
 
-Flat list of every weigh-in, ids prefixed `wt`. `lb` is pounds to one decimal,
-`t` is ms epoch — the time of day matters, the app breaks weigh-ins down by it.
-
-`PATCH weight/entries` with `{ "wtNEW": { "lb": 214.6, "t": … } }` to add.
-`DELETE weight/entries/{id}` to remove.
+Flat list of every weigh-in, ids prefixed `wt`. `lb` is pounds to one decimal.
 
 **`t` is not decoration.** The maintenance estimate normalises every weigh-in
-back to a fasted-morning equivalent before it fits a trend, using the food and
+back to a fasted-morning equivalent before fitting a trend, using the food and
 water logged before that moment to work out how much of the reading is
-breakfast. A weigh-in stamped with the wrong time is worse than a missing one:
-it gets corrected by the wrong amount and then counted with confidence. If you
-are back-filling a weigh-in, stamp it with when he actually stood on the scale.
-
-Two weigh-ins on the same day are what let the model learn his personal
-coefficients at all — the pair cancels the unknown true weight between them —
-so several readings a day is a feature, not noise.
+breakfast. A weigh-in stamped with the wrong time is worse than a missing one.
+Two weigh-ins on the same day are what let the model learn personal coefficients
+at all — several readings a day is a feature, not noise.
 
 ## `workouts/{YYYY-MM}/{DD}/{sessionId}` → one finished session
 
 ```json
 {
-  "id": "wm3k9x2",
-  "name": "Push day",
-  "startedAt": 1755590000000,
-  "endedAt":   1755595400000,
-  "durationSec": 5400,
-  "volume": 41250,
+  "id": "wm3k9x2", "name": "Push day",
+  "startedAt": 1755590000000, "endedAt": 1755595400000,
+  "durationSec": 5400, "volume": 41250,
   "groups": ["chest", "shoulders", "arms"],
   "exercises": [
     { "exId": "barbell-bench-press", "name": "Barbell Bench Press",
@@ -272,155 +251,81 @@ so several readings a day is a feature, not noise.
 ```
 
 Set `type`: `W` warm-up, `N` normal, `F` failure, `D` drop. Warm-ups are excluded
-from volume, records and history. `volume` is the sum of `w × r` over non-warm-up
-sets. `exId` must match an exercise in `exercises.js` or one in
-`exercises/custom` — a mismatched id breaks the "last time" line. Ids are slugs
-of the full name (`barbell-bench-press`), and a rename in `exercises/overrides`
-never changes one.
+from volume, records and history. `exId` must match an exercise in
+`exercises.js` or one in `exercises/custom`. Personal records are **derived**,
+never stored.
 
-Writing a workout by hand is the fiddliest thing here. Prefer letting the app
-record it. If you must, also update:
+`history/{exId}` → `[ { date, sets: [ {w,r,type} ] }, … ]`, newest first, 20 max
+— the per-exercise "last time" index.
 
-- `history/{exId}` → `[ { date, sets: [ {w,r,type} ] }, … ]`, newest first, 20
-  max — this is the per-exercise "last time" index.
-- Personal records are **derived**, never stored. Don't look for a records node.
+## `water/log/{YYYY-MM-DD}` → `{ entryId: { ml, t, src } }`
 
-## `water/log/{YYYY-MM-DD}` → `{ entryId: entry }`
-
-One node per calendar day, same shape as the food log. Ids are `wa` + base36
-timestamp + 3 random chars.
-
-```json
-{ "wam3k9x2ab": { "ml": 500, "t": 1755600000000, "src": "preset" } }
-```
-
-| field | |
-|---|---|
-| `ml` | **millilitres, always.** The display unit is a setting; the log is never in it |
-| `t` | ms epoch — the weight model uses this, so a plausible time matters |
-| `src` | `preset` \| `manual` \| `agent` |
-
-There is **no rollup node** for water and there should not be one. Sum the day
-on read. `food/daySummaries` exists because the TDEE math needed it; house rule
-3 exists because that rollup goes stale. One of those is enough.
-
-To log: `PATCH water/log/{date}` with `{ "<newId>": { … } }`. 16.9 fl oz — the
-supermarket flat-of-40 bottle — is 500 ml. A US gallon is 3785 ml.
+Ids are `wa` + base36 timestamp + 3 random chars. `ml` is **millilitres,
+always** — the display unit is a setting, the log never is. There is no rollup
+node for water and there should not be one; sum the day on read.
 
 ## `settings/water` → `{ goalMl, unit, presets }`
 
-```json
-{ "goalMl": 3785, "unit": "floz",
-  "presets": [ { "label": "Bottle", "ml": 500 } ] }
-```
-
 `unit` ∈ `floz` | `ml` | `L` | `cup`, display only. `presets` null means the
-standard sizes; the first entry is the big button on the card.
+standard sizes. Onboarding sets `goalMl` from bodyweight at half a fluid ounce
+per pound, the same rule the settings screen suggests.
 
-## `routines/{routineId}` → one pre-planned workout
+## `steps/{YYYY-MM-DD}` → `{ steps, mi, t, src }`
 
-```json
-{
-  "id": "rm3k9x2",
-  "name": "Push A",
-  "note": "heavy bench, back off on incline",
-  "exercises": [
-    { "exId": "barbell-bench-press", "name": "Barbell Bench Press",
-      "group": "chest", "equipment": "barbell",
-      "sets": [ { "tw": 225, "tr": 5, "type": "N" } ] }
-  ],
-  "created": 1756000000000, "lastUsed": 1756400000000, "uses": 6
-}
-```
-
-`tw` / `tr` are **target** weight and reps, both optional — a routine that says
-"three sets of bench, figure out the weight there" is a legitimate routine.
-They are deliberately not `w` / `r`: starting a routine puts them in as
-placeholder text, never as pre-filled values, so a number you forgot to change
-can't end up in the log as a number you lifted.
-
-`groups` is not stored. Derive it from the exercises, the way sessions do.
-
-## `steps/{YYYY-MM-DD}` → one day
-
-```json
-{ "steps": 11482, "mi": 5.1, "t": 1756000000000, "src": "shortcut" }
-```
-
-| field | |
-|---|---|
-| `steps` | whole-day total as of `t`, not an increment |
-| `mi` | optional distance in miles |
-| `t` | ms epoch — when the count was taken, not when the day ended |
-| `src` | `manual` \| `shortcut` \| `hae` \| `agent` |
-
-`PUT steps/{date}` — the day node is a whole record and a later reading for the
-same day legitimately replaces an earlier one. **Never `PUT` the `steps`
-container**, per house rule 4.
-
-Steps are **not** an input to the maintenance estimate and must not become one.
-That estimate is empirical — it reads intake against the real scale trend, so
-activity is already inside it. A step term would count the same walking twice.
+`steps` is the whole-day total as of `t`, not an increment. Steps are **not** an
+input to the maintenance estimate and must not become one — that estimate is
+empirical, reading intake against the real scale trend, so activity is already
+inside it. A step term would count the same walking twice.
 
 ## `settings/steps` → `{ goal }`
 
-Daily step goal. Drives the ring, the streak and the green bars.
+## `routines/{routineId}` → one pre-planned workout
+
+`tw` / `tr` are **target** weight and reps, both optional. They are deliberately
+not `w` / `r`: starting a routine puts them in as placeholder text, never as
+pre-filled values, so a number you forgot to change cannot end up in the log as
+a number you lifted.
 
 ## The exercise library — three nodes
 
-`exercises.js` holds 231 built-ins. These three make that list editable without
-editing code; the Exercises screen on the Train tab is the UI for all of them.
-
-**`exercises/custom` → `[ { id, name, group, equipment }, … ]`**
-Exercises beyond the built-ins. `group` is one of `chest` `back` `legs`
-`shoulders` `arms` `core`. Ids look like `custom-<slug>-<random>`.
-
-**`exercises/overrides` → `{ exId: { name, group, equipment } }`**
-A renamed or refiled built-in. The **id never changes**, which is the whole
-point: `history/{exId}` and every set ever logged are keyed on it, so renaming
-"Barbell Bench Press" to "Comp Bench" keeps the last-time line and the records
-attached. An override edited back to the built-in's original values is deleted
-rather than stored, so "edited" stays meaningful.
-
-**`exercises/hidden` → `[ exId, … ]`**
-Built-ins taken out of the picker. Hidden rather than deleted for the same
-reason — a missing id orphans the history of everything logged under it. Custom
-exercises are deleted outright, and the sessions that used them keep their sets.
-
-## `feed/wH7lqHV7y15z4EMq9T2UZi` (outside `ROOT`)
-
-A small world-readable summary the app maintains — last three workouts, today's
-nutrition, latest weight. Handy for a quick glance without pulling the tree.
-The app writes it; you don't need to.
+`exercises/custom` → `[ { id, name, group, equipment }, … ]`
+`exercises/overrides` → `{ exId: { name, group, equipment } }` — a renamed or
+refiled built-in. **The id never changes**, which is the whole point: history
+and every logged set are keyed on it.
+`exercises/hidden` → `[ exId, … ]` — built-ins taken out of the picker. Hidden
+rather than deleted for the same reason; a missing id orphans history.
 
 ---
 
-# Multiple accounts
+# Paste import format
 
-Everything under `users/{uid}/` is that account's alone. The published rules give
-each account read and write on its own subtree and nothing else — one account
-cannot see another's food, weight, workouts, water or steps. Micah's subtree is
-additionally world-**readable** on purpose (that is what makes the unauthenticated
-GET above work); no other account's is, and no account but his can write to
-`feed/`.
+Fuel → ⚙ → **Paste food JSON**, or a link of the form
+`https://lyttlebeast.github.io/lift-cal/#log=BASE64URL_JSON`. Single item, an
+array, or `{"items":[…]}`. Lands on **today**; nothing is written until **Log
+it** is tapped.
 
-So an agent holding Micah's credentials can only ever touch Micah's data. There
-is no cross-account anything, by design and by rules.
+```json
+{
+  "items": [
+    { "name": "Chicken and rice", "qty": "1 bowl",
+      "cal": 650, "p": 52, "c": 78, "f": 12, "meal": "lunch",
+      "micro": { "fiber": 4, "sugar": 2, "satfat": 3,
+                 "sodium": 900, "potassium": 800, "cholesterol": 150 } }
+  ]
+}
+```
+
+`meal` ∈ breakfast | lunch | dinner | snack (defaults by clock). `micro` is
+optional. Any food already in the log produces this exact shape — tap it →
+**Copy JSON**.
 
 # House rules
 
-1. **Confirm the numbers before you log them.** A guessed macro is worse than no
-   entry — it silently poisons the maintenance estimate for two weeks.
-2. **Log to today unless told otherwise**, and say which date you wrote to.
+1. **Confirm the numbers before logging.** A guessed macro silently poisons the
+   maintenance estimate for two weeks.
+2. **Never PUT a container node** (`food/log/{date}`, `weight/entries`,
+   `workouts/{month}`). It erases everything else inside.
 3. **Update `food/daySummaries/{date}`** after touching a day's food log.
-4. **PATCH to add, DELETE to remove.** Never PUT a container.
-5. **Don't invent library items or exercises** to make a log fit. Log the food
-   as a plain entry; make a custom exercise only when he asks.
-6. **Tell him what you wrote**, with the entry id, so it can be undone.
-
-If a write returns `Permission denied`, the token expired (one hour) or the
-credentials are missing. Re-run the sign-in step.
-
-If a request is blocked by a network allowlist, the two hosts that need to be
-reachable are `lift-cal-default-rtdb.firebaseio.com` and
-`identitytoolkit.googleapis.com`.
+4. **Don't invent library items or exercises** to make a log fit.
+5. **New top-level section under `users/{uid}` → add it to the rules**, or it
+   will fail to save with no error the user can see.

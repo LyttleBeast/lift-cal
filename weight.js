@@ -1,11 +1,12 @@
 // Weight — body-weight log, trend math, and the app's settings card.
 //   weight/entries -> { id: { lb, t } }
 
-import { read, write, writeFeed, watch, LS, todayKey, feedUrl, logout, isOwner } from './store.js';
+import { read, write, watch, LS, todayKey, logout, isOwner, purgeDevice, uid } from './store.js';
 import { hasActiveSession } from './workout.js';
 import { weightStats, dailyMeans as meansOf, movingAvg, maintenance,
          refreshModel, modelState, adjustedDays, peakOffset, trendRate } from './tdee.js';
 import { openImport } from './importer.js';
+import { openPeople } from './access.js';
 import { lineChart } from './analytics.js';
 import { $, el, toast, noteEl, confirmSheet, r1, parseKey, fmtDateFull } from './ui.js';
 
@@ -18,13 +19,12 @@ export async function initWeight() {
   entries = (await read('weight/entries', null)) || {};
   await refit();
   // Stay subscribed: this node is written whole, so a stale copy in memory
-  // would silently drop a weigh-in logged elsewhere (another device, or an
-  // agent writing over REST) the next time you stepped on the scale.
+  // would silently drop a weigh-in logged on another device the next time you
+  // stepped on the scale.
   watch('weight/entries', val => {
     const next = val || {};
     if (JSON.stringify(next) === JSON.stringify(entries)) return;
     entries = next;
-    pushWeightFeed();
     refit().then(render);
   });
   render();
@@ -46,20 +46,6 @@ function sorted() {
 }
 function dailyMeans() { return meansOf(entries); }
 function stats() { return weightStats(entries); }
-
-/* ================= FEED ================= */
-async function pushWeightFeed() {
-  const s = stats();
-  if (!s.latest) return;
-  await writeFeed({
-    weight: {
-      lb: r1(s.latest.lb),
-      date: todayKey(new Date(s.latest.t)),
-      avg7: s.avg7 != null ? r1(s.avg7) : null,
-      rateWk: s.rateWk != null ? r1(s.rateWk) : null
-    }
-  });
-}
 
 /* ================= RENDER ================= */
 export async function render() {
@@ -92,7 +78,6 @@ export async function render() {
     entries[id] = { lb: r1(lb), t: Date.now() };
     await write('weight/entries', entries);
     await refit();
-    await pushWeightFeed();
     inp.value = '';
     toast('Logged ' + r1(lb) + ' lb');
     render();
@@ -344,7 +329,6 @@ function renderRecent() {
         onConfirm: async () => {
           delete entries[e.id];
           await write('weight/entries', entries);
-          await pushWeightFeed();
           render();
         }
       });
@@ -354,22 +338,24 @@ function renderRecent() {
   return card;
 }
 
-/* ---------- settings ---------- */
+/* ---------- settings ----------
+   This card is where the app stops being about one person. "People & access"
+   is owner-only and is the entire admin surface: approve a request, hand out
+   an invite code, take somebody's access away, turn their AI estimator off.
+   Everything else here is per-account and shows for everyone. */
 function renderSettings() {
   const card = el('div', 'card');
   const hd = el('div', 'card-hd');
   hd.appendChild(el('div', 'eyebrow', 'Settings'));
   card.appendChild(hd);
 
-  // The feed is one hard-coded world-readable path belonging to one account.
-  // Showing this button to anyone else hands them somebody else's data.
+  // Only the owner can act on the access tree — the database rules say so, not
+  // this `if`. The check is here so the button isn't shown to somebody it would
+  // only ever return a permission error to.
   if (isOwner()) {
-    const linkBtn = el('button', 'btn btn-ghost btn-block', 'Copy Claude link');
-    linkBtn.onclick = async () => {
-      try { await navigator.clipboard.writeText(feedUrl()); toast('Link copied'); }
-      catch { prompt('Copy this:', feedUrl()); }
-    };
-    card.appendChild(linkBtn);
+    const people = el('button', 'btn btn-ghost btn-block', 'People & access');
+    people.onclick = openPeople;
+    card.appendChild(people);
   }
 
   const restRow = el('div', 'field');
@@ -389,13 +375,21 @@ function renderSettings() {
   imp.onclick = openImport;
   card.appendChild(imp);
 
+  const tour = el('button', 'btn btn-ghost btn-block', 'Replay the walkthrough');
+  tour.style.marginTop = '12px';
+  tour.onclick = () => {
+    if (typeof window.__rackTour === 'function') window.__rackTour();
+    else toast('Reload the app and try again');
+  };
+  card.appendChild(tour);
+
   const out = el('button', 'btn btn-danger btn-block', 'Sign out');
   out.style.marginTop = '12px';
   out.onclick = () => {
     if (hasActiveSession()) {
       confirmSheet({
         title: 'Workout in progress',
-        body: 'You have a live session. Signing out keeps it saved on this device, but you’ll need to sign back in to finish it.',
+        body: 'You have a live session. Signing out keeps it saved on this device, but you\u2019ll need to sign back in to finish it.',
         confirmLabel: 'Sign out anyway',
         danger: true,
         onConfirm: () => logout()
@@ -405,5 +399,27 @@ function renderSettings() {
     logout();
   };
   card.appendChild(out);
+
+  /* Signing out leaves this device's cached copy of the account behind. It is
+     namespaced by uid, so no other account can reach it through the app — but
+     on a shared or borrowed phone "unreachable through the app" is not the
+     same as gone, and this is the button that makes it gone. It also clears
+     any queued offline writes, which is the reason it is not the default. */
+  const wipe = el('button', 'linkish', 'Sign out and erase this device\u2019s copy');
+  wipe.style.cssText = 'display:block;width:100%;text-align:center;margin-top:10px';
+  wipe.onclick = () => confirmSheet({
+    title: 'Erase this device\u2019s copy?',
+    body: 'Everything stays in your account and comes back when you sign in again. Anything logged while offline and not yet synced is lost.',
+    confirmLabel: 'Erase and sign out',
+    danger: true,
+    onConfirm: async () => {
+      const u = uid();
+      await logout();
+      purgeDevice(u);
+      location.reload();
+    }
+  });
+  card.appendChild(wipe);
+
   return card;
 }
