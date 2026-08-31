@@ -30,13 +30,46 @@ import { el, noteEl, segmented, r1, toast } from './ui.js';
 
 export const ONBOARDING_VERSION = 1;
 
-/* ---------- has this account been through it? ---------- */
+/* ---------- has this account been through it? ----------
+   The flag is the answer when it exists. When it doesn't, the account either
+   is genuinely new, or predates this screen existing at all — and those two
+   must not be treated the same. An account that already holds targets or
+   weigh-ins has been in use for months; showing it "let's set you up" would
+   offer to overwrite the numbers its owner has been eating to. So a missing
+   flag on an account with data is backfilled as already-done, silently, once. */
 export async function onboardingState() {
   const o = (await read('onboarding', null)) || {};
-  return {
-    needsSetup: o.done !== true,
-    needsTour:  o.done === true && o.tourDone !== true && o.skipped !== true
-  };
+
+  if (o.done === true) {
+    return { needsSetup: false, needsTour: o.tourDone !== true && o.skipped !== true };
+  }
+
+  if (await hasRealData()) {
+    try {
+      await write('onboarding', {
+        done: true, at: Date.now(), version: ONBOARDING_VERSION,
+        skipped: true, tourDone: true
+      });
+    } catch {}
+    return { needsSetup: false, needsTour: false };
+  }
+
+  return { needsSetup: true, needsTour: false };
+}
+
+/* Two independent signals, either one sufficient. Targets exist as soon as
+   somebody has opened the targets sheet once; weigh-ins exist for anyone who
+   has stood on a scale. A brand-new account has neither. */
+async function hasRealData() {
+  try {
+    const [targets, weights] = await Promise.all([
+      read('food/targets', null),
+      read('weight/entries', null)
+    ]);
+    if (targets && Number(targets.cal) > 0) return true;
+    if (weights && Object.keys(weights).length > 0) return true;
+  } catch {}
+  return false;
 }
 
 async function markDone(patch) {
@@ -342,21 +375,38 @@ export function runSetup(user) {
             createdAt: Date.now()
           });
 
-          if (a.lb > 0) {
-            const entries = (await read('weight/entries', null)) || {};
+          // Everything below writes only into empty space. This screen should
+          // never be reached by an account that already has these — but "should
+          // never" is not a guarantee, and the failure mode is overwriting the
+          // targets somebody has been eating to for months. Re-read and defer.
+          const [priorWeights, priorTargets, priorWater, priorSteps] = await Promise.all([
+            read('weight/entries',  null),
+            read('food/targets',    null),
+            read('settings/water',  null),
+            read('settings/steps',  null)
+          ]);
+
+          if (a.lb > 0 && !(priorWeights && Object.keys(priorWeights).length)) {
+            const entries = priorWeights || {};
             entries['wt' + Date.now().toString(36)] = { lb: r1(a.lb), t: Date.now() };
             await write('weight/entries', entries);
           }
 
-          await write('food/targets', {
-            cal: a.cal, p: a.p, f: a.f,
-            maint: a.maint || null,
-            auto: { on: false, rateWk: (GOALS.find(g => g[0] === a.goal) || GOALS[1])[2],
-                    pPerLb: 1, fPerLb: 0.35, floor: 0, lastAdj: 0 }
-          });
+          if (!(priorTargets && Number(priorTargets.cal) > 0)) {
+            await write('food/targets', {
+              cal: a.cal, p: a.p, f: a.f,
+              maint: a.maint || null,
+              auto: { on: false, rateWk: (GOALS.find(g => g[0] === a.goal) || GOALS[1])[2],
+                      pPerLb: 1, fPerLb: 0.35, floor: 0, lastAdj: 0 }
+            });
+          }
 
-          await write('settings/water', { goalMl: waterGoalFor(a.lb), unit: 'floz', presets: null });
-          await write('settings/steps', { goal: (ACTIVITY.find(x => x[0] === a.activity) || ACTIVITY[1])[3] });
+          if (!(priorWater && Number(priorWater.goalMl) > 0)) {
+            await write('settings/water', { goalMl: waterGoalFor(a.lb), unit: 'floz', presets: null });
+          }
+          if (!(priorSteps && Number(priorSteps.goal) > 0)) {
+            await write('settings/steps', { goal: (ACTIVITY.find(x => x[0] === a.activity) || ACTIVITY[1])[3] });
+          }
         } else if (a.name.trim()) {
           await write('profile', { name: a.name.trim().slice(0, 60), createdAt: Date.now() });
         }
