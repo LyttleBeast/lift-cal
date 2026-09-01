@@ -1,0 +1,13 @@
+# Secrets. The real one of these must never reach a public repo —
+# dev.vars.example is the template, .dev.vars is the loaded gun.
+.dev.vars
+.env
+
+# Tooling
+node_modules/
+.wrangler/
+dist/
+
+# OS junk
+.DS_Store
+Thumbs.db
