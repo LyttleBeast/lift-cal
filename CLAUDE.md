@@ -13,20 +13,23 @@ database. It is the schema, node by node, and the access model.
 
 ## Read this before you edit anything
 
-**`index.js` is the Cloudflare Worker, not the app.** Nothing in the app
-imports it. It sits at the repo root for historical reasons and it is the
-easiest mistake to make here. The app's entry point is `app.js`, which is what
-`index.html` loads.
+**The Worker is not the app.** `worker/` is a separate Cloudflare Worker
+project. `worker/src/index.js` is what holds the Anthropic key logic; it runs
+on Cloudflare, not in the browser, and nothing in the app imports it. The app's
+entry point is `app.js`, which is what `index.html` loads. Merging to `main`
+does not deploy the Worker — that is `npx wrangler deploy`, run from inside
+`worker/`.
 
-`wrangler.toml` says `main = "src/index.js"` and there is no `src/` in this
-repo — the Worker is deployed from a separate local wrangler project. So
-`npx wrangler deploy` run from a clone of this repo will fail. Editing
-`index.js` here updates the file of record; it does not change what is running.
+*History, so older docs make sense:* until September 2026 the Worker's files sat
+loose at the repo root as `index.js`, `wrangler.toml` and `package.json`, and
+were copied by hand into a separate wrangler project on Micah's machine. That is
+why `DEPLOY.md` talks about copying `index.js` into `src/index.js` somewhere
+else. `worker/` is now the only copy.
 
 **`DEPLOY.md` is history, not process.** It documents one specific past
-deployment — the multi-account lockdown of August 2026 — down to files that
-have since been deleted. Do not follow it as a checklist for new work. The
-current process is the handoff at the bottom of this file.
+deployment — the multi-account lockdown of August 2026 — down to files that have
+since been deleted. Do not follow it as a checklist for new work. The current
+process is the handoff at the bottom of this file.
 
 ## Layout
 
@@ -40,9 +43,9 @@ current process is the handoff at the bottom of this file.
 | `weight.js` `weightmodel.js` `tdee.js` | Weight, trend, maintenance |
 | `water.js` `steps.js` | Water and Steps |
 | `stats.js` `analytics.js` `ui.js` | Shared stats, charts, UI helpers |
-| `rack.css` `app.css` `auth.css` | Styles |
+| `rack.css` `auth.css` | Styles (`app.css` is dead — the abandoned "IRONLOG" design) |
 | `sw.js` `manifest.json` `.nojekyll` | PWA and Pages plumbing |
-| `index.js` `wrangler.toml` | The Worker — see above |
+| `worker/` | The Cloudflare Worker — its own project, see above |
 | `database.rules.json` | A **copy** of the published Firebase rules |
 
 ## Two rules that break the app silently
@@ -53,7 +56,8 @@ current process is the handoff at the bottom of this file.
 `rack-v14` — in the same change as any edit to `*.js`, `*.css`, `index.html`
 or `404.html`. The service worker caches under that name, so a change shipped
 without a bump reaches nobody's phone and looks, from the outside, exactly like
-a change that didn't work. State the new version in your summary.
+a change that didn't work. State the new version in your summary. Changes
+confined to `worker/` or to documentation do not need a bump.
 
 **2. A new top-level node under `users/{uid}` needs a rules change too.**
 
@@ -67,19 +71,19 @@ raise it in the handoff, because editing that file does not publish it.
 |---|---|
 | `*.js` `*.css` `index.html` `404.html` `sw.js` | You. Merging to `main` deploys it. |
 | `database.rules.json` | You edit the file; **Micah pastes it into the Firebase console.** Nothing is live until he does. |
-| `index.js`, `wrangler.toml` | You edit; **Micah runs `npx wrangler deploy`** from his local wrangler project. |
+| `worker/**` | You edit; **Micah runs `npx wrangler deploy` from inside `worker/`.** Merging alone changes nothing. |
 | Firebase or Cloudflare dashboards, API keys, KV namespaces | Micah only. You have no access and should not attempt it. |
 | `README.md` `AGENTS.md` `ROADMAP.md` | You, whenever a change makes them wrong. Keep them true. |
 
-Never commit a key. `dev.vars.example` is the template; a real `.dev.vars` must
-never appear in a diff. The Anthropic key lives only in Cloudflare's encrypted
-secret store, and the app on the phone has no key at all.
+Never commit a key. `worker/.dev.vars.example` is the template; a real
+`.dev.vars` must never appear in a diff. The Anthropic key lives only in
+Cloudflare's encrypted secret store, and the app on the phone has no key at all.
 
 ## House style
 
-- Vanilla ES modules, no dependencies. `package.json` exists for `wrangler` and
-  nothing else. Do not add npm packages to the app — there is no bundler, so
-  they cannot be loaded.
+- Vanilla ES modules, no dependencies. The only `package.json` is
+  `worker/package.json`, and it exists for `wrangler` alone. Do not add npm
+  packages to the app — there is no bundler, so they cannot be loaded.
 - Match the surrounding file. These files are long and hand-written; a reformat
   buries the actual change.
 - Small diffs. Change what was asked and what it breaks, nothing else.
@@ -94,7 +98,7 @@ secret store, and the app on the phone has no key at all.
 There is no test suite and no linter. Before you finish:
 
 ```bash
-for f in *.js; do node --check --input-type=module < "$f" || echo "FAIL $f"; done
+for f in *.js worker/src/*.js; do node --check --input-type=module < "$f" || echo "FAIL $f"; done
 ```
 
 Plain `node --check file.js` silently passes broken ES modules, so use the form
