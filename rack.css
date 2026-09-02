@@ -1545,3 +1545,93 @@ body.peeking .view.active { padding-bottom: 58px; }
    back — but they should not look available. */
 .ex-off { opacity: .5; }
 .ex-off .nm { text-decoration: line-through; text-decoration-color: var(--dim); }
+
+/* ============================================================
+   YOU — the read-outs drawn as pictures
+   ============================================================ */
+
+/* A headline number, the way it moved, and the shape of the last fortnight
+   under it. The arrow is the number's sign and the colour is the judgement
+   (see .delta above) — the two are deliberately independent, because a
+   weight that fell on a cut is a down arrow painted green. */
+.kpi-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.kpi {
+  background: var(--rack); border: 1px solid var(--collar); border-radius: var(--r-sm);
+  padding: 10px 10px 8px; min-width: 0;
+}
+.kpi-lbl {
+  font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--dim);
+  font-variation-settings: 'wdth' 88, 'wght' 700;
+}
+.kpi-val {
+  display: flex; align-items: baseline; gap: 4px; margin-top: 5px;
+  font-size: 22px; line-height: 1; letter-spacing: -.01em;
+  font-variation-settings: 'wdth' 108, 'wght' 800;
+}
+.kpi-unit {
+  font-size: 10px; color: var(--dim); letter-spacing: .06em;
+  font-variation-settings: 'wdth' 88, 'wght' 700;
+}
+.kpi .delta { margin-top: 6px; }
+.kpi .chart-spark { margin-top: 8px; }
+.delta-a { font-size: 11px; font-variation-settings: 'wdth' 100, 'wght' 800; }
+
+/* sparkline */
+.chart-spark { width: 100%; height: auto; }
+.spark-line, .spark-line-dim {
+  fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+.spark-line-dim { stroke: var(--knurl); }
+.spark-none { stroke: var(--collar); stroke-width: 1.5; stroke-dasharray: 3 4; }
+
+/* a goal line across a bar chart, and a bar for a day that isn't over */
+.chart-target { stroke: var(--steel); stroke-width: 1; stroke-dasharray: 4 4; opacity: .8; }
+.chart-bar-dim { opacity: .38; }
+
+/* rings — one value against its goal, several side by side */
+.ring-row { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; }
+.ring-cell { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
+.ring-track { fill: none; stroke: var(--collar); }
+.ring-top {
+  font-size: 15px; fill: var(--chalk); font-family: inherit;
+  font-variant-numeric: tabular-nums;
+  font-variation-settings: 'wdth' 108, 'wght' 800;
+}
+.ring-sub {
+  font-size: 7.5px; fill: var(--dim); font-family: inherit;
+  letter-spacing: .1em; text-transform: uppercase;
+  font-variation-settings: 'wdth' 88, 'wght' 700;
+}
+.ring-lbl {
+  font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--dim);
+  font-variation-settings: 'wdth' 88, 'wght' 700; text-align: center;
+}
+.ring-of { font-size: 10px; color: var(--steel); margin-top: -3px; text-align: center; }
+
+/* one big number with its delta beside it, above a chart */
+.headline { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.headline-v {
+  font-size: 34px; line-height: 1; letter-spacing: -.02em;
+  font-variation-settings: 'wdth' 112, 'wght' 800;
+}
+.headline-u {
+  font-size: 11px; color: var(--dim); letter-spacing: .08em; text-transform: uppercase;
+  font-variation-settings: 'wdth' 88, 'wght' 700; margin-left: -6px;
+}
+
+/* two cards shoulder to shoulder */
+.you-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.you-pair .card { padding: 12px; margin-bottom: 0; }
+.you-pair .card .chart-empty { padding: 16px 6px; font-size: 11px; }
+.you-pair .ring-cell { margin-top: 8px; }
+
+/* a small heading inside a card, between two pictures */
+.chart-sub {
+  font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--dim);
+  margin: 14px 0 6px; font-variation-settings: 'wdth' 88, 'wght' 700;
+}
+/* The third judgement, for the weight card's rate: the wrong way for the
+   stated goal is a caution, not a failure — a pound up on a cut is a week to
+   look at, not a red mark on the screen the app opens on. */
+.delta.warn { color: var(--warn); }

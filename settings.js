@@ -16,7 +16,7 @@
 // Sheets never nest. Every row that opens another sheet closes this one first.
 
 import { el, sheet, toast, noteEl, confirmSheet, segmented } from './ui.js';
-import { LS, uid, read, write, purgeDevice, logout } from './store.js';
+import { LS, uid, readExact, currentEmail, write, purgeDevice, logout } from './store.js';
 import { openTargets, openAiSettings, openRecallList, openImportPaste,
          foodTargets, latestLb } from './food.js';
 import { openWaterSettings, waterSettings, fmtWater } from './water.js';
@@ -263,7 +263,16 @@ function openProfile(onEdit) {
 
   // The form is built from the answer rather than before it: segmented() takes
   // the selected value when it is constructed, so there is nothing to set later.
-  read('profile', null).catch(() => null).then(base => {
+  //
+  // readExact() rather than read(), because the two answers read() folds
+  // together mean opposite things here. A read that failed must not be saved
+  // over: the merge below would drop the email and the join date with nothing
+  // on screen to say so. But a profile that genuinely isn't there is the normal
+  // state of every account older than onboarding — the owner's is one — and
+  // treating that as "hasn't loaded" left those accounts unable to set a name
+  // at all. So the failure is shown, once, up front, and null builds the form
+  // with defaults and creates the node on save.
+  readExact('profile').then(base => {
     const p = base || {};
     let sex = (p.sex === 'f' || p.sex === 'x') ? p.sex : 'm';
     const heightIn = p.heightIn > 0 ? p.heightIn : 70;
@@ -299,23 +308,15 @@ function openProfile(onEdit) {
       if (!(hIn >= 36 && hIn <= 96)) { toast('That height doesn’t look right.'); return; }
       if (!(year >= 1920 && year <= thisYear - 12)) { toast('Check the birth year.'); return; }
 
-      // read() falls back to this device's mirror when the get() fails, and to
-      // null when there is no mirror either — which is not the same thing as an
-      // empty profile. Saving on top of that null would drop the email and the
-      // join date with nothing on screen to say it happened. navigator.onLine is
-      // no help in telling the two apart: it only says an interface exists, and
-      // the read fails the same way on flaky data or a cold second device. Any
-      // account that got this far has a profile, so a null is always a failed
-      // read and never an empty one.
-      if (!base) {
-        toast('Your profile hasn’t loaded — reconnect and try again.');
-        return;
-      }
-
       // Whole inches, the way onboarding writes it — the two decimals a typed
       // "5.5 ft" would produce mean nothing to any of the three formulas.
       const next = { name, sex, heightIn: Math.round(hIn), birthYear: year };
-      if (typeof p.email === 'string') next.email = p.email.slice(0, 120);
+      // A profile created here for the first time gets the email onboarding
+      // would have written, but no createdAt: the account is older than this
+      // node, and stamping today would print "Member since" as the day the name
+      // was typed. You's since-line already falls back to the onboarding stamp.
+      const email = typeof p.email === 'string' ? p.email : currentEmail();
+      if (email) next.email = email.slice(0, 120);
       if (Number.isFinite(p.createdAt)) next.createdAt = p.createdAt;
 
       await write('profile', next);
@@ -323,5 +324,8 @@ function openProfile(onEdit) {
       if (onEdit) onEdit();
       toast('Saved');
     };
+  }).catch(() => {
+    body.innerHTML = '';
+    body.appendChild(noteEl('Couldn’t reach your account just now. Check the connection, close this and try again.'));
   });
 }

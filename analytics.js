@@ -455,16 +455,23 @@ export function lineChart(points, opts = {}) {
 
 /**
  * Vertical bars.
- * bars: [{ label, v, color? }]
+ * bars: [{ label, v, color?, dim? }]   `dim` fades a bar that isn't finished —
+ *        today's calories, today's steps — so a half day never reads as a low one.
+ * opts:  { height, width, color, unit, showValues, target, targetLabel }
+ *        `target` draws a dashed goal line and is folded into the scale, so a
+ *        week of misses still shows how far off the goal sat. `width` is the
+ *        viewBox width: a chart in a half-width card keeps its text legible by
+ *        drawing at half the width rather than being scaled to it.
  */
 export function barChart(bars, opts = {}) {
-  const { height = 150, color = 'var(--p-blue)', unit = '', showValues = true } = opts;
+  const { height = 150, width = 340, color = 'var(--p-blue)', unit = '', showValues = true,
+          target = null, targetLabel = '' } = opts;
   if (!bars.length) return emptyChart('Nothing logged yet');
 
-  const W = 340, H = height, PADB = 20, PADT = 18, PADX = 8;
+  const W = width, H = height, PADB = 20, PADT = 18, PADX = 8;
   const svg = svgEl('svg', { viewBox: '0 0 ' + W + ' ' + H, class: 'chart' });
 
-  const max = Math.max(...bars.map(b => b.v), 1);
+  const max = Math.max(...bars.map(b => b.v), target > 0 ? target : 0, 1);
   const n = bars.length;
   const slot = (W - PADX * 2) / n;
   const bw = Math.max(3, Math.min(30, slot * 0.62));
@@ -481,7 +488,7 @@ export function barChart(bars, opts = {}) {
     }));
     svg.appendChild(svgEl('rect', {
       x: x.toFixed(1), y: y.toFixed(1), width: bw.toFixed(1), height: h.toFixed(1),
-      rx: Math.min(4, bw / 2), fill: b.color || color, class: 'chart-bar'
+      rx: Math.min(4, bw / 2), fill: b.color || color, class: 'chart-bar' + (b.dim ? ' chart-bar-dim' : '')
     }));
 
     if (showValues && n <= 14 && b.v > 0) {
@@ -501,6 +508,120 @@ export function barChart(bars, opts = {}) {
     }
   });
 
+  if (target > 0) {
+    const ty = H - PADB - (target / max) * (H - PADT - PADB);
+    svg.appendChild(svgEl('line', {
+      x1: PADX, y1: ty.toFixed(1), x2: W - PADX, y2: ty.toFixed(1), class: 'chart-target'
+    }));
+    if (targetLabel) {
+      const t = svgEl('text', {
+        x: W - PADX, y: (ty - 4).toFixed(1), class: 'chart-axis', 'text-anchor': 'end'
+      });
+      t.textContent = targetLabel;
+      svg.appendChild(t);
+    }
+  }
+
+  return svg;
+}
+
+/**
+ * A ring gauge: one value against its goal. The track is the unfilled
+ * remainder in the surface colour, so a ring that is nearly closed reads as
+ * "nearly there" before the number in the middle is read at all. Past 100% the
+ * ring simply closes — a bigger-than-full arc is not a thing anyone can read.
+ * frac: 0..∞      opts: { size, thickness, color, top, sub }
+ */
+export function ring(frac, opts = {}) {
+  const { size = 76, thickness = 7, color = 'var(--p-yellow)', top = '', sub = '' } = opts;
+  const R = size / 2, r = R - thickness / 2;
+  const svg = svgEl('svg', { viewBox: '0 0 ' + size + ' ' + size, class: 'chart chart-ring' });
+  svg.style.width = size + 'px';
+  svg.style.height = size + 'px';
+
+  svg.appendChild(svgEl('circle', { cx: R, cy: R, r, class: 'ring-track', 'stroke-width': thickness }));
+
+  const f = Number.isFinite(frac) ? Math.max(0, Math.min(1, frac)) : 0;
+  if (f >= 0.999) {
+    svg.appendChild(svgEl('circle', { cx: R, cy: R, r, stroke: color, 'stroke-width': thickness, fill: 'none', class: 'ring-fill' }));
+  } else if (f > 0.005) {
+    const a0 = -Math.PI / 2, a1 = a0 + f * Math.PI * 2;
+    const x0 = R + r * Math.cos(a0), y0 = R + r * Math.sin(a0);
+    const x1 = R + r * Math.cos(a1), y1 = R + r * Math.sin(a1);
+    svg.appendChild(svgEl('path', {
+      d: 'M' + x0.toFixed(2) + ' ' + y0.toFixed(2) +
+         'A' + r + ' ' + r + ' 0 ' + (f > 0.5 ? 1 : 0) + ' 1 ' + x1.toFixed(2) + ' ' + y1.toFixed(2),
+      stroke: color, 'stroke-width': thickness, fill: 'none', 'stroke-linecap': 'round', class: 'ring-fill'
+    }));
+  }
+
+  if (top) {
+    const t = svgEl('text', { x: R, y: sub ? R + 1 : R + 5, class: 'ring-top', 'text-anchor': 'middle' });
+    t.textContent = top;
+    svg.appendChild(t);
+  }
+  if (sub) {
+    const t = svgEl('text', { x: R, y: R + 13, class: 'ring-sub', 'text-anchor': 'middle' });
+    t.textContent = sub;
+    svg.appendChild(t);
+  }
+  return svg;
+}
+
+/**
+ * A sparkline: the shape of the last fortnight under a headline number. No
+ * axes, no labels — the number beside it is the label. A null is a day with
+ * nothing logged: it keeps its place on the x-axis but the line runs straight
+ * through it to the next real day, because drawing it as zero would be a
+ * crash to the floor and breaking the line at every gap turns a fortnight
+ * with two days off into confetti. Points from `accentFrom` onward draw in
+ * `color`; the ones before it in the muted stroke, so "this week" stands out
+ * of "last week" without a legend.
+ * values: [number | null]      opts: { width, height, color, accentFrom }
+ */
+export function sparkline(values, opts = {}) {
+  const { width = 150, height = 40, color = 'var(--p-yellow)', accentFrom = 0 } = opts;
+  const W = width, H = height, PADX = 4, PADY = 5;
+  const svg = svgEl('svg', { viewBox: '0 0 ' + W + ' ' + H, class: 'chart chart-spark' });
+
+  const n = values.length;
+  const pts = [];
+  values.forEach((v, i) => { if (Number.isFinite(v)) pts.push({ i, v }); });
+  if (n < 2 || pts.length < 2) {
+    svg.appendChild(svgEl('line', {
+      x1: PADX, y1: H / 2, x2: W - PADX, y2: H / 2, class: 'spark-none'
+    }));
+    return svg;
+  }
+
+  let lo = Math.min(...pts.map(p => p.v)), hi = Math.max(...pts.map(p => p.v));
+  if (hi - lo < 1e-6) { lo -= 1; hi += 1; }
+  const X = i => PADX + i / (n - 1) * (W - PADX * 2);
+  const Y = v => PADY + (1 - (v - lo) / (hi - lo)) * (H - PADY * 2);
+  pts.forEach(p => { p.x = X(p.i); p.y = Y(p.v); });
+
+  const path = (list, cls) => {
+    if (list.length < 2) return;
+    const d = list.map((p, k) => (k ? 'L' : 'M') + p.x.toFixed(1) + ' ' + p.y.toFixed(1)).join('');
+    const attrs = { d, class: cls };
+    if (cls === 'spark-line') attrs.stroke = color;
+    svg.appendChild(svgEl('path', attrs));
+  };
+
+  // The seam belongs to both halves: the last muted point is also the first
+  // coloured one, so the line has no gap where the colour changes.
+  if (accentFrom > 0) {
+    const before = pts.filter(p => p.i < accentFrom);
+    const after  = pts.filter(p => p.i >= accentFrom);
+    if (before.length && after.length) before.push(after[0]);
+    path(before, 'spark-line-dim');
+    path(after, 'spark-line');
+  } else {
+    path(pts, 'spark-line');
+  }
+
+  const end = pts[pts.length - 1];
+  svg.appendChild(svgEl('circle', { cx: end.x.toFixed(1), cy: end.y.toFixed(1), r: 2.6, fill: color, class: 'spark-end' }));
   return svg;
 }
 
@@ -552,13 +673,20 @@ export function donut(segments, opts = {}) {
 
 /**
  * Consistency heat strip — one cell per day for the last N days.
+ * Takes either a session list (shaded by volume, for Train's stats) or a
+ * plain { dateKey: weight } map, which is how You draws "any day with anything
+ * on it" without a session list standing in for the whole account.
  */
 export function heatStrip(sessions, days = 91) {
   const byDay = {};
-  sessions.forEach(s => {
-    const k = s._date;
-    byDay[k] = (byDay[k] || 0) + (s.volume || 0);
-  });
+  if (Array.isArray(sessions)) {
+    sessions.forEach(s => {
+      const k = s._date;
+      byDay[k] = (byDay[k] || 0) + (s.volume || 0);
+    });
+  } else {
+    Object.keys(sessions || {}).forEach(k => { byDay[k] = Number(sessions[k]) || 0; });
+  }
   const max = Math.max(1, ...Object.values(byDay));
 
   const cols = Math.ceil(days / 7);

@@ -81,6 +81,7 @@ export function watchAuth(cb) {
 }
 export function uid() { return UID; }
 export function isOwner() { return UID === OWNER_UID; }
+export function currentEmail() { const u = auth.currentUser; return u && u.email ? u.email : ''; }
 
 /* ---------- ID token ----------
    A short-lived, Google-signed proof that this browser really is signed in as
@@ -208,6 +209,26 @@ export async function read(path, fallback = null) {
   } catch {
     return cached === undefined ? fallback : cached;
   }
+}
+
+/* read() folds "the node isn't there" and "the node couldn't be reached" into
+   one fallback, which is right for every screen that just wants a number to
+   show. The profile editor is the one caller that has to tell them apart: it
+   merges on top of what it read, so a failed read must stop it, while a node
+   that genuinely does not exist yet — every account that predates onboarding,
+   the owner's included — has to let it through to create one. Rejects on a
+   failed read; resolves null only when the database itself said "nothing". */
+export async function readExact(path) {
+  if (!UID) throw new Error('signed out');
+  if (!online.value) {
+    const cached = LS.get('mirror:' + path, undefined);
+    if (cached === undefined) throw new Error('offline');
+    return cached;
+  }
+  const snap = await get(ref(db, userPath(path)));
+  const v = snap.exists() ? snap.val() : null;
+  LS.set('mirror:' + path, v);
+  return v;
 }
 
 /* Live listener on a node inside this account. Returns an unsubscribe. */
