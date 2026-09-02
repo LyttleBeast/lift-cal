@@ -432,6 +432,7 @@ function saveEntryAsItem(e) {
 export function render() {
   const root = $('#view-food');
   if (!root) return;
+  warmScanner();
   root.innerHTML = '';
   const wrap = el('div', 'screen-pad');
 
@@ -2410,6 +2411,57 @@ function loadZXing() {
   return zxingPromise;
 }
 
+/* Chrome on Windows and Linux exposes BarcodeDetector but supports no formats,
+   so testing `'BarcodeDetector' in window` alone left the scanner staring at a
+   live feed that would never decode. Ask what it can actually read, once. */
+let nativeDetectorPromise = null;
+function nativeDetector() {
+  nativeDetectorPromise = nativeDetectorPromise || (async () => {
+    try {
+      if (!('BarcodeDetector' in window)) return null;
+      const fmts = await window.BarcodeDetector.getSupportedFormats();
+      if (!fmts.includes('ean_13')) return null;
+      return new window.BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e'] });
+    } catch { return null; }
+  })();
+  return nativeDetectorPromise;
+}
+
+/* iPhone Safari has no native detector, so every iPhone scan runs on ZXing.
+   Fetching it when the scanner opened put a "Loading scanner…" stall in front
+   of a person's first scan; fetch it while Fuel is idle instead. The service
+   worker keeps it after that, and phones with a native detector never need it. */
+let scannerWarmed = false;
+function warmScanner() {
+  if (scannerWarmed) return;
+  scannerWarmed = true;
+  setTimeout(() => nativeDetector().then(det => {
+    if (!det) loadZXing().catch(() => { scannerWarmed = false; });
+  }), 4000);
+}
+
+/* No resolution used to be asked for, and the browser default (640×480 on
+   iOS) meant a UPC's bars only resolved with the package nearly touching the
+   lens — inside the camera's focus range, so it was blurry there too. Ask for
+   a full-HD frame. `ideal` is a preference: a camera that can't do it still
+   opens at whatever it has. */
+const SCAN_VIDEO = { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } };
+
+/* Best effort: continuous autofocus where the browser lets us ask, and whether
+   a torch exists. iOS exposes neither and ignores unsupported advanced
+   constraints rather than throwing, but wrap it anyway. */
+function tuneTrack(stream) {
+  const track = stream.getVideoTracks()[0];
+  let torch = false;
+  try {
+    const caps = track.getCapabilities ? track.getCapabilities() : {};
+    if ((caps.focusMode || []).includes('continuous'))
+      track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(() => {});
+    torch = !!caps.torch;
+  } catch {}
+  return { track, torch };
+}
+
 function openScanner(onCode) {
   bump('barcode');
   const { back, sh, close } = sheet();
@@ -2437,6 +2489,12 @@ function openScanner(onCode) {
     if (stream) stream.getTracks().forEach(t => t.stop());
   }
 
+  // Android only in practice; stays hidden unless the camera reports a torch.
+  const light = el('button', 'btn btn-ghost btn-block', 'Light on');
+  light.style.marginTop = '10px';
+  light.style.display = 'none';   // `.btn` sets display, so [hidden] alone wouldn't hide it
+  sh.appendChild(light);
+
   const cancel = el('button', 'btn btn-ghost btn-block', 'Cancel');
   cancel.style.marginTop = '10px';
   cancel.onclick = () => finish(null);
@@ -2445,32 +2503,67 @@ function openScanner(onCode) {
 
   (async () => {
     try {
-      if ('BarcodeDetector' in window) {
-        const det = new window.BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e'] });
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      const det = await nativeDetector();
+      if (!det) status.textContent = 'Loading scanner…';
+      const ZX = det ? null : await loadZXing();
+
+      stream = await navigator.mediaDevices.getUserMedia({ video: SCAN_VIDEO });
+      // Cancelled while the permission prompt was up: the old code left the
+      // camera running because `stream` was assigned after cleanup ran.
+      if (done) { cleanup(); return; }
+
+      const { track, torch } = tuneTrack(stream);
+      if (torch) {
+        let on = false;
+        light.style.display = '';
+        light.onclick = () => {
+          on = !on;
+          light.textContent = on ? 'Light off' : 'Light on';
+          track.applyConstraints({ advanced: [{ torch: on }] }).catch(() => {});
+        };
+      }
+      status.textContent = 'Point at the barcode \u00b7 hold steady, a hand\u2019s width away';
+
+      if (det) {
         video.srcObject = stream;
         await video.play();
-        status.textContent = 'Point at the barcode';
+        if (done) return;
+        let busy = false;
         const iv = setInterval(async () => {
-          if (done) return;
+          if (done || busy) return;
+          busy = true;
           try {
             const codes = await det.detect(video);
             if (codes.length) finish(codes[0].rawValue);
           } catch {}
-        }, 280);
+          busy = false;
+        }, 150);
         stopFns.push(() => clearInterval(iv));
       } else {
-        status.textContent = 'Loading scanner…';
-        const ZX = await loadZXing();
-        const reader = new ZX.BrowserMultiFormatReader();
-        status.textContent = 'Point at the barcode';
-        const controls = await reader.decodeFromVideoDevice(undefined, video, (result) => {
+        // Out of the box ZXing hunted every frame for QR, PDF417, Aztec and
+        // the rest, paused 500 ms between tries, and only sampled every 32nd
+        // row. Food labels are EAN/UPC, so tell it that; TRY_HARDER reads
+        // every row and retries the frame rotated, which is what makes a
+        // slightly tilted or vertical label go. The UMD build doesn't export
+        // DecodeHintType, so its TRY_HARDER key (3) is spelt out here.
+        const F = ZX.BarcodeFormat;
+        const reader = new ZX.BrowserMultiFormatReader(undefined,
+          { delayBetweenScanAttempts: 100, delayBetweenScanSuccess: 100 });
+        reader.possibleFormats = [F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E];
+        reader.hints.set(3, true);
+        reader.setHints(reader.hints);
+        const controls = await reader.decodeFromStream(stream, video, (result) => {
           if (result) finish(result.getText());
         });
-        stopFns.push(() => controls.stop());
+        // ZXing decodes the first frame synchronously inside that call, so a
+        // label already in frame can finish() before `controls` exists and the
+        // loop would run on with nothing to stop it. Catch up here.
+        if (done) controls.stop(); else stopFns.push(() => controls.stop());
       }
     } catch (err) {
-      status.textContent = 'Camera unavailable — check permission in Settings.';
+      status.textContent = err && err.message === 'scanner load failed'
+        ? 'Scanner failed to load \u2014 check your connection and try again.'
+        : 'Camera unavailable \u2014 check permission in Settings.';
     }
   })();
 }

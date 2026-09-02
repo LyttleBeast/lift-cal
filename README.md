@@ -478,7 +478,7 @@ never leave the phone.
   to add a second helping as its own entry. **Copy JSON** lifts it out in the shape the paste
   box eats; on a past day, **Log on today** does the same trip without the clipboard. Library-linked foods scale by portion so the
   gram maths stays honest; everything else scales its macros directly.
-- Barcode scan uses the native `BarcodeDetector` where it exists and falls back to ZXing (WASM)
+- Barcode scan uses the native `BarcodeDetector` where it exists and falls back to ZXing (plain JS, fetched from jsDelivr and cached by the service worker)
   on iOS Safari. Lookups hit Open Food Facts; misses drop into manual entry.
 - Starter foods (Body Fortress scoop 44 g, work pizza crusts S–XL dough only, wings per oz)
   are seeded for the owner account only, once. Delete one and it stays deleted.
