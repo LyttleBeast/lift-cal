@@ -63,7 +63,8 @@
 // imports back.
 
 import { read, LS, todayKey, isOwner } from './store.js';
-import { $, el, noteEl, trimNum, r1, parseKey, fmtDate, compact, fmtDuration } from './ui.js';
+import { $, el, noteEl, trimNum, r1, parseKey, fmtDate, compact, fmtDuration, sheet } from './ui.js';
+import { assess, keysBack as keysBackI, streakOf, fmtRange } from './insights.js';
 import { allSessions, exerciseIndex, filterByRange, groupSplit, topBy, weeklyVolume,
          lineChart, barChart, ring, sparkline, heatStrip, emptyChart, legend,
          groupColor } from './analytics.js';
@@ -78,7 +79,7 @@ const DAY = 864e5;
 // Exactly the two seven-day windows the week card compares, so the water reads
 // cover both and no more. There is deliberately no water rollup node
 // (water.js:10-13) — a day is a handful of entries, summed on read.
-const WATER_DAYS = 14;
+const WATER_DAYS = 15;   // the review's two complete weeks reach back to day 14
 // Restated rather than imported: steps.js and water.js hold these as private
 // module constants, and importing either module here would drag its listeners
 // and its render loop into the boot path for one number.
@@ -269,11 +270,9 @@ function refreshLogged() {
 }
 
 /* ================= SMALL HELPERS ================= */
-function keysBack(n, endAgo = 0) {
-  const out = [];
-  for (let i = endAgo + n - 1; i >= endAgo; i--) out.push(todayKey(new Date(Date.now() - i * DAY)));
-  return out;
-}
+// The same helper insights.js walks its windows with, so the two can never
+// disagree about which seven days "this week" is.
+const keysBack = keysBackI;
 
 // Coerces and drops anything that isn't a real number before it averages. One
 // string or null in a node written by an older build is otherwise enough to
@@ -315,15 +314,38 @@ function waterUnit() {
 function stepGoal()  { return stepSet  && stepSet.goal   > 0 ? stepSet.goal   : STEP_GOAL_DEFAULT; }
 function waterGoal() { return waterSet && waterSet.goalMl > 0 ? waterSet.goalMl : WATER_GOAL_DEFAULT; }
 
-function card(title, sub) {
+/* `why` is the dots in the corner — the same ⋯ Fuel's summary card uses —
+   and it opens a short sheet saying where the card's numbers come from. It
+   is given to the cards whose number a person might reasonably doubt
+   (maintenance, a pace, a verdict) and withheld from the ones that are just
+   a picture of the log. Pass { title, body: string | string[] }. */
+function card(title, sub, why) {
   const c = el('div', 'card');
   if (title) {
     const hd = el('div', 'card-hd');
     hd.appendChild(el('div', 'eyebrow', title));
-    if (sub) hd.appendChild(el('div', 'card-sub num', sub));
+    const right = el('div', 'card-right');
+    if (sub) right.appendChild(el('div', 'card-sub num', sub));
+    if (why) {
+      const b = el('button', 'ex-menu card-why', '⋯');
+      b.setAttribute('aria-label', 'Where this comes from');
+      b.onclick = () => whySheet(why);
+      right.appendChild(b);
+    }
+    hd.appendChild(right);
     c.appendChild(hd);
   }
   return c;
+}
+
+function whySheet({ title, body, eyebrow = 'Where this comes from' }) {
+  const { sh } = sheet();
+  sh.appendChild(el('div', 'eyebrow', eyebrow));
+  sh.appendChild(el('h2', null, title));
+  (Array.isArray(body) ? body : [body]).forEach(p => {
+    if (typeof p === 'string') sh.appendChild(noteEl(p));
+    else if (p) sh.appendChild(p);
+  });
 }
 
 function section(title) {
@@ -493,37 +515,48 @@ function build() {
   const est = modelReady ? maintenance(entries, summaries) : null;
   const maint = maintInfo(est);
 
-  const s1 = section('This week');
-  s1.appendChild(weekCard(maint));
+  // One reading of the data for the whole paint. Everything the verdict
+  // cards say is derived here from the same numbers the charts draw, so a
+  // "protein on target 5 of 6 days" line and the macro rows under the fuel
+  // chart can never be counting different days.
+  const found = loaded && modelReady ? safeAssess(est, maint) : null;
+
+  // The order is the order a person wants the answers in: how am I doing,
+  // where is it heading, what happened this week, what did Rack notice, then
+  // the pictures, then the week written up. Nothing here is a wall of stats
+  // first and a meaning second.
+  const s1 = section('How you’re doing');
+  s1.appendChild(assessCard(found, 'wins'));
+  s1.appendChild(assessCard(found, 'improve'));
   wrap.appendChild(s1);
 
-  const s2 = section('Fuel');
-  s2.appendChild(fuelCard(maint));
+  const s2 = section('Goal');
+  s2.appendChild(trajectoryCard(found, est, maint));
   wrap.appendChild(s2);
 
-  const s3 = section('Body weight');
-  s3.appendChild(weightCard(maint));
+  const s3 = section('This week');
+  s3.appendChild(weekCard(maint));
   wrap.appendChild(s3);
 
-  const s4 = section('How it fits together');
-  s4.appendChild(thesisCard(est, maint));
-  wrap.appendChild(s4);
+  if (found && found.insights.length) {
+    const s4 = section('Rack noticed');
+    s4.appendChild(insightsCard(found));
+    wrap.appendChild(s4);
+  }
 
-  const s5 = section('Training');
+  const s5 = section('Trends');
+  s5.appendChild(weightCard(maint));
+  s5.appendChild(fuelCard(maint));
   s5.appendChild(trainingCard());
-  wrap.appendChild(s5);
-
-  const s6 = section('Steps and water');
   const pair = el('div', 'you-pair');
   pair.appendChild(stepsCard());
   pair.appendChild(waterCard());
-  s6.appendChild(pair);
-  s6.appendChild(noteEl('Each ring is the daily average over the days with a total, against the goal; the bars are the last seven days with the goal drawn across them. Steps deliberately don’t feed the calorie maths — that estimate already has your activity in it.'));
-  wrap.appendChild(s6);
+  s5.appendChild(pair);
+  wrap.appendChild(s5);
 
-  const s7 = section('Consistency');
-  s7.appendChild(consistencyCard());
-  wrap.appendChild(s7);
+  const s6 = section('Weekly review');
+  s6.appendChild(reviewCard(found));
+  wrap.appendChild(s6);
 
   const showInstall = !isStandalone() && !LS.get('installDismissed', false);
   const owner = isOwner();
@@ -575,8 +608,14 @@ function hero() {
   av.onclick = () => { if (loaded) pickProfilePhoto(() => { liveFp = ''; refreshLogged(); }); };
   h.appendChild(av);
 
+  // The greeting is the headline and the name rides in it, so the first
+  // words on the first screen are about the person and the time of day,
+  // not a label. First name only: "Good morning, Micah Flunker" is a letter.
+  const hr = new Date().getHours();
+  const greet = hr < 5 ? 'Good night' : hr < 12 ? 'Good morning' : hr < 17 ? 'Good afternoon' : 'Good evening';
+  const first = name === 'You' ? '' : String(name).trim().split(/\s+/)[0];
   const mid = el('div');
-  mid.appendChild(el('div', 'you-name', name));
+  mid.appendChild(el('div', 'you-name', greet + (first ? ', ' + first : '')));
   mid.appendChild(el('div', 'you-sub',
     new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })));
   h.appendChild(mid);
@@ -685,7 +724,14 @@ function weeklySeries(n) {
 }
 
 function weekCard(maint) {
-  const c = card('Against last week', 'rolling 7 days');
+  const c = card('Against last week', 'rolling 7 days', {
+    title: 'Against last week',
+    body: [
+      'Each tile is the last seven days against the seven before them. Calories and steps are averaged over the days that have a total; weight is the average of the days you weighed in; training is finished sessions. Today’s food is left out of the calorie average because the day isn’t over.',
+      'The pill is the difference between the two weeks. Green means it moved the way your goal wants — so on a cut, weight falling is green — red the other way, grey when the move is too small to matter or the goal is unknown. Calories are judged by whether the week landed nearer your target than last week did.',
+      'The line under each is the same fortnight, this week in colour, with your target dashed across it. The dots are this week’s seven days, filled where something was logged.'
+    ]
+  });
 
   const thisWk = keysBack(7, 0);
   const lastWk = keysBack(7, 7);
@@ -772,11 +818,7 @@ function weekCard(maint) {
   }));
   c.appendChild(grid);
 
-  c.appendChild(noteEl(
-    !loaded ? 'Pulling the last two weeks together…'
-    : 'The pill is how far each moved against last week; green means the way you’d want, so weight falling on a cut is green. ' +
-      'The line is the last two weeks, this week in colour, with your target dashed across it; the dots are this week’s seven days, filled where you logged. ' +
-      'Training’s bars are the last eight weeks of volume.'));
+  if (!loaded) c.appendChild(noteEl('Pulling the last two weeks together…'));
   return c;
 }
 
@@ -787,7 +829,18 @@ function carbTarget() {
 }
 
 function fuelCard(maint) {
-  const c = card('Against your targets', 'last 7 days');
+  const c = card('Against your targets', 'last 7 days', {
+    title: 'Your targets',
+    body: [
+      targets && targets.cal > 0
+        ? 'Your daily target is ' + fmtInt(targets.cal) + ' kcal, ' + Math.round(targets.p || 0) + ' g protein and ' + Math.round(targets.f || 0) + ' g fat. Carbs are whatever is left — ' + (carbTarget() || 0) + ' g — never a number you set. ' +
+          (targets.auto && targets.auto.on ? 'The targets follow your weight: protein and fat are grams per pound of trend weight and calories are maintenance shifted by your goal rate, re-checked at most once a week.'
+                                          : 'They were set by hand, or by setup from your height, weight, age and goal, and stay where they are until you change them under ⚙ Daily targets.')
+        : 'No targets are set yet. Setup writes a starting set; the gear at the top of this screen is where they live.',
+      maint ? 'Maintenance — what holds your weight steady — is ' + fmtInt(maint.cal) + ' kcal' + (maint.pinned ? ', a fixed number rather than a measured one.' : ', measured from what you ate against what the scale did.') + ' Your target sits ' + fmtInt(Math.abs(targets.cal - maint.cal)) + ' ' + (targets.cal < maint.cal ? 'under' : 'over') + ' it.' : 'Maintenance is not known yet, so the chart shows only the target.',
+      'The bars are each day’s calories split into what they were made of; the rows are the week’s average against each target, today left out because it isn’t over. Protein reads green from 95% of target; carbs and fat within 10% either side.'
+    ]
+  });
 
   if (!loaded) {
     c.appendChild(noteEl('Reading your food log…'));
@@ -893,9 +946,7 @@ function fuelCard(maint) {
   });
   c.appendChild(list);
 
-  c.appendChild(noteEl('Averaged over the ' + logged.length + ' of the last 7 days you logged food, today left out because it isn’t over. ' +
-    'The dashed line is your daily target' + (lines.length ? ', the dotted one your maintenance' : '') +
-    '. Carbs are the remainder — calories left after protein and fat, never a number you set.'));
+  c.appendChild(noteEl('Averaged over the ' + logged.length + ' of the last 7 days you logged food. Dashed is your target' + (lines.length ? ', dotted your maintenance' : '') + '.'));
   return c;
 }
 
@@ -929,7 +980,14 @@ function latestWeighIn() {
 }
 
 function weightCard(maint) {
-  const c = card('Body weight', 'last 45 days');
+  const c = card('Body weight', 'last 45 days', {
+    title: 'The weight trend',
+    body: [
+      'The yellow line is the daily average of your weigh-ins. The dashed line is the trend: every reading first corrected for the food and water that were in you when you stood on the scale — a weigh-in after dinner runs pounds heavier than one before breakfast, and the model learns your own numbers for that from the log — then smoothed so a week of wobble reads as one slope.',
+      'The rate beside the headline is that slope in pounds a week, with a ✓ when it comes from the fitted model rather than the plain seven-day averages. The 30-day arrow is the first and last daily average in the window. Both are green when they move the way your goal wants and amber the other way.',
+      'Weighing more than once a day is a feature: two readings a day is what lets the model learn how much of a reading is breakfast.'
+    ]
+  });
 
   if (!loaded) {
     c.appendChild(noteEl('Reading your weigh-ins…'));
@@ -1034,95 +1092,21 @@ function weightCard(maint) {
     sr.style.marginTop = '12px';
     c.appendChild(sr);
   }
-  if (tw != null && Number.isFinite(tw)) {
-    c.appendChild(noteEl('The yellow line is the daily average of your weigh-ins, the dashed one the normalised trend — every reading corrected for what food and water were in you when you stood on the scale — and the dots are each time you weighed in.'));
-  } else if (pts.length >= 2) {
-    c.appendChild(noteEl('The daily average of every weigh-in. Weighing twice in a day is what lets Rack learn how much of a reading is breakfast.'));
-  } else {
+  if (pts.length < 2) {
     c.appendChild(noteEl('One reading is a data point. A handful across a fortnight is a trend — and the trend is what the rate, the targets and your maintenance number are all built on.'));
-  }
-  return c;
-}
-
-/* ================= THE THESIS ================= */
-/* The one card that says out loud how the four tabs are connected, by printing
-   the arithmetic instead of asserting the answer. The shift is derived FROM the
-   total rather than computed alongside it: both maintenance paths round the
-   result to ten and neither rounds its operands, so a shift worked out
-   independently gives sums that don't add up on screen. */
-function thesisCard(est, maint) {
-  const c = card('How it fits together');
-
-  if (!loaded || !modelReady) {
-    c.appendChild(noteEl('Working out where your numbers sit…'));
-    return c;
-  }
-
-  const line = (op, big, why, eq) => {
-    const row = el('div', 'thesis-line' + (eq ? ' thesis-eq' : ''));
-    row.appendChild(el('span', 'thesis-op', op));
-    row.appendChild(el('b', null, big));
-    row.appendChild(el('span', null, why));
-    return row;
-  };
-
-  const avg = est && Number.isFinite(est.avgIntake) ? Math.round(est.avgIntake) : null;
-
-  if (!maint) {
-    const need = est && est.need && est.need.length ? est.need.join(' and ') : 'a little more logging';
-    c.appendChild(noteEl('This is where your intake, your scale and your maintenance number meet — and it needs ' +
-      need + ' before it can show its working. Nothing here has to be set up; it arrives on its own.'));
-    return c;
-  }
-
-  if (avg == null) {
-    // A pinned maintenance number with nothing logged to weigh it against.
-    c.appendChild(noteEl('Maintenance is pinned at ' + maint.cal.toLocaleString() +
-      ' kcal. Log a week of food beside your weigh-ins and this card will check that number against what your body actually did with it.'));
-    return c;
-  }
-
-  // Derived from the total, never computed alongside it — that is what makes
-  // the three lines add up on screen.
-  const shift = Math.abs(maint.cal - avg);
-  const up    = maint.cal >= avg;
-  const rate  = est && Number.isFinite(est.rateWk) ? est.rateWk : null;
-
-  // Never "the number you pinned": setup writes a Mifflin-St Jeor estimate into
-  // food/targets.maint for everybody who did not skip it (onboarding.js:507), so
-  // a fixed number is the normal state and telling most people they chose it is
-  // simply false. Nothing in the schema records who wrote it, so the copy stays
-  // authorship-neutral and talks about the number instead of the author.
-  const why = maint.pinned
-    ? (up ? 'the gap between that and the maintenance number Rack is holding'
-          : 'how far over that fixed maintenance number this sits')
-    : rate == null || Math.abs(rate) < 0.05
-      ? 'your weight held steady, so there is almost nothing to correct for'
-      : up ? 'the deficit your scale says you were in, at ' + r1(Math.abs(rate)) + ' lb a week down'
-           : 'the surplus your scale says you were in, at ' + r1(Math.abs(rate)) + ' lb a week up';
-
-  const thesis = el('div', 'thesis');
-  thesis.appendChild(line('', avg.toLocaleString(),
-    'eaten per day, averaged over ' + (est.days || 0) + ' logged day' + (est.days === 1 ? '' : 's')));
-  thesis.appendChild(line(up ? '+' : '−', shift.toLocaleString(), why));
-  thesis.appendChild(line('=', maint.cal.toLocaleString(),
-    maint.pinned ? 'maintenance — fixed, not measured' : 'maintenance — what holds you steady', true));
-  c.appendChild(thesis);
-
-  c.appendChild(noteEl(maint.pinned
-    ? 'This maintenance number is fixed rather than measured — either setup worked it out from your height, weight, age and activity, or you typed it. Rack uses it everywhere instead of its own estimate until it is cleared. Clear the maintenance box under Daily targets in the gear and it goes back to measuring from your own data, which after a couple of weeks is the better number.'
-    : 'Nobody typed any of this. Roughly 3,500 kcal is a pound, so a pound a week is 500 a day — average what you ate, correct it by which way the scale went, and what is left is what your body spends. Fuel draws the cut / maintain / gain marks off this same number.'));
-
-  if (!maint.pinned && est && est.se) {
-    const ci = Math.round(1.96 * est.se / 5) * 5;
-    c.appendChild(noteEl('± ' + ci.toLocaleString() + ' kcal — the interval is the honest part. A single number invites chasing noise.'));
   }
   return c;
 }
 
 /* ================= TRAINING ================= */
 function trainingCard() {
-  const c = card('Training', 'last 30 days');
+  const c = card('Training', 'last 30 days', {
+    title: 'Training numbers',
+    body: [
+      'Volume is weight × reps over working sets — warm-ups never count, on this screen or anywhere else. The three numbers and the muscle split are the last 30 days; the bars are total volume by calendar week, Sunday to Saturday, with the session count over each and this week faded because it isn’t over.',
+      'Strongest lifts are ranked by estimated one-rep max from your best working set, using the Epley formula (weight × (1 + reps ÷ 30)). It is an estimate, and a better one for sets of eight or fewer. Records are derived from the log every time, never stored, so editing a session can never leave a stale one behind.'
+    ]
+  });
 
   if (sessions === null) {
     c.appendChild(noteEl('Reading your training history…'));
@@ -1212,8 +1196,6 @@ function trainingCard() {
       c.appendChild(row);
     });
   }
-  c.appendChild(noteEl('The numbers and the split are the last 30 days, ' + inRange.length + ' session' + (inRange.length === 1 ? '' : 's') +
-    '; the bars are total volume by calendar week, this week faded because it isn’t over. Lifts are ranked by estimated 1RM from your best working set — warm-ups never count.'));
   return c;
 }
 
@@ -1334,67 +1316,258 @@ function waterCard() {
   });
 }
 
-/* ================= CONSISTENCY ================= */
-function consistencyCard() {
-  const c = card('Days on record', 'last 13 weeks');
+/* ================= WHAT RACK MAKES OF IT =================
+   The verdict cards. All four read from one assess() over the same numbers
+   the charts draw, done once per paint in build(). The context handed to it
+   is exactly this module's state plus the two model outputs, so there is no
+   second copy of anything to drift. */
+function safeAssess(est, maint) {
+  try {
+    const tr = trendRate(entries);
+    const tw = trendWeight();
+    const s  = weightStats(entries);
+    return assess({
+      targets, maint, dir: goalDir(maint), summaries, wmap: weighDayMap(), entries,
+      rate: tr && Number.isFinite(tr.rateWk) ? tr : null,
+      tw: tw != null && Number.isFinite(tw) ? tw : null,
+      sessions, stepDays, stepGoal: stepGoal(), waterDays, waterGoal: waterGoal(),
+      est, days: s.days || []
+    });
+  } catch {
+    return null;
+  }
+}
 
-  if (!loaded) {
-    c.appendChild(noteEl('Counting…'));
+const SUBJECT_COLOR = {
+  fuel: C_FUEL, weight: C_WEIGHT, train: C_TRAIN, steps: C_STEPS, water: C_WATER, all: 'var(--chalk)'
+};
+
+/* One line per finding: a coloured mark for the subject, the finding, and
+   the detail under it. Tapping a row opens its `why` — the rule it was made
+   by, in plain words — because a verdict with no working is the one thing
+   this screen refuses to be. */
+function findingRow(f, tone) {
+  const row = el('button', 'find-row' + (tone ? ' ' + tone : ''));
+  const mark = el('i', 'find-mark');
+  mark.style.background = SUBJECT_COLOR[f.subject] || 'var(--steel)';
+  row.appendChild(mark);
+  const body = el('div', 'find-body');
+  body.appendChild(el('div', 'find-t', f.title));
+  if (f.detail) body.appendChild(el('div', 'find-d', f.detail));
+  row.appendChild(body);
+  row.onclick = () => whySheet({ eyebrow: 'How Rack decided', title: f.title, body: [f.why] });
+  return row;
+}
+
+function assessCard(found, kind) {
+  const wins = kind === 'wins';
+  const c = card(wins ? 'Doing well' : 'Could improve', null, {
+    title: 'How these are chosen',
+    body: [
+      'Every time this screen paints, Rack checks about a dozen things over the last seven days against the same targets the other tabs use: how many days were logged, protein and calories against target, which way the trend weight is moving for your goal, sessions, steps, water, and the streak.',
+      'Each check has a plain bar — “protein on at least four of five logged days”, “trend down at least 0.3 lb a week on a cut” — and only the ones clearly on one side of their bar make the lists. The three that matter most are shown; tap any line for the exact rule behind it.',
+      'Nothing here is generated. If a line cannot be checked against a number on another tab, it is not made.'
+    ]
+  });
+  c.classList.add(wins ? 'card-wins' : 'card-improve');
+
+  if (!found) {
+    c.appendChild(noteEl(loaded ? 'Working out where your numbers sit…' : 'Reading your log…'));
+    return c;
+  }
+  const list = found[kind];
+  if (!list.length) {
+    c.appendChild(noteEl(wins
+      ? 'Nothing has cleared the bar yet this week. A few logged days is usually all it takes.'
+      : 'Nothing is slipping that Rack can see. Keep going.'));
+    return c;
+  }
+  const wrap = el('div', 'find-list');
+  list.forEach(f => wrap.appendChild(findingRow(f, wins ? 'good' : 'warn')));
+  c.appendChild(wrap);
+  return c;
+}
+
+/* ================= GOAL TRAJECTORY ================= */
+function trajectoryCard(found, est, maint) {
+  const t = found ? found.trajectory : null;
+  const dirWord = d => d < 0 ? 'Cutting' : d > 0 ? 'Bulking' : 'Maintaining';
+
+  // The card's ⋯ is where the old "how it fits together" card went: the
+  // arithmetic behind maintenance and the pace, with the reader's numbers in
+  // it, derived from the estimate's own total so the sums close on screen.
+  const why = { title: 'Where this is heading', body: [] };
+  if (maint) {
+    const avg = est && Number.isFinite(est.avgIntake) ? Math.round(est.avgIntake) : null;
+    if (maint.pinned) {
+      why.body.push('Maintenance is fixed at ' + fmtInt(maint.cal) + ' kcal — either setup worked it out from your height, weight, age and activity, or you typed it. Rack uses it everywhere instead of its own estimate until it is cleared under ⚙ Daily targets, and after a couple of weeks of weigh-ins the measured number is the better one.');
+    } else if (avg != null) {
+      const shift = Math.abs(maint.cal - avg);
+      const rate  = est && Number.isFinite(est.rateWk) ? est.rateWk : null;
+      why.body.push('Nobody typed your maintenance. You averaged ' + fmtInt(avg) + ' kcal a day over ' + (est.days || 0) + ' logged days; the scale ' +
+        (rate == null || Math.abs(rate) < 0.05 ? 'held steady, so that is about what you spend' :
+         'went ' + (rate < 0 ? 'down' : 'up') + ' ' + r1(Math.abs(rate)) + ' lb a week, which at roughly 3,500 kcal a pound is ' + fmtInt(shift) + ' a day ' + (rate < 0 ? 'more' : 'less') + ' than you ate') +
+        ' — so maintenance is ' + fmtInt(maint.cal) + ' kcal' + (est && est.se ? ', give or take ' + fmtInt(Math.round(1.96 * est.se / 5) * 5) : '') + '.');
+    }
+  } else {
+    why.body.push('Maintenance is not known yet. It needs ' + (est && est.need && est.need.length ? est.need.join(' and ') : 'a couple of weeks of food and weigh-ins') + ', and it arrives on its own.');
+  }
+  why.body.push('The pace is the slope of your trend weight — every weigh-in corrected for the food and water in you at the time, then smoothed. It is not projected from fewer than two weeks of weigh-ins, and no finish date is printed more than two years out, because a slope over a handful of readings is noise dressed as a plan.');
+  if (t && t.goalLb && t.start != null) {
+    why.body.push('Progress runs from your first recorded daily average, ' + trimNum(t.start) + ' lb on ' + fmtDate(t.startDate) + ', to your goal of ' + trimNum(t.goalLb) + '. The finish date is the distance left divided by the current pace, and it moves as the pace does.');
+  }
+
+  const c = card('Goal', t ? dirWord(t.dir).toLowerCase() : null, why);
+
+  if (!loaded || !modelReady) {
+    c.appendChild(noteEl('Working out where your numbers sit…'));
+    return c;
+  }
+  if (!t) {
+    c.appendChild(noteEl('No goal is set. Setup asks whether you are cutting, maintaining or bulking; the rate under ⚙ Daily targets is where it lives now.'));
+    c.appendChild(goalBtn('Set a goal'));
     return c;
   }
 
-  // Every day this account has anything for, weighted by how many kinds of
-  // thing landed on it — that weight is what shades the heat map, so a day
-  // with a meal, a weigh-in and a session is brighter than one with a step
-  // total. weight/entries is keyed by weigh-in id, so its days only exist
-  // after mapping the timestamps through todayKey. Water is left out on
-  // purpose: only the last fourteen days of it are loaded, and a count that
-  // grows when a background read lands is worse than a count that never
-  // claimed to include it.
+  // Headline: the pace, judged. Then the goal weight and the finish date
+  // when there is one, then the progress bar when there is a start and an
+  // end to run it between.
+  const hl = el('div', 'headline');
+  const dot = el('i', 'traj-dot ' + (t.status === 'on' || t.status === 'ahead' ? 'good' : t.status === 'wrong' || t.status === 'drift' ? 'bad' : t.status ? 'warn' : ''));
+  hl.appendChild(dot);
+  if (t.enough && t.rate != null) {
+    hl.appendChild(el('span', 'headline-v num', r1(Math.abs(t.rate)) + ''));
+    hl.appendChild(el('span', 'headline-u', 'lb / week ' + (t.rate < 0 ? 'down' : t.rate > 0 ? 'up' : 'flat')));
+  } else {
+    hl.appendChild(el('span', 'headline-v num', '–'));
+    hl.appendChild(el('span', 'headline-u', 'lb / week'));
+  }
+  c.appendChild(hl);
+  c.appendChild(el('div', 'traj-reason', t.reason));
+
+  if (t.goalLb) {
+    const cells = [
+      [t.tw != null ? trimNum(t.tw) : '–', 'Trend now'],
+      [trimNum(t.goalLb), 'Goal lb']
+    ];
+    if (t.weeks === 0) cells.push(['✓', 'At goal']);
+    else if (t.eta) cells.push([t.eta.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + (t.eta.getFullYear() !== new Date().getFullYear() ? ' ’' + String(t.eta.getFullYear()).slice(2) : ''), 'At this pace']);
+    else if (t.weeks != null) cells.push(['2 yr +', 'At this pace']);
+    else cells.push(['–', 'At this pace']);
+    const sr = statRow(cells);
+    sr.style.marginTop = '12px';
+    c.appendChild(sr);
+
+    if (t.progress != null) {
+      const bar = el('div', 'traj-bar');
+      const fill = el('div', 'traj-fill');
+      fill.style.width = Math.round(t.progress * 100) + '%';
+      fill.style.background = t.status === 'wrong' || t.status === 'drift' ? 'var(--warn)' : C_WEIGHT;
+      bar.appendChild(fill);
+      c.appendChild(bar);
+      const ends = el('div', 'traj-ends');
+      ends.appendChild(el('span', 'num', trimNum(t.start) + ' lb · ' + fmtDate(t.startDate)));
+      ends.appendChild(el('span', 'num', Math.round(t.progress * 100) + '% there'));
+      ends.appendChild(el('span', 'num', trimNum(t.goalLb) + ' lb'));
+      c.appendChild(ends);
+    }
+  } else if (t.dir !== 0) {
+    c.appendChild(noteEl('Set a goal weight and this card works out when you would reach it at the current pace.'));
+    c.appendChild(goalBtn('Set a goal weight'));
+  }
+  return c;
+}
+
+function goalBtn(label) {
+  const b = el('button', 'btn btn-ghost btn-block', label);
+  b.style.marginTop = '12px';
+  b.onclick = () => openSettings(() => { liveFp = ''; refreshLogged(); });
+  return b;
+}
+
+/* ================= INSIGHTS ================= */
+function insightsCard(found) {
+  const c = card('Rack noticed', null, {
+    title: 'What counts as noticing',
+    body: [
+      'These are patterns over time rather than the state of the week: volume up or down a quarter on last week, a new record, a muscle group missed for four weeks, weekends running higher than weekdays, a pace well off the plan, steps changing by a quarter, a month mostly on record.',
+      'Each has a plain bar, written on the line itself when you tap it. Only what clears the bar is shown, four at most, and nothing is padded out to fill the card — most weeks there will be one or two, some weeks none, and then the card is not drawn at all.'
+    ]
+  });
+  const wrap = el('div', 'find-list');
+  found.insights.forEach(f => wrap.appendChild(findingRow(f, 'note')));
+  c.appendChild(wrap);
+  return c;
+}
+
+/* ================= WEEKLY REVIEW ================= */
+function reviewCard(found) {
+  const r = found ? found.review : null;
+  const c = card('Weekly review', r ? fmtRange(r.from, r.to) : null, {
+    title: 'The weekly review',
+    body: [
+      'The last seven complete days — yesterday and the six before it — against the seven before those. Complete days on purpose: a review that included today would change every time you read it.',
+      'Each line is judged against the same targets the other tabs use: at least two sessions; five of seven days logged; calories within 6% of target (or not more than 10% the wrong way for your goal); protein on at least seven in ten logged days; weight moving the way your goal wants; steps at 95% of goal; water at goal on four days. Lines that fall clearly short go under attention, lines clearly over go under going well, and the rest are simply reported.',
+      'The takeaway is chosen by leverage, not size: logging comes before protein, protein before training, training before calories — because fixing the earlier one is what makes the later ones measurable.'
+    ]
+  });
+
+  if (!r) {
+    c.appendChild(noteEl(loaded ? 'Writing the week up…' : 'Reading your log…'));
+    return c;
+  }
+
+  c.appendChild(el('div', 'review-verdict', r.verdict));
+
+  const block = (title, items, tone) => {
+    if (!items.length) return;
+    c.appendChild(el('div', 'chart-sub', title));
+    const list = el('div', 'review-list');
+    items.forEach(i => {
+      const row = el('div', 'review-row ' + tone);
+      const mark = el('i', 'find-mark');
+      mark.style.background = SUBJECT_COLOR[i.subject] || 'var(--steel)';
+      row.appendChild(mark);
+      const body = el('div', 'find-body');
+      body.appendChild(el('div', 'find-t', i.label + ' · ' + i.value));
+      body.appendChild(el('div', 'find-d', i.text));
+      row.appendChild(body);
+      list.appendChild(row);
+    });
+    c.appendChild(list);
+  };
+  block('Going well', r.positives, 'good');
+  block('Needs attention', r.attention, 'warn');
+  block('Also this week', r.items.filter(i => i.ok == null), 'flat');
+
+  const tk = el('div', 'review-take');
+  tk.appendChild(el('div', 'chart-sub', 'Next week'));
+  tk.appendChild(el('div', 'review-take-t', r.takeaway));
+  c.appendChild(tk);
+
+  // Days on record, as the picture under the write-up: everything the
+  // account has anything for, brighter the more kinds of thing landed on a
+  // day. weight/entries is keyed by weigh-in id, so its days only exist
+  // after mapping through todayKey; water is left out on purpose, because
+  // only a fortnight of it is loaded.
   const rec = {};
   const bump = k => { rec[k] = (rec[k] || 0) + 1; };
   Object.entries(summaries || {}).forEach(([k, v]) => { if (v && v.cal > 0) bump(k); });
   Object.keys(weighDayMap()).forEach(bump);
   Object.entries(stepDays || {}).forEach(([k, v]) => { if (v && v.steps > 0) bump(k); });
   new Set((sessions || []).map(s => s && s._date).filter(Boolean)).forEach(bump);
-
   const keys = Object.keys(rec);
-  if (!keys.length) {
-    c.appendChild(noteEl('Nothing on record yet. A meal, a weigh-in, a workout or a step count — any one of them puts a day on this list, and everything else on this screen is built out of them.'));
-    return c;
+  if (keys.length) {
+    c.appendChild(el('div', 'chart-sub', 'Days on record · 13 weeks'));
+    c.appendChild(heatStrip(rec, 91));
+    const streak = streakOf({ summaries, wmap: weighDayMap(), stepDays, sessions });
+    const sr = statRow([
+      [streak, 'Day streak'],
+      [keysBack(30).filter(k => rec[k]).length + ' / 30', 'Last 30 days'],
+      [keys.length.toLocaleString(), 'All time']
+    ]);
+    c.appendChild(sr);
   }
-
-  const last30 = keysBack(30).filter(k => rec[k]).length;
-
-  // Counted back from today, or from yesterday when today is still empty — you
-  // shouldn't lose a streak at eight in the morning. Bounded because a streak
-  // is only ever as long as the record behind it.
-  let streak = 0;
-  let d = new Date();
-  if (!rec[todayKey(d)]) d = new Date(d.getTime() - DAY);
-  for (let i = 0; i < keys.length + 2; i++) {
-    if (!rec[todayKey(d)]) break;
-    streak++;
-    d = new Date(d.getTime() - DAY);
-  }
-
-  c.appendChild(heatStrip(rec, 91));
-
-  c.appendChild(statRow([
-    [streak, 'Day streak'],
-    [last30 + ' / 30', 'Last 30 days'],
-    [keys.length.toLocaleString(), 'All time']
-  ]));
-
-  // YYYY-MM-DD sorts as it dates. The year only earns its place once the record
-  // reaches back past this one.
-  const first = keys.sort()[0];
-  const firstD = parseKey(first);
-  const firstLbl = firstD.getFullYear() === new Date().getFullYear()
-    ? fmtDate(first) : fmtDate(first) + ', ' + firstD.getFullYear();
-  c.appendChild(noteEl('Since ' + firstLbl +
-    '. A day lights up once anything at all landed on it, and brighter the more kinds of thing did — food, a weigh-in, a session, a step total.' +
-    (sessions === null ? ' Training days are still loading.' : '')));
   return c;
 }
 

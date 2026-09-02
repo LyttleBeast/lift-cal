@@ -42,7 +42,7 @@ import { LS, uid, todayKey, readShared, updateShared } from './store.js';
 
 // Must be bumped alongside CACHE in sw.js. It is duplicated rather than
 // imported because sw.js is a service worker, not a module the app can load.
-const VERSION = 'rack-v18';
+const VERSION = 'rack-v19';
 
 /* ---------- the vocabulary ----------
    Closed, and exported so admin.js renders from this list rather than from

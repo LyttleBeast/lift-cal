@@ -91,6 +91,7 @@ node in the database. See *Access* below for what replaced them, and why.
 | `index.html` | The only markup: auth gate, five empty views, bottom dock |
 | `app.js` | Shell — sign-in/sign-up, access gate, boot order, tab router, service worker |
 | `you.js` | You tab — the screen the app opens on. Read-only; every number is re-derived |
+| `insights.js` | What Rack makes of the data — wins, slips, insights, the weekly review, the goal pace. Pure functions over what `you.js` loaded |
 | `settings.js` | The settings hub behind the You gear, and the profile editor |
 | `admin.js` | Owner-only panel — feature usage, AI allowances, People & access |
 | `usage.js` | Counters-only telemetry: the `usage/{uid}` ledger, and platform detection |
@@ -547,7 +548,7 @@ never leave the phone.
   correction the model is applying, stated back to you.
 - Steps are deliberately **not** an input. This estimator is empirical — activity is already
   inside the scale trend, and adding a step term would double-count it.
-- The public API lives in `tdee.js` because Fuel's calorie bar and the You tab's thesis
+- The public API lives in `tdee.js` because Fuel's calorie bar and the You tab's goal
   card need the same number, and three copies of it is how three screens start
   disagreeing. `weightmodel.js` holds the math.
 

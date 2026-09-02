@@ -2677,7 +2677,9 @@ export function openRecallList() {
 }
 
 /* ================= TARGETS ================= */
-export function openTargets() {
+/* `onSaved` is for the screen behind the sheet — You's goal card quotes the
+   goal weight and the rate — so it can repaint the moment they change. */
+export function openTargets(onSaved) {
   const { sh, close } = sheet();
   sh.appendChild(el('h2', null, 'Daily targets'));
 
@@ -2824,15 +2826,32 @@ export function openTargets() {
       '. Leave this blank to keep following that estimate, or type your own number to pin the cut / maintain / gain marks.'
     : 'The estimate needs ' + est.need.join(' and ') + '. Type a number here to draw the zones in the meantime.'));
 
+  /* ---------- goal weight (shared) ----------
+     Read by nothing on this tab. It is the finish line for the goal card on
+     You, which works out a date from the trend's pace; it lives here because
+     this is where the goal's rate already lives, and a goal is one thing. */
+  const tg = el('div', 'field');
+  tg.style.marginTop = '14px';
+  tg.appendChild(el('label', null, 'Goal weight (lb)'));
+  const gw = el('input');
+  gw.type = 'number'; gw.inputMode = 'decimal'; gw.step = '0.5';
+  gw.value = targets.goalLb > 0 ? targets.goalLb : '';
+  gw.placeholder = 'optional';
+  tg.appendChild(gw);
+  sh.appendChild(tg);
+  sh.appendChild(noteEl('Optional. With a goal weight, the You tab shows how far along you are and roughly when you would get there at your current pace.'));
+
   /* ---------- save ---------- */
   const save = el('button', 'btn btn-primary btn-block', 'Save');
   save.style.marginTop = '14px';
   save.onclick = async () => {
     const maint = parseInt(mi.value) > 0 ? parseInt(mi.value) : null;
+    const g = parseFloat(gw.value);
+    const goalLb = g >= 50 && g <= 700 ? Math.round(g * 10) / 10 : null;
 
     if (mode === 'auto') {
       const a = readAuto();
-      targets = { ...targets, maint, auto: a };
+      targets = { ...targets, maint, goalLb, auto: a };
       // Apply straight away rather than waiting out the weekly gate — he just
       // asked for these numbers.
       const m2 = maintInfo();
@@ -2844,6 +2863,7 @@ export function openTargets() {
       }
       await write('food/targets', targets);
       close(); render();
+      if (onSaved) onSaved();
       toast(n ? 'Following your weight \u2014 ' + n.cal.toLocaleString() + ' kcal, ' + n.p + 'g protein'
               : 'Saved \u2014 targets will follow once there is enough data');
       return;
@@ -2854,11 +2874,12 @@ export function openTargets() {
       cal: parseInt(tc.input.value) || 2700,
       p: parseInt(tp.input.value) || 215,
       f: parseInt(tf.input.value) || 80,
-      maint,
+      maint, goalLb,
       auto: { ...auto, on: false }
     };
     await write('food/targets', targets);
     close(); render(); toast('Targets saved');
+    if (onSaved) onSaved();
   };
   sh.appendChild(save);
 

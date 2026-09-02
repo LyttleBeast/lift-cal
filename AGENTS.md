@@ -269,13 +269,20 @@ Integer sums of that day's log. The maintenance estimate reads this, not the raw
 log, so a stale summary skews the TDEE number for two weeks. The app recomputes
 it on every change to a day.
 
-## `food/targets` → `{ cal, p, f, maint, auto }`
+## `food/targets` → `{ cal, p, f, maint, goalLb, auto }`
 
 Daily goals. Carbs are the remainder: `(cal − p×4 − f×9) / 4`, never stored.
 `maint` anchors the cut / maintain / gain marks on the calorie bar; `null` means
 "estimate it from the weight trend". Onboarding writes a Mifflin-St Jeor number
 here so day one is not a blank guess, and the measured estimate takes over on
 its own once there are two weeks of real data.
+
+`goalLb` is optional and is the finish line for the You tab's goal card, which
+divides the distance left by the trend's pace to print a date. It lives here
+rather than on `profile` because `auto.rateWk` — the goal's direction and
+speed — already does, and a goal is one thing. Nothing on Fuel reads it.
+`profile` ends in `$other: false`; this node has no validation block, so the
+key needed no rules change.
 
 ```json
 { "cal": 2300, "p": 210, "f": 74, "maint": null,

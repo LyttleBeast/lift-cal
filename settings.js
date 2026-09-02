@@ -133,7 +133,7 @@ export function openSettings(onEdit) {
 
   /* ---- fuel ---- */
   const fuel = rowList(section(sh, 'Fuel'));
-  navRow(fuel, 'Daily targets', targetPill(), () => { close(); openTargets(); });
+  navRow(fuel, 'Daily targets', targetPill(), () => { close(); openTargets(onEdit); });
   navRow(fuel, 'Water goal and sizes', waterPill(), () => { close(); openWaterSettings(latestLb(), onEdit); });
   navRow(fuel, 'AI estimator', aiPill(), () => { close(); openAiSettings(); });
   navRow(fuel, 'Food memory', null, () => { close(); openRecallList(); });
