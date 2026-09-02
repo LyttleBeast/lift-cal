@@ -494,7 +494,14 @@ function renderFab() {
 
 function renderSummary() {
   const t = totals();
-  const card = el('div', 'card');
+  const card = el('div', 'card fuel-sum');
+
+  // The bar is the most information on the tab in the least space, and none
+  // of it is labelled with more than one word. The dots open the key.
+  const more = el('button', 'ex-menu fuel-more', '⋯');
+  more.setAttribute('aria-label', 'What the bar means');
+  more.onclick = () => openBarGuide(t);
+  card.appendChild(more);
 
   const top = el('div', 'fuel-top');
   const remain = targets.cal - t.cal;
@@ -2976,4 +2983,89 @@ function confirmImport(entries, sourceLabel) {
   cancel.style.marginTop = '8px';
   cancel.onclick = close;
   sh.appendChild(cancel);
+}
+
+/* ================= THE BAR, EXPLAINED =================
+   Opened from the dots on the summary card. Every row is one thing on the
+   card, with the reader's own numbers in it: "below 2,510" is a fact they can
+   check against the bar behind the sheet, "below maintenance minus the band"
+   is homework. The rows are built from the same maintInfo() / calorieZones()
+   the bar is drawn from, so the two can never disagree. */
+function openBarGuide(t) {
+  const { sh } = sheet();
+  sh.appendChild(el('div', 'eyebrow', 'Fuel'));
+  sh.appendChild(el('h2', null, 'Reading the bar'));
+
+  const mi = maintInfo();
+  const z  = mi ? calorieZones(mi.cal) : null;
+  const remain = targets.cal - t.cal;
+  const n = v => Math.round(v).toLocaleString();
+
+  const list = el('div', 'guide');
+  const row = (swCls, title, text) => {
+    const r = el('div', 'guide-row');
+    r.appendChild(el('i', 'guide-sw ' + swCls));
+    const body = el('div', 'guide-body');
+    body.appendChild(el('div', 'guide-t', title));
+    body.appendChild(el('div', 'guide-d', text));
+    r.appendChild(body);
+    list.appendChild(r);
+  };
+
+  row('big', 'The big number',
+    (remain < 0 ? n(-remain) + ' over your target' : n(remain) + ' kcal left') +
+    ' today. It counts down from your daily target, ' + n(targets.cal) + ', as you log food' +
+    (z ? ', and its colour is the band you are in right now.' : '.'));
+
+  row('eaten', 'Eaten · target',
+    'What you have logged so far, ' + n(t.cal) + ', and the number you eat to, ' + n(targets.cal) +
+    '. The target is yours to set under ⚙ Daily targets; it is not the same thing as maintenance.');
+
+  if (z) {
+    const g = goalSign(z.maint);
+    row('head', 'The bar',
+      'A window onto the day’s calories. The white head is where you are now and moves right as you eat. ' +
+      'The window leans toward your goal — ' +
+      (g < 0 ? 'you are cutting, so most of it is the blue band.'
+      : g > 0 ? 'you are bulking, so most of it is the red band.'
+      :         'you are maintaining, so the yellow band is the widest.'));
+    row('cut', 'Blue — cut',
+      'Below ' + n(z.cutTop) + ' kcal. Finish the day here and you are in a deficit: your body makes up the difference from stored fat.');
+    row('hold', 'Yellow — hold',
+      n(z.cutTop) + ' to ' + n(z.gainFrom) + ' kcal. Within ' + n(z.band) + ' either side of maintenance, ' +
+      'which is close enough that the scale will not move in any direction that matters.');
+    row('gain', 'Red — gain',
+      'Above ' + n(z.gainFrom) + ' kcal. A surplus; what the body cannot use it stores, as muscle if you are training for it and as fat otherwise.');
+    row('tick', 'The two solid ticks',
+      'The edges of the yellow band — ' + n(z.cutTop) + ' and ' + n(z.gainFrom) + '. Maintenance itself is the middle of the band, ' + n(z.maint) + '.');
+    row('target', 'The dashed mark',
+      'Your daily target, ' + n(targets.cal) + '. Where it falls tells you what eating to it does: ' +
+      (targets.cal < z.cutTop ? 'it is in the blue, so hitting it every day is a cut.'
+      : targets.cal > z.gainFrom ? 'it is in the red, so hitting it every day is a bulk.'
+      :                            'it is in the yellow, so hitting it every day holds your weight.'));
+    // The same window arithmetic renderCalMeter uses, so the number here is
+    // the runway's real edge and not an approximation of it.
+    const lo = Math.max(0, Math.round(Math.min(
+      z.cutTop - (g < 0 ? 3 : 1) * z.band, targets.cal - z.band / 2) / 50) * 50);
+    row('runway', 'The striped strip',
+      lo > 0
+        ? 'The first ' + n(lo) + ' kcal of the day, squeezed into a short runway so the head still moves through breakfast. Nothing is decided there yet.'
+        : 'Appears when the bar starts above zero: the calories below the window, squeezed into a short runway.');
+    row('status', 'The line under the bar',
+      'The word for the band you are in, and how far you sit from maintenance right now. ' +
+      '“maint ' + n(z.maint) + (mi.auto
+        ? ' est.” means Rack measured that number from your weigh-ins against what you ate — it moves as it learns.'
+        : '” is a number that was typed in or set at setup; clear it under ⚙ Daily targets and Rack measures its own.'));
+  } else {
+    row('head', 'The bar',
+      'The white head is where you are now and moves right as you eat; the dashed mark is your target. ' +
+      'The blue, yellow and red bands appear once Rack knows your maintenance — either type one under ⚙ Daily targets, or log a week of food alongside daily weigh-ins and it measures its own.');
+  }
+
+  row('macro', 'Protein · Carbs · Fat',
+    'Grams so far against each target. Protein is a floor — at or above it is the point. Carbs are whatever is left after protein and fat, never a number you set: ' +
+    n(targets.p) + ' g protein and ' + n(targets.f) + ' g fat leave ' + n(carbsTarget()) + ' g of carbs inside ' + n(targets.cal) + ' kcal.');
+
+  sh.appendChild(list);
+  sh.appendChild(noteEl('Roughly 3,500 kcal is a pound, so a pound a week is about 500 a day. Every number on this sheet is live — open it again tomorrow and it will have moved with you.'));
 }
