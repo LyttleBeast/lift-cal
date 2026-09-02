@@ -45,14 +45,29 @@ AI_PHOTO_PER_DAY  = "3"
 AI_TEXT_PER_DAY   = "3"
 
 # The one that actually protects the money. Dollars of Anthropic usage per
-# calendar month, counted from Anthropic's own token numbers, PER ACCOUNT — the
-# running total lives in KV under q:{uid}, so this is each person's own dollar
-# and not a pot they share. One account at 3 photos + 3 describes a day is
-# roughly $0.55 a month of photos and pennies of text, so $1 still only bites if
-# something has gone wrong. It is also the wall a raised allowance runs into:
-# 12 photos a day is about $2.20 a month, so raise this whenever you raise
-# somebody's daily limit, or all you have changed is which refusal they get.
-MONTHLY_USD_CAP = "1"
+# calendar month, counted from Anthropic's own token numbers.
+#
+# This is the DEFAULT for an account that has no number of its own. The owner
+# sets a per-person cap in the app (admin -> AI allowance), it lands in
+# aiAllow/{uid}/monthlyUsd, and the Worker clamps it at $10 -- so one person can
+# be given room without giving it to everybody, which is the whole point.
+#
+# Scale, from the price table above: a photo estimate is about $0.006 and a
+# typed description a fraction of a cent, so ordinary use at 3 photos a day is
+# roughly $0.55 a month. $2 is about three times that -- slack enough not to
+# bite an honest month, tight enough to stop a loop.
+MONTHLY_USD_CAP = "2"
+
+# The ceiling for EVERYONE COMBINED, in the same month. Per-account caps bound
+# each person and say nothing about their sum -- seven people at $2 each is $14
+# the month something goes wrong, and the first you would hear of it is a dead
+# API key. This counter lives in KV under spend:global and refuses everybody,
+# with a message that says so, once the month crosses it.
+#
+# Seven people at ordinary use is about $4 a month, so $10 is comfortable
+# headroom and still a hard stop. Raise it deliberately; it is the last wall
+# before your Anthropic balance is the wall.
+GLOBAL_MONTHLY_USD_CAP = "10"
 
 # Counter storage — also caches the aiAllow lookup for a minute per uid.
 # Create it once with:

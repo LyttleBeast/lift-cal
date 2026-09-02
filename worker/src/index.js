@@ -75,7 +75,7 @@ const TIMEOUT_MS    = 45000;
 
 // Defaults if the matching env var is unset. Per PERSON, per day — every
 // account gets its own counters, so a second user cannot eat the first one's.
-const LIMITS = { perMinute: 5, photoPerDay: 3, textPerDay: 3, monthUsd: 5 };
+const LIMITS = { perMinute: 5, photoPerDay: 3, textPerDay: 3, monthUsd: 2, globalMonthUsd: 10 };
 
 // A per-account override can raise these, but never past here. The override is a
 // database node the owner writes; a ceiling in code is what makes a bad or hostile
@@ -87,7 +87,13 @@ const LIMITS = { perMinute: 5, photoPerDay: 3, textPerDay: 3, monthUsd: 5 };
 // cap in a few days and get 402 for the rest of the month. Raise the cap in
 // wrangler.toml when you raise somebody's allowance, or they will just hit the
 // other wall.
-const HARD_MAX = { photoPerDay: 12, textPerDay: 30 };
+const HARD_MAX = { photoPerDay: 12, textPerDay: 30, monthlyUsd: 10 };
+
+// The whole group's ceiling, not one person's. Per-account caps bound each
+// person and say nothing about their sum: seven people at $2 each is $14 in the
+// month something goes wrong. This is one shared counter in KV, checked after
+// the per-account cap so the common refusal still names the person's own limit.
+const GLOBAL_KEY = 'spend:global';
 
 // Where the allowlist node lives. Reads of aiAllow/{uid} are public by rule —
 // it holds two booleans and two small numbers keyed on an opaque id, and nothing
@@ -311,6 +317,14 @@ function capDay(v, fallback, ceiling) {
   return Math.min(Math.floor(v), ceiling);
 }
 
+// The same rule for money, without the flooring. Math.floor here would turn a
+// deliberate $0.50 into $0, which does not mean "half a dollar" to anyone --
+// it means the estimator is off. Two decimals, because that is money.
+function capUsd(v, fallback, ceiling) {
+  if (typeof v !== 'number' || !Number.isFinite(v) || v < 0) return fallback;
+  return Math.min(Number(v.toFixed(2)), ceiling);
+}
+
 // A second, instant guard inside this isolate. KV needs a round trip; a runaway
 // loop in the app can fire a hundred times before the first write lands. This
 // catches that in memory, for free, before anything else runs.
@@ -359,7 +373,8 @@ async function dbAllows(env, uid) {
     val = {
       ok:          !!(j && j.on === true && j.blocked !== true),
       photoPerDay: j && typeof j.photoPerDay === 'number' ? j.photoPerDay : null,
-      textPerDay:  j && typeof j.textPerDay  === 'number' ? j.textPerDay  : null
+      textPerDay:  j && typeof j.textPerDay  === 'number' ? j.textPerDay  : null,
+      monthlyUsd:  j && typeof j.monthlyUsd  === 'number' ? j.monthlyUsd  : null
     };
   } catch {
     return null;
@@ -382,6 +397,22 @@ function saveState(env, uid, state) {
   return env.RACK_AI.put('q:' + uid, JSON.stringify(state), { expirationTtl: 60 * 60 * 24 * 70 });
 }
 
+/* The group counter. Same month string as the per-account one, so the two roll
+   over together on the 1st. Read lazily, only after a request has already
+   cleared its own cap, so the ordinary path still costs one KV read and not
+   two. A month it has never seen reads as zero rather than as an error. */
+async function readGlobal(env) {
+  let g = null;
+  try { g = await env.RACK_AI.get(GLOBAL_KEY, 'json'); } catch {}
+  const month = periods(Date.now()).month;
+  if (!g || g.month !== month) return { month, usd: 0 };
+  return { month, usd: Number(g.usd) || 0 };
+}
+
+function saveGlobal(env, g) {
+  return env.RACK_AI.put(GLOBAL_KEY, JSON.stringify(g), { expirationTtl: 60 * 60 * 24 * 70 });
+}
+
 /* ============ handler ============ */
 
 export default {
@@ -393,7 +424,8 @@ export default {
       perMinute:   num(env, 'RATE_PER_MINUTE',  LIMITS.perMinute),
       photoPerDay: num(env, 'AI_PHOTO_PER_DAY', LIMITS.photoPerDay),
       textPerDay:  num(env, 'AI_TEXT_PER_DAY',  LIMITS.textPerDay),
-      monthUsd:    num(env, 'MONTHLY_USD_CAP',  LIMITS.monthUsd)
+      monthUsd:    num(env, 'MONTHLY_USD_CAP',  LIMITS.monthUsd),
+      globalMonthUsd: num(env, 'GLOBAL_MONTHLY_USD_CAP', LIMITS.globalMonthUsd)
     };
     const origin = request.headers.get('Origin');
     const url    = new URL(request.url);
@@ -471,6 +503,7 @@ export default {
     if (override) {
       cfg.photoPerDay = capDay(override.photoPerDay, cfg.photoPerDay, HARD_MAX.photoPerDay);
       cfg.textPerDay  = capDay(override.textPerDay,  cfg.textPerDay,  HARD_MAX.textPerDay);
+      cfg.monthUsd    = capUsd(override.monthlyUsd,  cfg.monthUsd,    HARD_MAX.monthlyUsd);
     }
 
     /* ---- quota probe: what the app shows on the setup screen ---- */
@@ -486,7 +519,9 @@ export default {
                  text:   textLeft,
                  // Kept for older clients that only knew about one number.
                  day:    photoLeft + textLeft },
-        spend: { monthUsd: Number((state.monthUsd || 0).toFixed(4)), capUsd: cfg.monthUsd },
+        spend: { monthUsd: Number((state.monthUsd || 0).toFixed(4)), capUsd: cfg.monthUsd,
+                 globalUsd: Number((await readGlobal(env)).usd.toFixed(4)),
+                 globalCapUsd: cfg.globalMonthUsd },
         limits: { perMinute: cfg.perMinute,
                   photoPerDay: cfg.photoPerDay,
                   textPerDay:  cfg.textPerDay,
@@ -529,6 +564,13 @@ export default {
        entirely the wrong place. */
     if ((state.monthUsd || 0) >= cfg.monthUsd) {
       return reply({ error: 'spend_cap', message: 'This month’s $' + cfg.monthUsd + ' cap is used up. Raise it in the Worker settings if that was on purpose.' }, 402);
+    }
+    // The group's ceiling. Checked second on purpose: somebody who has blown
+    // their own cap should be told about their own cap, because that is the one
+    // a message can usefully name.
+    if ((await readGlobal(env)).usd >= cfg.globalMonthUsd) {
+      return reply({ error: 'global_spend_cap',
+        message: 'Rack\u2019s $' + cfg.globalMonthUsd + ' AI budget for this month is used up across everyone. It resets on the 1st.' }, 402);
     }
     // Photos and words have their own daily budgets. A photo costs roughly ten
     // times what the same meal costs described, so one shared counter lets a run
@@ -616,6 +658,17 @@ export default {
     state = roll(state, Date.now());
     state.monthUsd = Number(((state.monthUsd || 0) + usd).toFixed(6));
     await saveState(env, uid, state);
+
+    // And the group total. Re-read instead of trusting the value the gate saw:
+    // two calls can be in flight at once and the later write should not erase
+    // the earlier one. KV has no transaction, so this is not a ledger -- worst
+    // case it loses one call's worth of drift, and the number it feeds is a
+    // backstop rather than an invoice.
+    try {
+      const g = await readGlobal(env);
+      g.usd = Number((g.usd + usd).toFixed(6));
+      await saveGlobal(env, g);
+    } catch {}
 
     /* ---- unwrap the tool call ---- */
     const block = (data.content || []).find(b => b.type === 'tool_use' && b.name === 'log_food');

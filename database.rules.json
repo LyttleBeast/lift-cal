@@ -181,6 +181,10 @@
           ".write": "auth != null && auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2'",
           ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 30"
         },
+        "monthlyUsd": {
+          ".write": "auth != null && auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2'",
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 10"
+        },
         "$other": {
           ".validate": false
         }

@@ -548,20 +548,21 @@ function allowanceSection() {
     if (a.blocked === true) row.appendChild(el('span', 'adm-flag off', 'blocked'));
     else if (a.on !== true) row.appendChild(el('span', 'adm-flag', 'off'));
     row.appendChild(el('div', 'set-row-v',
-      limitText(a.photoPerDay) + ' / ' + limitText(a.textPerDay)));
+      limitText(a.photoPerDay) + ' / ' + limitText(a.textPerDay) + '  ' + usdText(a.monthlyUsd)));
     row.appendChild(el('div', 'set-row-x', '›'));
     row.onclick = () => openAllowance(u);
     list.appendChild(row);
   });
   if (!Object.keys(approved).length) list.appendChild(noteEl('Nobody has access yet.'));
   s.appendChild(list);
-  s.appendChild(noteEl('Photo / describe, per day. A dash is the Worker’s default.'));
+  s.appendChild(noteEl('Photo / describe per day, then that account\u2019s own monthly spending cap. A dash is the Worker\u2019s default.'));
 
   s.appendChild(quotaCard());
   return s;
 }
 
 function limitText(v) { return typeof v === 'number' ? String(v) : '–'; }
+function usdText(v)   { return typeof v === 'number' ? '$' + v.toFixed(2).replace(/\.00$/, '') : '$–'; }
 
 /* The owner's own quota, labelled as his own. /quota answers for whoever's
    token asked for it, so there is no version of this card that shows somebody
@@ -574,17 +575,25 @@ function quotaCard() {
   c.appendChild(noteEl(
     'Yours only. The Worker works out whose quota to answer with from the token that asked, so another account’s spend can’t be read from here — theirs lives in the Worker’s own counters and the app never sees it.'));
   c.appendChild(noteEl(
-    'The monthly cap is ' + capText() + ' PER ACCOUNT, and it is the wall that actually protects the money: for scale, one account at the 12-photo ceiling would eat a $1 cap in one to two weeks. Raising somebody’s allowance without raising MONTHLY_USD_CAP in worker/wrangler.toml only changes which refusal they get.'));
+    'Your own cap is ' + capText() + ', and it is the wall that actually protects the money. Every account has its own, set in AI allowance above; the Worker default applies to anyone you have not given a number.'));
   return c;
 }
 
-// A cap the Worker has not told us is not a cap we may print. Guessing $1 here
-// would keep saying "$1" after MONTHLY_USD_CAP had been raised and redeployed,
-// which is the one number on this screen somebody would act on.
+// A cap the Worker has not told us is not a cap we may print. It now varies by
+// account, so a guess here would not just be stale, it would be somebody else's
+// number -- and it is the one figure on this screen a person would act on.
 function capText() {
   const q = quotaState.data;
   const cap = q && q.spend && q.spend.capUsd;
-  return cap != null ? '$' + cap : 'whatever MONTHLY_USD_CAP is set to';
+  return cap != null ? '$' + cap : 'whatever the Worker is set to';
+}
+
+// What an empty cap box should show as its placeholder: the Worker default that
+// would apply if you leave it empty. Vague when the Worker has not answered yet.
+function defaultCapText() {
+  const q = quotaState.data;
+  const cap = q && q.spend && q.spend.capUsd;
+  return cap != null ? '$' + cap : 'Worker default';
 }
 
 function paintQuota() {
@@ -826,7 +835,7 @@ function openAllowance(u) {
   sh.appendChild(el('div', 'eyebrow', 'AI allowance'));
   sh.appendChild(el('h2', null, nameOf(u)));
   sh.appendChild(noteEl(
-    'Estimates a day, counted separately. Leave a box empty for the Worker’s default of 3. Zero means none of that kind at all.'));
+    'Estimates a day, counted separately. Leave a box empty for the Worker\u2019s default. Zero photos means none of that kind at all.'));
 
   const pf = el('div', 'field');
   pf.style.marginTop = '14px';
@@ -847,20 +856,37 @@ function openAllowance(u) {
   tf.appendChild(ti);
   sh.appendChild(tf);
 
+  // The money. Separate from the counts because it is a different kind of
+  // limit: the counts stop somebody using the estimator a lot, this stops them
+  // costing a lot, and at 12 photos a day those are two weeks apart.
+  const mf = el('div', 'field');
+  mf.appendChild(el('label', null, 'Monthly spending cap (max $10)'));
+  const mi = el('input');
+  mi.type = 'number'; mi.inputMode = 'decimal'; mi.min = '0'; mi.max = '10'; mi.step = '0.25';
+  mi.placeholder = 'default (' + defaultCapText() + ')';
+  mi.value = typeof a.monthlyUsd === 'number' ? String(a.monthlyUsd) : '';
+  mf.appendChild(mi);
+  sh.appendChild(mf);
+
   sh.appendChild(noteEl(
-    'The monthly cap is ' + capText() + ' PER ACCOUNT and it is the limit that actually protects the money — for scale, one account at the 12-photo ceiling would eat a $1 cap in one to two weeks. Raise MONTHLY_USD_CAP in worker/wrangler.toml when you raise somebody’s allowance, or all you have changed is which wall they hit.'));
+    'The cap is this account\u2019s alone \u2014 raising it gives nobody else a cent. It is also the limit that actually protects the money: a photo costs about $0.006, so ordinary use at 3 a day is roughly $0.55 a month, and somebody at the 12-photo ceiling would run about $2.20. Set the count and the cap together, or they hit whichever wall comes first.'));
+  sh.appendChild(noteEl(
+    'Everyone combined is capped too, and that number lives in GLOBAL_MONTHLY_USD_CAP in worker/wrangler.toml \u2014 no per-person cap can spend past it.'));
 
   const save = el('button', 'btn btn-primary btn-block', 'Save allowance');
   save.style.marginTop = '14px';
   save.onclick = async () => {
-    const p = parseLimit(pi.value), t = parseLimit(ti.value);
+    const p = parseLimit(pi.value), t = parseLimit(ti.value), m = parseUsd(mi.value);
     if (p === undefined || t === undefined) { toast('Whole numbers only'); return; }
     if (p !== null && (p < 0 || p > 12)) { toast('Photo tops out at 12 a day'); return; }
     if (t !== null && (t < 0 || t > 30)) { toast('Describe tops out at 30 a day'); return; }
+    if (m === undefined) { toast('Cap must be a dollar amount'); return; }
+    if (m !== null && (m < 0 || m > 10)) { toast('The cap tops out at $10 a month'); return; }
     save.disabled = true;
     try {
       await (p === null ? removeShared(P_AI + u + '/photoPerDay') : writeShared(P_AI + u + '/photoPerDay', p));
       await (t === null ? removeShared(P_AI + u + '/textPerDay')  : writeShared(P_AI + u + '/textPerDay', t));
+      await (m === null ? removeShared(P_AI + u + '/monthlyUsd')  : writeShared(P_AI + u + '/monthlyUsd', m));
       toast('Allowance saved');
       close();
       reload();
@@ -910,6 +936,17 @@ function parseLimit(raw) {
   const n = Number(s);
   if (!Number.isFinite(n) || n !== Math.floor(n)) return undefined;
   return n;
+}
+
+// Money, so decimals are allowed where the counts refuse them. Rounded to the
+// cent before it is written: the rules accept any number in range, and a cap of
+// 1.9999999 would be a number nobody typed and nobody could read back.
+function parseUsd(raw) {
+  const s = String(raw || '').trim().replace(/^\$/, '');
+  if (!s) return null;
+  const n = Number(s);
+  if (!Number.isFinite(n)) return undefined;
+  return Number(n.toFixed(2));
 }
 
 /* ================= small pieces ================= */
