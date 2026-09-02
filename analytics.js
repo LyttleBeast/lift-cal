@@ -356,11 +356,17 @@ function smoothPath(pts) {
  * opts:    { color, height, markMax, unit, dots, scatter }
  * scatter: optional second series drawn as faint dots behind the line —
  *          used by the weight tab to show raw weigh-ins under the average.
+ * line2:   optional second line, dashed and without an area, for a derived
+ *          series that belongs on the same axis — You draws the normalised
+ *          trend over the raw day means with it. `color2` is its stroke.
+ * yLabels: print the top and bottom of the scale on the grid, so the reader
+ *          knows what a pixel of slope is worth without a second chart.
  */
 export function lineChart(points, opts = {}) {
   const {
     color = 'var(--p-yellow)', height = 168, markMax = true,
-    unit = '', dots = true, scatter = null
+    unit = '', dots = true, scatter = null,
+    line2 = null, color2 = 'var(--chalk)', yLabels = false
   } = opts;
 
   const W = 340, H = height, PADX = 10, PADT = 16, PADB = 22;
@@ -377,13 +383,14 @@ export function lineChart(points, opts = {}) {
   defs.appendChild(lg);
   svg.appendChild(defs);
 
-  const vals = points.map(p => p.v).concat(scatter ? scatter.map(p => p.v) : []);
+  const extra = (scatter || []).concat(line2 || []);
+  const vals = points.map(p => p.v).concat(extra.map(p => p.v));
   let lo = Math.min(...vals), hi = Math.max(...vals);
   const span = hi - lo;
   if (span < 1e-6) { lo = lo - Math.max(1, lo * 0.05); hi = hi + Math.max(1, hi * 0.05); }
   else { lo -= span * 0.12; hi += span * 0.12; }
 
-  const allT = points.map(p => p.t).concat(scatter ? scatter.map(p => p.t) : []);
+  const allT = points.map(p => p.t).concat(extra.map(p => p.t));
   const t0 = Math.min(...allT);
   const t1 = Math.max(...allT);
   const spanT = Math.max(1, t1 - t0);
@@ -397,6 +404,14 @@ export function lineChart(points, opts = {}) {
     svg.appendChild(svgEl('line', {
       x1: PADX, y1: y.toFixed(1), x2: W - PADX, y2: y.toFixed(1), class: 'chart-grid'
     }));
+    if (yLabels && f !== 0.5) {
+      // Sits just above the top line and just above the bottom one, so neither
+      // collides with the date labels under the axis.
+      const t = svgEl('text', { x: PADX, y: (y - 3).toFixed(1), class: 'chart-axis' });
+      const v = hi - f * (hi - lo);
+      t.textContent = (Math.abs(v) >= 100 ? Math.round(v) : Math.round(v * 10) / 10) + (unit ? ' ' + unit : '');
+      svg.appendChild(t);
+    }
   });
 
   // faint raw series behind everything else
@@ -417,7 +432,16 @@ export function lineChart(points, opts = {}) {
       fill: 'url(#' + gid + ')', stroke: 'none'
     });
     svg.appendChild(area);
-    svg.appendChild(svgEl('path', { d: line, class: 'chart-line', stroke: color }));
+  }
+
+  if (line) svg.appendChild(svgEl('path', { d: line, class: 'chart-line', stroke: color }));
+
+  // The derived line goes over the measured one, thin and dashed: on a quiet
+  // fortnight the two nearly coincide, and drawn underneath it vanished
+  // entirely while the legend went on promising it.
+  if (line2 && line2.length >= 2) {
+    const p2 = line2.map(p => ({ x: X(p.t), y: Y(p.v) }));
+    svg.appendChild(svgEl('path', { d: smoothPath(p2), class: 'chart-line2', stroke: color2 }));
   }
 
   // dots
@@ -462,41 +486,78 @@ export function lineChart(points, opts = {}) {
  *        week of misses still shows how far off the goal sat. `width` is the
  *        viewBox width: a chart in a half-width card keeps its text legible by
  *        drawing at half the width rather than being scaled to it.
+ *        A bar may carry `parts: [{ v, color }]` and it is then drawn as a
+ *        stack, bottom part first, with a hairline of surface between the
+ *        pieces so the seams read; `v` is still the bar's total. `note` is a
+ *        short label printed above the bar whether or not values are shown —
+ *        the session count over a week of volume. `lines` are further
+ *        reference lines, `[{ v, label, at: 'start'|'end' }]`, folded into
+ *        the scale the way `target` is.
  */
 export function barChart(bars, opts = {}) {
   const { height = 150, width = 340, color = 'var(--p-blue)', unit = '', showValues = true,
-          target = null, targetLabel = '' } = opts;
+          target = null, targetLabel = '', lines = [] } = opts;
   if (!bars.length) return emptyChart('Nothing logged yet');
 
   const W = width, H = height, PADB = 20, PADT = 18, PADX = 8;
   const svg = svgEl('svg', { viewBox: '0 0 ' + W + ' ' + H, class: 'chart' });
 
-  const max = Math.max(...bars.map(b => b.v), target > 0 ? target : 0, 1);
+  const max = Math.max(...bars.map(b => b.v), target > 0 ? target : 0,
+                       ...lines.map(l => l && l.v > 0 ? l.v : 0), 1);
   const n = bars.length;
   const slot = (W - PADX * 2) / n;
   const bw = Math.max(3, Math.min(30, slot * 0.62));
+  const plotH = H - PADT - PADB;
 
   bars.forEach((b, i) => {
     const x = PADX + slot * i + (slot - bw) / 2;
-    const h = Math.max(b.v > 0 ? 2 : 0, (b.v / max) * (H - PADT - PADB));
+    const h = Math.max(b.v > 0 ? 2 : 0, (b.v / max) * plotH);
     const y = H - PADB - h;
+    const dimCls = b.dim ? ' chart-bar-dim' : '';
 
     svg.appendChild(svgEl('rect', {
-      x: x.toFixed(1), y: (H - PADB - (H - PADT - PADB)).toFixed(1),
-      width: bw.toFixed(1), height: (H - PADT - PADB).toFixed(1),
+      x: x.toFixed(1), y: (H - PADB - plotH).toFixed(1),
+      width: bw.toFixed(1), height: plotH.toFixed(1),
       rx: Math.min(4, bw / 2), class: 'chart-bar-bg'
     }));
-    svg.appendChild(svgEl('rect', {
-      x: x.toFixed(1), y: y.toFixed(1), width: bw.toFixed(1), height: h.toFixed(1),
-      rx: Math.min(4, bw / 2), fill: b.color || color, class: 'chart-bar' + (b.dim ? ' chart-bar-dim' : '')
-    }));
 
-    if (showValues && n <= 14 && b.v > 0) {
+    if (b.parts && b.parts.length && b.v > 0) {
+      // Clipped to the rounded outline of the whole bar, so the stack has one
+      // rounded top rather than a rounded cap on every piece.
+      const cid = 'c' + (++gradSeq);
+      const cp = svgEl('clipPath', { id: cid });
+      cp.appendChild(svgEl('rect', {
+        x: x.toFixed(1), y: y.toFixed(1), width: bw.toFixed(1), height: h.toFixed(1), rx: Math.min(4, bw / 2)
+      }));
+      svg.appendChild(cp);
+      const g = svgEl('g', { 'clip-path': 'url(#' + cid + ')', class: 'chart-bar' + dimCls });
+      let base = H - PADB;
+      b.parts.forEach((p, k) => {
+        if (!(p.v > 0)) return;
+        const ph = (p.v / b.v) * h;
+        const gap = k ? 1.5 : 0;
+        g.appendChild(svgEl('rect', {
+          x: x.toFixed(1), y: (base - ph + gap).toFixed(1),
+          width: bw.toFixed(1), height: Math.max(0, ph - gap).toFixed(1),
+          fill: p.color || color
+        }));
+        base -= ph;
+      });
+      svg.appendChild(g);
+    } else {
+      svg.appendChild(svgEl('rect', {
+        x: x.toFixed(1), y: y.toFixed(1), width: bw.toFixed(1), height: h.toFixed(1),
+        rx: Math.min(4, bw / 2), fill: b.color || color, class: 'chart-bar' + dimCls
+      }));
+    }
+
+    const above = b.note != null ? String(b.note) : (showValues && n <= 14 && b.v > 0 ? compact(b.v) + unit : '');
+    if (above) {
       const t = svgEl('text', {
         x: (x + bw / 2).toFixed(1), y: (y - 5).toFixed(1),
         class: 'chart-barval', 'text-anchor': 'middle'
       });
-      t.textContent = compact(b.v) + unit;
+      t.textContent = above;
       svg.appendChild(t);
     }
     if (b.label && n <= 14) {
@@ -508,19 +569,22 @@ export function barChart(bars, opts = {}) {
     }
   });
 
-  if (target > 0) {
-    const ty = H - PADB - (target / max) * (H - PADT - PADB);
+  const refLine = (v, label, at, cls) => {
+    const ty = H - PADB - (v / max) * plotH;
     svg.appendChild(svgEl('line', {
-      x1: PADX, y1: ty.toFixed(1), x2: W - PADX, y2: ty.toFixed(1), class: 'chart-target'
+      x1: PADX, y1: ty.toFixed(1), x2: W - PADX, y2: ty.toFixed(1), class: cls
     }));
-    if (targetLabel) {
+    if (label) {
+      const end = at !== 'start';
       const t = svgEl('text', {
-        x: W - PADX, y: (ty - 4).toFixed(1), class: 'chart-axis', 'text-anchor': 'end'
+        x: end ? W - PADX : PADX, y: (ty - 4).toFixed(1), class: 'chart-axis', 'text-anchor': end ? 'end' : 'start'
       });
-      t.textContent = targetLabel;
+      t.textContent = label;
       svg.appendChild(t);
     }
-  }
+  };
+  if (target > 0) refLine(target, targetLabel, 'end', 'chart-target');
+  lines.forEach(l => { if (l && l.v > 0) refLine(l.v, l.label, l.at, l.cls || 'chart-ref'); });
 
   return svg;
 }

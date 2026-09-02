@@ -52,6 +52,9 @@
           "createdAt": {
             ".validate": "newData.isNumber()"
           },
+          "photo": {
+            ".validate": "newData.isString() && newData.val().length <= 24000 && newData.val().beginsWith('data:image/jpeg;base64,')"
+          },
           "$other": {
             ".validate": false
           }

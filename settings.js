@@ -280,6 +280,29 @@ function openProfile(onEdit) {
 
     body.innerHTML = '';
 
+    // The photo is saved the moment it is picked rather than on Save, because
+    // the picker already wrote it (pickProfilePhoto) — but Save rebuilds the
+    // node from named keys, so it has to carry the current one forward or
+    // typing a new name would silently drop the face.
+    let photo = typeof p.photo === 'string' ? p.photo : null;
+    const prow = el('div', 'photo-row');
+    const pv = el('div', 'photo-pv');
+    const paint = () => {
+      pv.innerHTML = '';
+      if (photo) { const img = el('img'); img.src = photo; img.alt = ''; pv.appendChild(img); }
+      else pv.textContent = '–';
+      rm.hidden = !photo;
+    };
+    const ch = el('button', 'btn btn-ghost', 'Choose photo');
+    ch.onclick = () => pickProfilePhoto(url => { photo = url; paint(); if (onEdit) onEdit(); });
+    const rm = el('button', 'btn btn-ghost', 'Remove');
+    rm.onclick = async () => { await savePhoto(null); photo = null; paint(); if (onEdit) onEdit(); toast('Removed'); };
+    const pbtns = el('div', 'photo-btns');
+    pbtns.append(ch, rm);
+    prow.append(pv, pbtns);
+    body.appendChild(field('Photo', prow));
+    paint();
+
     const nameIn = el('input');
     nameIn.type = 'text';
     nameIn.autocomplete = 'name';
@@ -318,6 +341,7 @@ function openProfile(onEdit) {
       const email = typeof p.email === 'string' ? p.email : currentEmail();
       if (email) next.email = email.slice(0, 120);
       if (Number.isFinite(p.createdAt)) next.createdAt = p.createdAt;
+      if (photo) next.photo = photo;
 
       await write('profile', next);
       close();
@@ -328,4 +352,92 @@ function openProfile(onEdit) {
     body.innerHTML = '';
     body.appendChild(noteEl('Couldn’t reach your account just now. Check the connection, close this and try again.'));
   });
+}
+
+/* ================= PROFILE PHOTO =================
+   A face on the You tab. There is no file storage behind this app and there
+   is not going to be one for a 52-pixel circle, so the picture is shrunk on
+   the phone to a small square JPEG and kept as a data URL on the profile
+   node — a few kilobytes, mirrored with the rest of the profile, so it
+   paints on a cold start beside the name. The published rules cap the string
+   (AGENTS.md, `profile.photo`), so the resize is not a nicety: a photo written
+   at camera size fails validation and is silently never saved, which is the
+   one failure this app has no way to show. The quality steps down and then
+   the size does until it fits, so the write can only ever be one the rules
+   accept.
+
+   Drawn through an <img> rather than createImageBitmap because the browser
+   applies the camera's orientation tag to an <img> and older Safari does not
+   apply it to a bitmap — a portrait selfie would land on its side. */
+const PHOTO_PX  = 144;
+const PHOTO_MAX = 24000;
+
+export function pickProfilePhoto(onDone) {
+  const inp = el('input');
+  inp.type = 'file';
+  inp.accept = 'image/*';
+  inp.style.display = 'none';
+  document.body.appendChild(inp);
+  inp.onchange = async () => {
+    const file = inp.files && inp.files[0];
+    inp.remove();
+    if (!file) return;
+    let url = null;
+    try { url = await shrinkPhoto(file); } catch {}
+    if (!url) { toast('Couldn’t read that picture.'); return; }
+    await savePhoto(url);
+    toast('Photo saved');
+    if (onDone) onDone(url);
+  };
+  // Has to happen inside the tap that asked for it — a picker opened later,
+  // after an await, is blocked as a popup on iOS.
+  inp.click();
+}
+
+function shrinkPhoto(file) {
+  return new Promise((resolve, reject) => {
+    const src = URL.createObjectURL(file);
+    const img = new Image();
+    img.onerror = () => { URL.revokeObjectURL(src); reject(new Error('decode')); };
+    img.onload = () => {
+      URL.revokeObjectURL(src);
+      const side = Math.min(img.naturalWidth, img.naturalHeight);
+      if (!(side > 0)) { reject(new Error('empty')); return; }
+      const sx = (img.naturalWidth - side) / 2, sy = (img.naturalHeight - side) / 2;
+      let px = PHOTO_PX;
+      let out = null;
+      while (px >= 64 && !out) {
+        const cv = document.createElement('canvas');
+        cv.width = px; cv.height = px;
+        const ctx = cv.getContext('2d');
+        ctx.drawImage(img, sx, sy, side, side, 0, 0, px, px);
+        for (const q of [0.82, 0.7, 0.58, 0.46]) {
+          const d = cv.toDataURL('image/jpeg', q);
+          if (d.length <= PHOTO_MAX) { out = d; break; }
+        }
+        px = Math.round(px * 0.75);
+      }
+      resolve(out);
+    };
+    img.src = src;
+  });
+}
+
+/* The same rebuild-by-name the editor above does, for the same reason: the
+   node ends in "$other": false, so the write names every key it keeps. A
+   null removes the photo. Reads with readExact so a failed read stops here
+   instead of writing a profile with nothing but a picture in it. */
+async function savePhoto(url) {
+  let p = null;
+  try { p = (await readExact('profile')) || {}; }
+  catch { toast('Couldn’t reach your account just now.'); return; }
+  const next = {};
+  if (typeof p.name === 'string')  next.name  = p.name.slice(0, 60);
+  if (typeof p.email === 'string') next.email = p.email.slice(0, 120);
+  if (p.sex === 'm' || p.sex === 'f' || p.sex === 'x') next.sex = p.sex;
+  if (Number.isFinite(p.heightIn))  next.heightIn  = p.heightIn;
+  if (Number.isFinite(p.birthYear)) next.birthYear = p.birthYear;
+  if (Number.isFinite(p.createdAt)) next.createdAt = p.createdAt;
+  if (url) next.photo = url;
+  await write('profile', next);
 }

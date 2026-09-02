@@ -505,28 +505,21 @@ function renderSummary() {
   big.style.fontSize = '40px';
   const sub = el('div');
 
-  if (z) {
-    // The deficit is the entire point of the cut. The daily target is a number
-    // typed into settings once. So the deficit gets the 40px and the target
-    // gets the small print, not the other way round.
-    const zone = zoneOf(t.cal, z);
-    const gap  = Math.round(t.cal - z.maint);
-    big.textContent = Math.abs(gap).toLocaleString();
-    big.style.color = zoneColor(zone);
-    sub.appendChild(el('div', 'eyebrow', gap <= 0 ? 'under maintenance' : 'over maintenance'));
-    sub.appendChild(el('div', 'num fuel-eaten',
-      (remain < 0 ? Math.abs(remain).toLocaleString() + ' over target'
-                  : remain.toLocaleString() + ' left') +
-      '  ·  ' + t.cal.toLocaleString() + ' / ' + targets.cal.toLocaleString()));
-  } else {
-    // No maintenance number pinned and not enough logged to estimate one, so
-    // there is no deficit to headline. Keep the old layout exactly.
-    big.textContent = Math.abs(remain).toLocaleString();
-    big.style.color = remain < 0 ? 'var(--bad)' : 'var(--chalk)';
-    sub.appendChild(el('div', 'eyebrow', remain < 0 ? 'kcal over' : 'kcal left'));
-    sub.appendChild(el('div', 'num fuel-eaten',
-      t.cal.toLocaleString() + ' / ' + targets.cal.toLocaleString()));
-  }
+  // One number, one meaning. This used to headline the distance from
+  // maintenance with "N left" in small print under it, and on an empty
+  // morning those were two different four-digit numbers with nothing between
+  // them saying why — maintenance is measured, the target is the number you
+  // eat to, and they are rarely the same. The big number is now what is left
+  // to today's target, which is the one you act on; the distance from
+  // maintenance moves under the bar, beside the bands it is measured against.
+  // The colour is still the maintenance zone, so a day that is under target
+  // but over maintenance reads red before the small print is read at all.
+  const zone = z ? zoneOf(t.cal, z) : null;
+  big.textContent = Math.abs(remain).toLocaleString();
+  big.style.color = z ? zoneColor(zone) : (remain < 0 ? 'var(--bad)' : 'var(--chalk)');
+  sub.appendChild(el('div', 'eyebrow', remain < 0 ? 'kcal over target' : 'kcal left today'));
+  sub.appendChild(el('div', 'num fuel-eaten',
+    t.cal.toLocaleString() + ' eaten  ·  target ' + targets.cal.toLocaleString()));
   top.append(big, sub);
   card.appendChild(top);
 
@@ -574,21 +567,56 @@ function maintInfo() {
    three bands: everything left of the first tick is a deficit, between the two
    is holding, past the second you're gaining. The dashed mark is the day's
    calorie target, wherever you've set it. */
+/* Which way the account said it was going: the sign of the onboarding rate
+   (food/targets.auto.rateWk, written whether or not auto targets are on),
+   failing that where the target sits against maintenance. The same rule the
+   You tab uses (you.js goalDir), so the two screens lean the same way. */
+function goalSign(maintCal) {
+  const a = targets.auto;
+  if (a && Number.isFinite(a.rateWk) && a.rateWk !== 0) return a.rateWk < 0 ? -1 : 1;
+  if (maintCal > 0 && targets.cal > 0) {
+    if (targets.cal < maintCal - 100) return -1;
+    if (targets.cal > maintCal + 100) return 1;
+  }
+  return 0;
+}
+
 function renderCalMeter(cal) {
   const wrap = el('div', 'cal-meter');
   const mi = maintInfo();
   const z  = mi ? calorieZones(mi.cal) : null;
 
-  // Scale: always leave headroom past the gain tick so the third band is real
-  // estate you can actually land in, and never clip the day you overshot.
-  const headroom = z ? Math.max(350, z.gainFrom * 0.12) : targets.cal * 0.15;
-  const top = (z ? z.gainFrom : targets.cal) + headroom;
-  // A wild day would otherwise stretch the axis until the three bands are
-  // slivers, so the scale stops growing well before that. Past the end the bar
-  // just pins full — the number above it says how far over you went.
-  const ceiling = (z ? z.gainFrom : targets.cal) * 1.35;
-  const max = Math.ceil(Math.min(Math.max(top, targets.cal * 1.08, cal * 1.06, 1), ceiling) / 100) * 100;
-  const pct = v => Math.max(0, Math.min(100, v / max * 100));
+  // The bar is a window onto the calorie line, and the goal decides where the
+  // window sits: a cut gets most of its width below maintenance, a bulk most
+  // of it above, and maintaining is centred on the hold band. It used to run
+  // from zero, which made the cut band three quarters of the bar for
+  // everybody and the gain band a sliver a bulk could barely land in. The
+  // stretch below the window — the first thousand-odd calories of every day —
+  // is folded into a short runway at the left, so the head still moves
+  // through breakfast instead of sitting on the edge until lunch. The window
+  // always contains the target, so the dashed mark is always on the bar, and
+  // past the right edge the bar just pins full: the number above it says how
+  // far over you went.
+  let lo, hi;
+  if (z) {
+    const b = z.band, g = goalSign(z.maint);
+    if (g < 0)      { lo = z.cutTop - 3 * b;   hi = z.gainFrom + 1 * b; }
+    else if (g > 0) { lo = z.cutTop - 1 * b;   hi = z.gainFrom + 3 * b; }
+    else            { lo = z.cutTop - 1 * b;   hi = z.gainFrom + 1 * b; }
+    lo = Math.min(lo, targets.cal - b / 2);
+    hi = Math.max(hi, targets.cal + b / 2);
+  } else {
+    lo = 0;
+    hi = Math.max(targets.cal * 1.15, 1);
+  }
+  lo = Math.max(0, Math.round(lo / 50) * 50);
+  hi = Math.ceil(hi / 50) * 50;
+  const RUN = lo > 0 ? 9 : 0;
+  const pct = v => {
+    if (!(v > 0)) return 0;
+    if (v <= lo) return lo > 0 ? v / lo * RUN : 0;
+    return Math.min(100, RUN + (v - lo) / (hi - lo) * (100 - RUN));
+  };
 
   const track = el('div', 'cal-track');
   if (z) {
@@ -598,7 +626,12 @@ function renderCalMeter(cal) {
       d.style.width = (pct(to) - pct(from)) + '%';
       return d;
     };
-    track.append(band('cut', 0, z.cutTop), band('hold', z.cutTop, z.gainFrom), band('gain', z.gainFrom, max));
+    track.append(band('cut', 0, z.cutTop), band('hold', z.cutTop, z.gainFrom), band('gain', z.gainFrom, hi));
+  }
+  if (RUN) {
+    const rw = el('div', 'cal-runway');
+    rw.style.width = RUN + '%';
+    track.appendChild(rw);
   }
 
   const zone = zoneOf(cal, z);
@@ -613,27 +646,43 @@ function renderCalMeter(cal) {
     track.appendChild(tk);
   });
 
+  // The day's target, dashed so it is never mistaken for a band edge. This is
+  // the number the headline counts down to, and it is drawn here so the
+  // reader can see where it falls against maintenance without doing the sum.
+  const tgt = el('div', 'cal-target');
+  tgt.style.left = pct(targets.cal) + '%';
+  track.appendChild(tgt);
+
   const head = el('div', 'cal-head');
   head.style.left = pct(cal) + '%';
   track.appendChild(head);
   wrap.appendChild(track);
 
-  if (z) {
-    const legend = el('div', 'cal-bands');
-    const lab = (txt, from, to) => {
-      const w = pct(to) - pct(from);
-      const d = el('div', 'cal-band-lab', w < 9 ? '' : txt);   // too narrow to read
-      d.style.left = pct(from) + '%';
-      d.style.width = w + '%';
-      return d;
-    };
-    legend.append(lab('cut', 0, z.cutTop), lab('hold', z.cutTop, z.gainFrom), lab('gain', z.gainFrom, max));
-    wrap.appendChild(legend);
+  const legend = el('div', 'cal-bands');
+  const lab = (txt, from, to) => {
+    const w = pct(to) - pct(from);
+    const d = el('div', 'cal-band-lab', w < 9 ? '' : txt);   // too narrow to read
+    d.style.left = pct(from) + '%';
+    d.style.width = w + '%';
+    return d;
+  };
+  if (z) legend.append(lab('cut', 0, z.cutTop), lab('hold', z.cutTop, z.gainFrom), lab('gain', z.gainFrom, hi));
+  // "target" is centred on its mark and sits on its own line below the band
+  // words, so the two never collide whichever band the target falls in.
+  const tl = el('div', 'cal-band-lab cal-target-lab', 'target');
+  tl.style.left = pct(targets.cal) + '%';
+  legend.appendChild(tl);
+  wrap.appendChild(legend);
 
-    // The number moved up to the headline, so this is just the word for it.
-    const msg = zone === 'cut'  ? 'In a deficit'
-              : zone === 'gain' ? 'Gaining'
-              :                   'Holding \u00b7 within ' + z.band + ' of maintenance';
+  if (z) {
+    // The word for the zone and the distance from maintenance, together:
+    // this is where the "N under maintenance" number went when the headline
+    // became calories left to target.
+    const gap = Math.round(cal - z.maint);
+    const msg = (zone === 'cut'  ? 'In a deficit'
+              :  zone === 'gain' ? 'Gaining'
+              :                    'Holding') +
+      ' · ' + Math.abs(gap).toLocaleString() + (gap <= 0 ? ' under' : ' over') + ' maintenance';
     const line = el('div', 'cal-status');
     const dot = el('i');
     dot.style.background = fill.style.background;
@@ -641,8 +690,22 @@ function renderCalMeter(cal) {
     line.appendChild(el('span', 'cal-maint num',
       'maint ' + z.maint.toLocaleString() + (mi.auto ? ' est.' : '')));
     wrap.appendChild(line);
+
+    // The one case the two numbers genuinely disagree: a target that sits
+    // on the wrong side of the measured maintenance for the stated goal.
+    // Eating to it will not do what the goal says, and nothing else on the
+    // screen would ever say so.
+    const g = goalSign(z.maint);
+    if (g < 0 && targets.cal >= z.cutTop) {
+      wrap.appendChild(noteEl('Your target is at or above your ' + (mi.auto ? 'measured ' : '') +
+        'maintenance, so eating to it holds rather than cuts. Lower it under ⚙ Daily targets' +
+        (mi.auto ? '' : ', or clear the pinned maintenance number') + '.'));
+    } else if (g > 0 && targets.cal <= z.gainFrom) {
+      wrap.appendChild(noteEl('Your target is at or below your ' + (mi.auto ? 'measured ' : '') +
+        'maintenance, so eating to it holds rather than bulks. Raise it under ⚙ Daily targets.'));
+    }
   } else {
-    wrap.appendChild(noteEl('Set your maintenance calories in \u2699 Settings \u2014 or log a week of food alongside your weigh-ins \u2014 to mark the cut / maintain / gain lines on this bar.'));
+    wrap.appendChild(noteEl('Set your maintenance calories in ⚙ Settings — or log a week of food alongside your weigh-ins — to mark the cut / maintain / gain lines on this bar.'));
   }
   return wrap;
 }

@@ -63,15 +63,15 @@
 // imports back.
 
 import { read, LS, todayKey, isOwner } from './store.js';
-import { $, el, noteEl, trimNum, r1, parseKey, fmtDate } from './ui.js';
+import { $, el, noteEl, trimNum, r1, parseKey, fmtDate, compact, fmtDuration } from './ui.js';
 import { allSessions, exerciseIndex, filterByRange, groupSplit, topBy, weeklyVolume,
-         lineChart, barChart, donut, ring, sparkline, heatStrip, emptyChart, legend,
+         lineChart, barChart, ring, sparkline, heatStrip, emptyChart, legend,
          groupColor } from './analytics.js';
-import { weightStats, maintenance, trendRate, refreshModel, trendWeight } from './tdee.js';
+import { weightStats, maintenance, trendRate, refreshModel, trendWeight, adjustedDays } from './tdee.js';
 import { fmtWater } from './water.js';
 import { isStandalone } from './usage.js';
 import { openInstallGuide } from './onboarding.js';
-import { openSettings } from './settings.js';
+import { openSettings, pickProfilePhoto } from './settings.js';
 import { openAdmin, isAdminOpen } from './admin.js';
 
 const DAY = 864e5;
@@ -94,6 +94,11 @@ const C_WEIGHT = 'var(--p-yellow)';
 const C_STEPS  = 'var(--p-white)';   // chrome reads as the muted "last week" stroke beside it
 const C_WATER  = 'var(--p-blue)';
 const C_TRAIN  = 'var(--p-blue)';
+// The three macros wear the colours the Fuel tab's rows already gave them
+// (food.js renderSummary), so a red segment is protein on both screens.
+const C_PROT   = 'var(--p-red)';
+const C_CARB   = 'var(--p-yellow)';
+const C_FAT    = 'var(--p-blue)';
 
 /* ================= STATE ================= */
 let user       = null;
@@ -459,7 +464,7 @@ function build() {
   wrap.appendChild(s1);
 
   const s2 = section('Fuel');
-  s2.appendChild(fuelCard());
+  s2.appendChild(fuelCard(maint));
   wrap.appendChild(s2);
 
   const s3 = section('Body weight');
@@ -518,7 +523,23 @@ function hero() {
   const name = nameOf();
   const h = el('div', 'you-hero');
 
-  h.appendChild(el('div', 'you-avatar', initials(name)));
+  // The avatar is the one control on this screen that leads to a write, and
+  // the write still isn't here: settings.js owns the picker, the resize and
+  // the profile merge, the same way the gear hands off to openSettings. A
+  // photo is a small data URL on the profile node (AGENTS.md), so the mirror
+  // has it on a cold start and the face paints with the name.
+  const av = el('button', 'you-avatar');
+  av.setAttribute('aria-label', 'Profile photo');
+  if (profile && typeof profile.photo === 'string' && profile.photo.startsWith('data:image/')) {
+    const img = el('img');
+    img.src = profile.photo;
+    img.alt = '';
+    av.appendChild(img);
+  } else {
+    av.textContent = initials(name);
+  }
+  av.onclick = () => { if (loaded) pickProfilePhoto(() => { liveFp = ''; refreshLogged(); }); };
+  h.appendChild(av);
 
   const mid = el('div');
   mid.appendChild(el('div', 'you-name', name));
@@ -616,14 +637,15 @@ const higherBetter = (n, p) => n > p ? 'up' : n < p ? 'down' : 'flat';
 function weeklySeries(n) {
   if (!sessions) return null;
   const by = {};
-  weeklyVolume(sessions).forEach(w => { by[w.key] = w.volume; });
+  weeklyVolume(sessions).forEach(w => { by[w.key] = w; });
   const sun = new Date();
   sun.setHours(12, 0, 0, 0);
   sun.setDate(sun.getDate() - sun.getDay());
   const out = [];
   for (let i = n - 1; i >= 0; i--) {
     const k = todayKey(new Date(sun.getTime() - i * 7 * DAY));
-    out.push({ key: k, v: by[k] || 0 });
+    const w = by[k];
+    out.push({ key: k, v: w ? w.volume : 0, n: w ? w.sessions : 0 });
   }
   return out;
 }
@@ -720,7 +742,7 @@ function carbTarget() {
   return Math.max(0, Math.round((targets.cal - (targets.p || 0) * 4 - (targets.f || 0) * 9) / 4));
 }
 
-function fuelCard() {
+function fuelCard(maint) {
   const c = card('Against your targets', 'last 7 days');
 
   if (!loaded) {
@@ -752,48 +774,100 @@ function fuelCard() {
   }
 
   const avg = key => mean(logged.map(k => summaries[k][key] || 0));
-  const cells = [
-    ['kcal',    avg('cal'), targets.cal,                fmtInt,                    110],
-    ['protein', avg('p'),   Math.round(targets.p || 0), v => Math.round(v) + ' g', null],
-    ['carbs',   avg('c'),   carbTarget(),               v => Math.round(v) + ' g', 110],
-    ['fat',     avg('f'),   Math.round(targets.f || 0), v => Math.round(v) + ' g', 110]
-  ];
+  const avgCal = avg('cal');
 
-  // One ring per target. The ring fills to the share of the target the average
-  // reached and goes green only when that share is the good answer: protein is
-  // a floor, so at or above it is good; the other three are a band, near the
-  // number is the point and either side of it isn't. Any other ring stays
-  // neutral rather than red — a day under target on a cut is not a failure.
-  const row = el('div', 'ring-row');
-  cells.forEach(([label, v, tgt, fmt, band]) => {
-    const cell = el('div', 'ring-cell');
-    if (tgt > 0 && v != null) {
-      const pct = Math.round(v / tgt * 100);
-      const good = band == null ? pct >= 95 : (pct >= 200 - band && pct <= band);
-      cell.appendChild(ring(v / tgt, { size: 64, thickness: 6, color: good ? 'var(--good)' : 'var(--steel)', top: pct + '%' }));
-    } else {
-      cell.appendChild(ring(0, { size: 64, thickness: 6, top: '–' }));
-    }
-    cell.appendChild(el('div', 'ring-lbl', label));
-    cell.appendChild(el('div', 'ring-of num', tgt > 0 ? 'of ' + fmt(tgt) : '–'));
-    row.appendChild(cell);
-  });
-  c.appendChild(row);
+  // The headline is the week's average against the day's target, judged by
+  // the goal: within a few percent is the point whichever way you are going;
+  // over on a cut or under on a gain is a caution; the other side is neutral,
+  // because a day under target on a cut is not a failure. Four rings of
+  // percentages were the first cut of this card and read as four separate
+  // verdicts — one number, one arrow, and the picture under it does the rest.
+  const dir  = goalDir(maint);
+  const diff = avgCal - targets.cal;
+  const near = Math.abs(diff) <= targets.cal * 0.04;
+  const cls  = near ? 'up'
+    : dir == null || dir === 0 ? 'flat'
+    : (dir < 0 && diff > 0) || (dir > 0 && diff < 0) ? 'warn' : 'flat';
+  const hl = el('div', 'headline');
+  hl.appendChild(el('span', 'headline-v num', fmtInt(avgCal)));
+  hl.appendChild(el('span', 'headline-u', 'kcal / day'));
+  hl.appendChild(arrowEl(diff, cls, fmtInt(Math.abs(diff)), near ? 'on target' : diff < 0 ? 'under target' : 'over target'));
+  c.appendChild(hl);
 
-  // The same week as bars, so a 90% ring can be told apart from three days at
-  // 130% and four at 60%. Today is drawn but faded — it isn't over.
+  // Each day is one bar of calories, split into what the calories were made
+  // of, so a 2,400 day of mostly carbs and a 2,400 day of mostly protein stop
+  // looking like the same day. The macro kilocalories are scaled to the day's
+  // logged total rather than summed on their own: an estimated entry's macros
+  // rarely multiply out to exactly its calories, and the bar's height has to
+  // be the number the Fuel tab prints. Today is drawn but faded — it isn't over.
   const today = todayKey();
-  const bars = keysBack(7).map(k => ({
-    label: dayLetter(k),
-    v: summaries[k] && summaries[k].cal > 0 ? summaries[k].cal : 0,
-    dim: k === today
-  }));
-  c.appendChild(el('div', 'chart-sub', 'Calories, day by day'));
-  c.appendChild(barChart(bars, { height: 118, color: C_FUEL, target: targets.cal, targetLabel: 'target', showValues: false }));
+  const bars = keysBack(7).map(k => {
+    const s = summaries[k];
+    const cal = s && s.cal > 0 ? s.cal : 0;
+    const raw = [[(s && s.p) || 0, 4, C_PROT], [(s && s.c) || 0, 4, C_CARB], [(s && s.f) || 0, 9, C_FAT]];
+    const sum = raw.reduce((a, [g, per]) => a + g * per, 0);
+    const parts = sum > 0 ? raw.map(([g, per, color]) => ({ v: g * per / sum * cal, color })) : null;
+    return { label: dayLetter(k), v: cal, parts, dim: k === today };
+  });
+  // Maintenance is the second line only when it is somewhere else than the
+  // target — the two on top of each other is one line with two labels.
+  const lines = [];
+  if (maint && Math.abs(maint.cal - targets.cal) > targets.cal * 0.03) {
+    lines.push({ v: maint.cal, label: 'maint', at: 'start' });
+  }
+  const chart = el('div');
+  chart.style.marginTop = '10px';
+  chart.appendChild(barChart(bars, { height: 128, color: C_FUEL, target: targets.cal, targetLabel: 'target', lines, showValues: false }));
+  c.appendChild(chart);
+  c.appendChild(legendRow([['protein', C_PROT], ['carbs', C_CARB], ['fat', C_FAT]]));
 
-  c.appendChild(noteEl('Rings are the average over the ' + logged.length + ' of the last 7 days you logged food, against each target. ' +
-    'Carbs are the remainder — calories left after protein and fat, never a number you set.'));
+  // The same three, as the week's average against each target. Protein is a
+  // floor and reads green from 95% up; carbs and fat are a band around the
+  // number, and anything outside it stays the subject's colour rather than
+  // going red.
+  const rows = [
+    ['Protein', avg('p'), Math.round(targets.p || 0), C_PROT, null],
+    ['Carbs',   avg('c'), carbTarget(),               C_CARB, 110],
+    ['Fat',     avg('f'), Math.round(targets.f || 0), C_FAT,  110]
+  ];
+  const list = el('div', 'macro-rows');
+  rows.forEach(([name, v, tgt, color, band]) => {
+    const pct = tgt > 0 && v != null ? Math.round(v / tgt * 100) : null;
+    const good = pct != null && (band == null ? pct >= 95 : (pct >= 200 - band && pct <= band));
+    const row = el('div', 'vol-row');
+    row.appendChild(el('div', 'vol-name', name));
+    const track = el('div', 'vol-track');
+    const fill = el('div', 'vol-fill');
+    fill.style.width = Math.min(100, pct || 0) + '%';
+    fill.style.background = color;
+    track.appendChild(fill);
+    row.appendChild(track);
+    row.appendChild(el('div', 'vol-val num', tgt > 0 && v != null ? Math.round(v) + ' / ' + tgt + ' g' : '–'));
+    const badge = el('div', 'macro-pct num' + (good ? ' good' : ''), pct != null ? pct + '%' : '–');
+    row.appendChild(badge);
+    list.appendChild(row);
+  });
+  c.appendChild(list);
+
+  c.appendChild(noteEl('Averaged over the ' + logged.length + ' of the last 7 days you logged food, today left out because it isn’t over. ' +
+    'The dashed line is your daily target' + (lines.length ? ', the dotted one your maintenance' : '') +
+    '. Carbs are the remainder — calories left after protein and fat, never a number you set.'));
   return c;
+}
+
+/* A one-line legend for a chart with more than one series, so no colour is
+   ever the only thing that says which is which. */
+function legendRow(items) {
+  const wrap = el('div', 'legend legend-inline');
+  items.forEach(([label, color, shape]) => {
+    const it = el('div', 'legend-item');
+    const sw = el('i', shape ? 'sw-' + shape : null);
+    sw.style.background = color;
+    it.appendChild(sw);
+    it.appendChild(el('span', 'legend-lbl', label));
+    wrap.appendChild(it);
+  });
+  return wrap;
 }
 
 /* ================= WEIGHT ================= */
@@ -860,17 +934,64 @@ function weightCard(maint) {
     .filter(p => p && Number.isFinite(p.lb) && parseKey(p.d).getTime() > since)
     .map(p => ({ t: parseKey(p.d).getTime(), v: p.lb }));
 
+  // Every raw reading behind the day means, and the normalised trend through
+  // them: the three together say what one line cannot — how noisy the scale
+  // is, and what the noise averages out to.
+  const scatter = Object.values(entries || {})
+    .filter(e => e && e.lb > 0 && Number.isFinite(e.t) && e.t > since)
+    .map(e => ({ t: e.t, v: e.lb }));
+  // adjustedDays() is the day means with the food-and-water correction
+  // applied, not a fitted line — on a quiet fortnight it sits on top of the
+  // raw means, and a dashed copy of the yellow line says nothing. The trend
+  // drawn here is an exponential average over those corrected days (a
+  // quarter of each new day), which is the smooth shape the eye was trying
+  // to find in the wobble; the number it ends on is close to, but not the
+  // same as, trendWeight(), which is why that one is printed separately.
+  const adj = modelReady ? adjustedDays() : null;
+  const src = (adj && adj.length >= 2 ? adj : (s.days || []))
+    .filter(p => p && Number.isFinite(p.lb))
+    .map(p => ({ t: parseKey(p.d).getTime(), v: p.lb }))
+    .sort((a, b) => a.t - b.t);
+  const trend = [];
+  let ema = null;
+  src.forEach(p => {
+    ema = ema == null ? p.v : ema + (p.v - ema) * 0.25;
+    if (p.t > since) trend.push({ t: p.t, v: ema });
+  });
+
   const chart = el('div');
   chart.style.marginTop = '12px';
   chart.appendChild(pts.length >= 2
-    ? lineChart(pts, { color: C_WEIGHT, height: 132, unit: 'lb', dots: pts.length < 30, markMax: false })
+    ? lineChart(pts, { color: C_WEIGHT, height: 148, unit: 'lb', dots: pts.length < 30, markMax: false,
+                       scatter: scatter.length > pts.length ? scatter : null,
+                       line2: trend.length >= 2 ? trend : null, yLabels: true })
     : emptyChart('Two days of weigh-ins draw the first line'));
   c.appendChild(chart);
+  if (pts.length >= 2) {
+    const items = [['daily average', C_WEIGHT]];
+    if (trend.length >= 2) items.push(['trend', 'var(--chalk)', 'dash']);
+    if (scatter.length > pts.length) items.push(['each weigh-in', 'var(--steel)', 'dot']);
+    c.appendChild(legendRow(items));
+  }
 
   const tw = modelReady ? trendWeight() : null;
+  // Three more numbers, because a line has no scale worth reading without
+  // them: where the trend sits today, the week's average, and how far the
+  // window swung from its lowest day to its highest, so a 3 lb wobble can
+  // be told from a 3 lb loss.
+  if (pts.length >= 2) {
+    const lows = pts.map(p => p.v);
+    const lo = Math.min(...lows), hi = Math.max(...lows);
+    const sr = statRow([
+      [tw != null && Number.isFinite(tw) ? trimNum(tw) : '–', 'Trend today'],
+      [Number.isFinite(s.avg7) ? trimNum(s.avg7) : '–', '7-day avg'],
+      [trimNum(hi - lo), 'lb swing']
+    ]);
+    sr.style.marginTop = '12px';
+    c.appendChild(sr);
+  }
   if (tw != null && Number.isFinite(tw)) {
-    c.appendChild(noteEl('The line is the daily average of your weigh-ins. Normalised trend weight today is ' + trimNum(tw) +
-      ' lb — every reading corrected for what food and water were in you when you stood on the scale.'));
+    c.appendChild(noteEl('The yellow line is the daily average of your weigh-ins, the dashed one the normalised trend — every reading corrected for what food and water were in you when you stood on the scale — and the dots are each time you weighed in.'));
   } else if (pts.length >= 2) {
     c.appendChild(noteEl('The daily average of every weigh-in. Weighing twice in a day is what lets Rack learn how much of a reading is breakfast.'));
   } else {
@@ -971,60 +1092,94 @@ function trainingCard() {
 
   const inRange = filterByRange(sessions, 30);
 
-  // The split first: where the month's sets went, with the count in the middle
-  // of the ring so the donut is the only place the total is printed.
-  const split = groupSplit(inRange);
-  if (split.length) {
-    const totalSets = split.reduce((a, x) => a + x.sets, 0);
-    const holder = el('div', 'donut-wrap');
-    holder.appendChild(donut(
-      split.map(x => ({ label: groupLabel(x.group), v: x.sets, color: groupColor(x.group) })),
-      { size: 140, thickness: 18, centerTop: String(totalSets), centerSub: 'sets' }
-    ));
-    holder.appendChild(legend(split.map(x => ({
-      label: groupLabel(x.group),
-      color: groupColor(x.group),
-      value: Math.round(x.sets / totalSets * 100) + '%'
-    }))));
-    c.appendChild(holder);
-  } else {
-    c.appendChild(emptyChart('No working sets in the last 30 days'));
-  }
+  // The month in three numbers first, because "how much did I train" has
+  // three honest answers — how often, how much, how long — and the pictures
+  // under them each show one of the three over time.
+  const vol = inRange.reduce((a, s) => a + (s.volume || 0), 0);
+  const dur = mean(inRange.map(s => s.durationSec).filter(v => v > 0));
+  c.appendChild(statRow([
+    [inRange.length, inRange.length === 1 ? 'Session' : 'Sessions'],
+    [vol > 0 ? compact(vol) : '–', 'lb lifted'],
+    [dur != null ? fmtDuration(Math.round(dur)) : '–', 'Avg session']
+  ]));
 
-  // Then the weeks: is the work getting heavier. Calendar weeks, Sunday-first,
-  // the same buckets the Train stats use, with the empty ones left standing.
+  // The weeks: is the work getting heavier. Calendar weeks, Sunday-first, the
+  // same buckets the Train stats use, with the empty ones left standing and
+  // the number of sessions written over each bar — three light sessions and
+  // one heavy one can add up to the same volume, and that is worth knowing.
   const weeks = weeklySeries(8) || [];
   if (weeks.some(w => w.v > 0)) {
     c.appendChild(el('div', 'chart-sub', 'Volume by week · 8 weeks'));
     c.appendChild(barChart(
-      weeks.map((w, i) => ({ label: fmtDate(w.key), v: w.v, dim: i === weeks.length - 1 })),
-      { height: 110, color: C_TRAIN, showValues: false }));
+      weeks.map((w, i) => ({ label: fmtDate(w.key), v: w.v, note: w.n ? w.n + '×' : '', dim: i === weeks.length - 1 })),
+      { height: 118, color: C_TRAIN, showValues: false }));
+  }
+
+  // Where the month's sets went, as one bar split by muscle group. The
+  // segments are in the plate order the rest of the app uses, so the colours
+  // mean the same thing they mean on the calendar.
+  const split = groupSplit(inRange);
+  if (split.length) {
+    const totalSets = split.reduce((a, x) => a + x.sets, 0);
+    c.appendChild(el('div', 'chart-sub', 'Working sets by muscle · ' + totalSets + ' sets'));
+    const bar = el('div', 'split-bar');
+    split.forEach(x => {
+      const seg = el('div', 'split-seg');
+      seg.style.flex = String(x.sets);
+      seg.style.background = groupColor(x.group);
+      bar.appendChild(seg);
+    });
+    c.appendChild(bar);
+    c.appendChild(legendGrid(split.map(x => ({
+      label: groupLabel(x.group),
+      color: groupColor(x.group),
+      value: Math.round(x.sets / totalSets * 100) + '%'
+    }))));
+  } else {
+    c.appendChild(emptyChart('No working sets in the last 30 days'));
   }
 
   // topBy filters on e[key] > 0 and e1rm returns 0 without a weight
   // (analytics.js:59, 311), so a log made entirely of bodyweight work leaves
-  // this empty rather than short.
+  // this empty rather than short. Each lift carries a bar scaled to the
+  // strongest one, so the list has a shape and not just a column of numbers.
   const index = exerciseIndex(sessions);
   const best = topBy(index, 'bestE1rm', 3);
   c.appendChild(el('div', 'chart-sub', 'Strongest lifts · all time'));
   if (!best.length) {
     c.appendChild(noteEl('Nothing to rank yet — an estimated 1RM needs a weight on the bar, so bodyweight work doesn’t produce one.'));
   } else {
+    const top = best[0].bestE1rm;
     best.forEach(e => {
       const row = el('div', 'pb-row');
-      const body = el('div');
+      const body = el('div', 'pb-body');
       body.appendChild(el('div', 'pb-lbl', e.name));
       body.appendChild(el('div', 'pb-sub', e.bestE1rmSet
         ? e.bestE1rmSet.w + ' × ' + e.bestE1rmSet.r + '  ·  ' + (e.bestE1rmDate ? fmtDate(e.bestE1rmDate) : '')
         : e.sessions + ' sessions'));
+      const track = el('div', 'pb-track');
+      const fill = el('div', 'pb-fill');
+      fill.style.width = Math.round(e.bestE1rm / top * 100) + '%';
+      fill.style.background = groupColor(e.group);
+      track.appendChild(fill);
+      body.appendChild(track);
       row.appendChild(body);
       row.appendChild(el('div', 'pb-val num', Math.round(e.bestE1rm) + ' lb'));
       c.appendChild(row);
     });
   }
-  c.appendChild(noteEl('The ring is working sets by muscle group over ' + inRange.length + ' session' + (inRange.length === 1 ? '' : 's') +
-    ' this month; the bars are total volume by week, this week faded because it isn’t over. Lifts are ranked by estimated 1RM from your best working set — warm-ups never count.'));
+  c.appendChild(noteEl('The numbers and the split are the last 30 days, ' + inRange.length + ' session' + (inRange.length === 1 ? '' : 's') +
+    '; the bars are total volume by calendar week, this week faded because it isn’t over. Lifts are ranked by estimated 1RM from your best working set — warm-ups never count.'));
   return c;
+}
+
+/* The shared legend is a single column, which is the right shape beside a
+   donut and the wrong one under a full-width bar: six rows of one word each.
+   Two columns, the same items. */
+function legendGrid(items) {
+  const l = legend(items);
+  l.classList.add('legend-grid');
+  return l;
 }
 
 // The six group keys are already their own labels once capitalised, which is
@@ -1065,10 +1220,27 @@ function goalCard(title, o) {
 
   const bars = el('div');
   bars.style.marginTop = '8px';
-  bars.appendChild(barChart(o.bars, { width: 150, height: 96, color: o.color, target: o.goal, showValues: false }));
+  // The days that cleared the goal are drawn in the good colour and the rest
+  // in the subject's, so "3 of 6 at goal" is visible in the bars before it is
+  // read under them.
+  bars.appendChild(barChart(o.bars.map(b => ({ ...b, color: b.v >= o.goal ? 'var(--good)' : o.color })),
+    { width: 150, height: 96, color: o.color, target: o.goal, showValues: false }));
   c.appendChild(bars);
 
   c.appendChild(el('div', 'ring-lbl', o.hit + ' of ' + o.logged.length + ' days at goal'));
+
+  // Two small numbers the ring and the bars cannot carry on their own: the
+  // best day, and the week's total.
+  if (o.stats && o.stats.length) {
+    const row = el('div', 'mini-stats');
+    o.stats.forEach(([v, l]) => {
+      const cell = el('div', 'mini-stat');
+      cell.appendChild(el('div', 'mini-stat-v num', String(v)));
+      cell.appendChild(el('div', 'mini-stat-l', l));
+      row.appendChild(cell);
+    });
+    c.appendChild(row);
+  }
   return c;
 }
 
@@ -1085,6 +1257,10 @@ function stepsCard() {
     hit: logged.filter(k => stepDays[k].steps >= g).length,
     fmt: fmtInt,
     bars: wk.map(k => ({ label: dayLetter(k), v: stepDays[k] && stepDays[k].steps > 0 ? stepDays[k].steps : 0, dim: k === today })),
+    stats: logged.length ? [
+      [compact(Math.max(...logged.map(k => stepDays[k].steps))), 'best day'],
+      [compact(logged.reduce((s, k) => s + stepDays[k].steps, 0)), 'this week']
+    ] : null,
     none: 'Nothing this week. Your goal is ' + g.toLocaleString() + ' a day.',
     goLabel: 'Open Steps', view: 'steps'
   });
@@ -1103,6 +1279,12 @@ function waterCard() {
     hit: logged.filter(k => waterDays[k] >= g).length,
     fmt: v => fmtWater(v, waterUnit()),
     bars: wk.map(k => ({ label: dayLetter(k), v: waterDays[k] > 0 ? waterDays[k] : 0, dim: k === today })),
+    // "600 fl oz" does not fit a half-card cell; "600 oz" does, and under a
+    // water heading it is not ambiguous.
+    stats: logged.length ? [
+      [fmtWater(Math.max(...logged.map(k => waterDays[k])), waterUnit()).replace(' fl oz', ' oz'), 'best day'],
+      [fmtWater(logged.reduce((s, k) => s + waterDays[k], 0), waterUnit()).replace(' fl oz', ' oz'), 'this week']
+    ] : null,
     none: 'Nothing this week. Your goal is ' + fmtWater(g, waterUnit()) + ' a day.',
     goLabel: 'Open Fuel', view: 'food'
   });

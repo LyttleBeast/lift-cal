@@ -197,12 +197,19 @@ answerable from the console instead of by guessing.
 
 Everything below is a path under `users/{uid}`.
 
-## `profile` → `{ name, email, sex, heightIn, birthYear, createdAt }`
+## `profile` → `{ name, email, sex, heightIn, birthYear, createdAt, photo }`
 
 Written by onboarding, and — since the settings hub — editable afterwards at
 You → ⚙ → *Your details*. `sex` is `m` | `f` | `x` and feeds the Mifflin-St Jeor
 starting estimate; nothing else reads it, and nothing recalculates when it
 changes.
+
+`photo` is the profile picture: a JPEG data URL, at most 24,000 characters,
+and the rules check both the prefix and the length. There is no file storage
+behind the app and this node is not one — the app shrinks the picture to a
+144-pixel square before writing (settings.js `shrinkPhoto`), stepping the
+quality and then the size down until it fits, so a full-size camera frame can
+never reach the write. Tap the avatar on You, or You → ⚙ → *Your details*.
 
 Two things to know before writing here. Setup that was skipped writes only
 `{ name, createdAt }`, so every other key is legitimately absent and needs a

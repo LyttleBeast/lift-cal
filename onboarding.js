@@ -97,10 +97,16 @@ const ACTIVITY = [
   ['high',  'Very active',     1.725,12000, 'Physical job, or two sessions a day']
 ];
 
+// Named the way people name them — cutting, maintaining, bulking — because
+// that is the word the person already has for what they are doing, and the
+// same word the Fuel bar uses for its bands. The rate is what the choice
+// writes (food/targets.auto.rateWk) and its sign is what the Fuel bar and the
+// You tab read the goal back from, so the three rates stay non-zero for the
+// two that move and exactly zero for the one that doesn't.
 const GOALS = [
-  ['cut',  'Lose fat',   -1,   'About a pound a week'],
-  ['hold', 'Stay here',   0,   'Eat at maintenance'],
-  ['gain', 'Build',      0.5,  'About half a pound a week']
+  ['cut',  'Cutting',     -1,   'Lose fat, keep muscle — about a pound a week down'],
+  ['hold', 'Maintaining',  0,   'Hold your weight and eat at maintenance'],
+  ['gain', 'Bulking',     0.5,  'Build muscle — about half a pound a week up']
 ];
 
 export function estimateMaintenance({ sex, heightIn, birthYear, lb, activity }) {
@@ -381,7 +387,7 @@ export function runSetup(user) {
     /* ---- 3. goal ---- */
     function goalStep() {
       body.appendChild(el('div', 'ob-kicker', 'Goal'));
-      body.appendChild(el('h1', 'ob-title', 'What are you after?'));
+      body.appendChild(el('h1', 'ob-title', 'Cutting, maintaining or bulking?'));
 
       const wrap = el('div', 'ob-choices');
       GOALS.forEach(([id, label, rate, sub]) => {
@@ -392,7 +398,7 @@ export function runSetup(user) {
         wrap.appendChild(b);
       });
       body.appendChild(wrap);
-      body.appendChild(noteEl('Pick roughly. Rack nudges the numbers as it learns what your body actually does.'));
+      body.appendChild(noteEl('Pick roughly. It sets your starting calories and leans the Fuel bar toward the band you are aiming for; Rack nudges the numbers as it learns what your body actually does.'));
       nav({});
     }
 
