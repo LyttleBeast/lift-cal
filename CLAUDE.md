@@ -7,7 +7,8 @@ estimator. There is no framework, no bundler and no build step: the browser
 loads `app.js` as an ES module and that module graph is the whole app.
 
 Read [AGENTS.md](AGENTS.md) before touching anything that reads or writes the
-database. It is the schema, node by node, and the access model.
+database. It is the schema, node by node, and the access model. It is also 20KB,
+so read it when the change actually touches data — not for a CSS fix.
 
 ---
 
@@ -22,14 +23,14 @@ does not deploy the Worker — that is `npx wrangler deploy`, run from inside
 
 *History, so older docs make sense:* until September 2026 the Worker's files sat
 loose at the repo root as `index.js`, `wrangler.toml` and `package.json`, and
-were copied by hand into a separate wrangler project on Micah's machine. That is
-why `DEPLOY.md` talks about copying `index.js` into `src/index.js` somewhere
-else. `worker/` is now the only copy.
+were copied by hand into a separate wrangler project on Micah's machine.
+`worker/` is now the only copy.
 
-**`DEPLOY.md` is history, not process.** It documents one specific past
-deployment — the multi-account lockdown of August 2026 — down to files that have
-since been deleted. Do not follow it as a checklist for new work. The current
-process is the handoff at the bottom of this file.
+**`DEPLOY.md` is the current checklist — read it before shipping anything.** It
+covers the three separate deploy targets (app, Firebase rules, Worker), the
+version-bump rule, how to verify a ship, and how Micah adds a person. It was
+rewritten in September 2026; older sessions and older docs describe it as stale
+history, and that is no longer true. The handoff below is still how you end.
 
 ## Layout
 
@@ -53,8 +54,8 @@ process is the handoff at the bottom of this file.
 
 **1. Bump the service worker on any change to a file the phone loads.**
 
-`sw.js` opens with `const CACHE='rack-v13'`. Increment it — `rack-v14`, then
-`rack-v15` — in the same change as any edit to `*.js`, `*.css`, `index.html`
+`sw.js` opens with `const CACHE='rack-vNN'`. Read the current number and
+increment it — in the same change as any edit to `*.js`, `*.css`, `index.html`
 or `404.html`. The service worker caches under that name, so a change shipped
 without a bump reaches nobody's phone and looks, from the outside, exactly like
 a change that didn't work. State the new version in your summary. Changes
@@ -92,6 +93,9 @@ Cloudflare's encrypted secret store, and the app on the phone has no key at all.
 - Match the surrounding file. These files are long and hand-written; a reformat
   buries the actual change.
 - Small diffs. Change what was asked and what it breaks, nothing else.
+- Read narrowly. `food.js` is 116KB and `rack.css` 62KB — reading either whole
+  costs a sixth of the context window. Grep for the symbol and read the range
+  around it, and prefer a targeted edit over rewriting a file.
 - The comments and docs here explain *why*, not *what*. Keep writing them that
   way.
 - The house rules for touching data are at the bottom of `AGENTS.md`. They still
