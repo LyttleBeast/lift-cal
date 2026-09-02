@@ -13,6 +13,7 @@ import { openStats, isStatsOpen, renderStats, refresh as refreshStats } from './
 // use them without importing this file back.
 import { initPicker, allExercises, openPicker, openExerciseManager } from './picker.js';
 import { initRoutines, openRoutines, saveSessionAsRoutine } from './routines.js';
+import { bump } from './usage.js';
 
 let monthCache = {};        // 'YYYY-MM' -> { 'DD': { sessionId: record } }
 let viewMonth  = new Date();
@@ -430,6 +431,7 @@ function startWorkout(preset) {
     startedAt: Date.now(),
     exercises: (preset && preset.exercises) || []
   };
+  bump('workoutStart');
   persistSession();
   requestWakeLock();
   render();
@@ -680,6 +682,7 @@ function renderSet(ex, exIdx, s, i) {
   chk.setAttribute('aria-label', s.done ? 'Mark set incomplete' : 'Mark set complete');
   chk.onclick = () => {
     s.done = !s.done;
+    if (s.done) bump('setLogged');
     persistSession();
     const wasDone = s.done;
     render();
@@ -858,6 +861,7 @@ async function finishWorkout() {
   } catch {}
 
   await write(`workouts/${mk}/${dd}/${session.id}`, record);
+  bump('workoutFinish');
 
   // update per-exercise history for the "last time" line
   done.forEach(ex => {

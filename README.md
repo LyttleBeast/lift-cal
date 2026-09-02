@@ -8,6 +8,7 @@ Multi-account: every account holds its own training log, food, weight, water and
 steps, and no account can see or touch another's. New people get in with an
 invite code, or by asking the owner and being approved. See *Access* below.
 
+- **You** — the tab the app opens on. A read-only summary of the other four and of how their numbers pull on each other: this week against the last, intake against targets, the scale against maintenance, printed as arithmetic rather than asserted. Nothing on it writes anything. The gear in its header is where every setting in the app now lives.
 - **Train** — full workout tracker: saved routines, plate-colored calendar, session timer, W/F/D set tags, 231-exercise library, last-time numbers, rest timer, per-side plate math, e1RM, swipe-to-delete sets, editable history, a post-workout recap with personal records, and a full statistics page.
 - **Fuel** — nutrition: **photograph a plate and Claude reads the macros off it**, or just describe what you ate. Plus macro targets, saved-food library, barcode scanning via Open Food Facts, manual entry, saved meals, one-tap portion multiplying, micronutrient floors, paste import.
 - **Weight** — body-weight log: 7-day moving average chart, weekly rate, a learned time-of-day curve, and a maintenance (TDEE) estimate built on normalised weigh-ins with a stated confidence interval.
@@ -32,13 +33,18 @@ Firebase Console → Realtime Database → Rules → **Publish**. The shape:
 
 ```
 users/$uid          read:  own uid, and only while approved
-                    write: same, and only under the nine known sections
+                    write: same, and only under the eleven known sections
 access/approved/$uid the allowlist. Owner writes it; a valid invite code lets
                      an account write its own, once, atomically with the claim
 access/invites/$code owner-only, except the used-stamp the claimer sets
 access/requests/$uid an account files its own; only the owner reads the queue
-aiAllow/$uid         two booleans. Publicly readable BY KEY so the Worker can
-                     check it without credentials; `blocked` is owner-only
+aiAllow/$uid         two booleans and two optional daily limits. Publicly
+                     readable BY KEY so the Worker can check it without
+                     credentials; `blocked`, `photoPerDay` and `textPerDay`
+                     are owner-only
+usage/$uid           counters, and nothing that isn't a counter. An account
+                     writes its own day keys; the owner reads every account's
+                     and can write nobody's but his own
 everything else      denied at the root
 ```
 
@@ -48,8 +54,14 @@ release:
 - **No public read anywhere.** An unauthenticated `curl` at any user path gets
   `Permission denied`. That includes the owner's subtree, which used to be open.
 - **No account can reach another's data**, in either direction. There is no
-  admin read: the owner cannot see the roommate's food log through the app or
-  over REST, only who has access.
+  admin read of anybody's log: the owner cannot see the roommate's food,
+  weigh-ins, workouts or steps through the app or over REST. What he can see is
+  who has access, and — under `usage` — how often each account opened a screen
+  or used a feature: whole numbers per day, a platform token, whether the app is
+  installed to a home screen, an app version, and first- and last-seen stamps.
+  Nothing logged is in that tree and neither is a name or an email; the names
+  beside the counters in the admin panel come from `access/approved`, which is
+  the allowlist he writes himself.
 - **An unapproved account holds nothing.** It cannot write a byte, so a stranger
   who signs up costs a row in Authentication and nothing else.
 - **The owner cannot lock himself out.** His uid is exempt from the approval
@@ -61,6 +73,10 @@ release:
 rather than at `users/$uid`. RTDB write rules only ever grant and always cascade
 down, so granting at the parent would make the subtree free storage for anyone
 with an account; granting per section means an unknown key has no grant at all.
+`usage/$uid` is written the same way and for the same reason: the grant sits on
+the day key, `usage/$uid/days/$day`, never on the container above it, and the
+`YYYY-MM-DD` shape is checked in the write rule itself, where `$day` is in
+scope — so a junk key has no grant to begin with.
 
 ### The agent account
 
@@ -72,12 +88,16 @@ node in the database. See *Access* below for what replaced them, and why.
 
 | File | What it is |
 |---|---|
-| `index.html` | The only markup: auth gate, four empty views, bottom dock |
+| `index.html` | The only markup: auth gate, five empty views, bottom dock |
 | `app.js` | Shell — sign-in/sign-up, access gate, boot order, tab router, service worker |
+| `you.js` | You tab — the screen the app opens on. Read-only; every number is re-derived |
+| `settings.js` | The settings hub behind the You gear, and the profile editor |
+| `admin.js` | Owner-only panel — feature usage, AI allowances, People & access |
+| `usage.js` | Counters-only telemetry: the `usage/{uid}` ledger, and platform detection |
 | `store.js` | Data layer — Firebase + per-account localStorage mirror + offline queue |
 | `firebase-config.js` | Public project keys and the owner UID |
-| `access.js` | Who is allowed in — invite codes, requests, approval, the People sheet |
-| `onboarding.js` | First run — setup questions, starting targets, the four-tab tour |
+| `access.js` | Who is allowed in — invite codes, requests, approval; `admin.js` draws the People UI from it |
+| `onboarding.js` | First run — setup questions, starting targets, add-to-home-screen, the five-tab tour |
 | `database.rules.json` | **The security rules.** Paste into the Firebase console |
 | `auth.css` | Styles for the sign-in box, waiting screen, onboarding and People |
 | `ui.js` | Shared primitives — sheets, toasts, confirms, swipe, date/number helpers |
@@ -91,7 +111,7 @@ node in the database. See *Access* below for what replaced them, and why.
 | `ai-config.js` | The Worker URL. A public address, not a credential |
 | `worker/` | Cloudflare Worker that holds the Anthropic key. **Read `worker/README.md` to set it up** |
 | `water.js` | Water card, log sheet, goal and sizes |
-| `weight.js` | Weight tab and app settings |
+| `weight.js` | Weight tab — log, trend chart, time-of-day curve, maintenance |
 | `steps.js` | Steps tab — ring, trend, streaks, heat map, and the setup walkthrough |
 | `tdee.js` | Public face of the weight math — trend, maintenance, calorie zones |
 | `weightmodel.js` | Weigh-in normalisation: gut-load model, coefficient fit, robust slope |
@@ -99,7 +119,7 @@ node in the database. See *Access* below for what replaced them, and why.
 | `importer.js` | One-time Liftoff history migration |
 | `rack.css` | The stylesheet |
 | `404.html` | Branded not-found page |
-| `sw.js` | Service worker, network-first, cache `rack-v12` |
+| `sw.js` | Service worker, network-first, cache `rack-v13` |
 | `AGENTS.md` | The database schema, node by node |
 | `rack.mjs` | **Dead file** — CLI for the removed agent account, kept as a record |
 | `app.css` | **Dead file** — the abandoned "IRONLOG" design, not referenced anywhere |
@@ -107,25 +127,54 @@ node in the database. See *Access* below for what replaced them, and why.
 Import direction is strictly one-way, no cycles:
 
 ```
-app.js → workout.js → stats.js ──→ analytics.js → ui.js
-                    → picker.js ─────────────────→ ui.js
-                    → routines.js → picker.js
-      → food.js   → water.js ────────────────────→ ui.js
-                  → ai.js → ai-config.js
-                          → store.js (idToken only)
-                  → tdee.js → weightmodel.js ────→ ui.js
-      → steps.js  → analytics.js
-      → weight.js → importer.js ─────────────────→ ui.js
-                  → access.js ───────────────────→ ui.js
-                  → tdee.js
-                  → workout.js (hasActiveSession only)
-      → access.js → store.js
+app.js → you.js       → settings.js → food.js  water.js  steps.js  workout.js
+                                    → picker.js  importer.js  ai.js
+                                    → onboarding.js
+                      → admin.js    → access.js ──────────────→ store.js
+                                    → analytics.js
+                                    → ai.js
+                      → analytics.js ───────────────────────→ ui.js
+                      → tdee.js → weightmodel.js ───────────→ ui.js
+                      → water.js
+                      → onboarding.js
+      → workout.js    → stats.js ──→ analytics.js ─────────→ ui.js
+                      → picker.js ──────────────────────────→ ui.js
+                      → routines.js → picker.js
+      → food.js       → water.js ───────────────────────────→ ui.js
+                      → recall.js ──────────────────────────→ store.js
+                      → ai.js → ai-config.js
+                              → store.js (idToken only)
+                      → tdee.js → weightmodel.js ───────────→ ui.js
+      → steps.js      → analytics.js
+      → weight.js     → tdee.js
+                      → analytics.js
+      → access.js     → store.js
       → onboarding.js → tdee.js
+      → usage.js ─────────────────────────────────────────→ store.js
 ```
 
 `picker.js` exists so `routines.js` and `workout.js` can share the exercise
 picker without importing each other. `workout.js` hands its `startWorkout` to
 `routines.js` as a callback; routines never imports back.
+
+`usage.js` is imported by eleven modules — the eight that count something, plus
+`you.js` and `onboarding.js` for its home-screen detection and `admin.js` for
+its event list — and it imports nothing but `store.js`. That is what makes it
+safe to import from anywhere: a module at the bottom of the graph can never
+close a loop, and `bump()` is one line at a call site that already has real work
+to do.
+
+**`you.js` imports none of the four tab modules.** Every number on the opening
+screen is re-derived from `store.read()` — which answers out of the per-account
+localStorage mirror — and from the shared math in `tdee.js` and `analytics.js`.
+The point is not a smaller graph: `settings.js` pulls Fuel, Train, Steps, Water
+and the importer straight back in, because the settings hub opens the sheets
+those files already own. The point is that nothing on the screen the app opens
+on depends on another tab's module state, or on the order the four of them
+initialised in. `initYou()` runs after all four and asks none of them anything.
+Where a number has to agree with a tab — maintenance, which Fuel also prints —
+both read the same precedence out of the same node rather than each deriving
+their own.
 
 ---
 
@@ -143,8 +192,13 @@ to be re-proved every time a node is added.
 So it is gone, replaced by one flat statement enforced in
 [`database.rules.json`](database.rules.json):
 
-> An account can read and write `users/{its own uid}` and nothing else, and only
-> while `access/approved/{its own uid}` exists.
+> An account can read and write `users/{its own uid}`, and only while
+> `access/approved/{its own uid}` exists.
+
+Every byte of anybody's log lives under there. Outside it an account only ever
+touches records *about* itself, never content: it files its own
+`access/requests/{uid}`, claims an approval with a valid invite code, flips its
+own `aiAllow/{uid}/on`, and writes its own counters under `usage/{uid}`.
 
 Practically:
 
@@ -166,9 +220,11 @@ of that is untouched.
 
 Two doors, one allowlist.
 
-**Invite code.** Weight tab → Settings → **People & access** → *New invite code*.
+**Invite code.** You tab → **Admin** → *People & access* → *New invite code*.
 Ten characters, `ABCDE-FGHJK`, no ambiguous letters, single use. They enter it on
-the sign-up form and are in immediately.
+the sign-up form and are in immediately. The Admin row is only drawn for the
+owner, and the rules are what actually decide — that check is a courtesy, not a
+gate.
 
 **Request.** Anyone can create an account without a code. They land on a waiting
 screen holding no data at all, their request appears under People & access, and
@@ -189,11 +245,25 @@ rules on every single read and write.
 
 `aiAllow/{uid}` decides who may spend the Anthropic balance. An approved account
 switches its own `on` flag; only the owner can set `blocked`, and blocked wins —
-that is the **AI…** button next to each person. Limits are **3 photo and 3
+that is the **AI…** button next to each person. The default is **3 photo and 3
 describe estimates per person per day**, counted separately because a photo
-costs about ten times what the same meal costs described. They live in the
-Worker's settings where no client can reach them, under a shared monthly dollar
-cap that is the thing actually protecting the money.
+costs about ten times what the same meal costs described. That default lives in
+the Worker's settings, where no client can reach it.
+
+One account at a time can be given more, from **You → Admin → AI allowance**,
+which writes `photoPerDay` / `textPerDay` into that account's `aiAllow` node.
+The reasoning that kept the numbers out of the database still holds — a client
+that could rewrite its own limit does not have one — so the write is owner-only
+and bounded twice: the rules refuse anything above **12 photo or 30 describe**,
+and the Worker clamps whatever it reads to the same two ceilings before it uses
+it. A value it cannot read as a number is not a limit at all, and it falls back
+to the default rather than to zero.
+
+The count is not what protects the money. The monthly dollar cap in the Worker
+is, and it is **per account**, not shared: the running spend lives in KV under
+`q:{uid}`, so everybody gets their own dollar. At the 12-photo ceiling a $1 cap
+is gone inside a fortnight, so raising somebody's allowance without raising
+`MONTHLY_USD_CAP` in `worker/wrangler.toml` only changes which refusal they get.
 
 ## Food import by paste
 
@@ -201,7 +271,7 @@ The manual route in, and now the only one from outside the app. Both forms end
 in a confirmation card; nothing logs without a tap on **Log it**.
 
 1. **Link** — `https://lyttlebeast.github.io/lift-cal/#log=BASE64URL_JSON`
-2. **Paste** — Fuel → ⚙ → Paste food JSON
+2. **Paste** — Fuel → ⚙ → Paste food JSON, or You → ⚙ → Fuel → Paste food JSON
 
 Payload format (single item, an array, or `{"items":[…]}`):
 
@@ -222,6 +292,89 @@ Any food already in the log produces this exact shape: tap it → **Copy JSON**.
 is how you lift last Tuesday’s dinner onto today without retyping it — or, if
 you’re already looking at last Tuesday, **Log on today** skips the clipboard
 entirely.
+
+## You details
+
+- **It is the first thing that paints, and it never writes.** Every card is a
+  read-out; every button either sends you to the tab that owns the number or
+  opens the settings hub. `#view-you` is `active` in the markup and `initYou()`
+  paints its skeleton before its first `await`, so the tab is never an empty
+  box — and if it throws on the way up, the router lands you on Train instead.
+- **What it shows**: this week against last week, intake against targets, the
+  scale and its trend, the thesis card, training over 30 days, steps and water
+  against their goals, and days on record with the current streak. Every card
+  has a real empty state, because a one-weigh-in account should read as an
+  invitation and not as a wall of dashes.
+- **A delta is coloured by meaning, never by sign.** Weight falling on a cut is
+  green. Which way is better comes from the goal rate set at setup, or failing
+  that from where the calorie target sits against maintenance; when neither is
+  knowable the delta stays neutral rather than guessing.
+- **The thesis card prints the arithmetic** instead of asserting the answer:
+  what you ate on average, the shift the scale implies, and the maintenance
+  number the two add up to. The shift is derived *from* that total rather than
+  computed alongside it — both maintenance paths round the result to ten and
+  neither rounds its operands, so worked out independently the three lines
+  would not close on screen, which looks like a bug in the app rather than in
+  the rounding.
+- **Maintenance follows Fuel's precedence exactly**: a number you pinned wins,
+  otherwise the measured estimate. Two screens quoting different maintenance
+  numbers is the most confusing thing this app could do.
+- **Today is left out of every intake average**, the same way the maintenance
+  estimate leaves it out. A day you are still eating is an unfinished day, not
+  a small appetite.
+- Until the app is running from the home screen there is a dismissible card
+  offering the install walkthrough — the same one setup now shows as a step,
+  and the same one the settings hub opens.
+- Which tab the app opens on is a setting: You, Train, or the one you closed on.
+  A live workout outranks all three.
+
+### Settings
+
+One sheet, behind the gear in the You header, and the only settings surface in
+the app. The card at the bottom of the Weight tab is gone.
+
+| | |
+|---|---|
+| **You** | Your details — name, sex, height, birth year — and which tab the app opens on |
+| **Fuel** | Daily targets · Water goal and sizes · AI estimator · Food memory · Paste food JSON |
+| **Train** | Default rest · Exercise library · Import workout history |
+| **Steps** | Step goal · Step automation: the exact settings |
+| **App** | Add to Home Screen · Replay the walkthrough · Sign out · Sign out and erase this device's copy |
+
+Almost none of it is implemented there. The hub is a table of contents that
+knows where Fuel's, Water's, Steps' and Train's own sheets live and opens them,
+and the gears on the Fuel and Steps headers still open the same sheets directly —
+the hub is a second door, not a replacement. The two exceptions are the ones
+that had nowhere else to be: the profile editor, which is the first code that
+has ever written `profile` after onboarding, and the two sign-out paths, the
+only controls in the app that can lose anything.
+
+Rows show a live value — targets, water goal, step goal — from the owning
+module's own copy, never from a fresh read. Fuel moves its targets in memory
+when the weight trend says it should, so a re-read would sometimes quote a
+number the Fuel tab has already stopped using.
+
+### The owner's panel
+
+An **Admin** row, drawn only for the owner, takes the You tab over: accounts,
+requests waiting and live invite codes; charts of which tabs get opened and how
+food actually gets logged; a per-account breakdown; the AI allowance editor; and
+People & access folded in whole.
+
+Everything on it is something the owner is allowed to read — `access/*`,
+`aiAllow/{uid}` a uid at a time, and the `usage` counters. There is no path from
+it to anybody's food log, weigh-ins or workouts, and there is not meant to be
+one.
+
+It is also careful about what it does not know. The counters are written by each
+phone and flushed as absolute per-day values, so two devices on one day converge
+on the larger count rather than the true one — that is a shape, not an audit,
+and the panel says so on screen. The Worker's `/quota` answers for whoever's
+token asked, so the spend card is the owner's own and is labelled as his own.
+And a permission refusal and an empty node arrive as the same `null`, so before
+drawing zeros the panel checks a read it is known to be allowed: if the access
+list came back and the usage tree did not, it says the rules have not been
+published yet rather than reporting that nobody uses the app.
 
 ## Train details
 
@@ -284,7 +437,8 @@ the button.
 in this repo to every visitor; there is no private half of a static site. The
 key lives in a Cloudflare Worker (`worker/`) which verifies the caller's
 Firebase ID token, checks it against a uid allowlist, applies per-minute and
-per-day rate limits, and enforces a hard monthly dollar cap before it will call
+per-day rate limits — the per-day ones raisable per account, and ceilinged in
+code — and enforces a hard per-account monthly dollar cap before it will call
 Anthropic at all. Setup: **`worker/README.md`**. The Worker URL in
 `ai-config.js` is an address, not a secret — a stranger who finds it gets a 401.
 
@@ -297,8 +451,9 @@ never leave the phone.
 ### Targets and the day
 
 - Targets default 2,700 kcal / 215 g protein / 80 g fat; **carbs are the remainder**.
-  Targets, maintenance and the JSON paste box live behind the ⚙ in the Fuel header.
-- **Targets can follow the scale.** Fuel → ⚙ → Daily targets has a switch: *Set them*
+  Targets, maintenance and the JSON paste box live behind the ⚙ in the Fuel header,
+  and under *Fuel* in the settings hub — the same sheets, two doors.
+- **Targets can follow the scale.** Daily targets has a switch: *Set them*
   keeps the old behaviour, *Follow my weight* means you set a goal rate and grams-per-pound
   instead of numbers. Protein and fat then track your **trend** bodyweight — normalised, not
   the last weigh-in — and calories track the live maintenance estimate, so a cut doesn't
@@ -315,8 +470,8 @@ never leave the phone.
   three bands: left of the first is a deficit, between them is holding, right of the second
   you're gaining — and the fill takes the colour of the band you're standing in. The ticks sit
   a collar of ~8% either side of maintenance (call it 200 kcal, under half a pound a week),
-  anchored on your number from ⚙ if you've set one, otherwise the estimate off your weight
-  trend. With neither, the bar falls back to plain progress against target and says so. A
+  anchored on the number you pinned in Daily targets if you've set one, otherwise the
+  estimate off your weight trend. With neither, the bar falls back to plain progress against target and says so. A
   blowout day pins the bar full rather than stretching the axis until the bands are slivers.
 - **Tap any logged food → ×2 / ×3 / ×4 / Half** to scale it, or *Log this again separately*
   to add a second helping as its own entry. **Copy JSON** lifts it out in the shape the paste
@@ -332,8 +487,9 @@ never leave the phone.
 
 ## Water details
 
-- Goal, display unit and the quick-add sizes live behind the ⚙ in the Fuel header. The
-  goal can be suggested from bodyweight at roughly half an ounce per pound.
+- Goal, display unit and the quick-add sizes live behind the ⚙ in the Fuel header, and
+  under *Fuel* in the settings hub. The goal can be suggested from bodyweight at roughly
+  half an ounce per pound.
 - The card sits above Micronutrients: a bottle that fills, one pip per standard bottle, and
   a fat button for your default size. `⋯` opens every size, a custom amount in any unit,
   and today's entries with swipe-to-delete.
@@ -349,9 +505,11 @@ never leave the phone.
   automation later, and nothing breaks when it misses a day.
 - Tap **Set total** for the whole day's number, or `+500 / +1k / +2.5k` to nudge
   it. Any of the last 14 days is tappable to correct, swipe-left to clear.
-- **⚙ → Log steps automatically** is a walkthrough built into the app, with an
-  iPhone / Android switch, so a new tester can set themselves up without being
-  talked through it. It ends on a card showing the two exact requests.
+- **Steps → ⚙ → Log steps automatically** is a walkthrough built into the app, with
+  an iPhone / Android switch, so a new tester can set themselves up without being
+  talked through it. It ends on a card showing the two exact requests. The settings
+  hub reaches the walkthrough through *Step goal*, and opens that last card on its
+  own as *Step automation: the exact settings*.
 - The automation signs in **as that person**, and the sign-in response carries
   their own `localId`, so the same recipe works for every account unmodified —
   nobody types an account id and no shared credential exists anywhere.
@@ -389,8 +547,9 @@ never leave the phone.
   correction the model is applying, stated back to you.
 - Steps are deliberately **not** an input. This estimator is empirical — activity is already
   inside the scale trend, and adding a step term would double-count it.
-- The public API lives in `tdee.js` because Fuel's calorie bar needs the same number, and
-  two copies of it is how two screens start disagreeing. `weightmodel.js` holds the math.
+- The public API lives in `tdee.js` because Fuel's calorie bar and the You tab's thesis
+  card need the same number, and three copies of it is how three screens start
+  disagreeing. `weightmodel.js` holds the math.
 
 ---
 
@@ -399,8 +558,10 @@ never leave the phone.
 - Flat file layout — GitHub Pages serves it directly from the repo root.
 - Timers are timestamp-based, so iOS background throttling doesn't cause drift.
 - Writes queue in `localStorage` when offline and flush on reconnect.
-- Service worker is network-first with cache fallback (`rack-v8`). Bump the cache name in
+- Service worker is network-first with cache fallback (`rack-v13`). Bump the cache name in
   `sw.js` when you need to force-evict old assets. It bypasses `*.workers.dev` the same way
-  it bypasses Firebase — an estimate must never come out of a cache.
+  it bypasses Firebase — an estimate must never come out of a cache. `usage.js` holds the
+  same string a second time, because a service worker is not a module the app can import
+  and the version is what each account reports as its own; move the two together.
 - If a deploy looks stuck, edit `.nojekyll` (bump the "redeploy N") and push — that forces
   GitHub Pages to rebuild.

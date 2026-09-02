@@ -12,9 +12,10 @@
 // that rollup goes stale. A day of water is a handful of entries — sum it on
 // read. Don't build a second thing that can disagree with itself.
 //
-// Imports store.js and ui.js only, so it can never create a cycle.
+// Imports store.js, ui.js and usage.js only, so it can never create a cycle.
 
 import { read, write, watch, todayKey } from './store.js';
+import { bump } from './usage.js';
 import { el, svgEl, sheet, toast, noteEl, confirmSheet, segmented,
          swipeToDelete, r1, trimNum, parseKey } from './ui.js';
 
@@ -104,6 +105,7 @@ async function persist() {
 
 export async function addWater(ml, src = 'preset') {
   if (!dayKey || !(ml > 0)) return;
+  bump('waterLog');
   const id = 'wa' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
   // Logging onto a past day timestamps it at midday, so it can never look like
   // it happened at whatever o'clock it is now.

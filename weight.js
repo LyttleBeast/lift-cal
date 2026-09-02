@@ -1,13 +1,11 @@
-// Weight — body-weight log, trend math, and the app's settings card.
+// Weight — body-weight log and trend math.
 //   weight/entries -> { id: { lb, t } }
 
-import { read, write, watch, LS, todayKey, logout, isOwner, purgeDevice, uid } from './store.js';
-import { hasActiveSession } from './workout.js';
+import { read, write, watch, todayKey } from './store.js';
 import { weightStats, dailyMeans as meansOf, movingAvg, maintenance,
          refreshModel, modelState, adjustedDays, peakOffset, trendRate } from './tdee.js';
-import { openImport } from './importer.js';
-import { openPeople } from './access.js';
 import { lineChart } from './analytics.js';
+import { bump } from './usage.js';
 import { $, el, toast, noteEl, confirmSheet, r1, parseKey, fmtDateFull } from './ui.js';
 
 let entries = {};      // id -> { lb, t }
@@ -77,6 +75,7 @@ export async function render() {
     const id = 'wt' + Date.now().toString(36);
     entries[id] = { lb: r1(lb), t: Date.now() };
     await write('weight/entries', entries);
+    bump('weighIn');
     await refit();
     inp.value = '';
     toast('Logged ' + r1(lb) + ' lb');
@@ -115,7 +114,7 @@ export async function render() {
   wrap.appendChild(renderTOD());
   wrap.appendChild(await renderTDEE(s));
   wrap.appendChild(renderRecent());
-  wrap.appendChild(renderSettings());
+  // The settings card that used to end this screen is now the You tab's gear.
 
   root.appendChild(wrap);
 }
@@ -263,6 +262,11 @@ async function renderTDEE(s) {
 
   summaries = (await read('food/daySummaries', null)) || {};
   const m = maintenance(entries, summaries);
+  // Fuel only draws its marks off this estimate when nothing is pinned
+  // (food.js:565) — and setup writes a starting number there for everybody who
+  // did not skip it, so "Fuel uses this" is false more often than it is true.
+  const t = (await read('food/targets', null)) || {};
+  const pinned = Number(t.maint) > 0 ? Math.round(Number(t.maint)) : null;
 
   if (m.tdee == null) {
     card.appendChild(noteEl('Needs ' + m.need.join(' and ') +
@@ -285,7 +289,10 @@ async function renderTDEE(s) {
     'kcal/day to hold steady \u2014 from ' + Math.round(m.avgIntake).toLocaleString() + ' avg intake over ' + m.days +
     ' logged days and a ' + (m.rateWk > 0 ? '+' : '') + r1(m.rateWk) + ' lb/week trend' +
     (m.trendDays ? ' measured over ' + m.trendDays + ' days' : '') +
-    '. Fuel uses this to place the cut / maintain / gain marks on the calorie bar.'));
+    (pinned == null
+      ? '. Fuel uses this to place the cut / maintain / gain marks on the calorie bar.'
+      : '. Fuel is holding a fixed maintenance of ' + pinned.toLocaleString() +
+        ' instead, so that is what its marks are drawn from. Clear it under Daily targets to use this measured number.')));
 
   if (m.model && m.coef) {
     card.appendChild(noteEl(m.coef.learned
@@ -335,91 +342,5 @@ function renderRecent() {
     };
     card.appendChild(row);
   });
-  return card;
-}
-
-/* ---------- settings ----------
-   This card is where the app stops being about one person. "People & access"
-   is owner-only and is the entire admin surface: approve a request, hand out
-   an invite code, take somebody's access away, turn their AI estimator off.
-   Everything else here is per-account and shows for everyone. */
-function renderSettings() {
-  const card = el('div', 'card');
-  const hd = el('div', 'card-hd');
-  hd.appendChild(el('div', 'eyebrow', 'Settings'));
-  card.appendChild(hd);
-
-  // Only the owner can act on the access tree — the database rules say so, not
-  // this `if`. The check is here so the button isn't shown to somebody it would
-  // only ever return a permission error to.
-  if (isOwner()) {
-    const people = el('button', 'btn btn-ghost btn-block', 'People & access');
-    people.onclick = openPeople;
-    card.appendChild(people);
-  }
-
-  const restRow = el('div', 'field');
-  restRow.style.marginTop = '12px';
-  const lab = el('label', null, 'Default rest (seconds)');
-  lab.setAttribute('for', 'restDef');
-  restRow.appendChild(lab);
-  const restIn = el('input');
-  restIn.id = 'restDef'; restIn.type = 'number'; restIn.inputMode = 'numeric';
-  restIn.value = LS.get('restDefault', 150);
-  restIn.onchange = e => { LS.set('restDefault', parseInt(e.target.value) || 150); toast('Rest updated'); };
-  restRow.appendChild(restIn);
-  card.appendChild(restRow);
-
-  const imp = el('button', 'btn btn-ghost btn-block', 'Import workout history');
-  imp.style.marginTop = '12px';
-  imp.onclick = openImport;
-  card.appendChild(imp);
-
-  const tour = el('button', 'btn btn-ghost btn-block', 'Replay the walkthrough');
-  tour.style.marginTop = '12px';
-  tour.onclick = () => {
-    if (typeof window.__rackTour === 'function') window.__rackTour();
-    else toast('Reload the app and try again');
-  };
-  card.appendChild(tour);
-
-  const out = el('button', 'btn btn-danger btn-block', 'Sign out');
-  out.style.marginTop = '12px';
-  out.onclick = () => {
-    if (hasActiveSession()) {
-      confirmSheet({
-        title: 'Workout in progress',
-        body: 'You have a live session. Signing out keeps it saved on this device, but you\u2019ll need to sign back in to finish it.',
-        confirmLabel: 'Sign out anyway',
-        danger: true,
-        onConfirm: () => logout()
-      });
-      return;
-    }
-    logout();
-  };
-  card.appendChild(out);
-
-  /* Signing out leaves this device's cached copy of the account behind. It is
-     namespaced by uid, so no other account can reach it through the app — but
-     on a shared or borrowed phone "unreachable through the app" is not the
-     same as gone, and this is the button that makes it gone. It also clears
-     any queued offline writes, which is the reason it is not the default. */
-  const wipe = el('button', 'linkish', 'Sign out and erase this device\u2019s copy');
-  wipe.style.cssText = 'display:block;width:100%;text-align:center;margin-top:10px';
-  wipe.onclick = () => confirmSheet({
-    title: 'Erase this device\u2019s copy?',
-    body: 'Everything stays in your account and comes back when you sign in again. Anything logged while offline and not yet synced is lost.',
-    confirmLabel: 'Erase and sign out',
-    danger: true,
-    onConfirm: async () => {
-      const u = uid();
-      await logout();
-      purgeDevice(u);
-      location.reload();
-    }
-  });
-  card.appendChild(wipe);
-
   return card;
 }

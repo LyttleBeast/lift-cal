@@ -24,6 +24,7 @@ import { shrinkImage, estimatePhoto, estimateText, quota,
 import { initRecall, lookup as recallLookup, remember as recallRemember,
          rememberEntry, recallList, recallCount,
          forget as recallForget, forgetAll as recallForgetAll } from './recall.js';
+import { bump } from './usage.js';
 
 const MEALS = [
   ['breakfast', 'Breakfast'],
@@ -151,13 +152,19 @@ async function applyAuto() {
   return true;
 }
 
-function latestLb() {
+export function latestLb() {
   let best = null;
   Object.values(weighIns || {}).forEach(e => {
     if (e && e.lb > 0 && e.t > 0 && (!best || e.t > best.t)) best = e;
   });
   return best ? best.lb : 0;
 }
+
+// For the settings hub's live value pill. Deliberately the copy in memory
+// rather than another read of food/targets: this is the object Fuel itself
+// draws from, and applyAuto() moves it whenever the trend does, so the pill and
+// the tab can never end up quoting different numbers.
+export function foodTargets() { return targets; }
 
 function dk(d) { return todayKey(d); }
 function isToday() { return dk(viewDate) === todayKey(); }
@@ -786,6 +793,7 @@ function openEntry(e) {
     again.onclick = () => {
       const copy = { ...e };
       delete copy.id; delete copy.t;
+      bump('foodCopy');
       addEntry({ ...copy, src: 'copy' });
       close();
       toast('Logged again');
@@ -808,6 +816,7 @@ function openEntry(e) {
       toToday.onclick = async () => {
         const copy = { ...e };
         delete copy.id; delete copy.t;
+        bump('foodRepeat');
         await logOnToday([{ ...copy, src: 'repeat' }]);
         close();
         toast('Logged on today');
@@ -1473,6 +1482,7 @@ async function persistMeal(draft) {
 
 function logMeal(draft, meal, asOne) {
   const name = (draft.name || '').trim() || 'Meal';
+  bump('foodMeal');
   if (asOne) {
     const t = macroTotals(draft.items);
     const micro = {};
@@ -1746,11 +1756,16 @@ function openDescribeFlow(mealId, prefill, onPick) {
 }
 
 async function runEstimate(ctx) {
+  // Every estimate the app pays for comes through here. A photo with a
+  // sentence attached costs and reads differently from either half alone, so
+  // it is counted as its own thing rather than folded into the photo number.
+  bump(ctx.mode === 'text' ? 'aiText' : ctx.text ? 'aiPhotoText' : 'aiPhoto');
   const done = openEstimating(ctx.busy);
   let res;
   try {
     res = await ctx.run();
   } catch (e) {
+    bump('aiFail');
     done();
     openAiError(e, ctx);
     return;
@@ -1984,6 +1999,11 @@ function openRecallHit(hit, ctx) {
       ctx.onPick ? 'Add to meal' : 'Log ' + (isToday() ? 'it' : 'on ' + fmtViewDate()));
     go.style.marginTop = '12px';
     go.onclick = () => {
+      // Counted here rather than where the hit was found, because finding one
+      // is not using one: "Not this — ask Claude" below falls through to a paid
+      // estimate, and counting both would make a recall look free and paid at
+      // once. This is also the only point the Food memory browser passes through.
+      bump('aiRecall');
       // Using the answer counts as asking the question again: it keeps the row
       // fresh so it survives the prune, and if any line was corrected on the
       // way past, the correction is what gets remembered.
@@ -2075,7 +2095,7 @@ function openProposedEdit(e, onDone) {
    spends anything, so knowing the address gets a stranger a 401 and nothing
    else. Keeping it settable from the phone means the estimator can be pointed
    somewhere new without shipping a new version of the app. */
-function openAiSettings() {
+export function openAiSettings() {
   const { sh, close } = sheet();
   sh.appendChild(el('div', 'eyebrow', 'Fuel'));
   sh.appendChild(el('h2', null, 'AI estimator'));
@@ -2224,6 +2244,7 @@ function openPortion(item, mealId, onPick) {
     touchItem(item.id);
     close();
     if (onPick) { onPick(ing); return; }
+    bump('foodLib');
     addEntry({ ...ing, meal, src: 'lib' });
   };
   sh.appendChild(addBtn);
@@ -2301,6 +2322,7 @@ function openManual(mealId, prefill, onPick) {
     }
     close();
     if (onPick) { onPick(entry); return; }
+    bump('foodManual');
     addEntry(entry);
   };
   sh.appendChild(add);
@@ -2325,6 +2347,7 @@ function loadZXing() {
 }
 
 function openScanner(onCode) {
+  bump('barcode');
   const { back, sh, close } = sheet();
   sh.appendChild(el('h2', null, 'Scan barcode'));
   const status = el('div', 'eyebrow', 'Starting camera…');
@@ -2395,12 +2418,15 @@ async function lookupBarcode(code, mealId, onPick) {
     const j = await r.json();
     if (!j || j.status !== 1 || !j.product) {
       toast('Not in Open Food Facts — add it manually');
+      bump('barcodeMiss');
       openManual(mealId, { name: '', qty: '', src: 'barcode' }, onPick);
       return;
     }
     const item = itemFromOFF(j.product, code);
     if (!item) {
       toast('Product found but no nutrition data');
+      // A row with no macros on it is a miss as far as the log is concerned.
+      bump('barcodeMiss');
       openManual(mealId, { name: j.product.product_name || '', src: 'barcode' }, onPick);
       return;
     }
@@ -2409,9 +2435,11 @@ async function lookupBarcode(code, mealId, onPick) {
     const id = existing ? existing.id : 'b' + code;
     items[id] = { ...(existing || {}), id, ...item, uses: (existing && existing.uses) || 0, last: Date.now() };
     await write('food/items', items);
+    bump('barcodeHit');
     openPortion(items[id], mealId, onPick);
   } catch {
     toast('Lookup failed — no connection?');
+    bump('barcodeMiss');
     openManual(mealId, { name: '', src: 'barcode' }, onPick);
   }
 }
@@ -2502,7 +2530,7 @@ function openFuelSettings() {
    Everything already logged or already estimated, kept so the same question
    never gets asked twice. It is a cache, so it is allowed to be wrong — which
    is why it is browsable and every row can be thrown away. */
-function openRecallList() {
+export function openRecallList() {
   const { sh, close } = sheet();
   sh.appendChild(el('div', 'eyebrow', 'Fuel'));
   sh.appendChild(el('h2', null, 'Food memory'));
@@ -2579,7 +2607,7 @@ function openRecallList() {
 }
 
 /* ================= TARGETS ================= */
-function openTargets() {
+export function openTargets() {
   const { sh, close } = sheet();
   sh.appendChild(el('h2', null, 'Daily targets'));
 
@@ -2786,7 +2814,7 @@ function handleHash() {
   if (payload) confirmImport(normalizeImport(payload), 'From Claude');
 }
 
-function openImportPaste() {
+export function openImportPaste() {
   const { sh, close } = sheet();
   sh.appendChild(el('h2', null, 'Paste food JSON'));
   sh.appendChild(noteEl('From Claude, or copied off any food already in your log \u2014 tap an entry \u203a Copy JSON. Lands on today. Nothing is logged until you confirm.'));
@@ -2874,6 +2902,7 @@ function confirmImport(entries, sourceLabel) {
   go.style.marginTop = '12px';
   go.onclick = async () => {
     // imports always land on TODAY regardless of the day being viewed
+    bump('foodPaste');
     await logOnToday(entries);
     close();
     toast('Logged ' + entries.length + ' food' + (entries.length > 1 ? 's' : ''));

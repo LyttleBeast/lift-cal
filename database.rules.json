@@ -173,6 +173,55 @@
           ".write": "auth != null && auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2'",
           ".validate": "newData.isBoolean()"
         },
+        "photoPerDay": {
+          ".write": "auth != null && auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2'",
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 12"
+        },
+        "textPerDay": {
+          ".write": "auth != null && auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2'",
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 30"
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    },
+    "usage": {
+      ".read": "auth != null && auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2'",
+      ".write": false,
+      "$uid": {
+        ".read": "auth != null && (auth.uid === $uid || auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2')",
+        "who": {
+          ".write": "auth != null && auth.uid === $uid && root.child('access/approved').child($uid).exists()",
+          ".validate": "newData.hasChildren()",
+          "firstSeen": {
+            ".validate": "newData.isNumber() && (!data.exists() || data.val() === newData.val())"
+          },
+          "lastSeen": {
+            ".validate": "newData.isNumber()"
+          },
+          "platform": {
+            ".validate": "newData.val() === 'ios' || newData.val() === 'android' || newData.val() === 'mac' || newData.val() === 'windows' || newData.val() === 'linux' || newData.val() === 'other'"
+          },
+          "standalone": {
+            ".validate": "newData.isBoolean()"
+          },
+          "version": {
+            ".validate": "newData.isString() && newData.val().matches(/^rack-v[0-9]{1,4}$/)"
+          },
+          "$other": {
+            ".validate": false
+          }
+        },
+        "days": {
+          "$day": {
+            ".write": "auth != null && auth.uid === $uid && root.child('access/approved').child($uid).exists() && $day.matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)",
+            ".validate": "newData.hasChildren()",
+            "$event": {
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000 && $event.matches(/^[a-zA-Z][a-zA-Z0-9]{0,23}$/)"
+            }
+          }
+        },
         "$other": {
           ".validate": false
         }

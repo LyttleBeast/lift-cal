@@ -37,7 +37,8 @@ process is the handoff at the bottom of this file.
 |---|---|
 | `index.html` `app.js` | Entry point and boot order |
 | `store.js` | Firebase read/write, auth, sign-up, password reset |
-| `access.js` `onboarding.js` | Invite codes, approval, People sheet, first run |
+| `access.js` `onboarding.js` | Invite codes, approval, the waiting screen, first run |
+| `you.js` `settings.js` `admin.js` `usage.js` | The You tab, the settings hub, the owner panel, usage counters |
 | `food.js` `recall.js` `importer.js` `ai.js` `ai-config.js` | Fuel |
 | `workout.js` `routines.js` `exercises.js` `picker.js` | Train |
 | `weight.js` `weightmodel.js` `tdee.js` | Weight, trend, maintenance |
@@ -52,12 +53,16 @@ process is the handoff at the bottom of this file.
 
 **1. Bump the service worker on any change to a file the phone loads.**
 
-`sw.js` opens with `const CACHE='rack-v12'`. Increment it — `rack-v13`, then
-`rack-v14` — in the same change as any edit to `*.js`, `*.css`, `index.html`
+`sw.js` opens with `const CACHE='rack-v13'`. Increment it — `rack-v14`, then
+`rack-v15` — in the same change as any edit to `*.js`, `*.css`, `index.html`
 or `404.html`. The service worker caches under that name, so a change shipped
 without a bump reaches nobody's phone and looks, from the outside, exactly like
 a change that didn't work. State the new version in your summary. Changes
 confined to `worker/` or to documentation do not need a bump.
+
+`usage.js` holds the same string in its own `VERSION` constant, because it
+reports which build an account is running and a service worker is not a module
+the app can import. The two move together.
 
 **2. A new top-level node under `users/{uid}` needs a rules change too.**
 

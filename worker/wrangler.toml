@@ -36,15 +36,22 @@ FIREBASE_PROJECT_ID = "lift-cal"
 # run of cheap text estimates quietly spend the expensive ones — and you find
 # out at dinner, holding a plate. Using one of each in a day counts one against
 # each, not two against one.
+#
+# The two per-day numbers are the DEFAULT allowance. The owner can raise a single
+# account past them from the app, and never past the ceiling in src/index.js —
+# 12 photo, 30 text. The per-minute limit is the same for everybody.
 RATE_PER_MINUTE   = "5"
 AI_PHOTO_PER_DAY  = "3"
 AI_TEXT_PER_DAY   = "3"
 
 # The one that actually protects the money. Dollars of Anthropic usage per
-# calendar month, counted from Anthropic's own token numbers, shared across
-# everybody. Two people at 3 photos + 3 describes a day is roughly $0.55 a
-# month of photos and pennies of text, so $1 still only bites if something has
-# gone wrong. Raise it when the balance is bigger, or when a third person joins.
+# calendar month, counted from Anthropic's own token numbers, PER ACCOUNT — the
+# running total lives in KV under q:{uid}, so this is each person's own dollar
+# and not a pot they share. One account at 3 photos + 3 describes a day is
+# roughly $0.55 a month of photos and pennies of text, so $1 still only bites if
+# something has gone wrong. It is also the wall a raised allowance runs into:
+# 12 photos a day is about $2.20 a month, so raise this whenever you raise
+# somebody's daily limit, or all you have changed is which refusal they get.
 MONTHLY_USD_CAP = "1"
 
 # Counter storage — also caches the aiAllow lookup for a minute per uid.

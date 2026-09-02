@@ -18,6 +18,7 @@
 
 import { GROUPS, GROUP_ORDER, EXERCISES, EQUIPMENT, makeCustomExercise } from './exercises.js';
 import { read, write } from './store.js';
+import { bump } from './usage.js';
 import { el, sheet, toast, noteEl, confirmSheet } from './ui.js';
 
 let customEx  = [];
@@ -414,6 +415,7 @@ export function openCustomExercise(onCreate) {
     const dupe = everyExercise().find(x => x.name.toLowerCase() === name.toLowerCase());
     if (dupe) { toast('“' + dupe.name + '” already exists'); return; }
     close();
+    bump('exerciseCustom');
     onCreate(makeCustomExercise(name, group, equipment));
     toast('Added ' + name);
   };

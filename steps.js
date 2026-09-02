@@ -22,6 +22,7 @@ import { firebaseConfig } from './firebase-config.js';
 // renders blank with no error the user can see. That is exactly what happened
 // on the first deploy of this tab. The heat map below is therefore local.
 import { barChart, emptyChart } from './analytics.js';
+import { bump } from './usage.js';
 import { $, el, svgEl, sheet, toast, noteEl, confirmSheet, swipeToDelete,
          segmented, compact, copyText, parseKey, fmtDate, fmtDateFull } from './ui.js';
 
@@ -87,6 +88,10 @@ function heatMap(byDay, opts = {}) {
 /* ================= HELPERS ================= */
 function stepsOn(k) { const d = days[k]; return d && d.steps > 0 ? d.steps : 0; }
 function goal() { return settings.goal > 0 ? settings.goal : DEFAULTS.goal; }
+
+// For the settings hub's live value pill — the number this tab is drawing
+// with, so the two can never quote different goals.
+export function stepGoal() { return goal(); }
 
 function keysBack(n, from = new Date()) {
   const out = [];
@@ -487,6 +492,7 @@ function openSetSteps(k) {
     const n = parseInt(inp.value);
     if (!(n >= 0) || n > 300000) { toast('Enter a step count'); return; }
     close();
+    bump('stepsSet');
     await setSteps(k, n);
     toast(n.toLocaleString() + ' steps · ' + (k === todayKey() ? 'today' : fmtDate(k)));
   };
@@ -508,7 +514,9 @@ function openSetSteps(k) {
 }
 
 /* ================= SETTINGS ================= */
-function openStepSettings() {
+// `onSaved` is for whoever opened this from somewhere other than the Steps tab
+// — the You tab quotes the goal too, and a goal saved here has to reach it.
+export function openStepSettings(onSaved) {
   const { sh, close } = sheet();
   sh.appendChild(el('div', 'eyebrow', 'Steps'));
   sh.appendChild(el('h2', null, 'Settings'));
@@ -542,7 +550,9 @@ function openStepSettings() {
     const g = parseInt(gi.value);
     settings = { ...settings, goal: g > 0 ? g : DEFAULTS.goal };
     await write('settings/steps', settings);
-    close(); render(); toast('Goal saved');
+    close(); render();
+    if (onSaved) onSaved();
+    toast('Goal saved');
   };
   sh.appendChild(save);
 

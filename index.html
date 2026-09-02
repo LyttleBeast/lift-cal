@@ -81,7 +81,13 @@
 
 <!-- ===== APP ===== -->
 <div id="app">
-  <section class="view active" id="view-workout"></section>
+  <!-- You is first and starts active because it is the screen the app opens on,
+       so the markup and the dock agree from the first frame. initYou() runs last
+       in boot but paints its skeleton synchronously, so the tab is never an
+       empty box once boot reaches it — and if it throws, restoreView() sends
+       everyone to Train instead. -->
+  <section class="view active" id="view-you"></section>
+  <section class="view" id="view-workout"></section>
   <section class="view" id="view-food"></section>
   <section class="view" id="view-weight"></section>
   <section class="view" id="view-steps"></section>
@@ -89,7 +95,14 @@
 
 <!-- ===== DOCK ===== -->
 <nav class="dock" id="dock">
-  <button data-view="workout" class="active" aria-label="Training">
+  <button data-view="you" class="active" aria-label="Your summary">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M8.4 8.2a3.6 3.6 0 1 0 7.2 0 3.6 3.6 0 1 0-7.2 0z"/>
+      <path d="M5 20c.4-3.7 3.4-5.8 7-5.8s6.6 2.1 7 5.8"/>
+    </svg>
+    You
+  </button>
+  <button data-view="workout" aria-label="Training">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
       <path d="M4 9v6M20 9v6M7 6v12M17 6v12M7 12h10"/>
     </svg>

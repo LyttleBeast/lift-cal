@@ -26,8 +26,12 @@
 
 import { read, write, uid, todayKey } from './store.js';
 import { autoTargets } from './tdee.js';
-import { el, noteEl, segmented, r1, toast } from './ui.js';
+import { el, noteEl, segmented, sheet, r1, toast } from './ui.js';
+import { isStandalone, platform } from './usage.js';
 
+// Stays 1 on purpose. onboardingState() below reads `done` and never reads
+// `version`, so bumping this re-runs nothing for anybody — it would only look
+// from the outside like it had done something.
 export const ONBOARDING_VERSION = 1;
 
 /* ---------- has this account been through it? ----------
@@ -117,6 +121,94 @@ export function waterGoalFor(lb) {
   return Math.round(Math.max(1900, Math.min(4500, lb * 0.5 * 29.5735)));
 }
 
+/* ================= ADD TO HOME SCREEN ================= */
+
+/* The taps are written once and shown in two places: as a setup step for
+   somebody who is still in a browser tab, and as a sheet the You tab's card
+   and the settings hub both open. Modelled on the steps walkthrough — same
+   segmented control, because whoever is reading this is on one phone and may
+   be setting up another.
+
+   Detection is imported rather than repeated. `navigator.standalone` is the
+   iOS-only truth and `matchMedia('(display-mode: standalone)')` is the
+   standard signal Android answers; isStandalone() checks both. platform()
+   only picks which set of taps to show first — the control overrides it. */
+
+const INSTALL_WHY =
+  'Added to the home screen it opens like any other app — no browser bar, the ' +
+  'whole screen — and it keeps working when the signal doesn’t.';
+
+const INSTALL_TAPS = {
+  ios: [
+    ['Tap Share', 'The square with the arrow coming out of it. In Safari it is in the bar at the bottom of the screen; other browsers keep it in their own menu.'],
+    ['Scroll down to Add to Home Screen', 'It is in the list of actions under the row of apps.'],
+    ['Tap Add', 'Top right. Rack lands on the home screen with everything else.']
+  ],
+  android: [
+    ['Tap the three dots', 'Top right of Chrome.'],
+    ['Tap Add to Home screen', 'Some versions call it Install app — same thing.'],
+    ['Tap Install', 'Chrome sometimes offers a banner at the bottom of the page instead; that does the same job.']
+  ]
+};
+
+const INSTALL_ELSE = {
+  ios: 'Safari is the surest route, but Chrome, Edge and Firefox can add it too — ' +
+       'the item sits in their own share menu rather than the bottom bar. If Add to ' +
+       'Home Screen is not in the share list, scroll to the bottom of it and tap ' +
+       'Edit Actions to put it back.',
+  android: 'Firefox and Samsung Internet use the same menu. The item reads Install, ' +
+           'or Add page to → Home screen.'
+};
+
+function installGuideInto(host) {
+  host.appendChild(noteEl(INSTALL_WHY));
+
+  const p = platform();
+  let os = p === 'android' ? 'android' : 'ios';
+  const body = el('div');
+
+  const paint = () => {
+    body.innerHTML = '';
+    const list = el('div', 'install-steps');
+    INSTALL_TAPS[os].forEach(([t, d], n) => {
+      const r = el('div', 'install-step');
+      r.appendChild(el('span', 'install-n num', String(n + 1)));
+      const c = el('div');
+      c.appendChild(el('div', null, t));
+      c.appendChild(noteEl(d));
+      r.appendChild(c);
+      list.appendChild(r);
+    });
+    body.appendChild(list);
+    body.appendChild(noteEl(INSTALL_ELSE[os]));
+  };
+
+  host.appendChild(segmented([['ios', 'iPhone'], ['android', 'Android']], os, v => { os = v; paint(); }));
+  paint();
+  host.appendChild(body);
+
+  if (p !== 'ios' && p !== 'android') {
+    host.appendChild(noteEl(
+      'On a computer there is an install button at the end of the address bar, ' +
+      'but the point of this one is the phone in your pocket.'));
+  }
+}
+
+export function openInstallGuide() {
+  const { sh, close } = sheet();
+  sh.appendChild(el('div', 'eyebrow', 'App'));
+  sh.appendChild(el('h2', null, 'Add to Home Screen'));
+  if (isStandalone()) {
+    sh.appendChild(noteEl('This copy is already running from the home screen — these are the taps for another phone.'));
+  }
+  installGuideInto(sh);
+
+  const done = el('button', 'btn btn-ghost btn-block', 'Close');
+  done.style.marginTop = '12px';
+  done.onclick = close;
+  sh.appendChild(done);
+}
+
 /* ================= SETUP ================= */
 
 export function runSetup(user) {
@@ -142,7 +234,12 @@ export function runSetup(user) {
     card.append(bar, body, foot);
     host.appendChild(card);
 
-    const steps = [welcome, aboutYou, weighIn, goalStep, activityStep, numbers];
+    // The install step is built into the array rather than skipped when it is
+    // drawn: the progress bar divides by steps.length - 1, so a step that comes
+    // and goes has to change the length, never just be jumped over. `numbers`
+    // stays last — its Continue is what writes everything.
+    const steps = [welcome, aboutYou, weighIn, goalStep, activityStep,
+                   ...(isStandalone() ? [] : [installStep]), numbers];
     let i = 0;
     draw();
 
@@ -314,6 +411,18 @@ export function runSetup(user) {
         wrap.appendChild(b);
       });
       body.appendChild(wrap);
+      // Only promise the numbers when they are genuinely next. On a phone in a
+      // browser tab the home-screen step sits in between, and a button that
+      // says one thing and does another is worse than a plain Continue.
+      nav({ nextLabel: steps[i + 1] === numbers ? 'See my numbers' : 'Continue' });
+    }
+
+    /* ---- home screen — only in the list when the app is in a browser tab ---- */
+    function installStep() {
+      body.appendChild(el('div', 'ob-kicker', 'Home screen'));
+      body.appendChild(el('h1', 'ob-title', 'Put Rack on your home screen'));
+      installGuideInto(body);
+      body.appendChild(noteEl('Now or later — the same instructions live on the You tab. Adding it does not close this page, so finish setting up here first and then open it from the icon.'));
       nav({ nextLabel: 'See my numbers' });
     }
 
@@ -432,6 +541,9 @@ export function runSetup(user) {
 /* ================= TOUR ================= */
 
 const TOUR = [
+  { view: 'you', title: 'You',
+    body: 'Everything the app knows about you, in one place — how the week went, what your numbers are doing, and how they pull on each other. Nothing is edited here; it just shows you where you stand.',
+    tip: 'The gear in the top right is where every setting in the app now lives.' },
   { view: 'workout', title: 'Train',
     body: 'Start a session, add exercises, tap out your sets. Under every exercise it shows what you did last time, so you always know what to beat.',
     tip: 'Long sessions survive a locked phone — nothing is lost if you get interrupted.' },

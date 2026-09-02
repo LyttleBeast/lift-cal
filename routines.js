@@ -14,6 +14,7 @@
 import { read, write, watch } from './store.js';
 import { GROUPS, GROUP_ORDER } from './exercises.js';
 import { openPicker } from './picker.js';
+import { bump } from './usage.js';
 import { el, sheet, toast, noteEl, confirmSheet, swipeToDelete, fmtDate } from './ui.js';
 
 let routines = {};
@@ -140,6 +141,7 @@ function openRoutine(id, onStart) {
     r.uses = (r.uses || 0) + 1;
     routines[r.id] = r;
     persist();
+    bump('routineStart');
     onStart(toSession(r));
   };
   sh.appendChild(go);

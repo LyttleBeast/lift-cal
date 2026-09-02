@@ -1088,8 +1088,10 @@ body.peeking .view.active { padding-bottom: 58px; }
 /* ============================================================
    STEPS
    ============================================================ */
-/* Four dock slots instead of three — tighten the tracking so the longest
-   label still fits on a small phone. */
+/* Five dock slots now, not three — tighten the tracking so the longest label
+   still fits on a small phone. At 320px that is a 64px slot against WEIGHT,
+   which sets about 39px at 10px in this face; the icon is 22px. Nothing
+   collides, so nothing else here has to change. */
 .dock button { letter-spacing: .07em; }
 
 .st-hero { display: flex; align-items: center; gap: 18px; margin-top: 4px; }
@@ -1153,6 +1155,187 @@ body.peeking .view.active { padding-bottom: 58px; }
   font-variation-settings: 'wdth' 88, 'wght' 700; padding-top: 2px; }
 .st-kv-v { flex: 1; min-width: 0; font-size: 11.5px; color: var(--chalk);
   word-break: break-all; line-height: 1.5; }
+
+/* ============================================================
+   YOU
+   The tab the app opens on: the week in summary, the settings hub
+   behind the gear, and the owner's admin panel. It borrows the
+   card / stat / chart vocabulary above rather than restating it —
+   only the parts that had no home already are named here.
+   ============================================================ */
+
+/* Avatar, name, and the gear that is now the app's only way into settings.
+   A grid rather than a flex row so the gear stays pinned right whatever
+   length the name is; `min-width: 0` on the children is what lets a long
+   name ellipsis instead of pushing the gear off the edge. */
+.you-hero {
+  display: grid; grid-template-columns: auto 1fr auto;
+  align-items: center; gap: 13px;
+  margin-bottom: 4px;
+}
+.you-hero > * { min-width: 0; }
+.you-avatar {
+  width: 52px; height: 52px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--collar); color: var(--steel);
+  font-size: 19px; font-variation-settings: 'wdth' 104, 'wght' 800;
+}
+.you-name {
+  font-size: 22px; line-height: 1.12;
+  font-variation-settings: 'wdth' 100, 'wght' 800;
+  letter-spacing: -.01em;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.you-sub { font-size: 12px; color: var(--dim); margin-top: 3px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.you-gear {
+  width: 36px; height: 36px; border-radius: var(--r-sm);
+  background: var(--bar); border: 1px solid var(--collar);
+  color: var(--steel);
+  display: grid; place-items: center;
+  transition: background var(--fast), color var(--fast), transform var(--fast);
+}
+.you-gear svg { width: 17px; height: 17px; }
+.you-gear:active { background: var(--collar); color: var(--chalk); transform: scale(.92); }
+
+.you-since {
+  font-size: 10px; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--dim); font-variation-settings: 'wdth' 88, 'wght' 700;
+  margin: 12px 0 16px;
+}
+
+/* Week against week. The three classes are a judgement, not arithmetic:
+   `.up` means it moved the right way and `.down` the wrong one, so a trend
+   weight that fell is `.delta.up`. Nothing here reads the sign of the
+   number, because the sign does not know which way is good. The caller
+   picks the class; if it can't tell, it uses `.flat`. */
+.delta { display: inline-flex; align-items: baseline; gap: 5px; color: var(--steel); }
+.delta.up   { color: var(--good); }
+.delta.down { color: var(--bad); }
+.delta.flat { color: var(--dim); }
+.delta-v {
+  font-size: 13px; font-variant-numeric: tabular-nums;
+  font-variation-settings: 'wdth' 100, 'wght' 700;
+}
+.delta-l { font-size: 10px; color: var(--dim); letter-spacing: .04em; }
+
+/* `.stat-row` is already three-up, but You lays whole cards and rows into
+   these grids as well as `.stat`s, so the pair is named for the shape. */
+.you-grid-2, .you-grid-3 { display: grid; gap: 8px; }
+.you-grid-2 { grid-template-columns: repeat(2, 1fr); }
+.you-grid-3 { grid-template-columns: repeat(3, 1fr); }
+
+/* This is a long screen — the headings are what make it scannable. */
+.you-sec { margin-top: 26px; }
+.you-sec-t {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 10px;
+  font-size: 10px; letter-spacing: .16em; text-transform: uppercase;
+  color: var(--dim); font-variation-settings: 'wdth' 88, 'wght' 700;
+}
+.you-sec-t::after { content: ''; flex: 1; height: 1px; background: var(--collar); }
+
+/* ---------- the settings hub ----------
+   `.set-row` above belongs to the workout set table; these are the
+   deliberately separate names for a tappable settings row. */
+.set-list { margin-top: 4px; }
+.set-row-nav {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; text-align: left;
+  padding: 13px 2px; border-top: 1px solid var(--collar);
+  color: var(--chalk);
+  transition: background var(--fast) var(--ease);
+}
+.set-list .set-row-nav:first-child { border-top: none; }
+.set-row-nav:active { background: rgba(255,255,255,.04); }
+.set-row-l { flex: 1; min-width: 0; font-size: 14px;
+  font-variation-settings: 'wdth' 92, 'wght' 600; }
+/* The live value on the right — targets kcal, the water goal, AI on or off. */
+.set-row-v { flex: none; font-size: 12px; color: var(--steel);
+  font-variant-numeric: tabular-nums; }
+/* The trailing chevron: the row's only signal that it opens something. */
+.set-row-x { flex: none; color: var(--dim); font-size: 17px; line-height: 1; }
+
+/* ---------- admin ----------
+   Same bones as `.person` in auth.css — a name over a quieter second line,
+   numbers pinned right — but as a dense list rather than boxed cards,
+   because the owner is reading a table of accounts, not one profile. */
+.adm-table { margin-top: 6px; }
+.adm-r {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 2px; border-top: 1px solid var(--collar);
+}
+.adm-table .adm-r:first-child { border-top: none; }
+.adm-who {
+  flex: 1; min-width: 0;
+  font-size: 13px; font-variation-settings: 'wdth' 92, 'wght' 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.adm-uid {
+  font-size: 10px; color: var(--dim); margin-top: 2px;
+  font-family: ui-monospace, monospace;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.adm-n {
+  flex: none; text-align: right;
+  font-size: 14px; font-variant-numeric: tabular-nums;
+  font-variation-settings: 'wdth' 104, 'wght' 800;
+}
+.adm-flag {
+  flex: none;
+  padding: 2px 7px; border-radius: 999px;
+  border: 1px solid var(--collar); color: var(--dim);
+  font-size: 9px; letter-spacing: .1em; text-transform: uppercase;
+  font-variation-settings: 'wdth' 88, 'wght' 700;
+}
+.adm-flag.on  { border-color: rgba(42,168,92,.45);  color: var(--good); }
+.adm-flag.off { border-color: rgba(214,37,43,.45);  color: var(--bad); }
+
+/* ---------- add to home screen ----------
+   Numbered steps in the same shape as the Steps setup walkthrough, on a card
+   that is plated like `.pr-card` because it is an offer, not a warning. */
+.install-card {
+  position: relative;
+  border-color: rgba(240,190,30,.32);
+  background: linear-gradient(158deg, rgba(240,190,30,.10), rgba(240,190,30,0) 62%), var(--bar);
+}
+.install-x {
+  position: absolute; top: 7px; right: 7px;
+  padding: 6px 9px; border-radius: var(--r-sm);
+  color: var(--dim); font-size: 13px; line-height: 1;
+  transition: color var(--fast) var(--ease), background var(--fast) var(--ease);
+}
+.install-x:active { color: var(--chalk); background: var(--collar); }
+.install-steps { margin-top: 12px; }
+.install-step { display: flex; gap: 11px; padding: 9px 0; border-top: 1px solid var(--collar); }
+.install-steps .install-step:first-child { border-top: none; }
+.install-n {
+  flex: 0 0 22px; height: 22px; border-radius: 50%;
+  background: var(--collar); color: var(--steel);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-variation-settings: 'wght' 700;
+}
+
+/* ---------- how it fits together ----------
+   The maintenance arithmetic, printed a line at a time — operator, number,
+   what the number is — so it can be checked rather than believed. The last
+   line carries `.thesis-eq` and is the total. */
+.thesis { margin-top: 12px; font-variant-numeric: tabular-nums; }
+.thesis-line { display: flex; align-items: baseline; gap: 10px; padding: 8px 0; }
+.thesis-op {
+  flex: 0 0 14px; text-align: center;
+  color: var(--dim); font-size: 15px;
+  font-variation-settings: 'wdth' 100, 'wght' 700;
+}
+.thesis-line b {
+  font-size: 18px; line-height: 1;
+  font-variation-settings: 'wdth' 110, 'wght' 800;
+  letter-spacing: -.02em;
+}
+/* `:not(b)` so a line written without a label doesn't shrink its own number. */
+.thesis-line > :last-child:not(b) { flex: 1; min-width: 0; font-size: 12px; color: var(--steel); line-height: 1.4; }
+.thesis-eq { border-top: 1px solid var(--collar); margin-top: 2px; padding-top: 12px; }
+.thesis-eq .thesis-op, .thesis-eq b { color: var(--p-yellow); }
 
 /* ================================================================
    ============ ADDED: FUEL — LOG BUTTON + AI ESTIMATOR ============

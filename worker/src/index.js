@@ -77,9 +77,22 @@ const TIMEOUT_MS    = 45000;
 // account gets its own counters, so a second user cannot eat the first one's.
 const LIMITS = { perMinute: 5, photoPerDay: 3, textPerDay: 3, monthUsd: 5 };
 
+// A per-account override can raise these, but never past here. The override is a
+// database node the owner writes; a ceiling in code is what makes a bad or hostile
+// write bounded rather than a blank cheque.
+//
+// Be honest about what this protects: HARD_MAX bounds the COUNT per day. What
+// bounds the money is MONTHLY_USD_CAP, and that cap is per account — the counters
+// live in KV under q:{uid}. At this ceiling one account would reach a $1 monthly
+// cap in a few days and get 402 for the rest of the month. Raise the cap in
+// wrangler.toml when you raise somebody's allowance, or they will just hit the
+// other wall.
+const HARD_MAX = { photoPerDay: 12, textPerDay: 30 };
+
 // Where the allowlist node lives. Reads of aiAllow/{uid} are public by rule —
-// it holds two booleans keyed on an opaque id and nothing else — because this
-// Worker has no Firebase credentials of its own and should not be given any.
+// it holds two booleans and two small numbers keyed on an opaque id, and nothing
+// else — because this Worker has no Firebase credentials of its own and should
+// not be given any.
 const RTDB_URL = 'https://lift-cal-default-rtdb.firebaseio.com';
 const ALLOW_TTL_MS = 60000;
 
@@ -290,6 +303,14 @@ function roll(state, now) {
 const dayUsed  = (st, mode) => (mode === 'photo' ? st.photoDay : st.textDay) || 0;
 const dayLimit = (cfg, mode) => mode === 'photo' ? cfg.photoPerDay : cfg.textPerDay;
 
+// Number(null) is 0, which is finite and not negative — so a plain coercion here
+// would turn "no override set" into a limit of zero and take the estimator away
+// from everybody. Check the type first.
+function capDay(v, fallback, ceiling) {
+  if (typeof v !== 'number' || !Number.isFinite(v) || v < 0) return fallback;
+  return Math.min(Math.floor(v), ceiling);
+}
+
 // A second, instant guard inside this isolate. KV needs a round trip; a runaway
 // loop in the app can fire a hundred times before the first write lands. This
 // catches that in memory, for free, before anything else runs.
@@ -307,37 +328,48 @@ function burstOk(uid, perMinute) {
 /* ============ gate 4: is this account switched on? ============
    One unauthenticated GET for aiAllow/{uid}.json. `on` is set by the account
    itself the moment it is approved; `blocked` can only be set by the owner and
-   beats `on`. Answers are cached in KV for a minute so a caller holding a valid
-   token can't turn this into a load generator against Firebase — and the
-   in-memory burst guard runs before it, so they can't get that far anyway.
+   beats `on`. The same node optionally carries that account's daily allowance,
+   which only the owner can write. Answers are cached in KV for a minute so a
+   caller holding a valid token can't turn this into a load generator against
+   Firebase — and the in-memory burst guard runs before it, so they can't get
+   that far anyway.
 
-   Returns true, false, or null for "couldn't tell". Null is not a denial: it
+   Returns { ok, photoPerDay, textPerDay } — the two limits null when the node
+   does not set them — or null for "couldn't tell". Null is not a denial: it
    hands the decision back to ALLOWED_UIDS, so a Firebase outage degrades to the
    old behaviour instead of locking the owner out of his own estimator. */
 async function dbAllows(env, uid) {
-  const key = 'allow:' + uid;
+  // allow2:, not allow: — the cached value changed shape here, and a minute-old
+  // entry of the old bare boolean would read as an object with no limits at all.
+  const key = 'allow2:' + uid;
   try {
     const hit = await env.RACK_AI.get(key, 'json');
-    if (hit && hit.until > Date.now()) return hit.ok;
+    if (hit && hit.val && hit.until > Date.now()) return hit.val;
   } catch {}
 
-  let ok;
+  let val;
   try {
     const base = String(env.RTDB_URL || RTDB_URL).replace(/\/$/, '');
     const r = await fetch(base + '/aiAllow/' + encodeURIComponent(uid) + '.json',
                           { signal: AbortSignal.timeout(5000) });
     if (!r.ok) return null;
     const j = await r.json();
-    ok = !!(j && j.on === true && j.blocked !== true);
+    // Absent stays absent. Anything that is not already a number is not a limit,
+    // and capDay() is what turns "not a limit" into the configured default.
+    val = {
+      ok:          !!(j && j.on === true && j.blocked !== true),
+      photoPerDay: j && typeof j.photoPerDay === 'number' ? j.photoPerDay : null,
+      textPerDay:  j && typeof j.textPerDay  === 'number' ? j.textPerDay  : null
+    };
   } catch {
     return null;
   }
 
   try {
-    await env.RACK_AI.put(key, JSON.stringify({ ok, until: Date.now() + ALLOW_TTL_MS }),
+    await env.RACK_AI.put(key, JSON.stringify({ val, until: Date.now() + ALLOW_TTL_MS }),
                           { expirationTtl: 3600 });
   } catch {}
-  return ok;
+  return val;
 }
 
 async function readState(env, uid) {
@@ -412,15 +444,33 @@ export default {
     // Named in the settings = always allowed, no lookup. Otherwise ask the
     // database. A null answer (Firebase unreachable) falls back to the list.
     let allowed = cfg.uids.includes(uid);
+    let override = null;
     if (!allowed) {
-      const db = await dbAllows(env, uid);
-      allowed = db === true;
-      if (db === null && !cfg.uids.length) allowed = false;
+      override = await dbAllows(env, uid);
+      allowed = override !== null && override.ok === true;
+      if (override === null && !cfg.uids.length) allowed = false;
     }
     if (!allowed) {
       console.log('uid not allowed:', uid);
       return reply({ error: 'not_allowed',
         message: 'This account doesn\u2019t have the AI estimator switched on.' }, 403);
+    }
+
+    // A uid named in the settings skipped the lookup above \u2014 which would leave the
+    // one account guaranteed to be able to WRITE an allowance, the owner's, as the
+    // one account that could never receive it. He would set his own number in the
+    // app, the rules would accept it, and this Worker would ignore it forever.
+    // Access is already decided by here, so a Firebase outage costs a default
+    // limit and never the estimator itself.
+    if (!override && cfg.uids.includes(uid)) override = await dbAllows(env, uid);
+
+    // The owner can raise one account's daily allowance from the app, and only
+    // his own writes are accepted for it. It is still bounded here: HARD_MAX is
+    // the most any database write can ever buy, and cfg is built fresh for every
+    // request, so this lasts exactly as long as this one does.
+    if (override) {
+      cfg.photoPerDay = capDay(override.photoPerDay, cfg.photoPerDay, HARD_MAX.photoPerDay);
+      cfg.textPerDay  = capDay(override.textPerDay,  cfg.textPerDay,  HARD_MAX.textPerDay);
     }
 
     /* ---- quota probe: what the app shows on the setup screen ---- */

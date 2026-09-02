@@ -2,9 +2,11 @@
 
 Everything the app knows lives in one Firebase Realtime Database tree.
 
-**Nothing outside the app can read or write any of it.** That is new, and it is
-the first thing to know if you have seen an older copy of this file. There is no
-public read URL, no `feed/` node, and no agent account. The REST recipes that
+**Nothing outside the app can read or write anybody's data.** That is new, and
+it is the first thing to know if you have seen an older copy of this file. There
+is no public read URL onto a log, no `feed/` node, and no agent account. (One
+node is deliberately public by key, `aiAllow/{uid}`; it holds four small values
+and no content, and the reason is below.) The REST recipes that
 used to be here have been removed rather than corrected, because a half-working
 recipe is worse than none.
 
@@ -14,8 +16,9 @@ What replaced them:
   Cloudflare Worker with the phone's Firebase ID token, never through the
   database, and is unaffected by any of this.
 - To get numbers in from a conversation, paste them: **Fuel → ⚙ → Paste food
-  JSON**, or a `#log=` link. Format at the bottom of this file. Nothing is
-  written until it is confirmed on screen.
+  JSON** — the settings hub opens the same sheet under *Fuel* — or a `#log=`
+  link. Format at the bottom of this file. Nothing is written until it is
+  confirmed on screen.
 
 This file is now a schema reference for working *on* the app.
 
@@ -27,13 +30,17 @@ BASE = https://lift-cal-default-rtdb.firebaseio.com
 
 # Access — the part that decides everything else
 
-Three trees at the root, and they do not overlap.
+Four trees at the root, and they do not overlap.
 
 ## `users/{uid}` — one account's data
 
 Readable and writable by that uid alone, and only while
 `access/approved/{uid}` exists. Not by the owner, not by an admin, not by an
 unauthenticated GET. Everything in the schema section below hangs off here.
+
+There is an owner's admin panel now, and it does not change that sentence. It
+reads `access/*`, `aiAllow/{uid}` a uid at a time, and the `usage` counters —
+there is no path from it into this subtree, and there is not meant to be one.
 
 Write is granted per section, never at `users/{uid}` itself:
 
@@ -89,12 +96,13 @@ data stays exactly where it is; adding them back restores all of it.
 ## `aiAllow/{uid}` — the AI estimator switch
 
 ```
-aiAllow/{uid}  { on: bool, blocked?: bool }
+aiAllow/{uid}  { on: bool, blocked?: bool,
+                 photoPerDay?: number, textPerDay?: number }
 ```
 
-Two booleans and nothing else. This one node is readable **by key** without
-authentication, because the Cloudflare Worker has no Firebase credentials and
-should not be given any — it does a plain GET on
+Two booleans and two small integers, and nothing else. This one node is readable
+**by key** without authentication, because the Cloudflare Worker has no Firebase
+credentials and should not be given any — it does a plain GET on
 `aiAllow/{uid}.json` and allows the call when `on === true && blocked !== true`.
 The parent is not listable, and the value carries no personal data.
 
@@ -103,9 +111,85 @@ blocked wins. That split is what lets somebody who claimed an invite code get
 the estimator immediately, while leaving the owner a switch they cannot flip
 back.
 
-The per-day limits are deliberately **not** here — a client could rewrite them.
-They live in the Worker's settings: 3 photo and 3 describe estimates per person
-per day, counted separately, under a shared monthly dollar cap.
+`photoPerDay` and `textPerDay` are that account's daily allowance, and they are
+owner-writable only. The reason the per-day limits were kept out of here still
+stands — a client that can rewrite its own limit does not have one — so what
+makes it safe is that the number is bounded twice and neither bound is in the
+database's gift. The rules refuse anything above **12 photo or 30 describe**;
+the Worker clamps whatever it reads to the same two ceilings again before it
+uses it (`HARD_MAX` in `worker/src/index.js`), and treats a value it cannot read
+as a number as no override at all, falling back to its configured default rather
+than to zero. Absent means "use the Worker's default", which is 3 and 3. Zero is
+a real value and it means none of that kind at all.
+
+The count is not what protects the money; the monthly dollar cap in the Worker
+is, and it is per account — the running spend lives in KV under `q:{uid}`, so
+each person has their own. Raising an allowance without raising
+`MONTHLY_USD_CAP` in `worker/wrangler.toml` only changes which refusal they get.
+
+## `usage/{uid}` — counters, and nothing that is not a counter
+
+```
+usage/{uid}/who/firstSeen              ms epoch, write-once
+usage/{uid}/who/lastSeen               ms epoch
+usage/{uid}/who/platform               ios|android|mac|windows|linux|other
+usage/{uid}/who/standalone             bool — installed to the home screen
+usage/{uid}/who/version                'rack-v13' — the sw.js cache name
+usage/{uid}/days/{YYYY-MM-DD}/{event}  a whole number
+```
+
+The owner wanted to know which features people actually use. He cannot learn
+that from `users/{uid}` — that subtree is readable by its own account alone and
+nothing about this widened it — so the answer is a second tree that holds no
+content whatsoever. **Every value in it is a number, a boolean, one of six
+platform tokens, or a version string of fixed shape**, and that is enforced by
+the published rules rather than by good manners. There is no name and no email:
+the owner already has both from `access/approved`, and a second copy would only
+be a second thing to get wrong. There are no lifetime totals either — the admin
+panel sums the days, so a total and its parts can never disagree.
+
+Read: the account itself, and the owner, who can read the whole tree at once.
+Write: the account itself, and only while `access/approved/{uid}` exists. **The
+owner can write nobody's counters but his own** — there is no write grant for
+him anywhere under `usage`, so he can read every number here and edit none of
+them.
+
+The write grant sits on `$day`, never on `usage/{uid}` or on `days`, for exactly
+the reason the sections under `users/{uid}` are granted one at a time: a grant
+cascades downward, and a grant on the container turns the subtree into free
+storage. The `YYYY-MM-DD` shape is checked *in the write rule*, where `$day` is
+in scope, so a junk key has no grant to begin with.
+
+The event vocabulary is closed. It is exported as `EVENTS` from `usage.js`, it
+is the list `admin.js` renders from, and anything not on it is dropped before it
+can be written: opens and installs, one key per tab, five for the estimator
+(photo, photo with a typed description, words alone, a cache hit that spent
+nothing, and a failure), the ways food gets into the log, and one each for a
+session started and finished, a set, a routine, a custom exercise, a weigh-in, a
+water log and a step total. Keys match `^[a-zA-Z][a-zA-Z0-9]{0,23}$` and a
+count is capped at 1,000,000, which is the ceiling the rules validate against.
+
+**The numbers are approximate and have to be quoted that way.** There is no
+`increment()`: counts live in a localStorage ledger namespaced by uid and are
+flushed as absolute per-day values, which makes every write idempotent, so a
+refused or half-sent flush costs a retry and nothing else. The price is that two
+devices on the same day each write their own total and the later write wins;
+init seeds today from `max(local, server)` so they converge instead of
+sawtoothing. Read them as a shape, never as an audit — the admin panel says so
+on screen and so should anything else that quotes them.
+
+Retention is **120 days**. The account prunes its own history: the local ledger
+forgets old day keys, and the same pass deletes the server's, because forgetting
+a day locally is precisely what would otherwise guarantee the client never
+touched that key again. A delete is a null and `.validate` is not evaluated for
+a null, so the day rule permits it.
+
+This module shipped before the rules that allow it were published, so for a
+while every flush comes back permission-denied. Every failure is swallowed and
+backed off — 1 minute, 5, 30, then 6 hours — the ledger is capped so a
+permanently refused write cannot grow it without bound, and `window.__rackUsage`
+is the one deliberate hatch, so "refused, or just not published yet?" is
+answerable from the console instead of by guessing.
 
 ---
 
@@ -115,15 +199,28 @@ Everything below is a path under `users/{uid}`.
 
 ## `profile` → `{ name, email, sex, heightIn, birthYear, createdAt }`
 
-Written by onboarding. `sex` is `m` | `f` | `x` and feeds the Mifflin-St Jeor
-starting estimate; nothing else reads it.
+Written by onboarding, and — since the settings hub — editable afterwards at
+You → ⚙ → *Your details*. `sex` is `m` | `f` | `x` and feeds the Mifflin-St Jeor
+starting estimate; nothing else reads it, and nothing recalculates when it
+changes.
+
+Two things to know before writing here. Setup that was skipped writes only
+`{ name, createdAt }`, so every other key is legitimately absent and needs a
+default rather than an empty box. And the node ends with
+`"$other": { ".validate": false }` — spreading an old object forward carries any
+stray key from an older version into the write and fails the whole thing, so
+name the keys.
 
 ## `onboarding` → `{ done, at, version, skipped, tourDone }`
 
 Why it is in the database and not localStorage: a new phone would otherwise
 greet an existing account as a stranger. `done` gates the setup questions,
-`tourDone` gates the four-tab walkthrough, and the walkthrough can be replayed
-from Weight → Settings.
+`tourDone` gates the walkthrough — five cards now, one per tab, You first — and
+the walkthrough can be replayed from You → ⚙ → App → *Replay the walkthrough*.
+
+`version` is written and never read. `onboardingState()` only ever tests `done`,
+so raising `ONBOARDING_VERSION` re-runs nothing for anybody; it would only look
+from the outside as though it had.
 
 ## `food/log/{YYYY-MM-DD}` → `{ entryId: entry }`
 
@@ -328,4 +425,8 @@ optional. Any food already in the log produces this exact shape — tap it →
 3. **Update `food/daySummaries/{date}`** after touching a day's food log.
 4. **Don't invent library items or exercises** to make a log fit.
 5. **New top-level section under `users/{uid}` → add it to the rules**, or it
-   will fail to save with no error the user can see.
+   will fail to save with no error the user can see. The same is true of a new
+   tree at the root — `usage` is the most recent one. And editing
+   `database.rules.json` publishes nothing: it is a copy, and somebody has to
+   paste it into the Firebase console before a single one of those writes
+   lands.

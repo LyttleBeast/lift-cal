@@ -6,6 +6,8 @@ import { initWorkout, render as renderWorkout, hasActiveSession } from './workou
 import { initFood, render as renderFood } from './food.js';
 import { initWeight, render as renderWeight } from './weight.js';
 import { initSteps, render as renderSteps } from './steps.js';
+import { initYou, render as renderYou } from './you.js';
+import { initUsage, bump } from './usage.js';
 
 const $ = s => document.querySelector(s);
 
@@ -115,6 +117,9 @@ async function submitAuth() {
 
 let booted   = false;
 let gateOpen = false;
+// Whether initYou() got far enough that switching to You is safe. Module-level
+// because restoreView() is what has to act on it.
+let youOk    = true;
 
 watchAuth(async user => {
   if (user) {
@@ -161,6 +166,8 @@ async function boot(user) {
 
   syncPip();
   ensureAiRecord(user.uid);
+  // Unawaited on purpose: telemetry is never allowed to delay or break a boot.
+  initUsage(user);
   watchRevocation(user.uid);
   await flushQueue();
 
@@ -176,10 +183,21 @@ async function boot(user) {
     }
   } catch {}
 
+  // Started before the four tabs, awaited after them. #view-you is the view the
+  // markup marks active, so it is what somebody opening the app is looking at —
+  // and initYou() paints its skeleton synchronously, before its first await, so
+  // starting it here is the difference between a screen with headings on it and
+  // a blank one held for every read the four inits below make in turn. Its own
+  // reads then overlap theirs instead of queueing behind them.
+  const youReady = initYou({ user, go: switchView }).catch(() => { youOk = false; });
+
   await initWorkout();
   await initFood();
   await initWeight();
   await initSteps();
+  // Awaited here because restoreView() has to know whether You built itself
+  // before it decides where to put the user.
+  await youReady;
   restoreView();
 
   if (wantTour) {
@@ -207,10 +225,13 @@ export function switchView(name) {
   dock.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.view === name));
   document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + name));
   LS.set('lastView', name);
-  if (name === 'workout') renderWorkout();
-  if (name === 'food')    renderFood();
-  if (name === 'weight')  renderWeight();
-  if (name === 'steps')   renderSteps();
+  // The bump goes before the render so a screen that fails to draw is still
+  // counted as a screen somebody went looking for.
+  if (name === 'you')     { bump('tabYou');    renderYou(); }
+  if (name === 'workout') { bump('tabTrain');  renderWorkout(); }
+  if (name === 'food')    { bump('tabFuel');   renderFood(); }
+  if (name === 'weight')  { bump('tabWeight'); renderWeight(); }
+  if (name === 'steps')   { bump('tabSteps');  renderSteps(); }
 }
 
 dock.addEventListener('click', e => {
@@ -218,9 +239,24 @@ dock.addEventListener('click', e => {
   if (btn) switchView(btn.dataset.view);
 });
 
+/* You is the default now — it is what the app opens on unless the settings hub
+   says otherwise. A live workout still outranks all of it: coming back to a
+   parked session and landing anywhere else is how sets get lost.
+   `openOn` is 'you' | 'workout' | 'last'; 'last' defers to `lastView`, which
+   switchView has been writing all along. And if You failed to initialise, we
+   send them to Train rather than to a view whose render() will throw next. */
 function restoreView() {
-  const last = LS.get('lastView', 'workout');
-  if (last !== 'workout' && !hasActiveSession()) switchView(last);
+  if (hasActiveSession()) { switchView('workout'); return; }
+  let want = youOk ? LS.get('openOn', 'you') : 'workout';
+  if (want === 'last') want = LS.get('lastView', 'you');
+  if (want === 'you' && !youOk) want = 'workout';
+  // switchView toggles `active` by comparing against a view id, so a name that
+  // matches no view unsets all five and leaves a blank screen under the dock.
+  // A stored `null` reaches here as null rather than the fallback (LS.get tests
+  // the raw string, and "null" is truthy), and a settings label saved in place
+  // of its value would do the same. Land somewhere real instead.
+  if (!document.getElementById('view-' + want)) want = youOk ? 'you' : 'workout';
+  switchView(want);
 }
 
 /* Settings needs to be able to replay the tour without importing app.js and
