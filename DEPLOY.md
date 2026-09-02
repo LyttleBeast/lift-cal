@@ -1,210 +1,188 @@
-# Shipping this update
+# Shipping Rack
 
-Twelve steps, about twenty minutes. **Do them in this order** — the reasons are
-under each one.
+Three things can be deployed, and they are separate. Most changes need only the
+first.
 
-Two things to know before you start:
+| What you changed | What to deploy |
+|---|---|
+| Any `.js`, `.css`, `.html` in the repo root | **The app** — commit and push |
+| `database.rules.json` | **The app** *and* **the rules** (paste into Firebase) |
+| Anything under `worker/` | **The Worker** — `npx wrangler deploy` |
 
-- **Publishing the rules first is safe.** The version of Rack running on your
-  phone right now keeps working under the new rules. The only thing it does that
-  they refuse is writing the public feed, and that write is already inside a
-  `try/catch` that swallows failures. Nothing breaks while you're mid-upload.
-- **You cannot lock yourself out.** Your uid is exempt from the approval check
-  inside the rules themselves. Even if the whole `access` tree were empty or
-  deleted, your app opens.
+Merging to GitHub does nothing for the rules or the Worker. They live in Firebase
+and Cloudflare, and each has to be pushed there by hand. This is the single most
+common way a change appears to have shipped and hasn't.
 
 ---
 
-## 1. Publish the security rules
+## 1. Ship the app
 
-Firebase Console → your project → **Realtime Database** → **Rules** tab.
-Select everything in the box, delete it, paste all of `database.rules.json`,
-**Publish**.
+You work in a local clone at `C:\Users\micah\dev\lift-cal` and push. GitHub Pages
+serves `main` and takes a minute or two.
 
-This is the step that actually does the thing you asked for. From the second it
-publishes:
+```powershell
+cd C:\Users\micah\dev\lift-cal
+git add -A
+git status --short          # read this before committing
+git commit -m "what changed"
+git push
+```
 
-- the tree stops being world-readable — try
-  `curl "https://lift-cal-default-rtdb.firebaseio.com/users/aXSDfnZK8IMT9wRVhBbEgkDHpsj2.json"`
-  before and after; you should get your data, then `Permission denied`
-- no account can reach another's data, in either direction
-- an account with no approval record can't write a byte
+**Before you commit, bump the version.** Two files carry it and they must match:
 
-Do this first so everything after it lands on a database that is already locked.
+- `sw.js` — `const CACHE='rack-vN'`
+- `usage.js` — `const VERSION = 'rack-vN'`
 
-## 2. Turn on sign-up
+`sw.js` is what makes phones fetch the new bundle instead of serving the cached
+one. `usage.js` is what reports to the admin panel which build each person is
+actually running — which is how you find out that somebody's phone never took an
+update. If they disagree, the panel lies to you. Bump both, every ship.
 
-Authentication → **Settings** → *User actions* → make sure **"Enable create
-(sign-up)"** is ticked. Also check Authentication → **Sign-in method** →
-Email/Password is Enabled.
+### Two things that bite
 
-Your roommate cannot make an account while this is off. This is safe now and was
-not before: creating an account no longer grants access to anything. Someone who
-signs up without a code gets a waiting screen holding no data, and costs you one
-row in the user list.
+**Line endings.** The repo stores LF; Windows writes CRLF. If `git status` shows
+every file changed and a diff of thousands of lines, that is all it is. `git
+config core.autocrlf input` is already set in this clone and fixes it on the way
+in. Check the real size with `git diff --stat --ignore-all-space`.
 
-## 3. Delete the agent account
+**A stale lock.** If git refuses with *"another git process seems to be
+running"*, delete `.git\index.lock` and retry. Nothing is wrong.
 
-Authentication → **Users** → find `agent@lift-cal.app`
-(`HWwNbi0JPRbtTw0ODHxyq989UJj2`) → **Delete account**.
+---
 
-The rules already stop it writing anywhere. Deleting it means the password
-that's been sitting in a documentation file stops mattering at all.
+## 2. Publish the rules
 
-## 4. Delete the feed node
+Only when `database.rules.json` changed. Committing it to the repo is version
+control, not deployment — Firebase never reads your repo.
 
-Realtime Database → **Data** → find `feed` at the root → **×** → delete.
+```powershell
+Get-Content C:\Users\micah\dev\lift-cal\database.rules.json -Raw | Set-Clipboard
+```
 
-It was a world-readable summary of your day. Nothing writes it any more, and
-leaving it there leaves a stale copy of your macros on the internet.
+Firebase Console → **Realtime Database** → **Rules** tab → click in the editor →
+Ctrl+A, Delete → Ctrl+V → **Publish**.
 
-## 5. Upload the app files
+It is a full replace, not an append. Publishing while the app is open on your
+phone is safe.
 
-GitHub → `LyttleBeast/lift-cal` → **Add file → Upload files** → drop all of
-these in at once → Commit.
+**The failure is silent.** A write the rules don't allow is refused by the
+server, and the app is built not to blink at it. If you add a field to a rules
+file and forget this step, the feature simply does nothing and says nothing. That
+is why the verification below checks the database and not the screen.
 
-**New files** — the app will not run without all four:
+You cannot lock yourself out: your uid is exempt from the approval check inside
+the rules text itself. If you ever break the file, re-paste it from the repo.
 
-| | |
-|---|---|
-| `access.js` | Invite codes, requests, approval, the People sheet |
-| `onboarding.js` | First-run setup and the tour |
-| `auth.css` | Styles for all of the above |
-| `database.rules.json` | A copy of what you pasted in step 1, so it's in version control |
+---
 
-**Changed files:**
+## 3. Deploy the Worker
 
-| | |
-|---|---|
-| `index.html` | Sign-in / create-account form, gate and onboarding containers |
-| `app.js` | Sign-up, the access gate, onboarding in the boot order |
-| `store.js` | Sign-up + password reset, shared-node access, feed removed |
-| `firebase-config.js` | Feed token removed |
-| `food.js` | Feed writes removed, split photo/describe quota display |
-| `weight.js` | Feed removed; People & access, replay tour, device wipe in settings |
-| `workout.js` | Feed writes removed |
-| `sw.js` | Cache bumped to `rack-v12` so phones actually pick this up |
-| `AGENTS.md` `CLAUDE.md` `README.md` | Rewritten for the locked-down multi-account model |
-| `wrangler.toml` | New per-person AI limits |
+Only when something under `worker/` changed.
 
-**Delete from the repo while you're in there** (all three are junk):
-
-- `README (1).md` — an older copy of the README uploaded by accident
-- `download` — actually your `.gitignore`, uploaded under the wrong name.
-  Re-upload its contents as `.gitignore` if you want it working
-- `rack.mjs` — the CLI for the agent account. It cannot work any more. Delete it,
-  or keep it as a record; it's inert either way
-
-GitHub Pages takes a minute or two.
-
-## 6. Redeploy the Worker
-
-`index.js` in this bundle is the **Worker**, not the app — that's the layout
-your repo already uses, so uploading it to the repo root in step 5 is correct.
-It also has to go into your actual wrangler project, where `wrangler.toml` says
-`main = "src/index.js"` — so `src/index.js` there, not the root. Copy
-`wrangler.toml` across too, then:
-
-```bash
+```powershell
+cd C:\Users\micah\dev\lift-cal\worker
+npx wrangler whoami          # expired login fails the next step confusingly
 npx wrangler deploy
 ```
 
-What changed: photo and describe now have **separate** daily counters, 3 each,
-per person. And the uid allowlist now reads `aiAllow/{uid}` out of the database,
-so approving somebody in the app gives them the estimator without a redeploy —
-`ALLOWED_UIDS` stays as an override and as the fallback if Firebase is
-unreachable, which is why your own uid should stay in it.
+Read the bindings table it prints — that is the real proof your `wrangler.toml`
+edit took. `MONTHLY_USD_CAP` and `GLOBAL_MONTHLY_USD_CAP` should show the values
+you expect.
 
-## 7. Force your phone to take the update
-
-Rack is a PWA with a service worker. Close it fully (swipe it out of the app
-switcher), open it, then close and open once more. The first launch fetches the
-new files, the second runs them.
-
-If it still looks old: Safari → Settings → Clear History and Website Data, or
-delete the home-screen icon and re-add it.
+Your `ANTHROPIC_API_KEY` lives encrypted in Cloudflare and survives deploys. The
+KV namespace id is in `wrangler.toml`, so counters are never reset by a deploy.
 
 ---
 
-# Testing it — twenty minutes, worth every one
+## 4. Verify — in this order
 
-## 8. Check yourself first
+Each step proves a different thing, so a failure tells you where to look.
 
-Open Rack. You should land straight in, exactly as before — no onboarding, no
-waiting screen, all your data there. If you get the setup questions, something
-is wrong; stop and tell me.
+1. **Take the update.** Swipe Rack out of the app switcher, open it, swipe it out
+   again, open it again. The first launch fetches the new files, the second runs
+   them.
+2. **Confirm the build.** Firebase → Realtime Database → Data →
+   `usage/{your uid}/who/version`. It must read the version you just shipped. If
+   it shows the old one, your phone is still on the old bundle.
+3. **Confirm the rules.** In the same place, `usage/{your uid}/days/{today}` has
+   an `appOpen` count. If the whole `usage` node is missing, step 2 above didn't
+   happen.
+4. **Confirm the Worker.** Gear, top right of You or Fuel → **AI estimator** → **Test**. It reports your
+   remaining estimates and your monthly cap. Then photograph a meal and log it,
+   which exercises the whole path end to end.
 
-Then Weight tab → Settings. You should see **People & access**, **Replay the
-walkthrough**, and **Sign out and erase this device's copy**. The old *Copy
-Claude link* button should be gone.
+Still looks old after two relaunches: Safari → Settings → Clear History and
+Website Data, or delete the home-screen icon and re-add it.
 
-Fuel → ⚙ → AI estimator → **Test**. It should say something like
-*"Today: 3 of 3 photos, 3 of 3 describes left"*. Take a photo of something and
-log it, to prove the estimator still works end to end.
+---
 
-## 9. Prove the lockdown
+# Adding a person
 
-```bash
-curl "https://lift-cal-default-rtdb.firebaseio.com/users/aXSDfnZK8IMT9wRVhBbEgkDHpsj2/food/targets.json"
-curl "https://lift-cal-default-rtdb.firebaseio.com/feed/wH7lqHV7y15z4EMq9T2UZi.json"
-```
+Everything is in the app. No code changes, no redeploys.
 
-Both should answer `{"error" : "Permission denied"}`. If either returns data,
-the rules didn't publish — go back to step 1.
+**1. Make them a code.** You tab → **Admin** → People & access → **New invite
+code**. It copies itself to the clipboard. Text it to them.
 
-## 10. Make your roommate a code
+**2. They sign up** at `https://lyttlebeast.github.io/lift-cal/` — name, email,
+password, paste the code. A valid code takes them straight into onboarding. If
+they sign up without one they get a waiting screen holding no data, and their
+request appears under Admin → People & access → Requests for you to **Approve**.
+They are let in within a second, no reload.
 
-Weight → Settings → **People & access** → **New invite code**. It copies itself
-to the clipboard. Text it to him.
+Walk them through onboarding next to them the first time. Check the calorie and
+protein numbers it lands on look sane for them.
 
-## 11. Watch him sign up
+**3. Set their allowance and their cap, together.** Admin → their name → **AI
+allowance**. Three boxes:
 
-Do this next to him, on his phone, at `https://lyttlebeast.github.io/lift-cal/`:
+| | |
+|---|---|
+| Photo estimates a day | max 12, default 3 |
+| Describe estimates a day | max 30, default 3 |
+| Monthly spending cap | max $10, default $2 |
 
-1. **Create an account** → name, email, password, paste the code → *Create
-   account*
-2. He should go straight into onboarding — no waiting screen
-3. Walk through it: basics, weight, goal, activity. Check the calorie and
-   protein numbers look sane for him
-4. Let the four-card tour run
-5. Have him log a food and a weigh-in
+Leave a box empty to use the default. Zero is a real value and means none of that
+kind at all.
 
-Then, on **your** phone: your data should be completely unchanged. Not one
-entry of his, no target moved, nothing in your saved foods. Then check the
-reverse on his — he should see none of yours, and no *People & access* button
-at all.
+Set the counts and the cap together or they hit whichever wall comes first, and
+the refusal will name the wrong one. For scale: a photo estimate costs about
+**$0.006**, a typed description a fraction of a cent. Ordinary use at 3 photos a
+day is roughly **$0.55 a month**. Somebody at the 12-photo ceiling runs about
+**$2.20** — so 12 photos a day on the default $2 cap runs out of money in ten
+days.
 
-That's the test that matters. Everything else is convenience.
-
-## 12. Try the other door
-
-Worth doing once so you know it works before you need it. On a laptop, in a
-private window, create an account with **no code**. You should get the waiting
-screen. Send the request. On your phone: People & access → the request is there
-→ **Approve**. Watch the laptop — it should let itself in within a second, with
-no reload. Then remove that test account with **Remove**, and delete it from
-Firebase Authentication → Users.
+**4. Check the isolation once, with the first person.** On your phone: none of
+their entries anywhere, no target moved, nothing in your saved foods. On theirs:
+none of yours, and no Admin row at all.
 
 ---
 
 # Living with it
 
-**Adding a third person** is the same two doors, no code changes. If the AI
-starts costing more than you like, raise `MONTHLY_USD_CAP` deliberately rather
-than letting it bite — it's set to $1 against a $5 balance, and three people at
-3 photos a day would push against that.
+**Every cap is per account.** The counters live in Cloudflare KV keyed `q:{uid}`.
+Raising one person's cap gives nobody else a cent.
 
-**Taking access away** is People & access → **Remove**. It deletes one node.
-Their data is untouched, so adding them back restores everything. If you only
-want to stop them spending your Anthropic credit but keep them in the app, use
-**AI…** instead.
+**There is also a group ceiling.** `GLOBAL_MONTHLY_USD_CAP` in
+`worker/wrangler.toml`, currently **$10**, counted in KV under `spend:global`.
+Cross it and the estimator refuses *everybody* with a message saying so, until
+the 1st. It exists because per-account caps bound each person and say nothing
+about their sum — seven people at $2 each is $14 in a bad month. Changing it is
+one line and a `wrangler deploy`.
 
-**If you ever break the rules file** and lock everyone out, your uid is exempt
-from the approval check in the rules text, so your own app keeps working while
-you fix it. Re-paste `database.rules.json` from the repo.
+Seven people at ordinary use is about **$4 a month**. Watch the Anthropic balance
+as you add people; the group ceiling is the last wall before the balance itself
+is the wall, and that one fails as an API error rather than a clean message.
 
-**One known limitation, stated plainly.** Two people racing to claim the *same*
-invite code in the same second could both succeed — Realtime Database rules
-can't do a true compare-and-swap across two paths. Codes are single-use in every
-realistic case; if it ever mattered, the fix is to hand out one code per person,
-which is what the People screen does anyway.
+**Taking access away** is Admin → their name → **Remove**. It deletes one node.
+Their data is untouched, so adding them back restores everything. To leave them
+in the app but stop them spending your credit, use **Turn their estimator off**
+instead — only you can set that, and it beats their own switch.
+
+**The usage numbers are approximate.** Each phone counts its own and writes them
+up. They are a picture of who uses what, not an audit. The panel says so on
+screen.
+
+**One known limitation.** Two people racing to claim the same invite code in the
+same second could both succeed — Realtime Database rules can't compare-and-swap
+across two paths. Hand out one code per person, which is what the People screen
+does anyway.
