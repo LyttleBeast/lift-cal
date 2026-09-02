@@ -14,7 +14,7 @@
 
 import { read, write, watch, LS, todayKey, uid } from './store.js';
 import { maintenance, calorieZones, zoneOf, refreshModel,
-         autoTargets, trendWeight } from './tdee.js';
+         autoTargets, trendWeight, MIN_CARB_G } from './tdee.js';
 import { initWater, loadWaterDay, renderWater, openWaterSettings } from './water.js';
 import { OWNER_UID } from './firebase-config.js';
 import { $, el, svgEl, sheet, toast, noteEl, confirmSheet, copyText, readClipboard,
@@ -593,37 +593,26 @@ function renderCalMeter(cal) {
   const mi = maintInfo();
   const z  = mi ? calorieZones(mi.cal) : null;
 
-  // The bar is a window onto the calorie line, and the goal decides where the
-  // window sits: a cut gets most of its width below maintenance, a bulk most
-  // of it above, and maintaining is centred on the hold band. It used to run
-  // from zero, which made the cut band three quarters of the bar for
-  // everybody and the gain band a sliver a bulk could barely land in. The
-  // stretch below the window — the first thousand-odd calories of every day —
-  // is folded into a short runway at the left, so the head still moves
-  // through breakfast instead of sitting on the edge until lunch. The window
-  // always contains the target, so the dashed mark is always on the bar, and
-  // past the right edge the bar just pins full: the number above it says how
-  // far over you went.
-  let lo, hi;
+  // A plain ruler from zero. For a while this was a window that started
+  // well above zero with the morning squeezed into a striped runway at the
+  // left, so that the goal's band could be the widest — and 960 kcal of
+  // breakfast moved the head a few pixels and looked like nothing. What you
+  // ate has to show as what you ate. So the scale is linear from nothing to
+  // a top that leans with the goal instead: a cut stops just past the gain
+  // tick so the blue is most of the bar, a bulk runs well into the red so
+  // there is room to land there, and maintaining sits between. The top
+  // always clears the target, so the dashed mark is always on the bar, and a
+  // day past the top just pins full — the number above it says how far.
+  let hi;
   if (z) {
     const b = z.band, g = goalSign(z.maint);
-    if (g < 0)      { lo = z.cutTop - 3 * b;   hi = z.gainFrom + 1 * b; }
-    else if (g > 0) { lo = z.cutTop - 1 * b;   hi = z.gainFrom + 3 * b; }
-    else            { lo = z.cutTop - 1 * b;   hi = z.gainFrom + 1 * b; }
-    lo = Math.min(lo, targets.cal - b / 2);
+    hi = g < 0 ? z.gainFrom + 0.5 * b : g > 0 ? z.gainFrom + 3 * b : z.gainFrom + 1.5 * b;
     hi = Math.max(hi, targets.cal + b / 2);
   } else {
-    lo = 0;
     hi = Math.max(targets.cal * 1.15, 1);
   }
-  lo = Math.max(0, Math.round(lo / 50) * 50);
   hi = Math.ceil(hi / 50) * 50;
-  const RUN = lo > 0 ? 9 : 0;
-  const pct = v => {
-    if (!(v > 0)) return 0;
-    if (v <= lo) return lo > 0 ? v / lo * RUN : 0;
-    return Math.min(100, RUN + (v - lo) / (hi - lo) * (100 - RUN));
-  };
+  const pct = v => (v > 0 ? Math.min(100, v / hi * 100) : 0);
 
   const track = el('div', 'cal-track');
   if (z) {
@@ -635,12 +624,6 @@ function renderCalMeter(cal) {
     };
     track.append(band('cut', 0, z.cutTop), band('hold', z.cutTop, z.gainFrom), band('gain', z.gainFrom, hi));
   }
-  if (RUN) {
-    const rw = el('div', 'cal-runway');
-    rw.style.width = RUN + '%';
-    track.appendChild(rw);
-  }
-
   const zone = zoneOf(cal, z);
   const fill = el('div', 'cal-fill');
   fill.style.width = pct(cal) + '%';
@@ -3045,11 +3028,11 @@ function openBarGuide(t) {
   if (z) {
     const g = goalSign(z.maint);
     row('head', 'The bar',
-      'A window onto the day’s calories. The white head is where you are now and moves right as you eat. ' +
-      'The window leans toward your goal — ' +
-      (g < 0 ? 'you are cutting, so most of it is the blue band.'
-      : g > 0 ? 'you are bulking, so most of it is the red band.'
-      :         'you are maintaining, so the yellow band is the widest.'));
+      'The day’s calories from zero, filled to what you have eaten; the white head is where you are now and moves right with every meal. ' +
+      'The far end leans with your goal — ' +
+      (g < 0 ? 'you are cutting, so it stops just past the gain line and the blue is most of the bar.'
+      : g > 0 ? 'you are bulking, so it runs well into the red so there is room to land there.'
+      :         'you are maintaining, so it stops a little past the gain line.'));
     row('cut', 'Blue — cut',
       'Below ' + n(z.cutTop) + ' kcal. Finish the day here and you are in a deficit: your body makes up the difference from stored fat.');
     row('hold', 'Yellow — hold',
@@ -3064,14 +3047,6 @@ function openBarGuide(t) {
       (targets.cal < z.cutTop ? 'it is in the blue, so hitting it every day is a cut.'
       : targets.cal > z.gainFrom ? 'it is in the red, so hitting it every day is a bulk.'
       :                            'it is in the yellow, so hitting it every day holds your weight.'));
-    // The same window arithmetic renderCalMeter uses, so the number here is
-    // the runway's real edge and not an approximation of it.
-    const lo = Math.max(0, Math.round(Math.min(
-      z.cutTop - (g < 0 ? 3 : 1) * z.band, targets.cal - z.band / 2) / 50) * 50);
-    row('runway', 'The striped strip',
-      lo > 0
-        ? 'The first ' + n(lo) + ' kcal of the day, squeezed into a short runway so the head still moves through breakfast. Nothing is decided there yet.'
-        : 'Appears when the bar starts above zero: the calories below the window, squeezed into a short runway.');
     row('status', 'The line under the bar',
       'The word for the band you are in, and how far you sit from maintenance right now. ' +
       '“maint ' + n(z.maint) + (mi.auto
@@ -3089,4 +3064,65 @@ function openBarGuide(t) {
 
   sh.appendChild(list);
   sh.appendChild(noteEl('Roughly 3,500 kcal is a pound, so a pound a week is about 500 a day. Every number on this sheet is live — open it again tomorrow and it will have moved with you.'));
+}
+
+/* ================= THE GOAL, AS ONE WORD =================
+   Cutting, maintaining or bulking. The goal has always lived as the sign of
+   targets.auto.rateWk — onboarding writes it, the calorie bar and the You
+   tab read it back — but the only place to change it was the rate box in
+   the auto pane of Daily targets, which is not where anybody looks for
+   "I want to cut now". This is the one-word switch: Your details calls it.
+
+   Changing the word also moves the calorie target, because a cut whose
+   target still sits at maintenance is not a cut, and the bar would say so
+   in a note under itself forever. With auto targets on, the auto maths does
+   the moving; by hand, calories become maintenance shifted by the rate
+   (3,500 kcal a pound, so a pound a week is 500 a day), never below protein
+   and fat plus 100 g of carbs. Without a maintenance number the word is
+   saved and the calories are left alone. */
+const GOAL_RATE = { cut: -1, hold: 0, gain: 0.5 };
+
+export function goalId() {
+  const a = targets.auto;
+  if (a && Number.isFinite(a.rateWk) && a.rateWk !== 0) return a.rateWk < 0 ? 'cut' : 'gain';
+  const mi = maintInfo();
+  if (mi && targets.cal > 0) {
+    if (targets.cal < mi.cal - 100) return 'cut';
+    if (targets.cal > mi.cal + 100) return 'gain';
+  }
+  return 'hold';
+}
+
+function goalNext(id) {
+  const cur = targets.auto && Number.isFinite(targets.auto.rateWk) ? targets.auto.rateWk : 0;
+  // Keep a rate the person already chose when it points the same way, so
+  // switching cut → hold → cut does not quietly reset a ½ lb cut to 1 lb.
+  const rate = (id === 'cut' && cur < 0) || (id === 'gain' && cur > 0) ? cur : GOAL_RATE[id];
+  const a = { ...AUTO_DEFAULTS, ...(targets.auto || {}), rateWk: rate };
+  let next = { ...targets, auto: a };
+  const mi = maintInfo();
+  if (mi) {
+    if (a.on) {
+      const lb = trendWeight();
+      const n = lb > 0 ? autoTargets(a, mi.cal, lb) : null;
+      if (n) next = { ...next, cal: n.cal, p: n.p, f: n.f, auto: { ...a, lastAdj: Date.now() } };
+    } else {
+      const floor = (targets.p || 0) * 4 + (targets.f || 0) * 9 + MIN_CARB_G * 4;
+      next.cal = Math.max(floor, Math.round((mi.cal + rate * 500) / 10) * 10);
+    }
+  }
+  return { next, maint: mi ? mi.cal : null, rate };
+}
+
+export function previewGoal(id) {
+  const { next, maint, rate } = goalNext(id);
+  return { cal: next.cal, maint, rate, changed: next.cal !== targets.cal };
+}
+
+export async function setGoal(id) {
+  const { next } = goalNext(id);
+  targets = next;
+  await write('food/targets', targets);
+  render();
+  return targets.cal;
 }

@@ -614,8 +614,14 @@ function hero() {
   const hr = new Date().getHours();
   const greet = hr < 5 ? 'Good night' : hr < 12 ? 'Good morning' : hr < 17 ? 'Good afternoon' : 'Good evening';
   const first = name === 'You' ? '' : String(name).trim().split(/\s+/)[0];
+  // Two deliberate lines — the greeting, then the name — rather than one
+  // line that wraps wherever it runs out of room. The point is that the app
+  // greets you when it opens, so it gets to be large.
   const mid = el('div');
-  mid.appendChild(el('div', 'you-name', greet + (first ? ', ' + first : '')));
+  const g = el('div', 'you-greet');
+  g.appendChild(el('span', null, greet + (first ? ',' : '')));
+  if (first) g.appendChild(el('span', 'you-greet-name', first));
+  mid.appendChild(g);
   mid.appendChild(el('div', 'you-sub',
     new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })));
   h.appendChild(mid);

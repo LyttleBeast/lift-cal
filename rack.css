@@ -1836,3 +1836,16 @@ body.peeking .view.active { padding-bottom: 58px; }
 .review-take-t { font-size: 13.5px; line-height: 1.45; }
 .review-take + .chart-sub { margin-top: 16px; }
 .card .heat { margin-bottom: 10px; }
+
+/* ---------- the greeting ----------
+   Two lines, large: the app says hello before it says anything else. The
+   name line ellipses on its own so a long name never pushes the gear off
+   the edge; the greeting line never needs to. */
+.you-hero { align-items: center; }
+.you-greet {
+  display: flex; flex-direction: column;
+  font-size: 27px; line-height: 1.05; letter-spacing: -.02em;
+  font-variation-settings: 'wdth' 100, 'wght' 800;
+}
+.you-greet-name { color: var(--p-yellow); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.you-hero .you-sub { margin-top: 6px; }

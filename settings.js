@@ -18,7 +18,7 @@
 import { el, sheet, toast, noteEl, confirmSheet, segmented } from './ui.js';
 import { LS, uid, readExact, currentEmail, write, purgeDevice, logout } from './store.js';
 import { openTargets, openAiSettings, openRecallList, openImportPaste,
-         foodTargets, latestLb } from './food.js';
+         foodTargets, latestLb, goalId, previewGoal, setGoal } from './food.js';
 import { openWaterSettings, waterSettings, fmtWater } from './water.js';
 import { openStepSettings, stepGoal, openAutoDetails } from './steps.js';
 import { openImport } from './importer.js';
@@ -322,6 +322,28 @@ function openProfile(onEdit) {
     const yr = numIn(birthYear);
     body.appendChild(field('Birth year', yr));
 
+    // The goal, as the one word people actually use for it. It lives on
+    // food/targets rather than here, so food.js owns the arithmetic
+    // (setGoal) and this sheet only asks which word. The note under the
+    // control says what saving will do to the calorie target, in numbers,
+    // so nothing moves that the person did not see coming.
+    const goal0 = goalId();
+    let goal = goal0;
+    const goalNote = noteEl('');
+    const paintGoal = () => {
+      if (goal === goal0) { goalNote.textContent = 'Your current goal. Changing it moves your calorie target to match.'; return; }
+      const p = previewGoal(goal);
+      goalNote.textContent = p.maint
+        ? (p.changed ? 'Calories will move to ' + p.cal.toLocaleString() + ' a day — maintenance ' + p.maint.toLocaleString() +
+                       (p.rate ? (p.rate < 0 ? ' minus ' : ' plus ') + Math.abs(p.rate * 500).toLocaleString() : '') + '.'
+                     : 'Your calorie target already fits that goal, so it stays at ' + p.cal.toLocaleString() + '.')
+        : 'Saved as your goal. Calories stay where they are until Rack knows your maintenance — a week of food and weigh-ins, or a number under ⚙ Daily targets.';
+    };
+    body.appendChild(field('Goal', segmented(
+      [['cut', 'Cutting'], ['hold', 'Maintaining'], ['gain', 'Bulking']], goal0, v => { goal = v; paintGoal(); })));
+    body.appendChild(goalNote);
+    paintGoal();
+
     save.disabled = false;
     save.onclick = async () => {
       const name = nameIn.value.trim().slice(0, 60);
@@ -344,9 +366,14 @@ function openProfile(onEdit) {
       if (photo) next.photo = photo;
 
       await write('profile', next);
+      let calMsg = '';
+      if (goal !== goal0) {
+        const cal = await setGoal(goal);
+        calMsg = cal > 0 ? ' — ' + cal.toLocaleString() + ' kcal a day' : '';
+      }
       close();
       if (onEdit) onEdit();
-      toast('Saved');
+      toast('Saved' + calMsg);
     };
   }).catch(() => {
     body.innerHTML = '';
