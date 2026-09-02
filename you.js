@@ -72,7 +72,7 @@ import { weightStats, maintenance, trendRate, refreshModel, trendWeight, adjuste
 import { fmtWater } from './water.js';
 import { isStandalone } from './usage.js';
 import { openInstallGuide } from './onboarding.js';
-import { openSettings, pickProfilePhoto } from './settings.js';
+import { openSettings, openGoal, openDailyTargets, pickProfilePhoto } from './settings.js';
 import { openAdmin, isAdminOpen } from './admin.js';
 
 const DAY = 864e5;
@@ -1479,15 +1479,19 @@ function trajectoryCard(found, est, maint) {
     }
   } else if (t.dir !== 0) {
     c.appendChild(noteEl('Set a goal weight and this card works out when you would reach it at the current pace.'));
-    c.appendChild(goalBtn('Set a goal weight'));
+    c.appendChild(goalBtn('Set a goal weight', 'targets'));
   }
   return c;
 }
 
-function goalBtn(label) {
+/* `where` is 'goal' for the cut / hold / bulk sheet and 'targets' for Daily
+   targets, which is where the goal weight lives. Both repaint this tab
+   behind them the moment they save. */
+function goalBtn(label, where = 'goal') {
   const b = el('button', 'btn btn-ghost btn-block', label);
   b.style.marginTop = '12px';
-  b.onclick = () => openSettings(() => { liveFp = ''; refreshLogged(); });
+  const back = () => { liveFp = ''; refreshLogged(); };
+  b.onclick = () => (where === 'targets' ? openDailyTargets(back) : openGoal(back));
   return b;
 }
 

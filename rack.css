@@ -1849,3 +1849,10 @@ body.peeking .view.active { padding-bottom: 58px; }
 }
 .you-greet-name { color: var(--p-yellow); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .you-hero .you-sub { margin-top: 6px; }
+
+/* Hero alignment with the two-line greeting: avatar and gear sit level
+   with the greeting rather than centred on the whole three-line block,
+   which read as the avatar having slipped. */
+.you-hero { align-items: start; }
+.you-avatar { margin-top: 3px; }
+.you-gear { margin-top: 11px; }

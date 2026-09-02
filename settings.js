@@ -113,7 +113,9 @@ export function openSettings(onEdit) {
 
   /* ---- you ---- */
   const you = section(sh, 'You');
-  navRow(rowList(you), 'Your details', null, () => { close(); openProfile(onEdit); });
+  const youList = rowList(you);
+  navRow(youList, 'Goal', goalPill(), () => { close(); openGoal(onEdit); });
+  navRow(youList, 'Your details', null, () => { close(); openProfile(onEdit); });
 
   const openOn = el('div', 'field');
   openOn.style.marginTop = '14px';
@@ -322,28 +324,6 @@ function openProfile(onEdit) {
     const yr = numIn(birthYear);
     body.appendChild(field('Birth year', yr));
 
-    // The goal, as the one word people actually use for it. It lives on
-    // food/targets rather than here, so food.js owns the arithmetic
-    // (setGoal) and this sheet only asks which word. The note under the
-    // control says what saving will do to the calorie target, in numbers,
-    // so nothing moves that the person did not see coming.
-    const goal0 = goalId();
-    let goal = goal0;
-    const goalNote = noteEl('');
-    const paintGoal = () => {
-      if (goal === goal0) { goalNote.textContent = 'Your current goal. Changing it moves your calorie target to match.'; return; }
-      const p = previewGoal(goal);
-      goalNote.textContent = p.maint
-        ? (p.changed ? 'Calories will move to ' + p.cal.toLocaleString() + ' a day — maintenance ' + p.maint.toLocaleString() +
-                       (p.rate ? (p.rate < 0 ? ' minus ' : ' plus ') + Math.abs(p.rate * 500).toLocaleString() : '') + '.'
-                     : 'Your calorie target already fits that goal, so it stays at ' + p.cal.toLocaleString() + '.')
-        : 'Saved as your goal. Calories stay where they are until Rack knows your maintenance — a week of food and weigh-ins, or a number under ⚙ Daily targets.';
-    };
-    body.appendChild(field('Goal', segmented(
-      [['cut', 'Cutting'], ['hold', 'Maintaining'], ['gain', 'Bulking']], goal0, v => { goal = v; paintGoal(); })));
-    body.appendChild(goalNote);
-    paintGoal();
-
     save.disabled = false;
     save.onclick = async () => {
       const name = nameIn.value.trim().slice(0, 60);
@@ -366,14 +346,9 @@ function openProfile(onEdit) {
       if (photo) next.photo = photo;
 
       await write('profile', next);
-      let calMsg = '';
-      if (goal !== goal0) {
-        const cal = await setGoal(goal);
-        calMsg = cal > 0 ? ' — ' + cal.toLocaleString() + ' kcal a day' : '';
-      }
       close();
       if (onEdit) onEdit();
-      toast('Saved' + calMsg);
+      toast('Saved');
     };
   }).catch(() => {
     body.innerHTML = '';
@@ -468,3 +443,75 @@ async function savePhoto(url) {
   if (url) next.photo = url;
   await write('profile', next);
 }
+
+/* ================= GOAL =================
+   Cutting, maintaining or bulking — the one word the rest of the app reads
+   the goal back from. It has its own row in the hub because it was first
+   put inside Your details and nobody found it there: a goal is the thing
+   people come to settings to change, not a detail about them. food.js owns
+   the arithmetic (goalId / previewGoal / setGoal); this sheet asks which
+   word and shows, in numbers, what saving will do to the calorie target,
+   so nothing moves that the person did not see coming. */
+const GOAL_LABEL = { cut: 'Cutting', hold: 'Maintaining', gain: 'Bulking' };
+
+function goalPill() {
+  try { return GOAL_LABEL[goalId()] || null; } catch { return null; }
+}
+
+export function openGoal(onEdit) {
+  const { sh, close } = sheet();
+  sh.appendChild(el('div', 'eyebrow', 'You'));
+  sh.appendChild(el('h2', null, 'What are you doing right now?'));
+
+  const goal0 = goalId();
+  let goal = goal0;
+  const wrap = el('div', 'ob-choices');
+  const choices = [
+    ['cut',  'Cutting',     'Lose fat, keep muscle — about a pound a week down'],
+    ['hold', 'Maintaining', 'Hold your weight and eat at maintenance'],
+    ['gain', 'Bulking',     'Build muscle — about half a pound a week up']
+  ];
+  const note = noteEl('');
+  const paint = () => {
+    wrap.querySelectorAll('.ob-choice').forEach(b => b.classList.toggle('on', b.dataset.id === goal));
+    if (goal === goal0) { note.textContent = 'Your current goal. Pick another and the calorie target moves to match.'; return; }
+    const p = previewGoal(goal);
+    note.textContent = p.maint
+      ? (p.changed ? 'Calories will move to ' + p.cal.toLocaleString() + ' a day — maintenance ' + p.maint.toLocaleString() +
+                     (p.rate ? (p.rate < 0 ? ' minus ' : ' plus ') + Math.abs(p.rate * 500).toLocaleString() : '') + '. Protein and fat stay where they are.'
+                   : 'Your calorie target already fits that goal, so it stays at ' + p.cal.toLocaleString() + '.')
+      : 'Calories stay where they are until Rack knows your maintenance — a week of food and weigh-ins, or a number under Daily targets.';
+  };
+  choices.forEach(([id, label, sub]) => {
+    const b = el('button', 'ob-choice');
+    b.dataset.id = id;
+    b.appendChild(el('div', 'ob-choice-t', label));
+    b.appendChild(el('div', 'ob-choice-d', sub));
+    b.onclick = () => { goal = id; paint(); };
+    wrap.appendChild(b);
+  });
+  sh.appendChild(wrap);
+  sh.appendChild(note);
+  paint();
+
+  const save = el('button', 'btn btn-primary btn-block', 'Save');
+  save.style.marginTop = '14px';
+  save.onclick = async () => {
+    if (goal !== goal0) {
+      const cal = await setGoal(goal);
+      toast(GOAL_LABEL[goal] + (cal > 0 ? ' — ' + cal.toLocaleString() + ' kcal a day' : ''));
+    }
+    close();
+    if (onEdit) onEdit();
+  };
+  sh.appendChild(save);
+
+  const cancel = el('button', 'btn btn-ghost btn-block', 'Cancel');
+  cancel.style.marginTop = '8px';
+  cancel.onclick = close;
+  sh.appendChild(cancel);
+}
+
+/* The goal weight lives in Daily targets. You needs a way there that does
+   not import food.js, and this is it. */
+export function openDailyTargets(onEdit) { openTargets(onEdit); }
