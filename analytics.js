@@ -644,13 +644,41 @@ export function ring(frac, opts = {}) {
  * values: [number | null]      opts: { width, height, color, accentFrom }
  */
 export function sparkline(values, opts = {}) {
-  const { width = 150, height = 40, color = 'var(--p-yellow)', accentFrom = 0 } = opts;
+  const { width = 150, height = 40, color = 'var(--p-yellow)', accentFrom = 0,
+          area = false, glow = false, ref = null, kind = 'line' } = opts;
   const W = width, H = height, PADX = 4, PADY = 5;
   const svg = svgEl('svg', { viewBox: '0 0 ' + W + ' ' + H, class: 'chart chart-spark' });
 
   const n = values.length;
   const pts = [];
   values.forEach((v, i) => { if (Number.isFinite(v)) pts.push({ i, v }); });
+
+  // Bars: one per slot, from a zero baseline, the accented ones in colour.
+  // The shape for a series of discrete totals — weeks of training volume —
+  // where a line would imply a value between two weeks that never existed.
+  if (kind === 'bars') {
+    if (!n || !pts.some(p => p.v > 0)) {
+      svg.appendChild(svgEl('line', { x1: PADX, y1: H - PADY, x2: W - PADX, y2: H - PADY, class: 'spark-none' }));
+      return svg;
+    }
+    const max = Math.max(...pts.map(p => p.v), ref && ref > 0 ? ref : 0, 1);
+    const slot = (W - PADX * 2) / n;
+    const bw = Math.max(3, slot * 0.58);
+    values.forEach((v, i) => {
+      const x = PADX + slot * i + (slot - bw) / 2;
+      const h = Number.isFinite(v) && v > 0 ? Math.max(2, v / max * (H - PADY * 2)) : 1.5;
+      svg.appendChild(svgEl('rect', {
+        x: x.toFixed(1), y: (H - PADY - h).toFixed(1), width: bw.toFixed(1), height: h.toFixed(1), rx: 2,
+        fill: i >= accentFrom && v > 0 ? color : 'var(--knurl)', class: 'spark-bar'
+      }));
+    });
+    if (ref > 0) {
+      const y = H - PADY - ref / max * (H - PADY * 2);
+      svg.appendChild(svgEl('line', { x1: PADX, y1: y.toFixed(1), x2: W - PADX, y2: y.toFixed(1), class: 'spark-ref' }));
+    }
+    return svg;
+  }
+
   if (n < 2 || pts.length < 2) {
     svg.appendChild(svgEl('line', {
       x1: PADX, y1: H / 2, x2: W - PADX, y2: H / 2, class: 'spark-none'
@@ -658,34 +686,54 @@ export function sparkline(values, opts = {}) {
     return svg;
   }
 
-  let lo = Math.min(...pts.map(p => p.v)), hi = Math.max(...pts.map(p => p.v));
+  // The reference line is folded into the scale so it is always on the
+  // picture — a target the line never crosses is the most useful thing the
+  // picture can show.
+  const scaled = pts.map(p => p.v).concat(ref > 0 ? [ref] : []);
+  let lo = Math.min(...scaled), hi = Math.max(...scaled);
   if (hi - lo < 1e-6) { lo -= 1; hi += 1; }
   const X = i => PADX + i / (n - 1) * (W - PADX * 2);
   const Y = v => PADY + (1 - (v - lo) / (hi - lo)) * (H - PADY * 2);
   pts.forEach(p => { p.x = X(p.i); p.y = Y(p.v); });
 
-  const path = (list, cls) => {
-    if (list.length < 2) return;
-    const d = list.map((p, k) => (k ? 'L' : 'M') + p.x.toFixed(1) + ' ' + p.y.toFixed(1)).join('');
-    const attrs = { d, class: cls };
-    if (cls === 'spark-line') attrs.stroke = color;
-    svg.appendChild(svgEl('path', attrs));
-  };
-
+  const before = accentFrom > 0 ? pts.filter(p => p.i < accentFrom) : [];
+  const after  = accentFrom > 0 ? pts.filter(p => p.i >= accentFrom) : pts.slice();
   // The seam belongs to both halves: the last muted point is also the first
   // coloured one, so the line has no gap where the colour changes.
-  if (accentFrom > 0) {
-    const before = pts.filter(p => p.i < accentFrom);
-    const after  = pts.filter(p => p.i >= accentFrom);
-    if (before.length && after.length) before.push(after[0]);
-    path(before, 'spark-line-dim');
-    path(after, 'spark-line');
-  } else {
-    path(pts, 'spark-line');
+  if (before.length && after.length) before.push(after[0]);
+
+  const seg = list => list.map((p, k) => (k ? 'L' : 'M') + p.x.toFixed(1) + ' ' + p.y.toFixed(1)).join('');
+
+  // The area sits under the coloured half only: it is what makes "this week"
+  // read as the subject and last week as its shadow.
+  if (area && after.length >= 2) {
+    const gid = 'sg' + (++gradSeq);
+    const defs = svgEl('defs');
+    const lg = svgEl('linearGradient', { id: gid, x1: '0', y1: '0', x2: '0', y2: '1' });
+    lg.appendChild(svgEl('stop', { offset: '0%',   'stop-color': color, 'stop-opacity': '0.32' }));
+    lg.appendChild(svgEl('stop', { offset: '100%', 'stop-color': color, 'stop-opacity': '0' }));
+    defs.appendChild(lg);
+    svg.appendChild(defs);
+    const a0 = after[0], a1 = after[after.length - 1];
+    svg.appendChild(svgEl('path', {
+      d: seg(after) + 'L' + a1.x.toFixed(1) + ' ' + (H - 1) + 'L' + a0.x.toFixed(1) + ' ' + (H - 1) + 'Z',
+      fill: 'url(#' + gid + ')', stroke: 'none'
+    }));
   }
 
+  if (ref > 0) {
+    const y = Y(ref);
+    svg.appendChild(svgEl('line', { x1: PADX, y1: y.toFixed(1), x2: W - PADX, y2: y.toFixed(1), class: 'spark-ref' }));
+  }
+
+  if (before.length >= 2) svg.appendChild(svgEl('path', { d: seg(before), class: 'spark-line-dim' }));
+  if (after.length >= 2)  svg.appendChild(svgEl('path', { d: seg(after), class: 'spark-line', stroke: color }));
+
   const end = pts[pts.length - 1];
-  svg.appendChild(svgEl('circle', { cx: end.x.toFixed(1), cy: end.y.toFixed(1), r: 2.6, fill: color, class: 'spark-end' }));
+  if (glow) {
+    svg.appendChild(svgEl('circle', { cx: end.x.toFixed(1), cy: end.y.toFixed(1), r: 6.5, fill: color, class: 'spark-glow' }));
+  }
+  svg.appendChild(svgEl('circle', { cx: end.x.toFixed(1), cy: end.y.toFixed(1), r: 2.8, fill: color, class: 'spark-end' }));
   return svg;
 }
 

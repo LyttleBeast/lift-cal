@@ -379,29 +379,63 @@ function arrowEl(diff, cls, text, unit) {
 /* One headline number, which way it moved against the week before, and the
    shape of the last fortnight under it — this week in colour, last week in
    grey, so the comparison the arrow is making is visible without a legend. */
-function kpi({ label, now, prev, fmt, dfmt, unit, judge, series, color, ready = loaded }) {
+/* This is the first thing on the first screen, so every element earns its
+   place twice — once as a shape and once as a fact. Top row: the subject and
+   a tinted pill with how far it moved. The number, then last week's number
+   in small print, so the pill has something to be measured against without
+   a second glance. The picture: last week muted, this week in colour with an
+   area under it and a glow on today, and the target dashed across both so
+   "near the line" is visible before anything is read. The dots: the seven
+   days of this week, filled where something landed — the consistency the
+   average is built on, in the same tile as the average. `rgb` is the subject
+   colour as bare channels for the tile's corner tint; CSS variables cannot be
+   given an alpha, so the channels are passed rather than the variable. */
+function kpi({ label, now, prev, fmt, dfmt, unit, judge, series, color, rgb, ref, kind, days, ready = loaded }) {
   const t = el('div', 'kpi');
-  t.appendChild(el('div', 'kpi-lbl', label));
+  if (rgb) t.style.setProperty('--kpi-rgb', rgb);
+
+  const hd = el('div', 'kpi-hd');
+  hd.appendChild(el('div', 'kpi-lbl', label));
+  let d;
+  if (!ready) {
+    d = deltaEl('…', 'flat');
+  } else if (now == null || prev == null) {
+    // No last week is not a delta of zero, and printing one would be a lie
+    // about a week that never happened.
+    d = deltaEl('–', 'flat');
+  } else {
+    const diff = now - prev;
+    d = arrowEl(diff, judge(now, prev), (dfmt || fmt)(Math.abs(diff)));
+  }
+  d.classList.add('delta-pill');
+  hd.appendChild(d);
+  t.appendChild(hd);
 
   const v = el('div', 'kpi-val num');
   v.appendChild(el('span', null, val(now, fmt, ready)));
   if (unit && ready && now != null) v.appendChild(el('span', 'kpi-unit', unit));
   t.appendChild(v);
 
-  let d;
-  if (!ready) {
-    d = deltaEl('…', 'flat', '');
-  } else if (now == null || prev == null) {
-    // No last week is not a delta of zero, and printing one would be a lie
-    // about a week that never happened.
-    d = deltaEl('–', 'flat', prev == null && now != null ? 'first week' : 'vs last week');
-  } else {
-    const diff = now - prev;
-    d = arrowEl(diff, judge(now, prev), (dfmt || fmt)(Math.abs(diff)), 'vs last week');
-  }
-  t.appendChild(d);
+  t.appendChild(el('div', 'kpi-prev num',
+    !ready ? '…'
+    : prev != null ? 'last week ' + fmt(prev)
+    : now != null  ? 'first week on record'
+    :                'nothing this week'));
 
-  t.appendChild(sparkline(series || [], { color, accentFrom: 7 }));
+  t.appendChild(sparkline(series || [], {
+    color, accentFrom: 7, height: 46, area: kind !== 'bars', glow: kind !== 'bars',
+    ref: ref > 0 ? ref : null, kind: kind || 'line'
+  }));
+
+  if (days && days.length) {
+    const row = el('div', 'kpi-days');
+    days.forEach((on, i) => {
+      const dot = el('i', (on ? 'on' : '') + (i === days.length - 1 ? ' today' : ''));
+      if (on) dot.style.background = color;
+      row.appendChild(dot);
+    });
+    t.appendChild(row);
+  }
   return t;
 }
 
@@ -687,8 +721,10 @@ function weekCard(maint) {
   const dir = goalDir(maint);
   const towardTarget = (n, p) => {
     if (!(targets && targets.cal > 0)) return 'flat';
+    // Sixty kilocalories a day of drift either way is one apple, and the
+    // first pill on the first screen should not go red over an apple.
     const dn = Math.abs(n - targets.cal), dp = Math.abs(p - targets.cal);
-    return dn < dp - 20 ? 'up' : dn > dp + 20 ? 'down' : 'flat';
+    return dn < dp - 60 ? 'up' : dn > dp + 60 ? 'down' : 'flat';
   };
   const towardGoal = (n, p) => {
     if (dir == null) return 'flat';
@@ -702,37 +738,45 @@ function weekCard(maint) {
   // other three draw — a day-by-day line of session volume is a comb, and the
   // shape worth seeing is whether the weeks are getting heavier.
   const weeks = weeklySeries(8);
+  // The day dots include today where the averages leave it out: an average
+  // over a half-eaten day is wrong, but "you logged today" is simply true.
+  const trainOn = new Set((sessions || []).map(x => x && x._date));
   const grid = el('div', 'kpi-grid');
   grid.appendChild(kpi({
     label: 'Calories', unit: 'kcal / day',
     now: meanBy(thisWk, kcal), prev: meanBy(lastWk, kcal),
-    fmt: fmtInt, judge: towardTarget, color: C_FUEL,
-    series: both.map(kcal)
+    fmt: fmtInt, judge: towardTarget, color: C_FUEL, rgb: '240,190,30',
+    series: both.map(kcal), ref: targets && targets.cal > 0 ? targets.cal : null,
+    days: thisWk.map(k => !!(summaries[k] && summaries[k].cal > 0))
   }));
   grid.appendChild(kpi({
     label: 'Weight', unit: 'lb',
     now: meanBy(thisWk, weighOn), prev: meanBy(lastWk, weighOn),
-    fmt: trimNum, judge: towardGoal, color: C_WEIGHT,
-    series: both.map(weighOn)
+    fmt: trimNum, judge: towardGoal, color: C_WEIGHT, rgb: '240,190,30',
+    series: both.map(weighOn),
+    days: thisWk.map(k => weighOn(k) != null)
   }));
   grid.appendChild(kpi({
     label: 'Training', unit: sNow && sNow.length === 1 ? 'session' : 'sessions',
     now: sNow ? sNow.length : null, prev: sPrev ? sPrev.length : null,
-    fmt: String, judge: higherBetter, color: C_TRAIN,
-    series: weeks ? weeks.map(w => w.v) : [], ready: sessions !== null
+    fmt: String, judge: higherBetter, color: C_TRAIN, rgb: '46,127,217',
+    series: weeks ? weeks.map(w => w.v) : [], kind: 'bars', ready: sessions !== null,
+    days: sessions ? thisWk.map(k => trainOn.has(k)) : null
   }));
   grid.appendChild(kpi({
     label: 'Steps', unit: '/ day',
     now: meanBy(thisWk, stepsOn), prev: meanBy(lastWk, stepsOn),
-    fmt: fmtInt, judge: higherBetter, color: C_STEPS,
-    series: both.map(stepsOn)
+    fmt: fmtInt, judge: higherBetter, color: C_STEPS, rgb: '232,229,222',
+    series: both.map(stepsOn), ref: stepGoal(),
+    days: thisWk.map(k => stepsOn(k) != null)
   }));
   c.appendChild(grid);
 
   c.appendChild(noteEl(
     !loaded ? 'Pulling the last two weeks together…'
-    : 'The arrow is which way it moved; green means the way you’d want, so weight falling on a cut is green. ' +
-      'The line is the last two weeks, this week in colour — training’s is the last eight weeks of volume.'));
+    : 'The pill is how far each moved against last week; green means the way you’d want, so weight falling on a cut is green. ' +
+      'The line is the last two weeks, this week in colour, with your target dashed across it; the dots are this week’s seven days, filled where you logged. ' +
+      'Training’s bars are the last eight weeks of volume.'));
   return c;
 }
 

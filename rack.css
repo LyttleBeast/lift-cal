@@ -1715,3 +1715,40 @@ body.peeking .view.active { padding-bottom: 58px; }
   top: 13px; width: 60px; margin-left: -30px;
   color: var(--steel); overflow: visible;
 }
+
+/* ---------- "Against last week", the tiles the app opens on ----------
+   Each tile carries a faint tint of its subject colour in the top corner,
+   the delta as a pill, last week's figure in small print, and the seven
+   days of this week as dots under the picture. */
+.kpi {
+  --kpi-rgb: 141,147,159;
+  position: relative; overflow: hidden;
+  background: radial-gradient(130px 90px at 100% 0%, rgba(var(--kpi-rgb), .14), transparent 72%), var(--rack);
+  padding: 10px 10px 9px;
+}
+.kpi-hd { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-height: 18px; }
+.kpi-hd .delta { margin-top: 0; }
+.delta-pill {
+  padding: 2px 7px 2px 5px; border-radius: 999px; gap: 3px;
+  background: rgba(255,255,255,.05);
+}
+.delta-pill.up   { background: rgba(42,168,92,.16); }
+.delta-pill.down { background: rgba(214,37,43,.16); }
+.delta-pill.warn { background: rgba(240,190,30,.16); }
+.delta-pill .delta-v { font-size: 11.5px; }
+.delta-pill .delta-a { font-size: 10px; }
+.kpi-prev { font-size: 10.5px; color: var(--dim); margin-top: 4px; letter-spacing: .02em; }
+.kpi .chart-spark { margin-top: 7px; }
+.kpi-days { display: flex; justify-content: space-between; margin-top: 7px; padding: 0 2px; }
+.kpi-days i {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: transparent; box-shadow: inset 0 0 0 1.2px var(--knurl);
+}
+.kpi-days i.on { box-shadow: none; }
+.kpi-days i.today { box-shadow: 0 0 0 1.5px var(--rack), 0 0 0 2.5px var(--steel); }
+.kpi-days i.today.on { box-shadow: 0 0 0 1.5px var(--rack), 0 0 0 2.5px var(--chalk); }
+
+/* the sparkline's target line, end glow, and bars */
+.spark-ref { stroke: var(--steel); stroke-width: 1; stroke-dasharray: 3 3; opacity: .7; vector-effect: non-scaling-stroke; }
+.spark-glow { opacity: .22; }
+.spark-bar { transition: opacity var(--fast); }
