@@ -18,7 +18,7 @@
 import { el, sheet, toast, noteEl, confirmSheet, segmented } from './ui.js';
 import { LS, uid, readExact, currentEmail, write, purgeDevice, logout } from './store.js';
 import { openTargets, openAiSettings, openRecallList, openImportPaste,
-         foodTargets, latestLb, goalId, previewGoal, setGoal } from './food.js';
+         foodTargets, latestLb, goalId, previewGoal, setGoal, goalFits } from './food.js';
 import { openWaterSettings, waterSettings, fmtWater } from './water.js';
 import { openStepSettings, stepGoal, openAutoDetails } from './steps.js';
 import { openImport } from './importer.js';
@@ -472,10 +472,21 @@ export function openGoal(onEdit) {
     ['gain', 'Bulking',     'Build muscle — about half a pound a week up']
   ];
   const note = noteEl('');
+  // The word can be right while the number is wrong: setup writes calories
+  // off a formula, the measured maintenance comes in lower, and the target
+  // ends up in the hold band under a goal that says cut. Saving with the
+  // same word selected fixes that too, and the note says so.
+  const misfit = goalFits(goal0) === false;
   const paint = () => {
     wrap.querySelectorAll('.ob-choice').forEach(b => b.classList.toggle('on', b.dataset.id === goal));
-    if (goal === goal0) { note.textContent = 'Your current goal. Pick another and the calorie target moves to match.'; return; }
+    if (goal === goal0 && !misfit) { note.textContent = 'Your current goal. Pick another and the calorie target moves to match.'; return; }
     const p = previewGoal(goal);
+    if (goal === goal0) {
+      note.textContent = 'Your goal is ' + GOAL_LABEL[goal].toLowerCase() + ', but your calorie target, ' + foodTargets().cal.toLocaleString() +
+        ', sits ' + (goal === 'cut' ? 'at or above' : goal === 'gain' ? 'at or below' : 'away from') + ' your maintenance of ' + p.maint.toLocaleString() +
+        '. Save to move it to ' + p.cal.toLocaleString() + ' a day.';
+      return;
+    }
     note.textContent = p.maint
       ? (p.changed ? 'Calories will move to ' + p.cal.toLocaleString() + ' a day — maintenance ' + p.maint.toLocaleString() +
                      (p.rate ? (p.rate < 0 ? ' minus ' : ' plus ') + Math.abs(p.rate * 500).toLocaleString() : '') + '. Protein and fat stay where they are.'
@@ -497,7 +508,7 @@ export function openGoal(onEdit) {
   const save = el('button', 'btn btn-primary btn-block', 'Save');
   save.style.marginTop = '14px';
   save.onclick = async () => {
-    if (goal !== goal0) {
+    if (goal !== goal0 || misfit) {
       const cal = await setGoal(goal);
       toast(GOAL_LABEL[goal] + (cal > 0 ? ' — ' + cal.toLocaleString() + ' kcal a day' : ''));
     }

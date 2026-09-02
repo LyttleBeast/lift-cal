@@ -686,13 +686,24 @@ function renderCalMeter(cal) {
     // Eating to it will not do what the goal says, and nothing else on the
     // screen would ever say so.
     const g = goalSign(z.maint);
-    if (g < 0 && targets.cal >= z.cutTop) {
-      wrap.appendChild(noteEl('Your target is at or above your ' + (mi.auto ? 'measured ' : '') +
-        'maintenance, so eating to it holds rather than cuts. Lower it under ⚙ Daily targets' +
-        (mi.auto ? '' : ', or clear the pinned maintenance number') + '.'));
-    } else if (g > 0 && targets.cal <= z.gainFrom) {
-      wrap.appendChild(noteEl('Your target is at or below your ' + (mi.auto ? 'measured ' : '') +
-        'maintenance, so eating to it holds rather than bulks. Raise it under ⚙ Daily targets.'));
+    if ((g < 0 && targets.cal >= z.cutTop) || (g > 0 && targets.cal <= z.gainFrom)) {
+      // Setup wrote a calorie target off a formula; the measured maintenance
+      // then came in lower, and the target ended up in the wrong band while
+      // the goal word stayed right. The word being right is exactly why the
+      // goal sheet had nothing to change — so the fix is offered here, where
+      // the problem is visible, as one button that moves the number.
+      wrap.appendChild(noteEl('Your target is ' + (g < 0 ? 'at or above' : 'at or below') + ' your ' + (mi.auto ? 'measured ' : '') +
+        'maintenance, so eating to it holds rather than ' + (g < 0 ? 'cuts' : 'bulks') + '.'));
+      const p = previewGoal(g < 0 ? 'cut' : 'gain');
+      if (p.changed && p.cal > 0) {
+        const fixBtn = el('button', 'btn btn-ghost btn-block', 'Move target to ' + p.cal.toLocaleString() + ' kcal');
+        fixBtn.style.marginTop = '8px';
+        fixBtn.onclick = async () => {
+          const cal = await setGoal(g < 0 ? 'cut' : 'gain');
+          toast('Target is now ' + cal.toLocaleString() + ' kcal a day');
+        };
+        wrap.appendChild(fixBtn);
+      }
     }
   } else {
     wrap.appendChild(noteEl('Set your maintenance calories in ⚙ Settings — or log a week of food alongside your weigh-ins — to mark the cut / maintain / gain lines on this bar.'));
@@ -3125,4 +3136,15 @@ export async function setGoal(id) {
   await write('food/targets', targets);
   render();
   return targets.cal;
+}
+
+/* Whether the calorie target sits in the band the goal word says. Null when
+   maintenance is not known, because then there are no bands to sit in. */
+export function goalFits(id = goalId()) {
+  const mi = maintInfo();
+  if (!mi || !(targets.cal > 0)) return null;
+  const z = calorieZones(mi.cal);
+  return id === 'cut' ? targets.cal < z.cutTop
+       : id === 'gain' ? targets.cal > z.gainFrom
+       : targets.cal >= z.cutTop && targets.cal <= z.gainFrom;
 }
