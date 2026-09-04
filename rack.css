@@ -1764,6 +1764,17 @@ body.peeking .view.active { padding-bottom: 58px; }
 }
 .macro-pct.good { color: var(--ok); }
 
+/* quick log: one number and a button, on the log-food sheet */
+.quick-log { display: flex; gap: 8px; margin-top: 6px; }
+.quick-log input {
+  flex: 1; min-width: 0; padding: 12px; text-align: center;
+  background: var(--rack); border: 1px solid var(--collar); border-radius: var(--r-sm);
+  color: var(--chalk); font-size: 18px; font-variation-settings: 'wdth' 108, 'wght' 800;
+}
+.quick-log input:focus { border-color: var(--p-yellow); outline: none; }
+.quick-log .btn { flex: 0 0 auto; }
+.quick-note { margin-top: 8px; }
+
 /* the slim water row under Fuel's calorie summary (water.js renderWaterStrip) */
 .water-strip {
   display: flex; align-items: center; gap: 12px;

@@ -883,6 +883,12 @@ function fuelCard(maint) {
 
   const avg = key => mean(logged.map(k => summaries[k][key] || 0));
   const avgCal = avg('cal');
+  // A day with quick-logged calories has macros that are missing, not zero.
+  // Those days stay in the calorie average and leave the macro rows, and the
+  // note under the card says so.
+  const macroDays = logged.filter(k => !(summaries[k].q > 0));
+  const avgMacro = key => macroDays.length ? mean(macroDays.map(k => summaries[k][key] || 0)) : null;
+  const quickDays = logged.length - macroDays.length;
 
   // The headline is the week's average against the day's target, judged by
   // the goal: within a few percent is the point whichever way you are going;
@@ -914,8 +920,12 @@ function fuelCard(maint) {
     const cal = s && s.cal > 0 ? s.cal : 0;
     const raw = [[(s && s.p) || 0, 4, C_PROT], [(s && s.c) || 0, 4, C_CARB], [(s && s.f) || 0, 9, C_FAT]];
     const sum = raw.reduce((a, [g, per]) => a + g * per, 0);
-    const parts = sum > 0 ? raw.map(([g, per, color]) => ({ v: g * per / sum * cal, color })) : null;
-    return { label: dayLetter(k), v: cal, parts, dim: k === today };
+    // Quick-logged calories have no macros to split, so they are their own
+    // segment in the surface colour: visibly part of the day, visibly unknown.
+    const q = Math.min(cal, (s && s.q) || 0);
+    const parts = sum > 0 ? raw.map(([g, per, color]) => ({ v: g * per / sum * (cal - q), color })) : null;
+    if (q > 0) (parts || (cal > 0 ? [] : null)) && (parts ? parts.push({ v: q, color: 'var(--knurl)' }) : null);
+    return { label: dayLetter(k), v: cal, parts: parts && parts.length ? parts : (q > 0 ? [{ v: q, color: 'var(--knurl)' }] : null), dim: k === today };
   });
   // Maintenance is the second line only when it is somewhere else than the
   // target — the two on top of each other is one line with two labels.
@@ -928,16 +938,18 @@ function fuelCard(maint) {
   chart.appendChild(barChart(bars, { height: 128, color: C_FUEL, target: targets.cal, targetLabel: 'target', lines, showValues: false,
                                      label: 'Calories by day, last 7 days', unit: ' kcal' }));
   c.appendChild(chart);
-  c.appendChild(legendRow([['protein', C_PROT], ['carbs', C_CARB], ['fat', C_FAT]]));
+  const legendItems = [['protein', C_PROT], ['carbs', C_CARB], ['fat', C_FAT]];
+  if (keysBack(7).some(k => summaries[k] && summaries[k].q > 0)) legendItems.push(['no macros', 'var(--knurl)']);
+  c.appendChild(legendRow(legendItems));
 
   // The same three, as the week's average against each target. Protein is a
   // floor and reads green from 95% up; carbs and fat are a band around the
   // number, and anything outside it stays the subject's colour rather than
   // going red.
   const rows = [
-    ['Protein', avg('p'), Math.round(targets.p || 0), C_PROT, null],
-    ['Carbs',   avg('c'), carbTarget(),               C_CARB, 110],
-    ['Fat',     avg('f'), Math.round(targets.f || 0), C_FAT,  110]
+    ['Protein', avgMacro('p'), Math.round(targets.p || 0), C_PROT, null],
+    ['Carbs',   avgMacro('c'), carbTarget(),               C_CARB, 110],
+    ['Fat',     avgMacro('f'), Math.round(targets.f || 0), C_FAT,  110]
   ];
   const list = el('div', 'macro-rows');
   rows.forEach(([name, v, tgt, color, band]) => {
@@ -958,7 +970,9 @@ function fuelCard(maint) {
   });
   c.appendChild(list);
 
-  c.appendChild(noteEl('Averaged over the ' + logged.length + ' of the last 7 days you logged food. Dashed is your target' + (lines.length ? ', dotted your maintenance' : '') + '.'));
+  c.appendChild(noteEl('Averaged over the ' + logged.length + ' of the last 7 days you logged food' +
+    (quickDays ? ' — ' + quickDays + (quickDays === 1 ? ' day' : ' days') + ' with calories quick-logged and no macros ' + (quickDays === 1 ? 'is' : 'are') + ' left out of the macro rows' : '') +
+    '. Dashed is your target' + (lines.length ? ', dotted your maintenance' : '') + '.'));
   return c;
 }
 

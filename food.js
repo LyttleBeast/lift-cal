@@ -94,8 +94,7 @@ function watchDay() {
     if (JSON.stringify(next) === JSON.stringify(dayLog)) return;
     dayLog = next;
     render();
-    const t = totals();
-    write('food/daySummaries/' + key, { cal: t.cal, p: Math.round(t.p), c: Math.round(t.c), f: Math.round(t.f) });
+    write('food/daySummaries/' + key, daySummary());
   });
 }
 
@@ -253,14 +252,28 @@ function defaultMeal() {
 async function saveDay() {
   const key = dk(viewDate);
   await write('food/log/' + key, dayLog);
+  await write('food/daySummaries/' + key, daySummary());
+}
+
+// The rollup the maintenance estimate and You read. `q` is only present when
+// some of the day's calories were quick-logged with no macros: You and
+// insights.js leave such a day out of the macro averages rather than read it
+// as a low-protein day, while the calorie averages keep it.
+function daySummary() {
   const t = totals();
-  await write('food/daySummaries/' + key, { cal: t.cal, p: Math.round(t.p), c: Math.round(t.c), f: Math.round(t.f) });
+  const s = { cal: t.cal, p: Math.round(t.p), c: Math.round(t.c), f: Math.round(t.f) };
+  if (t.q > 0) s.q = t.q;
+  return s;
 }
 
 function totals() {
-  const t = { cal: 0, p: 0, c: 0, f: 0, micro: {}, microCount: {}, n: 0 };
+  // `q` is the calories logged as quick entries — a number and nothing else.
+  // They count toward the day's calories like any other, and they are the
+  // reason the macro sums below can be honest zeros rather than guesses.
+  const t = { cal: 0, p: 0, c: 0, f: 0, q: 0, micro: {}, microCount: {}, n: 0 };
   Object.values(dayLog).forEach(e => {
     t.cal += e.cal || 0; t.p += e.p || 0; t.c += e.c || 0; t.f += e.f || 0; t.n++;
+    if (e.src === 'quick') t.q += e.cal || 0;
     if (e.micro) for (const [k] of MICROS) {
       if (e.micro[k] != null) {
         t.micro[k] = (t.micro[k] || 0) + e.micro[k];
@@ -561,6 +574,10 @@ function renderSummary() {
     row.appendChild(el('div', 'vol-val num', trimNum(val) + '/' + tgt));
     card.appendChild(row);
   });
+  if (t.q > 0) {
+    card.appendChild(el('div', 'note quick-note',
+      t.q.toLocaleString() + ' kcal of today was quick-logged with no macros, so the rows above are missing it.'));
+  }
   return card;
 }
 
@@ -755,8 +772,8 @@ function renderEntry(e) {
   const row = el('button', 'food-entry');
   const body = el('div', 'fe-body');
   body.appendChild(el('div', 'fe-name', e.name));
-  body.appendChild(el('div', 'fe-sub num',
-    (e.qty ? e.qty + '  ·  ' : '') + 'P ' + trimNum(e.p || 0) + '  C ' + trimNum(e.c || 0) + '  F ' + trimNum(e.f || 0)));
+  body.appendChild(el('div', 'fe-sub num', e.src === 'quick' ? 'calories only'
+    : (e.qty ? e.qty + '  ·  ' : '') + 'P ' + trimNum(e.p || 0) + '  C ' + trimNum(e.c || 0) + '  F ' + trimNum(e.f || 0)));
   row.appendChild(body);
   row.appendChild(el('div', 'fe-cal num', String(e.cal || 0)));
   row.onclick = () => openEntry(e);
@@ -1052,6 +1069,32 @@ function openAdd(mealId) {
   tile(null,   'barcode', 'Barcode',  'Scan a package label.',                           null, m => openScanner(code => lookupBarcode(code, m)));
   tile(null,   'keypad',  'Manual',   'You already know the numbers.',                   null, m => openManual(m));
   sh.appendChild(grid);
+
+  /* ---- quick log ----
+     Calories only: no name, no macros, one number and Log. Self-monitoring
+     frequency is what predicts outcomes and an abbreviated log does nearly as
+     well as a full one, so the cheapest possible entry belongs on this sheet.
+     It saves as src 'quick' with zero macros, and daySummary() records how
+     many of the day's calories came in this way so You can leave the day out
+     of the macro averages instead of reading it as a zero-protein day. */
+  sh.appendChild(el('div', 'field-lbl', 'Just the calories'));
+  const quick = el('div', 'quick-log');
+  const qin = el('input');
+  qin.type = 'number'; qin.inputMode = 'numeric'; qin.placeholder = 'kcal';
+  qin.min = 1; qin.max = LIMITS.entryCal[1];
+  qin.setAttribute('aria-label', 'Calories to quick-log');
+  const qbtn = el('button', 'btn btn-primary', 'Quick log');
+  qbtn.onclick = () => {
+    const cal = Math.round(parseFloat(qin.value));
+    if (!(cal > 0) || !within(cal, LIMITS.entryCal)) { toast('Enter the calories'); qin.focus(); return; }
+    close();
+    bump('foodManual');
+    addEntry({ name: 'Quick log', qty: '', cal, p: 0, c: 0, f: 0, meal, src: 'quick' });
+    toast(cal.toLocaleString() + ' kcal logged');
+  };
+  qin.onkeydown = e => { if (e.key === 'Enter') qbtn.onclick(); };
+  quick.append(qin, qbtn);
+  sh.appendChild(quick);
 
   if (!hasProxy()) {
     const warn = el('button', 'ai-warn');
