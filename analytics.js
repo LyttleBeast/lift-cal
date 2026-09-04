@@ -390,13 +390,15 @@ function smoothPath(pts) {
  * scrub:   { line, scatter, line2 } — names for the readout, and switching it
  *          on: drag or hover and a rule snaps to the nearest point of the line
  *          and prints that day's numbers (attachScrub below).
+ * refs:    [{ v, label }] — dashed reference lines, a goal weight, folded into
+ *          the scale so a goal still 10 lb off is on the picture.
  */
 export function lineChart(points, opts = {}) {
   const {
     color = 'var(--p-yellow)', height = 168, markMax = false,
     unit = '', dots = true, scatter = null,
     line2 = null, color2 = 'var(--chalk)', yLabels = false,
-    label = 'Trend', describe = '', minSpan = 0, scrub = null
+    label = 'Trend', describe = '', minSpan = 0, scrub = null, refs = []
   } = opts;
 
   const W = 340, H = height, PADX = 10, PADT = 16, PADB = 22;
@@ -414,7 +416,8 @@ export function lineChart(points, opts = {}) {
   svg.appendChild(defs);
 
   const extra = (scatter || []).concat(line2 || []);
-  const vals = points.map(p => p.v).concat(extra.map(p => p.v));
+  const refVals = (refs || []).filter(r => r && Number.isFinite(r.v)).map(r => r.v);
+  const vals = points.map(p => p.v).concat(extra.map(p => p.v), refVals);
   let lo = Math.min(...vals), hi = Math.max(...vals);
   if (minSpan > 0 && hi - lo < minSpan) { const mid = (hi + lo) / 2; lo = mid - minSpan / 2; hi = mid + minSpan / 2; }
   const span = hi - lo;
@@ -441,6 +444,17 @@ export function lineChart(points, opts = {}) {
       const t = svgEl('text', { x: PADX, y: (y - 3).toFixed(1), class: 'chart-axis' });
       const v = hi - f * (hi - lo);
       t.textContent = (Math.abs(v) >= 100 ? Math.round(v) : Math.round(v * 10) / 10) + (unit ? ' ' + unit : '');
+      svg.appendChild(t);
+    }
+  });
+
+  (refs || []).forEach(r => {
+    if (!r || !Number.isFinite(r.v)) return;
+    const y = Y(r.v);
+    svg.appendChild(svgEl('line', { x1: PADX, y1: y.toFixed(1), x2: W - PADX, y2: y.toFixed(1), class: 'chart-target' }));
+    if (r.label) {
+      const t = svgEl('text', { x: W - PADX, y: (y - 4).toFixed(1), class: 'chart-axis', 'text-anchor': 'end' });
+      t.textContent = r.label;
       svg.appendChild(t);
     }
   });

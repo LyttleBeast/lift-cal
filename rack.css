@@ -1288,6 +1288,8 @@ body.peeking .view.active { padding-bottom: 58px; }
 /* Today / Trends, under the hero. Sections carry their own top margin, so the
    control gives some of its own back. */
 .you-seg { margin: 18px 0 -6px; }
+/* Weight tab: the goal line under the headline stats. */
+.goal-gap { margin: -6px 2px 12px; }
 .you-sec-t {
   display: flex; align-items: center; gap: 10px;
   margin-bottom: 10px;

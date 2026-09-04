@@ -3,7 +3,7 @@
 
 import { read, write, watch, todayKey } from './store.js';
 import { weightStats, dailyMeans as meansOf, movingAvg, maintenance,
-         refreshModel, modelState, adjustedDays, peakOffset, trendRate, goalDir } from './tdee.js';
+         refreshModel, modelState, adjustedDays, peakOffset, trendRate, trendWeight, goalDir } from './tdee.js';
 import { lineChart } from './analytics.js';
 import { bump } from './usage.js';
 import { $, el, toast, noteEl, confirmSheet, r1, parseKey, fmtDateFull, LIMITS, within } from './ui.js';
@@ -223,6 +223,24 @@ export function render() {
     ));
     sr.style.marginBottom = '12px';
     wrap.appendChild(sr);
+
+    // The finish line, beside the headline: the goal from Daily targets and
+    // how far the trend is from it. You's goal card does the date arithmetic;
+    // this is just the distance, on the tab where the number gets logged.
+    const goalLb = Number(targets.goalLb);
+    if (goalLb > 0) {
+      const tw = trendWeight();
+      const from = Number.isFinite(tw) && tw > 0 ? tw : s.latest.lb;
+      const gap = r1(from - goalLb);
+      const dir = goalDir(targets, maintCal());
+      // On a cut the goal is below you, so being under it is past it; on a bulk
+      // the other way round. Holding has no "past".
+      const passed = dir != null && dir !== 0 && gap !== 0 && Math.sign(gap) === dir;
+      const line = el('div', 'you-sub num goal-gap');
+      line.textContent = 'Goal ' + r1(goalLb) + ' lb  ·  ' +
+        (gap === 0 ? 'on it' : passed ? Math.abs(gap) + ' lb past it' : Math.abs(gap) + ' lb to go');
+      wrap.appendChild(line);
+    }
   }
 
   wrap.appendChild(renderChart(s));
@@ -306,6 +324,7 @@ function renderChart(s) {
       markMax: false,
       scatter: raw.map(e => ({ t: e.t, v: e.lb })),
       scrub: { line: '7-day avg', scatter: useAdj ? 'normalised' : 'weigh-ins' },
+      refs: Number(targets.goalLb) > 0 ? [{ v: Number(targets.goalLb), label: 'goal ' + r1(Number(targets.goalLb)) }] : [],
       label: 'Body weight, last ' + (range === 365 ? 'year' : range + ' days'),
       describe: tr.rateWk != null ? 'Trending ' + (tr.rateWk < 0 ? 'down ' : 'up ') + r1(Math.abs(tr.rateWk)) + ' pounds a week' : ''
     }
