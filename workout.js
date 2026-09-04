@@ -25,7 +25,6 @@ let restTotal  = 0;
 let wakeLock   = null;
 let tickHandle = null;
 let peek       = false;     // live session parked out of sight, calendar on top
-let weekLoading = false;    // renderWeekVolume is fetching a month it found missing
 
 export { allExercises } from './picker.js';
 
@@ -35,20 +34,10 @@ export async function initWorkout() {
   await initRoutines();
   history  = (await read('history', null)) || {};
 
-  // The account's default rest (settings/train.restSec, written by the
-  // settings hub) wins over this device's copy: it is what makes the number
-  // follow the person from phone to phone. startRest() keeps reading
-  // localStorage, so a device with no connection still has a number.
-  try {
-    const tr = await read('settings/train', null);
-    if (tr && Number.isFinite(tr.restSec)) LS.set('restDefault', tr.restSec);
-  } catch {}
-
   const saved = LS.get('activeSession', null);
   if (saved) session = saved;
 
   await loadMonth(monthKey(viewMonth));
-  await weekMonths();
   render();
   startTick();
 }
@@ -77,28 +66,12 @@ async function requestWakeLock() {
 function releaseWakeLock() { try { wakeLock && wakeLock.release(); } catch {} wakeLock = null; }
 
 /* ================= DATA ================= */
-// Fills the cache for a month and nothing else. Split out of loadMonth because
-// the live subscription below follows whatever loadMonth was last asked for,
-// and the "last 7 days" card needs a second month in memory without stealing
-// the watch from the month the calendar is actually showing.
-async function fetchMonth(mk) {
-  if (!monthCache[mk]) monthCache[mk] = (await read(`workouts/${mk}`, null)) || {};
-  return monthCache[mk];
-}
-
 async function loadMonth(mk) {
-  await fetchMonth(mk);
+  if (monthCache[mk]) { watchMonth(mk); return monthCache[mk]; }
+  const data = (await read(`workouts/${mk}`, null)) || {};
+  monthCache[mk] = data;
   watchMonth(mk);
-  return monthCache[mk];
-}
-
-// The months the trailing seven days touch: two of them for the first six
-// days of every month. The card used to sum only what happened to be cached,
-// which on those days was the current month alone, so it undercounted and
-// disagreed with You, which reads the whole tree.
-function weekMonths() {
-  const mks = [...new Set([monthKey(new Date(Date.now() - 7 * 864e5)), monthKey()])];
-  return Promise.all(mks.map(fetchMonth));
+  return data;
 }
 
 // Keep the month on screen subscribed, so a session written straight to the
@@ -340,19 +313,6 @@ function renderWeekVolume() {
   card.appendChild(hd);
 
   const since = Date.now() - 7 * 864e5;
-
-  // initWorkout fetched both months, but a phone keeps this tab alive for
-  // days, so the window can cross into a month nobody has fetched yet. Fetch
-  // it and repaint once; fetchMonth leaves an empty month as {}, so a month
-  // with no training cannot trigger this twice.
-  const missing = [...new Set([monthKey(new Date(since)), monthKey()])].filter(mk => !monthCache[mk]);
-  if (missing.length && !weekLoading) {
-    weekLoading = true;
-    Promise.all(missing.map(fetchMonth))
-      .then(() => { weekLoading = false; if (!session && !summary && !isStatsOpen()) render(); })
-      .catch(() => { weekLoading = false; });
-  }
-
   const counts = {};
   Object.values(monthCache).forEach(month => {
     Object.values(month).forEach(day => {
@@ -841,19 +801,14 @@ function beep() {
 }
 
 /* ---------- collect ---------- */
-// Keeps only sets that are marked done and carry reps. A blank weight is a
-// bodyweight set — pull-ups, dips, planks — and this used to drop it, which
-// took the whole exercise out of the record when every set was blank. It is
-// kept as 0 lb: still a working set for the sets-by-muscle counts and the
-// "last time" line, while 0 lb adds nothing to volume and e1rm() returns 0 for
-// a zero load, so it can never surface as a record or a strongest lift.
+// Keeps only sets that are marked done and carry both a weight and reps.
 function collectDone() {
   return session.exercises
     .map(ex => ({
       ...ex,
       // tw/tr are routine targets — live-session scaffolding, not part of the record.
-      sets: ex.sets.filter(s => s.done && s.r !== '' && s.r != null)
-                   .map(({ tw, tr, ...keep }) => ({ ...keep, w: keep.w === '' || keep.w == null ? '0' : keep.w }))
+      sets: ex.sets.filter(s => s.done && s.w !== '' && s.r !== '')
+                   .map(({ tw, tr, ...keep }) => keep)
     }))
     .filter(ex => ex.sets.length);
 }
@@ -1087,7 +1042,7 @@ function renderSummary() {
     card.appendChild(hd);
     const big = el('div', 'load-num num', (pct >= 0 ? '+' : '') + pct + '%');
     big.style.fontSize = '34px';
-    big.style.color = pct >= 0 ? 'var(--ok)' : 'var(--steel)';
+    big.style.color = pct >= 0 ? 'var(--good)' : 'var(--steel)';
     card.appendChild(big);
     card.appendChild(noteEl(
       compact(record.volume) + ' lb today against a ' + compact(Math.round(avg)) +
@@ -1139,7 +1094,3 @@ function renderSummary() {
 // Re-exported so older imports of `toast` from this module keep working.
 export { toast } from './ui.js';
 export function hasActiveSession() { return !!session && !session._edit; }
-// The home-screen shortcut's way in (app.js restoreView). A live session is
-// never replaced — starting a second would orphan the first — so the shortcut
-// simply lands on it.
-export function startFresh() { if (hasActiveSession()) { render(); return; } startWorkout(); }

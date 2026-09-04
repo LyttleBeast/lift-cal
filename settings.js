@@ -15,9 +15,8 @@
 //
 // Sheets never nest. Every row that opens another sheet closes this one first.
 
-import { el, sheet, toast, noteEl, confirmSheet, segmented, LIMITS, clamp, saveText } from './ui.js';
-import { LS, uid, read, readExact, currentEmail, write, mergeUpdate, purgeDevice, logout, lastSyncAt, queuedWrites, online } from './store.js';
-import { appVersion, isStandalone } from './usage.js';
+import { el, sheet, toast, noteEl, confirmSheet, segmented, LIMITS, clamp } from './ui.js';
+import { LS, uid, readExact, currentEmail, write, purgeDevice, logout } from './store.js';
 import { openTargets, openAiSettings, openRecallList, openImportPaste,
          foodTargets, latestLb, goalId, previewGoal, setGoal, goalFits } from './food.js';
 import { openWaterSettings, waterSettings, fmtWater } from './water.js';
@@ -150,26 +149,12 @@ export function openSettings(onEdit) {
   restRow.appendChild(lab);
   const restIn = el('input');
   restIn.id = 'restDef'; restIn.type = 'number'; restIn.inputMode = 'numeric';
-  // The device's copy paints first; the account's (settings/train.restSec)
-  // corrects it when the read lands. Both are written on change, so a second
-  // phone picks the number up at its next boot (workout.js initWorkout) and a
-  // phone with no connection keeps working from localStorage. It would have
-  // gone on profile, but the published rules refuse any key profile does not
-  // list, and settings is the section with room.
   restIn.value = LS.get('restDefault', 150);
   restIn.min = LIMITS.rest[0]; restIn.max = LIMITS.rest[1];
-  read('settings/train', null).then(t => {
-    if (t && Number.isFinite(t.restSec) && sh.isConnected && document.activeElement !== restIn) {
-      restIn.value = t.restSec;
-      LS.set('restDefault', t.restSec);
-    }
-  }).catch(() => {});
   restIn.onchange = e => {
     const r = clamp(parseInt(e.target.value) || 150, LIMITS.rest);
     e.target.value = r;
-    LS.set('restDefault', r);
-    mergeUpdate('settings/train', { restSec: r });
-    toast('Rest updated');
+    LS.set('restDefault', r); toast('Rest updated');
   };
   restRow.appendChild(restIn);
   train.appendChild(restRow);
@@ -194,8 +179,6 @@ export function openSettings(onEdit) {
     if (typeof window.__rackTour === 'function') window.__rackTour();
     else toast('Reload the app and try again');
   });
-  navRow(appList, 'About Rack', appVersion(), () => { close(); openAbout(); });
-  navRow(appList, 'Export my data', null, () => { close(); openExport(); });
 
   const out = el('button', 'btn btn-danger btn-block', 'Sign out');
   out.style.marginTop = '16px';
@@ -543,180 +526,6 @@ export function openGoal(onEdit) {
   cancel.style.marginTop = '8px';
   cancel.onclick = close;
   sh.appendChild(cancel);
-}
-
-/* ================= ABOUT =================
-   The three facts that answer "did the update take": the build this page is
-   running, the build the service worker is serving, and when this device last
-   heard from the database. DEPLOY.md has them read out of the admin panel and
-   the database; now they are on the phone. */
-function swVersion() {
-  return new Promise(res => {
-    const sw = navigator.serviceWorker;
-    const c = sw && sw.controller;
-    if (!c) return res(null);
-    const t = setTimeout(() => { sw.removeEventListener('message', h); res(null); }, 1500);
-    function h(e) {
-      if (e.data && e.data.version) { clearTimeout(t); sw.removeEventListener('message', h); res(e.data.version); }
-    }
-    sw.addEventListener('message', h);
-    try { c.postMessage('version'); } catch { clearTimeout(t); sw.removeEventListener('message', h); res(null); }
-  });
-}
-
-function ago(t) {
-  if (!t) return 'never';
-  const s = Math.round((Date.now() - t) / 1000);
-  if (s < 60) return 'just now';
-  const m = Math.round(s / 60);
-  if (m < 60) return m + ' min ago';
-  const h = Math.round(m / 60);
-  if (h < 48) return h + ' h ago';
-  return Math.round(h / 24) + ' days ago';
-}
-
-export function openAbout() {
-  const { sh, close } = sheet();
-  sh.appendChild(el('div', 'eyebrow', 'App'));
-  sh.appendChild(el('h2', null, 'About Rack'));
-
-  const list = el('div', 'set-list');
-  sh.appendChild(list);
-  const kv = (k, v) => {
-    const r = el('div', 'set-row-nav about-row');
-    r.appendChild(el('span', 'set-row-l', k));
-    const val = el('span', 'set-row-v num', v);
-    r.appendChild(val);
-    list.appendChild(r);
-    return val;
-  };
-  kv('App build', appVersion());
-  const swv = kv('Service worker', '…');
-  kv('Last synced', ago(lastSyncAt()));
-  const q = queuedWrites();
-  kv('Waiting to sync', q ? q + (q === 1 ? ' write' : ' writes') : 'nothing');
-  kv('Connection', online.value ? 'online' : 'offline');
-  kv('Installed', isStandalone() ? 'home screen' : 'browser tab');
-
-  const note = noteEl('');
-  note.style.marginTop = '12px';
-  sh.appendChild(note);
-  swVersion().then(v => {
-    swv.textContent = v || 'not running';
-    note.textContent = !v
-      ? 'No service worker is controlling this page yet — a first visit, or a browser without one. Working offline needs it.'
-      : v === appVersion()
-        ? 'The worker and the app are the same build.'
-        : 'The worker is serving ' + v + ' while this page is ' + appVersion() + '. Close Rack from the app switcher and open it twice: the first launch fetches the new build, the second runs it.';
-  });
-
-  const done = el('button', 'btn btn-ghost btn-block', 'Close');
-  done.style.marginTop = '16px';
-  done.onclick = close;
-  sh.appendChild(done);
-}
-
-/* ================= EXPORT =================
-   Two ways in — the workout importer and pasted JSON — and until now no way
-   out. Everything the account holds as one JSON file, and each log as a CSV a
-   spreadsheet opens. Read fresh from the database rather than from the tabs'
-   memory: the tabs hold the day and the month on screen, not the history. */
-const EXPORT_NODES = [
-  'profile', 'onboarding', 'food/targets', 'food/items', 'food/meals', 'food/log', 'food/daySummaries',
-  'weight/entries', 'workouts', 'history', 'water/log', 'steps', 'routines', 'exercises', 'settings'
-];
-
-export async function readAllForExport() {
-  const vals = await Promise.all(EXPORT_NODES.map(p => read(p, null)));
-  const out = {};
-  EXPORT_NODES.forEach((p, i) => {
-    const parts = p.split('/');
-    let n = out;
-    for (let j = 0; j < parts.length - 1; j++) n = n[parts[j]] = n[parts[j]] || {};
-    n[parts[parts.length - 1]] = vals[i];
-  });
-  return out;
-}
-
-const pad2 = n => String(n).padStart(2, '0');
-const ymd = t => { const d = new Date(t); return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); };
-const hm  = t => (Number.isFinite(t) ? pad2(new Date(t).getHours()) + ':' + pad2(new Date(t).getMinutes()) : '');
-
-// RFC 4180: quote a cell that holds a comma, a quote or a line break, and
-// double the quotes inside it. CRLF line ends, which is what Excel expects.
-function csv(rows) {
-  const cell = v => { const s = v == null ? '' : String(v); return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
-  return rows.map(r => r.map(cell).join(',')).join('\r\n') + '\r\n';
-}
-
-export function buildExport(data) {
-  const food = [['date', 'time', 'meal', 'name', 'qty', 'kcal', 'protein_g', 'carbs_g', 'fat_g', 'source']];
-  const log = (data.food && data.food.log) || {};
-  Object.keys(log).sort().forEach(d => Object.values(log[d] || {})
-    .filter(e => e && e.name).sort((a, b) => (a.t || 0) - (b.t || 0))
-    .forEach(e => food.push([d, hm(e.t), e.meal, e.name, e.qty, e.cal, e.p, e.c, e.f, e.src])));
-
-  const weight = [['date', 'time', 'lb']];
-  Object.values((data.weight && data.weight.entries) || {})
-    .filter(e => e && e.lb > 0).sort((a, b) => (a.t || 0) - (b.t || 0))
-    .forEach(e => weight.push([ymd(e.t), hm(e.t), e.lb]));
-
-  const workouts = [['date', 'session', 'exercise', 'group', 'set', 'type', 'lb', 'reps']];
-  const tree = data.workouts || {};
-  Object.keys(tree).sort().forEach(mk => Object.keys(tree[mk] || {}).sort().forEach(dd =>
-    Object.values(tree[mk][dd] || {}).forEach(s => (s && s.exercises || []).forEach(ex =>
-      (ex.sets || []).forEach((st, i) => workouts.push([mk + '-' + dd, s.name, ex.name, ex.group, i + 1, st.type || 'N', st.w, st.r]))))));
-
-  const water = [['date', 'time', 'ml', 'source']];
-  const wl = (data.water && data.water.log) || {};
-  Object.keys(wl).sort().forEach(d => Object.values(wl[d] || {})
-    .filter(e => e && e.ml > 0).sort((a, b) => (a.t || 0) - (b.t || 0))
-    .forEach(e => water.push([d, hm(e.t), e.ml, e.src])));
-
-  const steps = [['date', 'steps', 'mi', 'source']];
-  Object.keys(data.steps || {}).sort().forEach(d => { const s = data.steps[d]; if (s && s.steps > 0) steps.push([d, s.steps, s.mi, s.src]); });
-
-  return {
-    json: JSON.stringify({ app: 'Rack', exportedAt: new Date().toISOString(), ...data }, null, 2),
-    csv: { food: csv(food), weight: csv(weight), workouts: csv(workouts), water: csv(water), steps: csv(steps) }
-  };
-}
-
-export function openExport() {
-  const { sh, close } = sheet();
-  sh.appendChild(el('div', 'eyebrow', 'App'));
-  sh.appendChild(el('h2', null, 'Export my data'));
-  sh.appendChild(noteEl('Everything in your account as one JSON file, or each log as a spreadsheet. On a phone the share sheet opens so it can go to Files, Mail or a computer. Nothing leaves the device unless you send it.'));
-
-  const list = el('div', 'set-list');
-  sh.appendChild(list);
-  const stamp = ymd(Date.now());
-  let built = null;
-  const data = async () => built || (built = buildExport(await readAllForExport()));
-  const row = (label, sub, name, mime, pick) => {
-    const b = el('button', 'set-row-nav');
-    b.appendChild(el('span', 'set-row-l', label));
-    b.appendChild(el('span', 'set-row-v', sub));
-    b.appendChild(el('span', 'set-row-x', '›'));
-    b.onclick = async () => {
-      b.disabled = true;
-      try { const d = await data(); await saveText(name, pick(d), mime); }
-      catch { toast('Couldn’t read your data just now'); }
-      b.disabled = false;
-    };
-    list.appendChild(b);
-  };
-  row('Everything',  'JSON', 'rack-' + stamp + '.json',          'application/json', d => d.json);
-  row('Food log',    'CSV',  'rack-food-' + stamp + '.csv',      'text/csv',         d => d.csv.food);
-  row('Weigh-ins',   'CSV',  'rack-weight-' + stamp + '.csv',    'text/csv',         d => d.csv.weight);
-  row('Workouts',    'CSV',  'rack-workouts-' + stamp + '.csv',  'text/csv',         d => d.csv.workouts);
-  row('Water',       'CSV',  'rack-water-' + stamp + '.csv',     'text/csv',         d => d.csv.water);
-  row('Steps',       'CSV',  'rack-steps-' + stamp + '.csv',     'text/csv',         d => d.csv.steps);
-
-  const done = el('button', 'btn btn-ghost btn-block', 'Close');
-  done.style.marginTop = '16px';
-  done.onclick = close;
-  sh.appendChild(done);
 }
 
 /* The goal weight lives in Daily targets. You needs a way there that does

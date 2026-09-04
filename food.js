@@ -14,8 +14,8 @@
 
 import { read, write, watch, LS, todayKey, uid } from './store.js';
 import { maintenance, calorieZones, zoneOf, refreshModel,
-         autoTargets, trendWeight, MIN_CARB_G, goalDir } from './tdee.js';
-import { initWater, loadWaterDay, renderWater, renderWaterStrip, openWaterSettings } from './water.js';
+         autoTargets, trendWeight, MIN_CARB_G } from './tdee.js';
+import { initWater, loadWaterDay, renderWater, openWaterSettings } from './water.js';
 import { OWNER_UID } from './firebase-config.js';
 import { $, el, svgEl, sheet, toast, noteEl, confirmSheet, copyText, readClipboard,
          segmented, r1, trimNum, LIMITS, clamp, within } from './ui.js';
@@ -44,7 +44,6 @@ const MICROS = [
 
 let viewDate = new Date();
 let dayLog   = {};      // entryId -> entry for viewDate
-let prevLog  = {};      // the day before viewDate, for "copy yesterday's"
 let items    = {};      // itemId  -> library item
 let meals    = {};      // mealId  -> saved meal
 let targets  = { cal: 2700, p: 215, f: 80, maint: null, auto: null };
@@ -76,36 +75,9 @@ export async function initFood() {
 }
 
 async function loadDay() {
-  const prev = new Date(viewDate.getTime() - 864e5);
-  const [cur, before] = await Promise.all([
-    read('food/log/' + dk(viewDate), null),
-    read('food/log/' + dk(prev), null)
-  ]);
-  dayLog = cur || {};
-  prevLog = before || {};
+  dayLog = (await read('food/log/' + dk(viewDate), null)) || {};
   await loadWaterDay(dk(viewDate));
   watchDay();
-}
-
-/* ---------- copying forward ----------
-   "Same as yesterday" is the commonest meal there is, and it used to be a
-   search or a saved meal away. Copies are new entries — fresh ids, stamped
-   now, src 'copy' — so editing one later never touches the day it came from. */
-function copyOf(e, meal) {
-  return { ...cleanIng(e), meal: meal || e.meal || defaultMeal(), src: 'copy' };
-}
-function copyFromPrev(mealId) {
-  const list = Object.values(prevLog).filter(e => e && e.meal === mealId).sort((a, b) => (a.t || 0) - (b.t || 0));
-  if (!list.length) return;
-  bump('foodCopy');
-  addEntries(list.map(e => copyOf(e, mealId)));
-  toast('Copied ' + list.length + (list.length === 1 ? ' entry' : ' entries') + ' from yesterday');
-}
-async function copyToToday(list) {
-  if (!list.length) return;
-  bump('foodCopy');
-  await logOnToday(list.map(e => copyOf(e, e.meal)));
-  toast('Copied ' + list.length + (list.length === 1 ? ' entry' : ' entries') + ' to today');
 }
 
 // Live listener on whichever day is on screen. It keeps a second device — the
@@ -122,7 +94,8 @@ function watchDay() {
     if (JSON.stringify(next) === JSON.stringify(dayLog)) return;
     dayLog = next;
     render();
-    write('food/daySummaries/' + key, daySummary());
+    const t = totals();
+    write('food/daySummaries/' + key, { cal: t.cal, p: Math.round(t.p), c: Math.round(t.c), f: Math.round(t.f) });
   });
 }
 
@@ -280,28 +253,14 @@ function defaultMeal() {
 async function saveDay() {
   const key = dk(viewDate);
   await write('food/log/' + key, dayLog);
-  await write('food/daySummaries/' + key, daySummary());
-}
-
-// The rollup the maintenance estimate and You read. `q` is only present when
-// some of the day's calories were quick-logged with no macros: You and
-// insights.js leave such a day out of the macro averages rather than read it
-// as a low-protein day, while the calorie averages keep it.
-function daySummary() {
   const t = totals();
-  const s = { cal: t.cal, p: Math.round(t.p), c: Math.round(t.c), f: Math.round(t.f) };
-  if (t.q > 0) s.q = t.q;
-  return s;
+  await write('food/daySummaries/' + key, { cal: t.cal, p: Math.round(t.p), c: Math.round(t.c), f: Math.round(t.f) });
 }
 
 function totals() {
-  // `q` is the calories logged as quick entries — a number and nothing else.
-  // They count toward the day's calories like any other, and they are the
-  // reason the macro sums below can be honest zeros rather than guesses.
-  const t = { cal: 0, p: 0, c: 0, f: 0, q: 0, micro: {}, microCount: {}, n: 0 };
+  const t = { cal: 0, p: 0, c: 0, f: 0, micro: {}, microCount: {}, n: 0 };
   Object.values(dayLog).forEach(e => {
     t.cal += e.cal || 0; t.p += e.p || 0; t.c += e.c || 0; t.f += e.f || 0; t.n++;
-    if (e.src === 'quick') t.q += e.cal || 0;
     if (e.micro) for (const [k] of MICROS) {
       if (e.micro[k] != null) {
         t.micro[k] = (t.micro[k] || 0) + e.micro[k];
@@ -483,17 +442,7 @@ export function render() {
   left.appendChild(el('div', 'eyebrow', 'Fuel'));
   const title = isToday() ? 'Today'
     : viewDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-  const h1 = el('h1', isToday() ? null : 'h1-link', title);
-  if (!isToday()) {
-    // Browsing back a week is one tap a day; getting home used to be the same
-    // again. The date itself is the way back.
-    h1.setAttribute('role', 'button');
-    h1.setAttribute('aria-label', 'Back to today');
-    h1.tabIndex = 0;
-    h1.onclick = async () => { viewDate = new Date(); await loadDay(); render(); };
-    h1.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); h1.onclick(); } };
-  }
-  left.appendChild(h1);
+  left.appendChild(el('h1', null, title));
   hd.appendChild(left);
 
   const nav = el('div', 'cal-nav');
@@ -517,19 +466,8 @@ export function render() {
   wrap.appendChild(hd);
 
   wrap.appendChild(renderSummary());
-  wrap.appendChild(renderWaterStrip(!isFuture()));
 
   MEALS.forEach(([id, label]) => wrap.appendChild(renderMeal(id, label)));
-
-  // A whole past day, forward in one go: the same breakfast, lunch and dinner
-  // as the day you are looking at.
-  const all = Object.values(dayLog).filter(e => e && e.name);
-  if (!isToday() && all.length) {
-    const b = el('button', 'btn btn-ghost btn-block', 'Copy this whole day to today');
-    b.style.marginBottom = '12px';
-    b.onclick = () => copyToToday(all.sort((a, b) => (a.t || 0) - (b.t || 0)));
-    wrap.appendChild(b);
-  }
 
   wrap.appendChild(renderWater(!isFuture()));
   wrap.appendChild(renderMicros());
@@ -586,7 +524,7 @@ function renderSummary() {
   // but over maintenance reads red before the small print is read at all.
   const zone = z ? zoneOf(t.cal, z) : null;
   big.textContent = Math.abs(remain).toLocaleString();
-  big.style.color = z ? zoneColor(zone) : (remain < 0 ? 'var(--miss)' : 'var(--chalk)');
+  big.style.color = z ? zoneColor(zone) : (remain < 0 ? 'var(--bad)' : 'var(--chalk)');
   sub.appendChild(el('div', 'eyebrow', remain < 0 ? 'kcal over target' : 'kcal left today'));
   sub.appendChild(el('div', 'num fuel-eaten',
     t.cal.toLocaleString() + ' eaten  ·  target ' + targets.cal.toLocaleString()));
@@ -612,10 +550,6 @@ function renderSummary() {
     row.appendChild(el('div', 'vol-val num', trimNum(val) + '/' + tgt));
     card.appendChild(row);
   });
-  if (t.q > 0) {
-    card.appendChild(el('div', 'note quick-note',
-      t.q.toLocaleString() + ' kcal of today was quick-logged with no macros, so the rows above are missing it.'));
-  }
   return card;
 }
 
@@ -641,11 +575,18 @@ function maintInfo() {
    three bands: everything left of the first tick is a deficit, between the two
    is holding, past the second you're gaining. The dashed mark is the day's
    calorie target, wherever you've set it. */
-/* Which way the account said it was going. The rule is tdee.js goalDir — the
-   one You and Weight read too, so the three screens lean the same way; this
-   only folds its "unknown" into "hold", which is what the bar draws for both. */
+/* Which way the account said it was going: the sign of the onboarding rate
+   (food/targets.auto.rateWk, written whether or not auto targets are on),
+   failing that where the target sits against maintenance. The same rule the
+   You tab uses (you.js goalDir), so the two screens lean the same way. */
 function goalSign(maintCal) {
-  return goalDir(targets, maintCal) || 0;
+  const a = targets.auto;
+  if (a && Number.isFinite(a.rateWk) && a.rateWk !== 0) return a.rateWk < 0 ? -1 : 1;
+  if (maintCal > 0 && targets.cal > 0) {
+    if (targets.cal < maintCal - 100) return -1;
+    if (targets.cal > maintCal + 100) return 1;
+  }
+  return 0;
 }
 
 function renderCalMeter(cal) {
@@ -787,14 +728,6 @@ function renderMeal(mealId, label) {
   const right = el('div', 'meal-right');
   if (entries.length) {
     right.appendChild(el('div', 'num meal-kcal', kcal + ' kcal'));
-    if (!isToday()) {
-      // Looking back at a day: bring this meal forward as it was.
-      const fwd = el('button', 'meal-copy', 'to today ›');
-      fwd.title = 'Copy this meal to today';
-      fwd.setAttribute('aria-label', 'Copy ' + label + ' to today');
-      fwd.onclick = () => copyToToday(entries);
-      right.appendChild(fwd);
-    }
     const save = el('button', 'ex-menu', '⋯');
     save.title = 'Turn this into a meal';
     save.onclick = () => openMealBuilder({
@@ -804,12 +737,6 @@ function renderMeal(mealId, label) {
       saved: false
     }, mealId);
     right.appendChild(save);
-  } else if (isToday() && !isFuture() && Object.values(prevLog).some(e => e && e.meal === mealId)) {
-    // Nothing here yet, and yesterday had this meal: one tap repeats it.
-    const again = el('button', 'meal-copy', 'copy yesterday’s ›');
-    again.setAttribute('aria-label', 'Copy yesterday’s ' + label);
-    again.onclick = () => copyFromPrev(mealId);
-    right.appendChild(again);
   } else {
     right.appendChild(el('div', 'meal-kcal', 'nothing yet'));
   }
@@ -824,8 +751,8 @@ function renderEntry(e) {
   const row = el('button', 'food-entry');
   const body = el('div', 'fe-body');
   body.appendChild(el('div', 'fe-name', e.name));
-  body.appendChild(el('div', 'fe-sub num', e.src === 'quick' ? 'calories only'
-    : (e.qty ? e.qty + '  ·  ' : '') + 'P ' + trimNum(e.p || 0) + '  C ' + trimNum(e.c || 0) + '  F ' + trimNum(e.f || 0)));
+  body.appendChild(el('div', 'fe-sub num',
+    (e.qty ? e.qty + '  ·  ' : '') + 'P ' + trimNum(e.p || 0) + '  C ' + trimNum(e.c || 0) + '  F ' + trimNum(e.f || 0)));
   row.appendChild(body);
   row.appendChild(el('div', 'fe-cal num', String(e.cal || 0)));
   row.onclick = () => openEntry(e);
@@ -1105,32 +1032,6 @@ function openAdd(mealId) {
   sh.appendChild(el('div', 'eyebrow', isToday() ? 'Add to' : 'Add to ' + fmtViewDate()));
   sh.appendChild(mealChips(meal, v => { meal = v; }));
 
-  /* ---- recent ----
-     The last ten distinct things logged, out of the last fortnight. Food
-     memory holds these and more but sits in settings, two layers away, and
-     the things you eat every week belong at the top of the sheet you log
-     from. Painted when the reads land so the sheet never waits on them. */
-  const recentWrap = el('div', 'recent-wrap');
-  sh.appendChild(recentWrap);
-  recentEntries().then(list => {
-    if (!list.length || !sh.isConnected) return;
-    recentWrap.appendChild(el('div', 'field-lbl', 'Recent'));
-    const row = el('div', 'recent-row');
-    list.forEach(e => {
-      const b = el('button', 'recent-chip');
-      b.appendChild(el('span', 'rc-name', e.name));
-      b.appendChild(el('span', 'rc-cal num', (e.cal || 0) + ' kcal' + (e.qty ? ' · ' + e.qty : '')));
-      b.onclick = () => {
-        close();
-        bump('foodRepeat');
-        addEntry({ ...cleanIng(e), meal, src: 'repeat' });
-        toast('Logged ' + e.name);
-      };
-      row.appendChild(b);
-    });
-    recentWrap.appendChild(row);
-  }).catch(() => {});
-
   const grid = el('div', 'add-grid');
   const tile = (cls, ic, title, desc, tag, fn) => {
     const b = el('button', 'add-tile' + (cls ? ' ' + cls : ''));
@@ -1147,32 +1048,6 @@ function openAdd(mealId) {
   tile(null,   'barcode', 'Barcode',  'Scan a package label.',                           null, m => openScanner(code => lookupBarcode(code, m)));
   tile(null,   'keypad',  'Manual',   'You already know the numbers.',                   null, m => openManual(m));
   sh.appendChild(grid);
-
-  /* ---- quick log ----
-     Calories only: no name, no macros, one number and Log. Self-monitoring
-     frequency is what predicts outcomes and an abbreviated log does nearly as
-     well as a full one, so the cheapest possible entry belongs on this sheet.
-     It saves as src 'quick' with zero macros, and daySummary() records how
-     many of the day's calories came in this way so You can leave the day out
-     of the macro averages instead of reading it as a zero-protein day. */
-  sh.appendChild(el('div', 'field-lbl', 'Just the calories'));
-  const quick = el('div', 'quick-log');
-  const qin = el('input');
-  qin.type = 'number'; qin.inputMode = 'numeric'; qin.placeholder = 'kcal';
-  qin.min = 1; qin.max = LIMITS.entryCal[1];
-  qin.setAttribute('aria-label', 'Calories to quick-log');
-  const qbtn = el('button', 'btn btn-primary', 'Quick log');
-  qbtn.onclick = () => {
-    const cal = Math.round(parseFloat(qin.value));
-    if (!(cal > 0) || !within(cal, LIMITS.entryCal)) { toast('Enter the calories'); qin.focus(); return; }
-    close();
-    bump('foodManual');
-    addEntry({ name: 'Quick log', qty: '', cal, p: 0, c: 0, f: 0, meal, src: 'quick' });
-    toast(cal.toLocaleString() + ' kcal logged');
-  };
-  qin.onkeydown = e => { if (e.key === 'Enter') qbtn.onclick(); };
-  quick.append(qin, qbtn);
-  sh.appendChild(quick);
 
   if (!hasProxy()) {
     const warn = el('button', 'ai-warn');
@@ -1201,31 +1076,6 @@ function openAdd(mealId) {
   cancel.style.marginTop = '12px';
   cancel.onclick = close;
   sh.appendChild(cancel);
-}
-
-// The home-screen shortcut's way in (app.js restoreView): Fuel, with the log
-// sheet already up.
-export function openLogFood() { openAdd(null); }
-
-/* The most recent distinct entries across the last fortnight, newest first,
-   by name. Quick logs are left out — there is nothing to repeat. store.read()
-   is mirror-cached, so this is fourteen cheap reads on a warm device. */
-async function recentEntries(n = 10, days = 14) {
-  const keys = [];
-  for (let i = 0; i < days; i++) keys.push(todayKey(new Date(Date.now() - i * 864e5)));
-  const logs = await Promise.all(keys.map(k => k === dk(viewDate) ? dayLog : read('food/log/' + k, null)));
-  const all = [];
-  logs.forEach(l => Object.values(l || {}).forEach(e => { if (e && e.name && e.src !== 'quick') all.push(e); }));
-  all.sort((a, b) => (b.t || 0) - (a.t || 0));
-  const seen = new Set(), out = [];
-  for (const e of all) {
-    const k = String(e.name).trim().toLowerCase();
-    if (seen.has(k)) continue;
-    seen.add(k);
-    out.push(e);
-    if (out.length >= n) break;
-  }
-  return out;
 }
 
 /* ---------- saved foods ----------
@@ -2030,9 +1880,9 @@ function openAiError(e, ctx) {
 }
 
 const CONF = {
-  high:   ['var(--ok)', 'confident'],
-  medium: ['var(--caution)', 'a fair guess'],
-  low:    ['var(--miss)',  'a rough guess']
+  high:   ['var(--good)', 'confident'],
+  medium: ['var(--warn)', 'a fair guess'],
+  low:    ['var(--bad)',  'a rough guess']
 };
 
 /* The check-before-you-log screen. Every row is editable and removable, because
@@ -2169,7 +2019,7 @@ function openRecallHit(hit, ctx) {
     const when = hit.last ? new Date(hit.last).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
     const pill = el('div', 'conf');
     const dot = el('i');
-    dot.style.background = hit.exact ? 'var(--ok)' : 'var(--caution)';
+    dot.style.background = hit.exact ? 'var(--good)' : 'var(--warn)';
     pill.append(dot, el('span', null,
       (hit.exact ? 'exact match' : 'close match') +
       (hit.n > 1 ? ' · logged ' + hit.n + ' times' : '') +
@@ -2337,7 +2187,7 @@ export function openAiSettings() {
     test.disabled = true;
     try {
       const q = await quota();
-      status.style.color = 'var(--ok)';
+      status.style.color = 'var(--good)';
       // Photo and describe have separate daily budgets — showing one combined
       // number would say "4 left" to somebody who has no photos left at all.
       const photo = q.left.photo != null ? q.left.photo : q.left.day;
@@ -2348,7 +2198,7 @@ export function openAiSettings() {
         text + ' of ' + tMax + ' describes left · $' + Number(q.spend.monthUsd).toFixed(3) +
         ' of $' + q.spend.capUsd + ' used this month.';
     } catch (err) {
-      status.style.color = 'var(--miss)';
+      status.style.color = 'var(--bad)';
       status.textContent = err.message || 'Could not reach it.';
     }
     test.disabled = false;

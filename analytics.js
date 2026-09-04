@@ -327,25 +327,6 @@ export function groupColor(g) { return PALETTE[g] || '#8d939f'; }
 
 let gradSeq = 0;
 
-/* ---------- what a chart says out loud ----------
-   Every SVG below used to be svgEl('svg', { viewBox, class }) and nothing
-   else: no role, no name, silent to a screen reader. Each now gets role="img"
-   and a sentence built from the numbers it already has. `label` names the
-   subject ("Body weight, last 45 days"); `describe` is for the one thing only
-   the caller knows, like the fitted weekly rate. Units are spoken as words. */
-const UNIT_WORDS = { lb: 'pounds', kcal: 'kilocalories', g: 'grams', '%': 'percent' };
-function unitWord(u) { const k = String(u || '').trim(); return UNIT_WORDS[k] || k; }
-function spoken(v, unit) {
-  const n = Math.abs(v) >= 100 ? Math.round(v) : Math.round(v * 10) / 10;
-  const u = unitWord(unit);
-  return n.toLocaleString() + (u ? ' ' + u : '');
-}
-function fmtDay(t) { return new Date(t).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); }
-function describeSvg(svg, text) {
-  svg.setAttribute('role', 'img');
-  svg.setAttribute('aria-label', text);
-}
-
 // Catmull-Rom through the points, converted to cubic beziers. Gives the line
 // a soft shape without overshooting the data the way a naive spline does.
 function smoothPath(pts) {
@@ -373,9 +354,6 @@ function smoothPath(pts) {
  * A trend line with a gradient area fill.
  * points:  [{ t: msTimestamp, v: number }]   the line itself
  * opts:    { color, height, markMax, unit, dots, scatter }
- * markMax: ring and label the highest point. Off unless asked for: it was on
- *          by default and drew a "peak" on charts where the peak means nothing,
- *          like a body-weight trend on a cut.
  * scatter: optional second series drawn as faint dots behind the line —
  *          used by the weight tab to show raw weigh-ins under the average.
  * line2:   optional second line, dashed and without an area, for a derived
@@ -383,22 +361,12 @@ function smoothPath(pts) {
  *          trend over the raw day means with it. `color2` is its stroke.
  * yLabels: print the top and bottom of the scale on the grid, so the reader
  *          knows what a pixel of slope is worth without a second chart.
- * minSpan: the least the vertical scale may cover, in the data's units. The
- *          padding is a fraction of the span, so with no floor four weigh-ins
- *          inside 0.4 lb filled the whole chart and read as a swing — the one
- *          place these charts actively misled.
- * scrub:   { line, scatter, line2 } — names for the readout, and switching it
- *          on: drag or hover and a rule snaps to the nearest point of the line
- *          and prints that day's numbers (attachScrub below).
- * refs:    [{ v, label }] — dashed reference lines, a goal weight, folded into
- *          the scale so a goal still 10 lb off is on the picture.
  */
 export function lineChart(points, opts = {}) {
   const {
-    color = 'var(--p-yellow)', height = 168, markMax = false,
+    color = 'var(--p-yellow)', height = 168, markMax = true,
     unit = '', dots = true, scatter = null,
-    line2 = null, color2 = 'var(--chalk)', yLabels = false,
-    label = 'Trend', describe = '', minSpan = 0, scrub = null, refs = []
+    line2 = null, color2 = 'var(--chalk)', yLabels = false
   } = opts;
 
   const W = 340, H = height, PADX = 10, PADT = 16, PADB = 22;
@@ -416,10 +384,8 @@ export function lineChart(points, opts = {}) {
   svg.appendChild(defs);
 
   const extra = (scatter || []).concat(line2 || []);
-  const refVals = (refs || []).filter(r => r && Number.isFinite(r.v)).map(r => r.v);
-  const vals = points.map(p => p.v).concat(extra.map(p => p.v), refVals);
+  const vals = points.map(p => p.v).concat(extra.map(p => p.v));
   let lo = Math.min(...vals), hi = Math.max(...vals);
-  if (minSpan > 0 && hi - lo < minSpan) { const mid = (hi + lo) / 2; lo = mid - minSpan / 2; hi = mid + minSpan / 2; }
   const span = hi - lo;
   if (span < 1e-6) { lo = lo - Math.max(1, lo * 0.05); hi = hi + Math.max(1, hi * 0.05); }
   else { lo -= span * 0.12; hi += span * 0.12; }
@@ -444,17 +410,6 @@ export function lineChart(points, opts = {}) {
       const t = svgEl('text', { x: PADX, y: (y - 3).toFixed(1), class: 'chart-axis' });
       const v = hi - f * (hi - lo);
       t.textContent = (Math.abs(v) >= 100 ? Math.round(v) : Math.round(v * 10) / 10) + (unit ? ' ' + unit : '');
-      svg.appendChild(t);
-    }
-  });
-
-  (refs || []).forEach(r => {
-    if (!r || !Number.isFinite(r.v)) return;
-    const y = Y(r.v);
-    svg.appendChild(svgEl('line', { x1: PADX, y1: y.toFixed(1), x2: W - PADX, y2: y.toFixed(1), class: 'chart-target' }));
-    if (r.label) {
-      const t = svgEl('text', { x: W - PADX, y: (y - 4).toFixed(1), class: 'chart-axis', 'text-anchor': 'end' });
-      t.textContent = r.label;
       svg.appendChild(t);
     }
   });
@@ -519,120 +474,7 @@ export function lineChart(points, opts = {}) {
   hi1.textContent = new Date(t1).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   svg.append(lo1, hi1);
 
-  if (scrub) attachScrub(svg, { W, H, PADX, PADT, PADB, pts, scatter, line2, unit, names: scrub });
-
-  const first = points[0].v, last = points[points.length - 1].v;
-  const move = Math.abs(last - first) < 0.05 ? 'flat' : (last < first ? 'down' : 'up');
-  describeSvg(svg, label + ', ' + fmtDay(t0) + ' to ' + fmtDay(t1) + ': ' +
-    spoken(first, '') + (move === 'flat' ? ' to ' : ' ' + move + ' to ') + spoken(last, unit) +
-    (describe ? '. ' + describe : '') + '.');
-
   return svg;
-}
-
-/* ---------- scrub to read ----------
-   A finger on a chart used to do nothing, so every number in it had to be
-   guessed off the axis. Dragging (or hovering) snaps a rule to the nearest
-   point of the line and prints that day: the line's value, any scatter
-   readings from the same day, and the second line's value. The gesture is
-   decided the way swipeToDelete decides it (ui.js): nothing is claimed until
-   the pointer has moved 8px, a mostly-vertical move is a scroll and is left
-   alone, and touch-action: pan-y on the svg means the browser never has to
-   wait on us to find that out. A tap reads one point and a second tap on the
-   same spot puts the readout away; a mouse just hovers. */
-function attachScrub(svg, o) {
-  const { W, H, PADX, PADT, PADB, pts, scatter, line2, unit, names } = o;
-  if (pts.length < 2) return;
-  svg.classList.add('chart-scrub');
-  // Something to receive events over the empty parts of the plot.
-  svg.appendChild(svgEl('rect', { x: 0, y: 0, width: W, height: H, fill: 'transparent' }));
-
-  const g = svgEl('g', { class: 'chart-readout', 'pointer-events': 'none' });
-  g.style.display = 'none';
-  const rule = svgEl('line', { class: 'chart-scrub-rule', y1: PADT, y2: H - PADB });
-  const dot  = svgEl('circle', { class: 'chart-scrub-dot', r: 4 });
-  const box  = svgEl('rect', { rx: 6, ry: 6 });
-  const rows = [0, 1, 2, 3].map(i => svgEl('text', { class: i ? 'ro-val' : 'ro-date', x: 0, y: 0 }));
-  g.append(rule, dot, box, ...rows);
-  svg.appendChild(g);
-
-  const sameDay = (a, b) => {
-    const d1 = new Date(a), d2 = new Date(b);
-    return d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
-  };
-  // One decimal up to four figures: 199.2 lb is the whole point of reading a weigh-in.
-  const fmt = v => (Math.abs(v) >= 1000 ? Math.round(v) : Math.round(v * 10) / 10).toLocaleString();
-  const withUnit = v => fmt(v) + (unit ? ' ' + unit : '');
-  const toX = e => { const r = svg.getBoundingClientRect(); return (e.clientX - r.left) / Math.max(1, r.width) * W; };
-
-  let shownAt = null;
-  const show = vx => {
-    let best = pts[0];
-    for (const p of pts) if (Math.abs(p.x - vx) < Math.abs(best.x - vx)) best = p;
-    shownAt = best.x;
-    rule.setAttribute('x1', best.x.toFixed(1)); rule.setAttribute('x2', best.x.toFixed(1));
-    dot.setAttribute('cx', best.x.toFixed(1)); dot.setAttribute('cy', best.y.toFixed(1));
-
-    const text = [new Date(best.t).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })];
-    text.push((names.line || 'value') + '  ' + withUnit(best.v));
-    const sc = (scatter || []).filter(p => sameDay(p.t, best.t)).map(p => fmt(p.v));
-    if (sc.length) text.push((names.scatter || 'readings') + '  ' + sc.join(', '));
-    if (line2 && line2.length) {
-      const l2 = line2.reduce((a, b) => Math.abs(b.t - best.t) < Math.abs(a.t - best.t) ? b : a);
-      if (sameDay(l2.t, best.t)) text.push((names.line2 || 'trend') + '  ' + withUnit(l2.v));
-    }
-    rows.forEach((t, i) => { t.textContent = text[i] || ''; t.style.display = text[i] ? '' : 'none'; });
-    g.style.display = '';
-
-    // Size the box to its text and keep it on the side away from the finger.
-    const lh = 12, padX = 8, padY = 6;
-    let w = 0;
-    rows.forEach(t => {
-      if (!t.textContent) return;
-      let len = 0;
-      try { len = t.getComputedTextLength(); } catch {}
-      w = Math.max(w, len || t.textContent.length * 5.4);
-    });
-    const bw = w + padX * 2, bh = text.length * lh + padY * 2 - 2;
-    const bx = best.x > W / 2 ? Math.max(PADX, best.x - 14 - bw) : Math.min(W - PADX - bw, best.x + 14);
-    const by = 2;
-    box.setAttribute('x', bx.toFixed(1)); box.setAttribute('y', by);
-    box.setAttribute('width', bw.toFixed(1)); box.setAttribute('height', bh.toFixed(1));
-    rows.forEach((t, i) => {
-      t.setAttribute('x', (bx + padX).toFixed(1));
-      t.setAttribute('y', (by + padY + lh * (i + 1) - 3).toFixed(1));
-    });
-  };
-  const hide = () => { g.style.display = 'none'; shownAt = null; };
-
-  let startX = 0, startY = 0, tracking = false, decided = false, moved = false;
-  svg.addEventListener('pointerdown', e => {
-    if (e.pointerType === 'mouse') return;          // hover handles the mouse
-    startX = e.clientX; startY = e.clientY;
-    tracking = true; decided = false; moved = false;
-  });
-  svg.addEventListener('pointermove', e => {
-    if (e.pointerType === 'mouse') { show(toX(e)); return; }
-    if (!tracking) return;
-    const dx = e.clientX - startX, dy = e.clientY - startY;
-    if (!decided) {
-      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
-      if (Math.abs(dy) > Math.abs(dx)) { tracking = false; return; }   // a scroll, not ours
-      decided = true;
-      try { svg.setPointerCapture(e.pointerId); } catch {}
-    }
-    moved = true;
-    show(toX(e));
-  });
-  svg.addEventListener('pointerup', e => {
-    if (e.pointerType === 'mouse' || !tracking) return;
-    tracking = false;
-    if (moved) return;
-    const vx = toX(e);
-    if (shownAt != null && Math.abs(shownAt - vx) < 12) hide(); else show(vx);
-  });
-  svg.addEventListener('pointercancel', () => { tracking = false; });
-  svg.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') hide(); });
 }
 
 /**
@@ -654,7 +496,7 @@ function attachScrub(svg, o) {
  */
 export function barChart(bars, opts = {}) {
   const { height = 150, width = 340, color = 'var(--p-blue)', unit = '', showValues = true,
-          target = null, targetLabel = '', lines = [], label = 'Bars' } = opts;
+          target = null, targetLabel = '', lines = [] } = opts;
   if (!bars.length) return emptyChart('Nothing logged yet');
 
   const W = width, H = height, PADB = 20, PADT = 18, PADX = 8;
@@ -664,10 +506,6 @@ export function barChart(bars, opts = {}) {
                        ...lines.map(l => l && l.v > 0 ? l.v : 0), 1);
   const n = bars.length;
   const slot = (W - PADX * 2) / n;
-  // Fourteen weeks in a 340px chart is a 23px slot, and "Aug 28" is ~30px at
-  // 9px, so every label overprinted its neighbour. Label every kth bar instead,
-  // counted back from the newest so the latest bar always keeps its date.
-  const labelEvery = Math.max(1, Math.ceil(n / 8));
   const bw = Math.max(3, Math.min(30, slot * 0.62));
   const plotH = H - PADT - PADB;
 
@@ -722,7 +560,7 @@ export function barChart(bars, opts = {}) {
       t.textContent = above;
       svg.appendChild(t);
     }
-    if (b.label && n <= 14 && (n - 1 - i) % labelEvery === 0) {
+    if (b.label && n <= 14) {
       const t = svgEl('text', {
         x: (x + bw / 2).toFixed(1), y: H - 6, class: 'chart-axis', 'text-anchor': 'middle'
       });
@@ -748,19 +586,6 @@ export function barChart(bars, opts = {}) {
   if (target > 0) refLine(target, targetLabel, 'end', 'chart-target');
   lines.forEach(l => { if (l && l.v > 0) refLine(l.v, l.label, l.at, l.cls || 'chart-ref'); });
 
-  const lastB = bars[n - 1];
-  const top = bars.reduce((a, b) => (b.v > a.v ? b : a), bars[0]);
-  let said = label + ': ' + n + (n === 1 ? ' bar' : ' bars');
-  if (bars[0].label && lastB.label && n > 1) said += ', ' + bars[0].label + ' to ' + lastB.label;
-  const uw = unitWord(unit) ? ' ' + unitWord(unit) : '';
-  if (top.v > 0) said += '. Highest ' + compact(top.v) + uw + (top.label ? ' at ' + top.label : '');
-  said += '. Latest ' + compact(lastB.v) + uw;
-  if (target > 0) {
-    const tl = targetLabel || 'Target';
-    said += '. ' + tl.charAt(0).toUpperCase() + tl.slice(1) + ' ' + compact(target) + uw;
-  }
-  describeSvg(svg, said + '.');
-
   return svg;
 }
 
@@ -769,14 +594,12 @@ export function barChart(bars, opts = {}) {
  * remainder in the surface colour, so a ring that is nearly closed reads as
  * "nearly there" before the number in the middle is read at all. Past 100% the
  * ring simply closes — a bigger-than-full arc is not a thing anyone can read.
- * frac: 0..∞      opts: { size, thickness, color, top, sub, label, cls }
- * cls is an extra class for the caller's CSS to size the text by — the Steps
- * hero draws this ring at 132px and needs a 22px number in it.
+ * frac: 0..∞      opts: { size, thickness, color, top, sub }
  */
 export function ring(frac, opts = {}) {
-  const { size = 76, thickness = 7, color = 'var(--p-yellow)', top = '', sub = '', label = '', cls = '' } = opts;
+  const { size = 76, thickness = 7, color = 'var(--p-yellow)', top = '', sub = '' } = opts;
   const R = size / 2, r = R - thickness / 2;
-  const svg = svgEl('svg', { viewBox: '0 0 ' + size + ' ' + size, class: 'chart chart-ring' + (cls ? ' ' + cls : '') });
+  const svg = svgEl('svg', { viewBox: '0 0 ' + size + ' ' + size, class: 'chart chart-ring' });
   svg.style.width = size + 'px';
   svg.style.height = size + 'px';
 
@@ -806,8 +629,6 @@ export function ring(frac, opts = {}) {
     t.textContent = sub;
     svg.appendChild(t);
   }
-  describeSvg(svg, (label || 'Progress') + ': ' + Math.round((Number.isFinite(frac) ? frac : 0) * 100) + ' percent of goal' +
-    (top && !/%$/.test(top) ? ', ' + top + (sub ? ' ' + sub : '') : '') + '.');
   return svg;
 }
 
@@ -820,20 +641,13 @@ export function ring(frac, opts = {}) {
  * with two days off into confetti. Points from `accentFrom` onward draw in
  * `color`; the ones before it in the muted stroke, so "this week" stands out
  * of "last week" without a legend.
- * values: [number | null]      opts: { width, height, color, accentFrom, minSpan }
- * minSpan is the same floor lineChart has: a quiet fortnight must not fill the
- * whole height and read as a swing.
+ * values: [number | null]      opts: { width, height, color, accentFrom }
  */
 export function sparkline(values, opts = {}) {
   const { width = 150, height = 40, color = 'var(--p-yellow)', accentFrom = 0,
-          area = false, glow = false, ref = null, kind = 'line', label = 'Last days', minSpan = 0 } = opts;
+          area = false, glow = false, ref = null, kind = 'line' } = opts;
   const W = width, H = height, PADX = 4, PADY = 5;
   const svg = svgEl('svg', { viewBox: '0 0 ' + W + ' ' + H, class: 'chart chart-spark' });
-
-  const finite = values.filter(Number.isFinite);
-  describeSvg(svg, label + ': ' + values.length + (kind === 'bars' ? ' weeks' : ' days') + ', ' +
-    (finite.length ? finite.length + ' with a value, ' + spoken(finite[0], '') + ' to ' + spoken(finite[finite.length - 1], '') : 'nothing logged') +
-    (ref > 0 ? ', target ' + spoken(ref, '') : '') + '.');
 
   const n = values.length;
   const pts = [];
@@ -877,7 +691,6 @@ export function sparkline(values, opts = {}) {
   // picture can show.
   const scaled = pts.map(p => p.v).concat(ref > 0 ? [ref] : []);
   let lo = Math.min(...scaled), hi = Math.max(...scaled);
-  if (minSpan > 0 && hi - lo < minSpan) { const mid = (hi + lo) / 2; lo = mid - minSpan / 2; hi = mid + minSpan / 2; }
   if (hi - lo < 1e-6) { lo -= 1; hi += 1; }
   const X = i => PADX + i / (n - 1) * (W - PADX * 2);
   const Y = v => PADY + (1 - (v - lo) / (hi - lo)) * (H - PADY * 2);
@@ -929,14 +742,12 @@ export function sparkline(values, opts = {}) {
  * segments: [{ label, v, color }]
  */
 export function donut(segments, opts = {}) {
-  const { size = 168, thickness = 20, centerTop = '', centerSub = '', label = 'Split' } = opts;
+  const { size = 168, thickness = 20, centerTop = '', centerSub = '' } = opts;
   const total = segments.reduce((a, s) => a + s.v, 0);
   if (!total) return emptyChart('Nothing logged yet');
 
   const R = size / 2, r = R - thickness / 2;
   const svg = svgEl('svg', { viewBox: '0 0 ' + size + ' ' + size, class: 'chart chart-donut' });
-  describeSvg(svg, label + ': ' + segments.filter(s => s.v > 0)
-    .map(s => s.label + ' ' + Math.round(s.v / total * 100) + '%').join(', ') + '.');
 
   let angle = -Math.PI / 2;   // start at 12 o'clock
   const GAP = 0.028;          // radians of breathing room between segments
@@ -973,37 +784,12 @@ export function donut(segments, opts = {}) {
 }
 
 /**
- * One bar split by share — the month's working sets by muscle group. Linear
- * on purpose: a length is read to within a few percent and a wedge angle is
- * not, so the donut this replaced was misread about three times as often. The
- * numbers belong in a legend beside it, not on the bar.
- * segments: [{ label, v, color }]      opts: { label }
- */
-export function splitBar(segments, opts = {}) {
-  const { label = 'Split' } = opts;
-  const total = segments.reduce((a, s) => a + (s.v > 0 ? s.v : 0), 0);
-  if (!total) return emptyChart('Nothing logged yet');
-  const bar = el('div', 'split-bar');
-  segments.forEach(s => {
-    if (!(s.v > 0)) return;
-    const seg = el('div', 'split-seg');
-    seg.style.flex = String(s.v);
-    seg.style.background = s.color;
-    bar.appendChild(seg);
-  });
-  bar.setAttribute('role', 'img');
-  bar.setAttribute('aria-label', label + ': ' + segments.filter(s => s.v > 0)
-    .map(s => s.label + ' ' + Math.round(s.v / total * 100) + '%').join(', ') + '.');
-  return bar;
-}
-
-/**
  * Consistency heat strip — one cell per day for the last N days.
  * Takes either a session list (shaded by volume, for Train's stats) or a
  * plain { dateKey: weight } map, which is how You draws "any day with anything
  * on it" without a session list standing in for the whole account.
  */
-export function heatStrip(sessions, days = 91, label = 'Activity') {
+export function heatStrip(sessions, days = 91) {
   const byDay = {};
   if (Array.isArray(sessions)) {
     sessions.forEach(s => {
@@ -1025,7 +811,6 @@ export function heatStrip(sessions, days = 91, label = 'Activity') {
   start.setDate(start.getDate() - (days - 1));
   start.setDate(start.getDate() - start.getDay());   // align to a Sunday
 
-  let active = 0;
   for (let c = 0; c < cols; c++) {
     for (let row = 0; row < 7; row++) {
       const d = new Date(start);
@@ -1033,7 +818,6 @@ export function heatStrip(sessions, days = 91, label = 'Activity') {
       if (d.getTime() > Date.now() + 864e5) continue;
       const k = todayKey(d);
       const v = byDay[k] || 0;
-      if (v) active++;
       const op = v ? (0.28 + 0.72 * Math.min(1, v / max)) : 0;
       svg.appendChild(svgEl('rect', {
         x: (c * (CELL + GAP)).toFixed(1), y: (row * (CELL + GAP)).toFixed(1),
@@ -1043,7 +827,6 @@ export function heatStrip(sessions, days = 91, label = 'Activity') {
       }));
     }
   }
-  describeSvg(svg, label + ', last ' + days + ' days: ' + active + (active === 1 ? ' day' : ' days') + ' with something logged.');
   return svg;
 }
 

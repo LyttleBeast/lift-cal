@@ -605,7 +605,7 @@ function paintQuota() {
   }
   if (quotaState.status === 'err') {
     const n = noteEl(quotaState.message);
-    n.style.color = 'var(--miss)';
+    n.style.color = 'var(--bad)';
     quotaBox.appendChild(n);
     return;
   }

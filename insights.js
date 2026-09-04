@@ -56,14 +56,9 @@ export function windowStats(ctx, keys, { dropToday = false } = {}) {
 
   const logged = foodKeys.filter(k => summaries[k] && summaries[k].cal > 0);
   const kcal = mean(logged.map(k => summaries[k].cal));
-  // Days with quick-logged calories (summary.q) have macros that are missing,
-  // not zero, so they count for calories and are left out of the protein
-  // reading — otherwise a 700 kcal dinner logged as a number reads as a
-  // protein-free day and the verdict is wrong.
-  const macroKeys = logged.filter(k => !(summaries[k].q > 0));
   const pTarget = targets && targets.p > 0 ? targets.p : null;
-  const pAvg = mean(macroKeys.map(k => summaries[k].p || 0));
-  const pDays = pTarget ? macroKeys.filter(k => (summaries[k].p || 0) >= pTarget * 0.9).length : null;
+  const pAvg = mean(logged.map(k => summaries[k].p || 0));
+  const pDays = pTarget ? logged.filter(k => (summaries[k].p || 0) >= pTarget * 0.9).length : null;
 
   const stepKeys = keys.filter(k => stepDays[k] && stepDays[k].steps > 0);
   const steps = mean(stepKeys.map(k => stepDays[k].steps));
@@ -84,7 +79,7 @@ export function windowStats(ctx, keys, { dropToday = false } = {}) {
 
   return {
     keys, foodDays: foodKeys.length,
-    logged: logged.length, macroDays: macroKeys.length, kcal, pAvg, pDays, pTarget,
+    logged: logged.length, kcal, pAvg, pDays, pTarget,
     stepDays: stepKeys.length, steps, stepHit,
     waterDays: waterKeys.length, water, waterHit, waterKnown: waterDays != null,
     sessions: sess ? sess.length : null, volume, trainDays: trainDays.size,
@@ -131,25 +126,25 @@ export function assess(ctx) {
   }
 
   /* ---- protein ---- */
-  if (thisWk.pTarget && thisWk.macroDays >= 3) {
-    const share = thisWk.pDays / thisWk.macroDays;
+  if (thisWk.pTarget && thisWk.logged >= 3) {
+    const share = thisWk.pDays / thisWk.logged;
     if (share >= 0.8) {
       win({ id: 'protein-good', subject: 'fuel', score: 85,
-        title: 'Protein on target ' + thisWk.pDays + ' of ' + thisWk.macroDays + ' logged days',
+        title: 'Protein on target ' + thisWk.pDays + ' of ' + thisWk.logged + ' logged days',
         detail: 'Averaging ' + fmtInt(thisWk.pAvg) + ' g against ' + fmtInt(thisWk.pTarget) + '.',
         why: 'A day counts when it reaches 90% of your protein target (' + fmtInt(thisWk.pTarget * 0.9) + ' g). Four of five logged days or better is the bar.' });
     } else if (share <= 0.4) {
       fix({ id: 'protein-low', subject: 'fuel', score: 95,
-        title: 'Protein under target ' + (thisWk.macroDays - thisWk.pDays) + ' of ' + thisWk.macroDays + ' days',
+        title: 'Protein under target ' + (thisWk.logged - thisWk.pDays) + ' of ' + thisWk.logged + ' days',
         detail: 'Averaging ' + fmtInt(thisWk.pAvg) + ' g against ' + fmtInt(thisWk.pTarget) +
           (dir < 0 ? ' — on a cut it is the number that decides whether the weight you lose is fat.' : '.'),
         why: 'A day counts when it reaches 90% of your protein target. Fewer than two in five logged days is the bar for this.' });
     }
     // Improving, week over week — a pattern rather than a state.
-    if (lastWk.pTarget && lastWk.macroDays >= 3 && thisWk.pDays - lastWk.pDays >= 2 && share >= 0.6) {
+    if (lastWk.pTarget && lastWk.logged >= 3 && thisWk.pDays - lastWk.pDays >= 2 && share >= 0.6) {
       note({ id: 'protein-up', subject: 'fuel', score: 70,
         title: 'Protein consistency is improving',
-        detail: thisWk.pDays + ' of ' + thisWk.macroDays + ' days on target this week, up from ' + lastWk.pDays + ' of ' + lastWk.macroDays + ' last week.',
+        detail: thisWk.pDays + ' of ' + thisWk.logged + ' days on target this week, up from ' + lastWk.pDays + ' of ' + lastWk.logged + ' last week.',
         why: 'Days at or above 90% of your protein target, this seven days against the seven before. Two more days is the bar.' });
     }
   }
@@ -433,12 +428,11 @@ export function weeklyReview(ctx) {
   }
 
   // Protein
-  if (cur.pTarget && cur.macroDays >= 3) {
-    const share = cur.pDays / cur.macroDays;
+  if (cur.pTarget && cur.logged >= 3) {
+    const share = cur.pDays / cur.logged;
     item('fuel', 'Protein', share >= 0.7 ? true : share <= 0.4 ? false : null,
-      cur.pDays + ' of ' + cur.macroDays + ' logged days on target, averaging ' + fmtInt(cur.pAvg) + ' g of ' + fmtInt(cur.pTarget) +
-      (cur.logged > cur.macroDays ? ' (' + (cur.logged - cur.macroDays) + ' quick-logged ' + (cur.logged - cur.macroDays === 1 ? 'day' : 'days') + ' left out)' : '') + '.',
-      cur.pDays + ' / ' + cur.macroDays + ' days');
+      cur.pDays + ' of ' + cur.logged + ' logged days on target, averaging ' + fmtInt(cur.pAvg) + ' g of ' + fmtInt(cur.pTarget) + '.',
+      cur.pDays + ' / ' + cur.logged + ' days');
   }
 
   // Weight

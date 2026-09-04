@@ -6,7 +6,7 @@
 
 import {
   allSessions, exerciseIndex, filterByRange, weeklyVolume, groupSplit,
-  topBy, prTimeline, isWorking, lineChart, barChart, splitBar, heatStrip,
+  topBy, prTimeline, isWorking, lineChart, barChart, donut, heatStrip,
   legend, emptyChart, groupColor, GROUPS, GROUP_ORDER
 } from './analytics.js';
 import { todayKey } from './store.js';
@@ -140,14 +140,14 @@ function renderOverview() {
   const volCard = card('Volume per week', weeks.length ? compact(totalVol) + ' lb total' : '');
   volCard.appendChild(barChart(
     weeks.map(w => ({ label: fmtDate(w.key).replace(/ /, ' '), v: w.volume })),
-    { color: 'var(--p-blue)', height: 158, label: 'Volume per week' }
+    { color: 'var(--p-blue)', height: 158 }
   ));
   volCard.appendChild(noteEl('Working sets only — warm-ups never count toward volume.'));
   wrap.appendChild(volCard);
 
   /* ---- consistency ---- */
   const consist = card('Consistency', trainedDays(inRange) + ' training days');
-  consist.appendChild(heatStrip(sessions, 91, 'Training days'));
+  consist.appendChild(heatStrip(sessions, 91));
   const streakInfo = streaks(sessions);
   consist.appendChild(statRow([
     [streakInfo.currentWeeks, 'Week streak'],
@@ -160,21 +160,19 @@ function renderOverview() {
   /* ---- muscle group split ---- */
   const split = groupSplit(inRange);
   if (split.length) {
+    const gc = card('Muscle group split');
+    const holder = el('div', 'donut-wrap');
     const totalSplitSets = split.reduce((a, s) => a + s.sets, 0);
-    const gc = card('Muscle group split', totalSplitSets + ' sets');
-    // The same bar You draws for the same data. It was a donut here, and a
-    // wedge is read far less accurately than a length (analytics.js splitBar).
-    gc.appendChild(splitBar(
+    holder.appendChild(donut(
       split.map(s => ({ label: GROUPS[s.group].label, v: s.sets, color: groupColor(s.group) })),
-      { label: 'Muscle group split' }
+      { centerTop: String(totalSplitSets), centerSub: 'sets' }
     ));
-    const lg = legend(split.map(s => ({
+    holder.appendChild(legend(split.map(s => ({
       label: GROUPS[s.group].label,
       color: groupColor(s.group),
       value: s.sets + '  ' + Math.round(s.sets / totalSplitSets * 100) + '%'
-    })));
-    lg.classList.add('legend-grid');
-    gc.appendChild(lg);
+    }))));
+    gc.appendChild(holder);
     gc.appendChild(noteEl('Counted by each exercise’s primary group.'));
     wrap.appendChild(gc);
   }
@@ -183,7 +181,7 @@ function renderOverview() {
   const freqCard = card('Sessions per week');
   freqCard.appendChild(barChart(
     weeks.map(w => ({ label: fmtDate(w.key).replace(/ /, ' '), v: w.sessions })),
-    { color: 'var(--s-train)', height: 132, label: 'Sessions per week' }
+    { color: 'var(--p-green)', height: 132 }
   ));
   wrap.appendChild(freqCard);
 
@@ -412,7 +410,7 @@ function renderDetail(exId) {
   } else {
     trend.appendChild(lineChart(
       entries.map(x => ({ t: x.startedAt, v: x.e1rm })),
-      { color: 'var(--p-yellow)', unit: 'lb', height: 176, markMax: true, scrub: { line: 'e1RM' }, label: 'Estimated one-rep max, ' + e.name }
+      { color: 'var(--p-yellow)', unit: 'lb', height: 176 }
     ));
     trend.appendChild(noteEl('Epley estimate from your best working set each session. The ring marks your peak.'));
   }
@@ -423,7 +421,7 @@ function renderDetail(exId) {
     const wt = card('Heaviest set');
     wt.appendChild(lineChart(
       entries.map(x => ({ t: x.startedAt, v: x.topWeight })),
-      { color: 'var(--p-red)', unit: 'lb', height: 152, markMax: true, scrub: { line: 'heaviest' }, label: 'Heaviest set, ' + e.name }
+      { color: 'var(--p-red)', unit: 'lb', height: 152 }
     ));
     wrap.appendChild(wt);
   }
@@ -432,7 +430,7 @@ function renderDetail(exId) {
   const volCard = card('Volume per session');
   volCard.appendChild(barChart(
     entries.slice(-12).map(x => ({ label: fmtDate(x.date).replace(/ /, ' '), v: x.volume })),
-    { color: 'var(--p-blue)', height: 150, label: 'Volume per session, ' + e.name }
+    { color: 'var(--p-blue)', height: 150 }
   ));
   wrap.appendChild(volCard);
 

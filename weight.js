@@ -3,7 +3,7 @@
 
 import { read, write, watch, todayKey } from './store.js';
 import { weightStats, dailyMeans as meansOf, movingAvg, maintenance,
-         refreshModel, modelState, adjustedDays, peakOffset, trendRate, trendWeight, goalDir } from './tdee.js';
+         refreshModel, modelState, adjustedDays, peakOffset, trendRate } from './tdee.js';
 import { lineChart } from './analytics.js';
 import { bump } from './usage.js';
 import { $, el, toast, noteEl, confirmSheet, r1, parseKey, fmtDateFull, LIMITS, within } from './ui.js';
@@ -12,16 +12,9 @@ let entries = {};      // id -> { lb, t }
 let range   = 30;      // chart window, days
 let adjusted = true;   // chart shows normalised weigh-ins, not raw ones
 let summaries = {};    // dateKey -> {cal,...} for TDEE
-let targets   = {};    // food/targets — the stated goal, and a pinned maintenance if any
 
 export async function initWeight() {
-  // The rate's colour needs the goal direction on the first paint, and that
-  // reads targets and, failing a stated goal, maintenance — so both come in
-  // with the weigh-ins rather than trailing them by a render.
-  const [we, ds, tg] = await Promise.all([
-    read('weight/entries', null), read('food/daySummaries', null), read('food/targets', null)
-  ]);
-  entries = we || {}; summaries = ds || {}; targets = tg || {};
+  entries = (await read('weight/entries', null)) || {};
   await refit();
   // Stay subscribed: this node is written whole, so a stale copy in memory
   // would silently drop a weigh-in logged on another device the next time you
@@ -52,69 +45,11 @@ function sorted() {
 function dailyMeans() { return meansOf(entries); }
 function stats() { return weightStats(entries); }
 
-/* ---------- when a weigh-in happened ----------
-   Every weigh-in used to be stamped with the moment it was typed in, so this
-   morning's number logged at lunch carried a lunchtime clock — and the
-   time-of-day correction (weightmodel.js) then subtracted a lunch that was
-   not in you when you stood on the scale. Three choices: now, this morning,
-   or a time you pick. Resets to "now" after each log. */
-let whenMode = 'now';   // 'now' | 'morning' | 'custom'
-
-// The clock time this account's morning weigh-ins usually carry (the median
-// of every reading before 11am), so "This morning" lands where the scale
-// actually gets stepped on. 7:00 until there is anything to go on.
-function morningMinutes() {
-  const mins = sorted()
-    .map(e => new Date(e.t)).filter(d => d.getHours() < 11)
-    .map(d => d.getHours() * 60 + d.getMinutes()).sort((a, b) => a - b);
-  return mins.length ? mins[Math.floor(mins.length / 2)] : 7 * 60;
-}
-
-// The timestamp a log would carry right now. NaN for an unparseable custom
-// value; never in the future for the morning chip, which just means "now" if
-// it is still before the usual time.
-function whenStamp(customValue) {
-  const now = Date.now();
-  if (whenMode === 'morning') {
-    const d = new Date(); d.setHours(0, 0, 0, 0);
-    return Math.min(now, d.getTime() + morningMinutes() * 60e3);
-  }
-  if (whenMode === 'custom') {
-    const t = customValue ? new Date(customValue).getTime() : NaN;
-    return Number.isFinite(t) ? t : NaN;
-  }
-  return now;
-}
-
-const pad2 = n => String(n).padStart(2, '0');
-// What a datetime-local input wants: local time, no zone, to the minute.
-function localIso(d) {
-  return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) +
-         'T' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
-}
-function fmtClock(t) {
-  return new Date(t).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-}
-
-// Same precedence as Fuel and You: a pinned number wins, then the estimate.
-function maintCal() {
-  if (Number(targets.maint) > 0) return Math.round(Number(targets.maint));
-  const m = maintenance(entries, summaries);
-  return m.tdee > 0 ? m.tdee : null;
-}
-
 /* ================= RENDER ================= */
-// Synchronous, the way you.js paints. This used to be async: it emptied the
-// view and then awaited the maintenance card's two reads, so every visit to
-// the tab flashed blank for as long as the database took to answer. Now the
-// whole screen goes up in one swap with a placeholder where the estimate will
-// be, and fillTDEE() replaces that card when the reads land.
-let renderSeq = 0;
-
-export function render() {
+export async function render() {
   const root = $('#view-weight');
   if (!root) return;
-  const seq = ++renderSeq;
+  root.innerHTML = '';
   const wrap = el('div', 'screen-pad');
 
   const hd = el('div', 'cal-hd');
@@ -133,65 +68,22 @@ export function render() {
   inp.type = 'number'; inp.inputMode = 'decimal'; inp.step = '0.1';
   inp.min = LIMITS.lb[0]; inp.max = LIMITS.lb[1];
   inp.placeholder = s.latest ? String(r1(s.latest.lb)) : '208.0';
-  // The chips repaint themselves rather than calling render(), because a full
-  // repaint would throw away the number already typed in the box above.
-  const whenRow = el('div', 'chip-row');
-  whenRow.style.marginTop = '10px';
-  const customWrap = el('div', 'field');
-  customWrap.style.marginTop = '10px';
-  const custom = el('input');
-  custom.type = 'datetime-local';
-  custom.max = localIso(new Date());
-  custom.value = localIso(new Date());
-  custom.style.background = 'var(--rack)';
-  custom.setAttribute('aria-label', 'Date and time of the weigh-in');
-  customWrap.appendChild(custom);
-  const whenNote = noteEl('');
-  const paintWhen = () => {
-    whenRow.querySelectorAll('.chip').forEach(c => c.classList.toggle('on', c.dataset.id === whenMode));
-    customWrap.style.display = whenMode === 'custom' ? '' : 'none';
-    whenNote.style.display = whenMode === 'now' ? 'none' : '';
-    const usual = new Date(); usual.setHours(0, 0, 0, 0);
-    const usualT = usual.getTime() + morningMinutes() * 60e3;
-    whenNote.textContent = whenMode === 'morning'
-      ? (Date.now() < usualT
-          ? 'Your morning weigh-ins usually land around ' + fmtClock(usualT) + '. It is earlier than that, so this one is stamped now.'
-          : 'Stamped ' + fmtClock(usualT) + ' today, when your morning weigh-ins usually happen.')
-      : whenMode === 'custom' ? 'Stamped with the time you pick, so the correction knows what was in you.' : '';
-  };
-  [['now', 'Now'], ['morning', 'This morning'], ['custom', 'Custom']].forEach(([id, label]) => {
-    const c = el('button', 'chip', label);
-    c.dataset.id = id;
-    c.onclick = () => { whenMode = id; paintWhen(); };
-    whenRow.appendChild(c);
-  });
-
   const btn = el('button', 'btn btn-primary', 'Log');
   btn.style.flex = '0 0 auto';
   btn.onclick = async () => {
     const lb = parseFloat(inp.value);
     if (!within(lb, LIMITS.lb)) { toast('Enter a weight between ' + LIMITS.lb[0] + ' and ' + LIMITS.lb[1] + ' lb'); return; }
-    const t = whenStamp(custom.value);
-    if (!Number.isFinite(t)) { toast('Pick a date and time first'); return; }
-    if (t > Date.now() + 60e3) { toast('That time hasn’t happened yet'); return; }
     const id = 'wt' + Date.now().toString(36);
-    entries[id] = { lb: r1(lb), t };
+    entries[id] = { lb: r1(lb), t: Date.now() };
     await write('weight/entries', entries);
     bump('weighIn');
     await refit();
     inp.value = '';
-    const day = todayKey(new Date(t));
-    toast('Logged ' + r1(lb) + ' lb' + (whenMode === 'now' ? ''
-      : ' at ' + fmtClock(t) + (day === todayKey() ? '' : ', ' + fmtDateFull(day))));
-    whenMode = 'now';
+    toast('Logged ' + r1(lb) + ' lb');
     render();
   };
   row.append(inp, btn);
   log.appendChild(row);
-  log.appendChild(whenRow);
-  log.appendChild(customWrap);
-  log.appendChild(whenNote);
-  paintWhen();
   log.appendChild(noteEl('Same scale, same time of day makes the trend honest. Morning after waking is the classic.'));
   wrap.appendChild(log);
 
@@ -210,63 +102,22 @@ export function render() {
     sr.appendChild(cell(s.avg7 != null ? String(r1(s.avg7)) : '–', '7-day avg'));
     const tr = trendRate(entries);
     const rate = tr.rateWk;
-    // Losing is only good on a cut. This used to colour any fall green and any
-    // rise amber, which contradicted You for anybody bulking; both tabs now ask
-    // tdee.js goalDir, and stay uncoloured when the goal is unknown.
-    const dir = goalDir(targets, maintCal());
-    const right = dir == null || rate == null ? null
-      : dir === 0 ? Math.abs(rate) <= 0.5 : dir < 0 ? rate <= 0 : rate >= 0;
     sr.appendChild(cell(
       rate != null ? (rate > 0 ? '+' : '') + r1(rate) : '–',
       tr.model ? 'lb / week ✓' : 'lb / week',
-      right == null ? null : right ? 'var(--ok)' : 'var(--caution)'
+      rate != null ? (rate <= 0 ? 'var(--good)' : 'var(--warn)') : null
     ));
     sr.style.marginBottom = '12px';
     wrap.appendChild(sr);
-
-    // The finish line, beside the headline: the goal from Daily targets and
-    // how far the trend is from it. You's goal card does the date arithmetic;
-    // this is just the distance, on the tab where the number gets logged.
-    const goalLb = Number(targets.goalLb);
-    if (goalLb > 0) {
-      const tw = trendWeight();
-      const from = Number.isFinite(tw) && tw > 0 ? tw : s.latest.lb;
-      const gap = r1(from - goalLb);
-      const dir = goalDir(targets, maintCal());
-      // On a cut the goal is below you, so being under it is past it; on a bulk
-      // the other way round. Holding has no "past".
-      const passed = dir != null && dir !== 0 && gap !== 0 && Math.sign(gap) === dir;
-      const line = el('div', 'you-sub num goal-gap');
-      line.textContent = 'Goal ' + r1(goalLb) + ' lb  ·  ' +
-        (gap === 0 ? 'on it' : passed ? Math.abs(gap) + ' lb past it' : Math.abs(gap) + ' lb to go');
-      wrap.appendChild(line);
-    }
   }
 
   wrap.appendChild(renderChart(s));
   wrap.appendChild(renderTOD());
-
-  const pending = el('div', 'card');
-  const phd = el('div', 'card-hd');
-  phd.appendChild(el('div', 'eyebrow', 'Maintenance estimate'));
-  pending.appendChild(phd);
-  pending.appendChild(noteEl('Reading your food log…'));
-  wrap.appendChild(pending);
-
+  wrap.appendChild(await renderTDEE(s));
   wrap.appendChild(renderRecent());
   // The settings card that used to end this screen is now the You tab's gear.
 
-  root.replaceChildren(wrap);
-  fillTDEE(pending, s, seq);
-}
-
-// A render that started after this one owns the screen; a read landing late
-// must not swap a stale card into it.
-async function fillTDEE(placeholder, s, seq) {
-  let card;
-  try { card = await renderTDEE(s); } catch { return; }
-  if (seq !== renderSeq || !placeholder.isConnected) return;
-  placeholder.replaceWith(card);
+  root.appendChild(wrap);
 }
 
 /* ---------- chart ---------- */
@@ -312,21 +163,15 @@ function renderChart(s) {
 
   const avg = movingAvg(source).filter(p => parseKey(p.d).getTime() > since);
 
-  const tr = trendRate(entries);
   card.appendChild(lineChart(
     avg.map(p => ({ t: parseKey(p.d).getTime(), v: p.lb })),
     {
-      color: 'var(--s-weight)',
+      color: 'var(--p-yellow)',
       height: 178,
       unit: 'lb',
-      minSpan: 4,
       dots: false,
       markMax: false,
-      scatter: raw.map(e => ({ t: e.t, v: e.lb })),
-      scrub: { line: '7-day avg', scatter: useAdj ? 'normalised' : 'weigh-ins' },
-      refs: Number(targets.goalLb) > 0 ? [{ v: Number(targets.goalLb), label: 'goal ' + r1(Number(targets.goalLb)) }] : [],
-      label: 'Body weight, last ' + (range === 365 ? 'year' : range + ' days'),
-      describe: tr.rateWk != null ? 'Trending ' + (tr.rateWk < 0 ? 'down ' : 'up ') + r1(Math.abs(tr.rateWk)) + ' pounds a week' : ''
+      scatter: raw.map(e => ({ t: e.t, v: e.lb }))
     }
   ));
 
@@ -382,7 +227,7 @@ function renderTOD() {
     const hr = pk.h === 0 ? '12am' : pk.h === 12 ? '12pm' : (pk.h % 12) + (pk.h < 12 ? 'am' : 'pm');
     const big = el('div', 'load-num num', '+' + r1(pk.lb));
     big.style.fontSize = '28px';
-    big.style.color = 'var(--s-weight)';
+    big.style.color = 'var(--p-yellow)';
     card.appendChild(big);
     card.appendChild(el('div', 'eyebrow', 'lb heavier by ' + hr));
 
@@ -421,8 +266,8 @@ async function renderTDEE(s) {
   // Fuel only draws its marks off this estimate when nothing is pinned
   // (food.js:565) — and setup writes a starting number there for everybody who
   // did not skip it, so "Fuel uses this" is false more often than it is true.
-  targets = (await read('food/targets', null)) || {};
-  const pinned = Number(targets.maint) > 0 ? Math.round(Number(targets.maint)) : null;
+  const t = (await read('food/targets', null)) || {};
+  const pinned = Number(t.maint) > 0 ? Math.round(Number(t.maint)) : null;
 
   if (m.tdee == null) {
     card.appendChild(noteEl('Needs ' + m.need.join(' and ') +

@@ -21,7 +21,7 @@ import { firebaseConfig } from './firebase-config.js';
 // browser is holding even one stale file, the import fails and this whole tab
 // renders blank with no error the user can see. That is exactly what happened
 // on the first deploy of this tab. The heat map below is therefore local.
-import { barChart, emptyChart, ring } from './analytics.js';
+import { barChart, emptyChart } from './analytics.js';
 import { bump } from './usage.js';
 import { $, el, svgEl, sheet, toast, noteEl, confirmSheet, swipeToDelete,
          segmented, compact, copyText, parseKey, fmtDate, fmtDateFull, LIMITS, within } from './ui.js';
@@ -55,7 +55,7 @@ export async function initSteps() {
    Same grid as the training one in analytics.js, over any {dateKey: number}.
    Deliberately duplicated rather than shared — see the import note above. */
 function heatMap(byDay, opts = {}) {
-  const { days = 91, color = 'var(--s-steps)' } = opts;
+  const { days = 91, color = 'var(--p-green)' } = opts;
   const max = Math.max(1, ...Object.values(byDay));
   const cols = Math.ceil(days / 7);
   const CELL = 9, GAP = 2.5;
@@ -67,14 +67,12 @@ function heatMap(byDay, opts = {}) {
   start.setDate(start.getDate() - (days - 1));
   start.setDate(start.getDate() - start.getDay());   // align to a Sunday
 
-  let active = 0;
   for (let c = 0; c < cols; c++) {
     for (let row = 0; row < 7; row++) {
       const d = new Date(start);
       d.setDate(d.getDate() + c * 7 + row);
       if (d.getTime() > Date.now() + DAY) continue;
       const v = byDay[todayKey(d)] || 0;
-      if (v) active++;
       const op = v ? (0.28 + 0.72 * Math.min(1, v / max)) : 0;
       svg.appendChild(svgEl('rect', {
         x: (c * (CELL + GAP)).toFixed(1), y: (row * (CELL + GAP)).toFixed(1),
@@ -84,10 +82,6 @@ function heatMap(byDay, opts = {}) {
       }));
     }
   }
-  // The same sentence analytics.js gives its heat strip; this copy is local
-  // for the reason in the import note above.
-  svg.setAttribute('role', 'img');
-  svg.setAttribute('aria-label', 'Steps, last ' + days + ' days: ' + active + (active === 1 ? ' day' : ' days') + ' logged.');
   return svg;
 }
 
@@ -183,21 +177,14 @@ function renderToday() {
   const card = el('div', 'card');
 
   const row = el('div', 'st-hero');
-  // Third distinct shape in the app on purpose: Fuel is a bar, Water is a
-  // filling vessel, this is an arc. The shared ring closes at 100% rather than
-  // lapping itself; the caption under the number carries the overshoot.
-  row.appendChild(ring(n / g, {
-    size: 132, thickness: 11, cls: 'st-ring', label: 'Steps today',
-    color: n >= g ? 'var(--ok)' : 'var(--s-steps)',
-    top: n.toLocaleString(), sub: Math.round(n / g * 100) + '% of ' + compact(g)
-  }));
+  row.appendChild(ring(n / g, n, g));
 
   const side = el('div', 'st-hero-side');
   const left = Math.max(0, g - n);
   side.appendChild(el('div', 'eyebrow', n >= g ? 'goal met' : 'to go'));
   const big = el('div', 'load-num num', (n >= g ? n - g : left).toLocaleString());
   big.style.fontSize = '26px';
-  big.style.color = n >= g ? 'var(--ok)' : 'var(--chalk)';
+  big.style.color = n >= g ? 'var(--good)' : 'var(--chalk)';
   side.appendChild(big);
   side.appendChild(el('div', 'st-side-lbl', n >= g ? 'steps past goal' : 'steps'));
 
@@ -219,6 +206,50 @@ function renderToday() {
   ctl.appendChild(set);
   card.appendChild(ctl);
   return card;
+}
+
+/* ---------- the ring ----------
+   Third distinct shape in the app on purpose: Fuel is a bar, Water is a
+   filling vessel, this is an arc. You should know which screen you're on from
+   across the room. */
+function ring(frac, n, g) {
+  const S = 132, R = 54, C = 2 * Math.PI * R, mid = S / 2;
+  const svg = svgEl('svg', { viewBox: `0 0 ${S} ${S}`, class: 'st-ring' });
+
+  svg.appendChild(svgEl('circle', {
+    cx: mid, cy: mid, r: R, fill: 'none',
+    stroke: 'var(--collar)', 'stroke-width': 11
+  }));
+
+  const over = frac > 1;
+  const shown = Math.max(0, Math.min(1, frac));
+  if (shown > 0) {
+    svg.appendChild(svgEl('circle', {
+      cx: mid, cy: mid, r: R, fill: 'none',
+      stroke: over ? 'var(--good)' : 'var(--p-green)',
+      'stroke-width': 11, 'stroke-linecap': 'round',
+      'stroke-dasharray': `${(C * shown).toFixed(1)} ${C.toFixed(1)}`,
+      transform: `rotate(-90 ${mid} ${mid})`
+    }));
+  }
+  // A second, brighter arc for the part past the goal.
+  if (over) {
+    const extra = Math.min(1, frac - 1);
+    svg.appendChild(svgEl('circle', {
+      cx: mid, cy: mid, r: R, fill: 'none',
+      stroke: 'var(--p-yellow)', 'stroke-width': 11, 'stroke-linecap': 'round',
+      'stroke-dasharray': `${(C * extra).toFixed(1)} ${C.toFixed(1)}`,
+      transform: `rotate(-90 ${mid} ${mid})`
+    }));
+  }
+
+  const t1 = svgEl('text', { x: mid, y: mid - 2, class: 'st-ring-n', 'text-anchor': 'middle' });
+  t1.textContent = n.toLocaleString();
+  svg.appendChild(t1);
+  const t2 = svgEl('text', { x: mid, y: mid + 16, class: 'st-ring-s', 'text-anchor': 'middle' });
+  t2.textContent = Math.round(frac * 100) + '% of ' + compact(g);
+  svg.appendChild(t2);
+  return svg;
 }
 
 /* ---------- trend ---------- */
@@ -252,18 +283,17 @@ function renderTrend() {
       bars.push({
         label: d.toLocaleDateString('en-US', { month: 'narrow' }),
         v: Math.round(mean(vals)),
-        color: mean(vals) >= goal() ? 'var(--ok)' : 'var(--s-steps)'
+        color: mean(vals) >= goal() ? 'var(--good)' : 'var(--p-green)'
       });
     }
   } else {
     bars = keysBack(range).map(k => ({
       label: range <= 7 ? parseKey(k).toLocaleDateString('en-US', { weekday: 'narrow' }) : '',
       v: stepsOn(k),
-      color: stepsOn(k) >= goal() ? 'var(--ok)' : 'var(--s-steps)'
+      color: stepsOn(k) >= goal() ? 'var(--good)' : 'var(--p-green)'
     }));
   }
-  card.appendChild(barChart(bars, { height: 170, color: 'var(--s-steps)', showValues: range <= 7,
-    label: range === 365 ? 'Steps, monthly averages' : 'Steps by day, last ' + range + ' days' }));
+  card.appendChild(barChart(bars, { height: 170, color: 'var(--p-green)', showValues: range <= 7 }));
 
   const foot = el('div', 'chart-foot');
   foot.appendChild(el('span', 'num', range === 365 ? 'monthly average' : 'daily'));
@@ -296,7 +326,7 @@ function renderStats() {
   r1.append(
     cell(vals.length ? compact(Math.round(mean(vals))) : '–', 'Daily avg'),
     cell(vals.length ? compact(vals.reduce((s, x) => s + x, 0)) : '–', 'Total'),
-    cell(String(hit), 'Goal days', hit ? 'var(--ok)' : null)
+    cell(String(hit), 'Goal days', hit ? 'var(--good)' : null)
   );
   card.appendChild(r1);
 
@@ -313,7 +343,7 @@ function renderStats() {
     cell(bestK ? compact(stepsOn(bestK)) : '–', bestK ? 'Best · ' + fmtDate(bestK) : 'Best day'),
     cell(all.length ? compact(Math.round(mean(all.map(stepsOn)))) : '–', 'All-time avg'),
     cell(delta == null ? '–' : (delta > 0 ? '+' : '') + Math.round(delta) + '%', 'vs last week',
-         delta == null ? null : delta >= 0 ? 'var(--ok)' : 'var(--caution)')
+         delta == null ? null : delta >= 0 ? 'var(--good)' : 'var(--warn)')
   );
   card.appendChild(r2);
   return card;
@@ -362,7 +392,7 @@ function renderConsistency() {
     card.appendChild(noteEl('Thirteen weeks of days, darker where you walked more.'));
     return card;
   }
-  card.appendChild(heatMap(byDay, { days: 91, color: 'var(--s-steps)' }));
+  card.appendChild(heatMap(byDay, { days: 91, color: 'var(--p-green)' }));
   card.appendChild(noteEl('Thirteen weeks — darker is more. Same grid as your training heat map, so the two read the same way.'));
   return card;
 }
@@ -384,9 +414,9 @@ function renderWeekdays() {
   const bars = buckets.map((b, i) => ({
     label: names[i],
     v: Math.round(mean(b)),
-    color: mean(b) >= goal() ? 'var(--ok)' : 'var(--s-steps)'
+    color: mean(b) >= goal() ? 'var(--good)' : 'var(--p-green)'
   }));
-  card.appendChild(barChart(bars, { height: 140, color: 'var(--s-steps)', showValues: true, label: 'Steps by day of the week' }));
+  card.appendChild(barChart(bars, { height: 140, color: 'var(--p-green)', showValues: true }));
 
   const top = bars.reduce((b, x, i) => x.v > bars[b].v ? i : b, 0);
   const low = bars.reduce((b, x, i) => (x.v > 0 && x.v < bars[b].v) || bars[b].v === 0 ? i : b, 0);
@@ -412,7 +442,7 @@ function renderRecent() {
     const row = el('div', 'st-row');
     row.appendChild(el('span', 'st-row-d', k === todayKey() ? 'Today' : fmtDateFull(k)));
     const v = el('span', 'st-row-n num', n ? n.toLocaleString() : '–');
-    if (n >= goal()) v.style.color = 'var(--ok)';
+    if (n >= goal()) v.style.color = 'var(--good)';
     row.appendChild(v);
     const pct = el('span', 'st-row-p', n ? Math.round(n / goal() * 100) + '%' : '');
     row.appendChild(pct);
