@@ -26,7 +26,7 @@
 
 import { read, write, uid, todayKey } from './store.js';
 import { autoTargets } from './tdee.js';
-import { el, noteEl, segmented, sheet, r1, toast } from './ui.js';
+import { el, noteEl, segmented, sheet, r1, toast, LIMITS, within } from './ui.js';
 import { isStandalone, platform } from './usage.js';
 
 // Stays 1 on purpose. onboardingState() below reads `done` and never reads
@@ -374,13 +374,13 @@ export function runSetup(user) {
       body.appendChild(el('h1', 'ob-title', 'What do you weigh?'));
       body.appendChild(noteEl('This becomes your first weigh-in. Rack learns your real maintenance calories from how this number moves against what you eat, so the more often you step on the scale, the better every other number gets.'));
 
-      const lb = numInput(a.lb || '', { min: 50, max: 700, placeholder: '185' });
+      const lb = numInput(a.lb || '', { min: LIMITS.lb[0], max: LIMITS.lb[1], placeholder: '185' });
       lb.oninput = e => a.lb = parseFloat(e.target.value) || 0;
       setTimeout(() => lb.focus(), 120);
       body.appendChild(field('Current weight (lb)', lb));
 
       nav({
-        canNext: () => (a.lb >= 50 && a.lb <= 700) ? true : 'Enter your weight in pounds.'
+        canNext: () => within(a.lb, LIMITS.lb) ? true : 'Enter your weight in pounds.'
       });
     }
 
@@ -461,9 +461,12 @@ export function runSetup(user) {
 
       const adj = el('details', 'ob-adjust');
       adj.appendChild(el('summary', null, 'Change these'));
-      const cIn = numInput(a.cal); cIn.oninput = e => a.cal = parseInt(e.target.value) || a.cal;
-      const pIn = numInput(a.p);   pIn.oninput = e => a.p   = parseInt(e.target.value) || a.p;
-      const fIn = numInput(a.f);   fIn.oninput = e => a.f   = parseInt(e.target.value) || a.f;
+      const cIn = numInput(a.cal, { min: LIMITS.cal[0], max: LIMITS.cal[1] });
+      const pIn = numInput(a.p,   { min: LIMITS.targetG[0], max: LIMITS.targetG[1] });
+      const fIn = numInput(a.f,   { min: LIMITS.targetG[0], max: LIMITS.targetG[1] });
+      cIn.oninput = e => a.cal = parseInt(e.target.value) || a.cal;
+      pIn.oninput = e => a.p   = parseInt(e.target.value) || a.p;
+      fIn.oninput = e => a.f   = parseInt(e.target.value) || a.f;
       adj.append(field('Calories', cIn), field('Protein (g)', pIn), field('Fat (g)', fIn));
       body.appendChild(adj);
 
@@ -471,7 +474,15 @@ export function runSetup(user) {
         ' fl oz · step goal ' + (ACTIVITY.find(x => x[0] === a.activity) || ACTIVITY[1])[3].toLocaleString() +
         '. Both adjustable on their own tabs.'));
 
-      nav({ nextLabel: 'Start using Rack', onNext: () => finish(false) });
+      nav({
+        nextLabel: 'Start using Rack',
+        canNext: () => {
+          if (!within(a.cal, LIMITS.cal)) return 'Calories should be between ' + LIMITS.cal[0].toLocaleString() + ' and ' + LIMITS.cal[1].toLocaleString() + '.';
+          if (!within(a.p, LIMITS.targetG) || !within(a.f, LIMITS.targetG)) return 'Check the protein and fat grams.';
+          return true;
+        },
+        onNext: () => finish(false)
+      });
     }
 
     /* ---- write everything ---- */

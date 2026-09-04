@@ -96,6 +96,54 @@ export function compact(n) {
   return String(Math.round(n));
 }
 
+/* ---------- limits ----------
+   The most a typed number is allowed to be. Nothing here is a nudge toward a
+   sensible value — that is what the target sheets and the You tab are for.
+   These only stop a slipped digit, or a bored thumb, from writing a number the
+   charts and the weight model then have to live with. Each ceiling sits
+   comfortably past the real-world extreme so nobody who is actually training
+   ever meets one:
+     lb          heaviest living people are in the 600s; 1,400 is the record,
+                 and nobody at that weight is logging lifts
+     steps       a 100-mile day is roughly 200k
+     waterMl     a US gallon is 3,785 ml; 15 l a day is Tour-de-France territory
+     cal         the famous Phelps figure is 10,000 kcal; sled-dog racers ~12,000
+     entryCal    one food — a whole pizza is ~2,500, a family cake ~8,000
+     setW        the leg-press "records" people post are ~2,300 lb
+     reps        a single set of 1,000 pushups is a stunt, not a workout
+   Each pair is [min, max]. clamp() pulls a value inside; within() just asks. */
+export const LIMITS = {
+  lb:          [50, 700],      // bodyweight and goal weight
+  steps:       [0, 300000],    // one day's total
+  stepGoal:    [500, 100000],
+  waterMl:     [1, 5000],      // one drink or one preset
+  waterGoalMl: [250, 15000],
+  cal:         [500, 15000],   // a daily target, a floor, or maintenance
+  targetG:     [0, 1000],      // protein or fat target, grams
+  entryCal:    [0, 20000],     // one logged food or one library item
+  entryG:      [0, 5000],      // one macro on one food, grams
+  micro:       [0, 100000],    // fibre in g, sodium in mg — one bound covers both
+  servG:       [0.1, 10000],   // grams in one serving
+  amount:      [0, 10000],     // servings or grams being logged
+  mult:        [0.05, 100],    // the "× how much" multiplier
+  setW:        [0, 5000],      // lb on the bar
+  reps:        [0, 1000],
+  durMin:      [0, 1440],      // a workout can't outlast the day
+  rest:        [0, 1800],      // default rest, seconds
+  rateWk:      [-5, 5],        // lb per week
+  perLb:       [0, 3]          // grams of protein or fat per lb
+};
+export const clamp  = (v, [lo, hi]) => Math.min(hi, Math.max(lo, v));
+export const within = (v, [lo, hi]) => Number.isFinite(v) && v >= lo && v <= hi;
+// A set's weight and reps are kept as the strings the inputs hold, and '' has
+// to survive — it is how an unfilled set is told apart from a logged zero.
+// Anything else is pulled inside the limit before it is stored.
+export function setNum(v, lim, whole = false) {
+  if (String(v).trim() === '') return '';
+  const n = whole ? parseInt(v) : parseFloat(v);
+  return String(clamp(Number.isFinite(n) ? n : 0, lim));
+}
+
 /* ---------- dates ---------- */
 // Everything parses date keys at T12:00:00 local. Parsing 'YYYY-MM-DD' bare
 // gives UTC midnight, which lands on the previous day in western timezones.

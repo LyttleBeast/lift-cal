@@ -6,7 +6,7 @@ import { weightStats, dailyMeans as meansOf, movingAvg, maintenance,
          refreshModel, modelState, adjustedDays, peakOffset, trendRate } from './tdee.js';
 import { lineChart } from './analytics.js';
 import { bump } from './usage.js';
-import { $, el, toast, noteEl, confirmSheet, r1, parseKey, fmtDateFull } from './ui.js';
+import { $, el, toast, noteEl, confirmSheet, r1, parseKey, fmtDateFull, LIMITS, within } from './ui.js';
 
 let entries = {};      // id -> { lb, t }
 let range   = 30;      // chart window, days
@@ -66,12 +66,13 @@ export async function render() {
   const row = el('div', 'qty-row');
   const inp = el('input');
   inp.type = 'number'; inp.inputMode = 'decimal'; inp.step = '0.1';
+  inp.min = LIMITS.lb[0]; inp.max = LIMITS.lb[1];
   inp.placeholder = s.latest ? String(r1(s.latest.lb)) : '208.0';
   const btn = el('button', 'btn btn-primary', 'Log');
   btn.style.flex = '0 0 auto';
   btn.onclick = async () => {
     const lb = parseFloat(inp.value);
-    if (!lb || lb < 60 || lb > 600) { toast('Enter a weight in pounds'); return; }
+    if (!within(lb, LIMITS.lb)) { toast('Enter a weight between ' + LIMITS.lb[0] + ' and ' + LIMITS.lb[1] + ' lb'); return; }
     const id = 'wt' + Date.now().toString(36);
     entries[id] = { lb: r1(lb), t: Date.now() };
     await write('weight/entries', entries);

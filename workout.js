@@ -2,7 +2,7 @@ import { GROUPS, GROUP_ORDER } from './exercises.js';
 import { read, write, watch, LS, todayKey, monthKey } from './store.js';
 import {
   $, el, sheet, toast, noteEl, confirmSheet, swipeToDelete,
-  fmtDate, fmtDateFull, fmtDuration, compact, parseKey
+  fmtDate, fmtDateFull, fmtDuration, compact, parseKey, clamp, setNum, LIMITS
 } from './ui.js';
 import {
   allSessions, invalidate, detectPRs, sessionMilestones, isWorking, groupColor
@@ -582,7 +582,7 @@ function renderEditMeta() {
   tIn.type = 'number'; tIn.inputMode = 'numeric';
   tIn.value = Math.round((session._edit.durationSec || 0) / 60);
   tIn.onchange = e => {
-    const m = Math.max(0, parseInt(e.target.value) || 0);
+    const m = clamp(parseInt(e.target.value) || 0, LIMITS.durMin);
     session._edit.durationSec = m * 60;
     e.target.value = m;
   };
@@ -667,12 +667,12 @@ function renderSet(ex, exIdx, s, i) {
   // box in would be a number you forgot to change reading as a number you lifted.
   const w = el('input'); w.type = 'number'; w.inputMode = 'decimal';
   w.placeholder = s.tw ? String(s.tw) : '–';
-  w.value = s.w; w.onchange = e => { s.w = e.target.value; persistSession(); render(); };
+  w.value = s.w; w.onchange = e => { s.w = setNum(e.target.value, LIMITS.setW); persistSession(); render(); };
   row.appendChild(w);
 
   const r = el('input'); r.type = 'number'; r.inputMode = 'numeric';
   r.placeholder = s.tr ? String(s.tr) : '–';
-  r.value = s.r; r.onchange = e => { s.r = e.target.value; persistSession(); render(); };
+  r.value = s.r; r.onchange = e => { s.r = setNum(e.target.value, LIMITS.reps, true); persistSession(); render(); };
   row.appendChild(r);
 
   const e1 = e1rm(s.w, s.r);

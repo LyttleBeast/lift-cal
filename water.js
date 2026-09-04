@@ -17,7 +17,7 @@
 import { read, write, watch, todayKey } from './store.js';
 import { bump } from './usage.js';
 import { el, svgEl, sheet, toast, noteEl, confirmSheet, segmented,
-         swipeToDelete, r1, trimNum, parseKey } from './ui.js';
+         swipeToDelete, r1, trimNum, parseKey, LIMITS, within } from './ui.js';
 
 /* ---------- units ---------- */
 export const UNITS = {
@@ -293,6 +293,7 @@ function openWaterSheet() {
     const v = parseFloat(inp.value);
     if (!(v > 0)) { toast('Enter an amount'); return; }
     const ml = fromDisplay(v, unit);
+    if (!within(ml, LIMITS.waterMl)) { toast('That’s more than ' + fmtWater(LIMITS.waterMl[1], unit) + ' in one go'); return; }
     close();
     await addWater(ml, 'manual');
     toast('+ ' + fmtWater(ml, unit));
@@ -384,7 +385,7 @@ export function openWaterSettings(latestLb, onSaved) {
         const rm = el('button', 'wpe-del', '×');
         rm.setAttribute('aria-label', 'Remove');
         rm.onclick = () => {
-          const next = rows.map(x => ({ label: x.nm.value.trim() || 'Drink', ml: fromDisplay(parseFloat(x.am.value) || 0, unit) }));
+          const next = rows.map(x => ({ label: x.nm.value.trim() || 'Drink', ml: Math.min(LIMITS.waterMl[1], fromDisplay(parseFloat(x.am.value) || 0, unit)) }));
           next.splice(i, 1);
           settings.presets = next.filter(x => x.ml > 0);
           paint();
@@ -401,7 +402,7 @@ export function openWaterSettings(latestLb, onSaved) {
   addRow.onclick = () => {
     settings.presets = rows.map(x => ({
       label: x.nm.value.trim() || 'Drink',
-      ml: fromDisplay(parseFloat(x.am.value) || 0, unit)
+      ml: Math.min(LIMITS.waterMl[1], fromDisplay(parseFloat(x.am.value) || 0, unit))
     })).filter(x => x.ml > 0).concat([{ label: 'Drink', ml: 500 }]);
     paint();
   };
@@ -416,9 +417,13 @@ export function openWaterSettings(latestLb, onSaved) {
   save.style.marginTop = '14px';
   save.onclick = async () => {
     const goal = fromDisplay(parseFloat(gi.value) || 0, unit);
+    if (goal > 0 && !within(goal, LIMITS.waterGoalMl)) {
+      toast('Pick a goal between ' + fmtWater(LIMITS.waterGoalMl[0], unit) + ' and ' + fmtWater(LIMITS.waterGoalMl[1], unit));
+      return;
+    }
     const next = rows.map(x => ({
       label: x.nm.value.trim() || 'Drink',
-      ml: fromDisplay(parseFloat(x.am.value) || 0, unit)
+      ml: Math.min(LIMITS.waterMl[1], fromDisplay(parseFloat(x.am.value) || 0, unit))
     })).filter(x => x.ml > 0);
     settings = {
       goalMl: goal > 0 ? goal : DEFAULTS.goalMl,

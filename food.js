@@ -18,7 +18,7 @@ import { maintenance, calorieZones, zoneOf, refreshModel,
 import { initWater, loadWaterDay, renderWater, openWaterSettings } from './water.js';
 import { OWNER_UID } from './firebase-config.js';
 import { $, el, svgEl, sheet, toast, noteEl, confirmSheet, copyText, readClipboard,
-         segmented, r1, trimNum } from './ui.js';
+         segmented, r1, trimNum, LIMITS, clamp, within } from './ui.js';
 import { shrinkImage, estimatePhoto, estimateText, quota,
          proxyUrl, setProxyUrl, hasProxy } from './ai.js';
 import { initRecall, lookup as recallLookup, remember as recallRemember,
@@ -902,8 +902,8 @@ function openEntry(e) {
         const i = el('input'); i.type = 'number'; i.inputMode = 'decimal'; i.value = e[key] || 0;
         i.onchange = ev => {
           e[key] = key === 'cal'
-            ? Math.round(parseFloat(ev.target.value) || 0)
-            : r1(parseFloat(ev.target.value) || 0);
+            ? Math.round(clamp(parseFloat(ev.target.value) || 0, LIMITS.entryCal))
+            : r1(clamp(parseFloat(ev.target.value) || 0, LIMITS.entryG));
           // A typed number is the new truth, so the multiplier bookkeeping
           // that was tracking the old one has to go.
           delete e.qtyBase; delete e.mult; delete e.baseN;
@@ -971,8 +971,8 @@ function multControl(e, onChange) {
   const apply = () => { setEntryMult(e, m); show(); onChange(); };
 
   minus.onclick = () => { m = Math.max(0.25, r1(m - 0.25)); apply(); };
-  plus.onclick  = () => { m = r1(m + 0.25); apply(); };
-  inp.onchange  = ev => { m = Math.max(0.05, parseFloat(ev.target.value) || 1); apply(); };
+  plus.onclick  = () => { m = Math.min(LIMITS.mult[1], r1(m + 0.25)); apply(); };
+  inp.onchange  = ev => { m = clamp(parseFloat(ev.target.value) || 1, LIMITS.mult); apply(); };
 
   box.append(row, preview);
   show();   // opening the sheet changes nothing, so don't write on build
@@ -1245,16 +1245,18 @@ function openItemEdit(item, onDone) {
     const nm = name.input.value.trim();
     if (!nm) { toast('Give it a name'); name.input.focus(); return; }
 
-    const kcal = Math.round(parseFloat(cal.input.value) || 0);
-    if (!kcal) { toast('It needs calories'); cal.input.focus(); return; }
+    const mac = readMacros(cal.input, pr.input, cb.input, ft.input);
+    if (!mac) return;
+    if (!mac.cal) { toast('It needs calories'); cal.input.focus(); return; }
 
     const gramsVal = parseFloat(grams.input.value);
+    if (gramsVal > LIMITS.servG[1]) { toast('A serving can’t be more than ' + LIMITS.servG[1].toLocaleString() + ' g'); grams.input.focus(); return; }
     const lbl = label.input.value.trim();
 
     const micro = {};
     MICROS.forEach(([k]) => {
       const v = parseFloat(microIn[k].value);
-      if (!isNaN(v)) micro[k] = r1(v);
+      if (!isNaN(v)) micro[k] = r1(clamp(v, LIMITS.micro));
     });
 
     items[draft.id] = {
@@ -1266,12 +1268,7 @@ function openItemEdit(item, onDone) {
       serv: (lbl || gramsVal > 0)
         ? { label: lbl || 'serving', grams: gramsVal > 0 ? gramsVal : null }
         : null,
-      n: {
-        cal: kcal,
-        p: r1(parseFloat(pr.input.value) || 0),
-        c: r1(parseFloat(cb.input.value) || 0),
-        f: r1(parseFloat(ft.input.value) || 0)
-      },
+      n: mac,
       micro: Object.keys(micro).length ? micro : null,
       last: draft.last || Date.now()
     };
@@ -2132,12 +2129,11 @@ function openProposedEdit(e, onDone) {
   const done = el('button', 'btn btn-primary btn-block btn-lg', 'Done');
   done.style.marginTop = '12px';
   done.onclick = () => {
+    const mac = readMacros(cal.input, p.input, c.input, fat.input);
+    if (!mac) return;
     e.name = name.input.value.trim() || e.name;
     e.qty  = qty.input.value.trim();
-    e.cal  = Math.round(parseFloat(cal.input.value) || 0);
-    e.p    = r1(parseFloat(p.input.value) || 0);
-    e.c    = r1(parseFloat(c.input.value) || 0);
-    e.f    = r1(parseFloat(fat.input.value) || 0);
+    e.cal = mac.cal; e.p = mac.p; e.c = mac.c; e.f = mac.f;
     if (chk.checked) {
       const id = 'u' + Date.now().toString(36);
       items[id] = { id, ...mkItem(e.name, '', 'serv', { label: e.qty || 'serving' },
@@ -2264,8 +2260,8 @@ function portionControl(item, startAmt, startUnit, onChange) {
     }
   }
   minus.onclick = () => { amt = Math.max(step(), r1(amt - step())); paint(); };
-  plus.onclick  = () => { amt = r1(amt + step()); paint(); };
-  amtIn.onchange = ev => { amt = Math.max(0, parseFloat(ev.target.value) || 0); paint(); };
+  plus.onclick  = () => { amt = Math.min(LIMITS.amount[1], r1(amt + step())); paint(); };
+  amtIn.onchange = ev => { amt = clamp(parseFloat(ev.target.value) || 0, LIMITS.amount); paint(); };
 
   box.append(unitRow, stepRow, preview);
   paint();
@@ -2369,12 +2365,10 @@ function openManual(mealId, prefill, onPick) {
   add.onclick = () => {
     const nm = name.input.value.trim();
     if (!nm) { toast('Give it a name'); return; }
+    const mac = readMacros(cal.input, p.input, c.input, fat.input);
+    if (!mac) return;
     const entry = {
-      name: nm, qty: qty.input.value.trim(),
-      cal: Math.round(parseFloat(cal.input.value) || 0),
-      p: r1(parseFloat(p.input.value) || 0),
-      c: r1(parseFloat(c.input.value) || 0),
-      f: r1(parseFloat(fat.input.value) || 0),
+      name: nm, qty: qty.input.value.trim(), ...mac,
       meal, src: prefill ? prefill.src || 'manual' : 'manual'
     };
     if (prefill && prefill.micro) entry.micro = prefill.micro;
@@ -2836,10 +2830,10 @@ export function openTargets(onSaved) {
 
   const readAuto = () => ({
     on: true,
-    rateWk: parseFloat(ra.input.value) || 0,
-    pPerLb: Math.max(0, parseFloat(pl.input.value) || 0),
-    fPerLb: Math.max(0, parseFloat(fl.input.value) || 0),
-    floor:  parseInt(fo.input.value) || 0,
+    rateWk: clamp(parseFloat(ra.input.value) || 0, LIMITS.rateWk),
+    pPerLb: clamp(parseFloat(pl.input.value) || 0, LIMITS.perLb),
+    fPerLb: clamp(parseFloat(fl.input.value) || 0, LIMITS.perLb),
+    floor:  parseInt(fo.input.value) > 0 ? clamp(parseInt(fo.input.value), LIMITS.cal) : 0,
     lastAdj: auto.lastAdj || 0
   });
 
@@ -2933,8 +2927,16 @@ export function openTargets(onSaved) {
   save.style.marginTop = '14px';
   save.onclick = async () => {
     const maint = parseInt(mi.value) > 0 ? parseInt(mi.value) : null;
+    if (maint != null && !within(maint, LIMITS.cal)) {
+      toast('Maintenance should be between ' + LIMITS.cal[0].toLocaleString() + ' and ' + LIMITS.cal[1].toLocaleString() + ' kcal');
+      return;
+    }
     const g = parseFloat(gw.value);
-    const goalLb = g >= 50 && g <= 700 ? Math.round(g * 10) / 10 : null;
+    if (gw.value.trim() && !within(g, LIMITS.lb)) {
+      toast('Goal weight should be between ' + LIMITS.lb[0] + ' and ' + LIMITS.lb[1] + ' lb');
+      return;
+    }
+    const goalLb = within(g, LIMITS.lb) ? Math.round(g * 10) / 10 : null;
 
     if (mode === 'auto') {
       const a = readAuto();
@@ -2956,11 +2958,20 @@ export function openTargets(onSaved) {
       return;
     }
 
+    const tCal = parseInt(tc.input.value) || 2700,
+          tP   = parseInt(tp.input.value) || 215,
+          tF   = parseInt(tf.input.value) || 80;
+    if (!within(tCal, LIMITS.cal)) {
+      toast('Calories should be between ' + LIMITS.cal[0].toLocaleString() + ' and ' + LIMITS.cal[1].toLocaleString());
+      return;
+    }
+    if (!within(tP, LIMITS.targetG) || !within(tF, LIMITS.targetG)) {
+      toast('Protein and fat can’t be more than ' + LIMITS.targetG[1].toLocaleString() + ' g');
+      return;
+    }
     targets = {
       ...targets,
-      cal: parseInt(tc.input.value) || 2700,
-      p: parseInt(tp.input.value) || 215,
-      f: parseInt(tf.input.value) || 80,
+      cal: tCal, p: tP, f: tF,
       maint, goalLb,
       auto: { ...auto, on: false }
     };
@@ -3029,6 +3040,25 @@ export function openImportPaste() {
   sh.appendChild(cancel);
 }
 
+/* The four macro inputs every food sheet shares, read as one. A number past
+   the ceiling stops the save with a toast instead of being trimmed quietly: a
+   typed 25,000 is a slipped digit far more often than a meal, and trimming it
+   would log 20,000 without a word. Below zero is simply zero. Imports from the
+   estimator go through normalizeImport instead, which does trim — there is no
+   input to send anyone back to. */
+function readMacros(cal, p, c, f) {
+  const num = (i, whole) => { const v = Math.max(0, parseFloat(i.value) || 0); return whole ? Math.round(v) : r1(v); };
+  const mac = { cal: num(cal, true), p: num(p), c: num(c), f: num(f) };
+  if (!within(mac.cal, LIMITS.entryCal)) {
+    toast('One food can’t be more than ' + LIMITS.entryCal[1].toLocaleString() + ' kcal'); cal.focus(); return null;
+  }
+  const over = [p, c, f].find(i => !within(num(i), LIMITS.entryG));
+  if (over) {
+    toast('A macro can’t be more than ' + LIMITS.entryG[1].toLocaleString() + ' g'); over.focus(); return null;
+  }
+  return mac;
+}
+
 function normalizeImport(data) {
   let list = [];
   if (Array.isArray(data)) list = data;
@@ -3038,16 +3068,16 @@ function normalizeImport(data) {
     const e = {
       name: String(x.name).slice(0, 80),
       qty: x.qty ? String(x.qty).slice(0, 40) : '',
-      cal: Math.round(parseFloat(x.cal) || 0),
-      p: r1(parseFloat(x.p) || 0),
-      c: r1(parseFloat(x.c) || 0),
-      f: r1(parseFloat(x.f) || 0),
+      cal: Math.round(clamp(parseFloat(x.cal) || 0, LIMITS.entryCal)),
+      p: r1(clamp(parseFloat(x.p) || 0, LIMITS.entryG)),
+      c: r1(clamp(parseFloat(x.c) || 0, LIMITS.entryG)),
+      f: r1(clamp(parseFloat(x.f) || 0, LIMITS.entryG)),
       meal: MEALS.some(m => m[0] === x.meal) ? x.meal : defaultMeal(),
       src: 'claude'
     };
     if (x.micro && typeof x.micro === 'object') {
       const mo = {};
-      MICROS.forEach(([k]) => { if (x.micro[k] != null) mo[k] = r1(parseFloat(x.micro[k]) || 0); });
+      MICROS.forEach(([k]) => { if (x.micro[k] != null) mo[k] = r1(clamp(parseFloat(x.micro[k]) || 0, LIMITS.micro)); });
       if (Object.keys(mo).length) e.micro = mo;
     }
     return e;

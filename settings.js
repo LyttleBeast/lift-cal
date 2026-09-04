@@ -15,7 +15,7 @@
 //
 // Sheets never nest. Every row that opens another sheet closes this one first.
 
-import { el, sheet, toast, noteEl, confirmSheet, segmented } from './ui.js';
+import { el, sheet, toast, noteEl, confirmSheet, segmented, LIMITS, clamp } from './ui.js';
 import { LS, uid, readExact, currentEmail, write, purgeDevice, logout } from './store.js';
 import { openTargets, openAiSettings, openRecallList, openImportPaste,
          foodTargets, latestLb, goalId, previewGoal, setGoal, goalFits } from './food.js';
@@ -150,7 +150,12 @@ export function openSettings(onEdit) {
   const restIn = el('input');
   restIn.id = 'restDef'; restIn.type = 'number'; restIn.inputMode = 'numeric';
   restIn.value = LS.get('restDefault', 150);
-  restIn.onchange = e => { LS.set('restDefault', parseInt(e.target.value) || 150); toast('Rest updated'); };
+  restIn.min = LIMITS.rest[0]; restIn.max = LIMITS.rest[1];
+  restIn.onchange = e => {
+    const r = clamp(parseInt(e.target.value) || 150, LIMITS.rest);
+    e.target.value = r;
+    LS.set('restDefault', r); toast('Rest updated');
+  };
   restRow.appendChild(restIn);
   train.appendChild(restRow);
 

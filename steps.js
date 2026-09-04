@@ -24,7 +24,7 @@ import { firebaseConfig } from './firebase-config.js';
 import { barChart, emptyChart } from './analytics.js';
 import { bump } from './usage.js';
 import { $, el, svgEl, sheet, toast, noteEl, confirmSheet, swipeToDelete,
-         segmented, compact, copyText, parseKey, fmtDate, fmtDateFull } from './ui.js';
+         segmented, compact, copyText, parseKey, fmtDate, fmtDateFull, LIMITS, within } from './ui.js';
 
 const DAY = 864e5;
 const DEFAULTS = { goal: 10000 };
@@ -483,14 +483,14 @@ function openSetSteps(k) {
 
   const row = el('div', 'qty-row');
   const inp = el('input');
-  inp.type = 'number'; inp.inputMode = 'numeric'; inp.min = '0';
+  inp.type = 'number'; inp.inputMode = 'numeric'; inp.min = '0'; inp.max = LIMITS.steps[1];
   inp.placeholder = String(goal());
   if (stepsOn(k)) inp.value = String(stepsOn(k));
   const go = el('button', 'btn btn-primary', 'Save');
   go.style.flex = '0 0 auto';
   go.onclick = async () => {
     const n = parseInt(inp.value);
-    if (!(n >= 0) || n > 300000) { toast('Enter a step count'); return; }
+    if (!within(n, LIMITS.steps)) { toast(n > 0 ? 'That’s more than ' + LIMITS.steps[1].toLocaleString() + ' steps in a day' : 'Enter a step count'); return; }
     close();
     bump('stepsSet');
     await setSteps(k, n);
@@ -526,6 +526,7 @@ export function openStepSettings(onSaved) {
   gf.appendChild(el('label', null, 'Daily goal'));
   const gi = el('input');
   gi.type = 'number'; gi.inputMode = 'numeric';
+  gi.min = LIMITS.stepGoal[0]; gi.max = LIMITS.stepGoal[1];
   gi.value = String(goal());
   gf.appendChild(gi);
   sh.appendChild(gf);
@@ -547,8 +548,13 @@ export function openStepSettings(onSaved) {
   const save = el('button', 'btn btn-primary btn-block', 'Save');
   save.style.marginTop = '10px';
   save.onclick = async () => {
-    const g = parseInt(gi.value);
-    settings = { ...settings, goal: g > 0 ? g : DEFAULTS.goal };
+    // Blank falls back to the default; a number has to be one a person could walk.
+    const g = gi.value.trim() ? parseInt(gi.value) : DEFAULTS.goal;
+    if (!within(g, LIMITS.stepGoal)) {
+      toast('Pick a goal between ' + LIMITS.stepGoal[0].toLocaleString() + ' and ' + LIMITS.stepGoal[1].toLocaleString());
+      return;
+    }
+    settings = { ...settings, goal: g };
     await write('settings/steps', settings);
     close(); render();
     if (onSaved) onSaved();

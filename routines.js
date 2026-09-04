@@ -15,7 +15,7 @@ import { read, write, watch } from './store.js';
 import { GROUPS, GROUP_ORDER } from './exercises.js';
 import { openPicker } from './picker.js';
 import { bump } from './usage.js';
-import { el, sheet, toast, noteEl, confirmSheet, swipeToDelete, fmtDate } from './ui.js';
+import { el, sheet, toast, noteEl, confirmSheet, swipeToDelete, fmtDate, setNum, LIMITS } from './ui.js';
 
 let routines = {};
 
@@ -252,13 +252,13 @@ function openEditor(draft, isNew, onStart) {
       const w = el('input');
       w.type = 'number'; w.inputMode = 'decimal'; w.placeholder = '–';
       w.value = s.tw != null ? s.tw : '';
-      w.onchange = e => { s.tw = e.target.value; };
+      w.onchange = e => { s.tw = setNum(e.target.value, LIMITS.setW); e.target.value = s.tw; };
       row.appendChild(w);
 
       const rr = el('input');
       rr.type = 'number'; rr.inputMode = 'numeric'; rr.placeholder = '–';
       rr.value = s.tr != null ? s.tr : '';
-      rr.onchange = e => { s.tr = e.target.value; };
+      rr.onchange = e => { s.tr = setNum(e.target.value, LIMITS.reps, true); e.target.value = s.tr; };
       row.appendChild(rr);
 
       row.appendChild(el('span'));
