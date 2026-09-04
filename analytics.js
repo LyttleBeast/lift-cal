@@ -844,6 +844,31 @@ export function donut(segments, opts = {}) {
 }
 
 /**
+ * One bar split by share — the month's working sets by muscle group. Linear
+ * on purpose: a length is read to within a few percent and a wedge angle is
+ * not, so the donut this replaced was misread about three times as often. The
+ * numbers belong in a legend beside it, not on the bar.
+ * segments: [{ label, v, color }]      opts: { label }
+ */
+export function splitBar(segments, opts = {}) {
+  const { label = 'Split' } = opts;
+  const total = segments.reduce((a, s) => a + (s.v > 0 ? s.v : 0), 0);
+  if (!total) return emptyChart('Nothing logged yet');
+  const bar = el('div', 'split-bar');
+  segments.forEach(s => {
+    if (!(s.v > 0)) return;
+    const seg = el('div', 'split-seg');
+    seg.style.flex = String(s.v);
+    seg.style.background = s.color;
+    bar.appendChild(seg);
+  });
+  bar.setAttribute('role', 'img');
+  bar.setAttribute('aria-label', label + ': ' + segments.filter(s => s.v > 0)
+    .map(s => s.label + ' ' + Math.round(s.v / total * 100) + '%').join(', ') + '.');
+  return bar;
+}
+
+/**
  * Consistency heat strip — one cell per day for the last N days.
  * Takes either a session list (shaded by volume, for Train's stats) or a
  * plain { dateKey: weight } map, which is how You draws "any day with anything

@@ -6,7 +6,7 @@
 
 import {
   allSessions, exerciseIndex, filterByRange, weeklyVolume, groupSplit,
-  topBy, prTimeline, isWorking, lineChart, barChart, donut, heatStrip,
+  topBy, prTimeline, isWorking, lineChart, barChart, splitBar, heatStrip,
   legend, emptyChart, groupColor, GROUPS, GROUP_ORDER
 } from './analytics.js';
 import { todayKey } from './store.js';
@@ -160,19 +160,21 @@ function renderOverview() {
   /* ---- muscle group split ---- */
   const split = groupSplit(inRange);
   if (split.length) {
-    const gc = card('Muscle group split');
-    const holder = el('div', 'donut-wrap');
     const totalSplitSets = split.reduce((a, s) => a + s.sets, 0);
-    holder.appendChild(donut(
+    const gc = card('Muscle group split', totalSplitSets + ' sets');
+    // The same bar You draws for the same data. It was a donut here, and a
+    // wedge is read far less accurately than a length (analytics.js splitBar).
+    gc.appendChild(splitBar(
       split.map(s => ({ label: GROUPS[s.group].label, v: s.sets, color: groupColor(s.group) })),
-      { centerTop: String(totalSplitSets), centerSub: 'sets' }
+      { label: 'Muscle group split' }
     ));
-    holder.appendChild(legend(split.map(s => ({
+    const lg = legend(split.map(s => ({
       label: GROUPS[s.group].label,
       color: groupColor(s.group),
       value: s.sets + '  ' + Math.round(s.sets / totalSplitSets * 100) + '%'
-    }))));
-    gc.appendChild(holder);
+    })));
+    lg.classList.add('legend-grid');
+    gc.appendChild(lg);
     gc.appendChild(noteEl('Counted by each exercise’s primary group.'));
     wrap.appendChild(gc);
   }
@@ -181,7 +183,7 @@ function renderOverview() {
   const freqCard = card('Sessions per week');
   freqCard.appendChild(barChart(
     weeks.map(w => ({ label: fmtDate(w.key).replace(/ /, ' '), v: w.sessions })),
-    { color: 'var(--p-green)', height: 132, label: 'Sessions per week' }
+    { color: 'var(--s-train)', height: 132, label: 'Sessions per week' }
   ));
   wrap.appendChild(freqCard);
 

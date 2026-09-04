@@ -67,7 +67,7 @@ import { $, el, noteEl, trimNum, r1, parseKey, fmtDate, compact, fmtDuration, sh
 import { assess, keysBack as keysBackI, streakOf, fmtRange } from './insights.js';
 import { allSessions, exerciseIndex, filterByRange, groupSplit, topBy, weeklyVolume,
          lineChart, barChart, ring, sparkline, heatStrip, emptyChart, legend,
-         groupColor } from './analytics.js';
+         groupColor, splitBar } from './analytics.js';
 import { weightStats, maintenance, trendRate, refreshModel, trendWeight, adjustedDays,
          goalDir as goalDirOf } from './tdee.js';
 import { fmtWater } from './water.js';
@@ -1155,14 +1155,9 @@ function trainingCard() {
   if (split.length) {
     const totalSets = split.reduce((a, x) => a + x.sets, 0);
     c.appendChild(el('div', 'chart-sub', 'Working sets by muscle · ' + totalSets + ' sets'));
-    const bar = el('div', 'split-bar');
-    split.forEach(x => {
-      const seg = el('div', 'split-seg');
-      seg.style.flex = String(x.sets);
-      seg.style.background = groupColor(x.group);
-      bar.appendChild(seg);
-    });
-    c.appendChild(bar);
+    c.appendChild(splitBar(
+      split.map(x => ({ label: groupLabel(x.group), v: x.sets, color: groupColor(x.group) })),
+      { label: 'Working sets by muscle, last 30 days' }));
     c.appendChild(legendGrid(split.map(x => ({
       label: groupLabel(x.group),
       color: groupColor(x.group),
