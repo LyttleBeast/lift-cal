@@ -67,12 +67,14 @@ function heatMap(byDay, opts = {}) {
   start.setDate(start.getDate() - (days - 1));
   start.setDate(start.getDate() - start.getDay());   // align to a Sunday
 
+  let active = 0;
   for (let c = 0; c < cols; c++) {
     for (let row = 0; row < 7; row++) {
       const d = new Date(start);
       d.setDate(d.getDate() + c * 7 + row);
       if (d.getTime() > Date.now() + DAY) continue;
       const v = byDay[todayKey(d)] || 0;
+      if (v) active++;
       const op = v ? (0.28 + 0.72 * Math.min(1, v / max)) : 0;
       svg.appendChild(svgEl('rect', {
         x: (c * (CELL + GAP)).toFixed(1), y: (row * (CELL + GAP)).toFixed(1),
@@ -82,6 +84,10 @@ function heatMap(byDay, opts = {}) {
       }));
     }
   }
+  // The same sentence analytics.js gives its heat strip; this copy is local
+  // for the reason in the import note above.
+  svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label', 'Steps, last ' + days + ' days: ' + active + (active === 1 ? ' day' : ' days') + ' logged.');
   return svg;
 }
 
@@ -293,7 +299,8 @@ function renderTrend() {
       color: stepsOn(k) >= goal() ? 'var(--ok)' : 'var(--s-steps)'
     }));
   }
-  card.appendChild(barChart(bars, { height: 170, color: 'var(--s-steps)', showValues: range <= 7 }));
+  card.appendChild(barChart(bars, { height: 170, color: 'var(--s-steps)', showValues: range <= 7,
+    label: range === 365 ? 'Steps, monthly averages' : 'Steps by day, last ' + range + ' days' }));
 
   const foot = el('div', 'chart-foot');
   foot.appendChild(el('span', 'num', range === 365 ? 'monthly average' : 'daily'));
@@ -416,7 +423,7 @@ function renderWeekdays() {
     v: Math.round(mean(b)),
     color: mean(b) >= goal() ? 'var(--ok)' : 'var(--s-steps)'
   }));
-  card.appendChild(barChart(bars, { height: 140, color: 'var(--s-steps)', showValues: true }));
+  card.appendChild(barChart(bars, { height: 140, color: 'var(--s-steps)', showValues: true, label: 'Steps by day of the week' }));
 
   const top = bars.reduce((b, x, i) => x.v > bars[b].v ? i : b, 0);
   const low = bars.reduce((b, x, i) => (x.v > 0 && x.v < bars[b].v) || bars[b].v === 0 ? i : b, 0);

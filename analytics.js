@@ -327,6 +327,25 @@ export function groupColor(g) { return PALETTE[g] || '#8d939f'; }
 
 let gradSeq = 0;
 
+/* ---------- what a chart says out loud ----------
+   Every SVG below used to be svgEl('svg', { viewBox, class }) and nothing
+   else: no role, no name, silent to a screen reader. Each now gets role="img"
+   and a sentence built from the numbers it already has. `label` names the
+   subject ("Body weight, last 45 days"); `describe` is for the one thing only
+   the caller knows, like the fitted weekly rate. Units are spoken as words. */
+const UNIT_WORDS = { lb: 'pounds', kcal: 'kilocalories', g: 'grams', '%': 'percent' };
+function unitWord(u) { const k = String(u || '').trim(); return UNIT_WORDS[k] || k; }
+function spoken(v, unit) {
+  const n = Math.abs(v) >= 100 ? Math.round(v) : Math.round(v * 10) / 10;
+  const u = unitWord(unit);
+  return n.toLocaleString() + (u ? ' ' + u : '');
+}
+function fmtDay(t) { return new Date(t).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); }
+function describeSvg(svg, text) {
+  svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label', text);
+}
+
 // Catmull-Rom through the points, converted to cubic beziers. Gives the line
 // a soft shape without overshooting the data the way a naive spline does.
 function smoothPath(pts) {
@@ -366,7 +385,8 @@ export function lineChart(points, opts = {}) {
   const {
     color = 'var(--p-yellow)', height = 168, markMax = true,
     unit = '', dots = true, scatter = null,
-    line2 = null, color2 = 'var(--chalk)', yLabels = false
+    line2 = null, color2 = 'var(--chalk)', yLabels = false,
+    label = 'Trend', describe = ''
   } = opts;
 
   const W = 340, H = height, PADX = 10, PADT = 16, PADB = 22;
@@ -474,6 +494,12 @@ export function lineChart(points, opts = {}) {
   hi1.textContent = new Date(t1).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   svg.append(lo1, hi1);
 
+  const first = points[0].v, last = points[points.length - 1].v;
+  const move = Math.abs(last - first) < 0.05 ? 'flat' : (last < first ? 'down' : 'up');
+  describeSvg(svg, label + ', ' + fmtDay(t0) + ' to ' + fmtDay(t1) + ': ' +
+    spoken(first, '') + (move === 'flat' ? ' to ' : ' ' + move + ' to ') + spoken(last, unit) +
+    (describe ? '. ' + describe : '') + '.');
+
   return svg;
 }
 
@@ -496,7 +522,7 @@ export function lineChart(points, opts = {}) {
  */
 export function barChart(bars, opts = {}) {
   const { height = 150, width = 340, color = 'var(--p-blue)', unit = '', showValues = true,
-          target = null, targetLabel = '', lines = [] } = opts;
+          target = null, targetLabel = '', lines = [], label = 'Bars' } = opts;
   if (!bars.length) return emptyChart('Nothing logged yet');
 
   const W = width, H = height, PADB = 20, PADT = 18, PADX = 8;
@@ -586,6 +612,19 @@ export function barChart(bars, opts = {}) {
   if (target > 0) refLine(target, targetLabel, 'end', 'chart-target');
   lines.forEach(l => { if (l && l.v > 0) refLine(l.v, l.label, l.at, l.cls || 'chart-ref'); });
 
+  const lastB = bars[n - 1];
+  const top = bars.reduce((a, b) => (b.v > a.v ? b : a), bars[0]);
+  let said = label + ': ' + n + (n === 1 ? ' bar' : ' bars');
+  if (bars[0].label && lastB.label && n > 1) said += ', ' + bars[0].label + ' to ' + lastB.label;
+  const uw = unitWord(unit) ? ' ' + unitWord(unit) : '';
+  if (top.v > 0) said += '. Highest ' + compact(top.v) + uw + (top.label ? ' at ' + top.label : '');
+  said += '. Latest ' + compact(lastB.v) + uw;
+  if (target > 0) {
+    const tl = targetLabel || 'Target';
+    said += '. ' + tl.charAt(0).toUpperCase() + tl.slice(1) + ' ' + compact(target) + uw;
+  }
+  describeSvg(svg, said + '.');
+
   return svg;
 }
 
@@ -597,7 +636,7 @@ export function barChart(bars, opts = {}) {
  * frac: 0..∞      opts: { size, thickness, color, top, sub }
  */
 export function ring(frac, opts = {}) {
-  const { size = 76, thickness = 7, color = 'var(--p-yellow)', top = '', sub = '' } = opts;
+  const { size = 76, thickness = 7, color = 'var(--p-yellow)', top = '', sub = '', label = '' } = opts;
   const R = size / 2, r = R - thickness / 2;
   const svg = svgEl('svg', { viewBox: '0 0 ' + size + ' ' + size, class: 'chart chart-ring' });
   svg.style.width = size + 'px';
@@ -629,6 +668,8 @@ export function ring(frac, opts = {}) {
     t.textContent = sub;
     svg.appendChild(t);
   }
+  describeSvg(svg, (label || 'Progress') + ': ' + Math.round((Number.isFinite(frac) ? frac : 0) * 100) + ' percent of goal' +
+    (top && !/%$/.test(top) ? ', ' + top + (sub ? ' ' + sub : '') : '') + '.');
   return svg;
 }
 
@@ -645,9 +686,14 @@ export function ring(frac, opts = {}) {
  */
 export function sparkline(values, opts = {}) {
   const { width = 150, height = 40, color = 'var(--p-yellow)', accentFrom = 0,
-          area = false, glow = false, ref = null, kind = 'line' } = opts;
+          area = false, glow = false, ref = null, kind = 'line', label = 'Last days' } = opts;
   const W = width, H = height, PADX = 4, PADY = 5;
   const svg = svgEl('svg', { viewBox: '0 0 ' + W + ' ' + H, class: 'chart chart-spark' });
+
+  const finite = values.filter(Number.isFinite);
+  describeSvg(svg, label + ': ' + values.length + (kind === 'bars' ? ' weeks' : ' days') + ', ' +
+    (finite.length ? finite.length + ' with a value, ' + spoken(finite[0], '') + ' to ' + spoken(finite[finite.length - 1], '') : 'nothing logged') +
+    (ref > 0 ? ', target ' + spoken(ref, '') : '') + '.');
 
   const n = values.length;
   const pts = [];
@@ -742,12 +788,14 @@ export function sparkline(values, opts = {}) {
  * segments: [{ label, v, color }]
  */
 export function donut(segments, opts = {}) {
-  const { size = 168, thickness = 20, centerTop = '', centerSub = '' } = opts;
+  const { size = 168, thickness = 20, centerTop = '', centerSub = '', label = 'Split' } = opts;
   const total = segments.reduce((a, s) => a + s.v, 0);
   if (!total) return emptyChart('Nothing logged yet');
 
   const R = size / 2, r = R - thickness / 2;
   const svg = svgEl('svg', { viewBox: '0 0 ' + size + ' ' + size, class: 'chart chart-donut' });
+  describeSvg(svg, label + ': ' + segments.filter(s => s.v > 0)
+    .map(s => s.label + ' ' + Math.round(s.v / total * 100) + '%').join(', ') + '.');
 
   let angle = -Math.PI / 2;   // start at 12 o'clock
   const GAP = 0.028;          // radians of breathing room between segments
@@ -789,7 +837,7 @@ export function donut(segments, opts = {}) {
  * plain { dateKey: weight } map, which is how You draws "any day with anything
  * on it" without a session list standing in for the whole account.
  */
-export function heatStrip(sessions, days = 91) {
+export function heatStrip(sessions, days = 91, label = 'Activity') {
   const byDay = {};
   if (Array.isArray(sessions)) {
     sessions.forEach(s => {
@@ -811,6 +859,7 @@ export function heatStrip(sessions, days = 91) {
   start.setDate(start.getDate() - (days - 1));
   start.setDate(start.getDate() - start.getDay());   // align to a Sunday
 
+  let active = 0;
   for (let c = 0; c < cols; c++) {
     for (let row = 0; row < 7; row++) {
       const d = new Date(start);
@@ -818,6 +867,7 @@ export function heatStrip(sessions, days = 91) {
       if (d.getTime() > Date.now() + 864e5) continue;
       const k = todayKey(d);
       const v = byDay[k] || 0;
+      if (v) active++;
       const op = v ? (0.28 + 0.72 * Math.min(1, v / max)) : 0;
       svg.appendChild(svgEl('rect', {
         x: (c * (CELL + GAP)).toFixed(1), y: (row * (CELL + GAP)).toFixed(1),
@@ -827,6 +877,7 @@ export function heatStrip(sessions, days = 91) {
       }));
     }
   }
+  describeSvg(svg, label + ', last ' + days + ' days: ' + active + (active === 1 ? ' day' : ' days') + ' with something logged.');
   return svg;
 }
 

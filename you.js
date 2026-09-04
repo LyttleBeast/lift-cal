@@ -450,7 +450,7 @@ function kpi({ label, now, prev, fmt, dfmt, unit, judge, series, color, rgb, ref
 
   t.appendChild(sparkline(series || [], {
     color, accentFrom: 7, height: 46, area: kind !== 'bars', glow: kind !== 'bars',
-    ref: ref > 0 ? ref : null, kind: kind || 'line'
+    ref: ref > 0 ? ref : null, kind: kind || 'line', label: label + ', this week against last'
   }));
 
   if (days && days.length) {
@@ -915,7 +915,8 @@ function fuelCard(maint) {
   }
   const chart = el('div');
   chart.style.marginTop = '10px';
-  chart.appendChild(barChart(bars, { height: 128, color: C_FUEL, target: targets.cal, targetLabel: 'target', lines, showValues: false }));
+  chart.appendChild(barChart(bars, { height: 128, color: C_FUEL, target: targets.cal, targetLabel: 'target', lines, showValues: false,
+                                     label: 'Calories by day, last 7 days', unit: ' kcal' }));
   c.appendChild(chart);
   c.appendChild(legendRow([['protein', C_PROT], ['carbs', C_CARB], ['fat', C_FAT]]));
 
@@ -1067,7 +1068,9 @@ function weightCard(maint) {
   chart.appendChild(pts.length >= 2
     ? lineChart(pts, { color: C_WEIGHT, height: 148, unit: 'lb', dots: pts.length < 30, markMax: false,
                        scatter: scatter.length > pts.length ? scatter : null,
-                       line2: trend.length >= 2 ? trend : null, color2: 'var(--p-chrome)', yLabels: true })
+                       line2: trend.length >= 2 ? trend : null, color2: 'var(--p-chrome)', yLabels: true,
+                       label: 'Body weight, last 45 days',
+                       describe: rate != null ? 'Trending ' + (rate < 0 ? 'down ' : 'up ') + r1(Math.abs(rate)) + ' pounds a week' : '' })
     : emptyChart('Two days of weigh-ins draw the first line'));
   c.appendChild(chart);
   if (pts.length >= 2) {
@@ -1141,7 +1144,7 @@ function trainingCard() {
     c.appendChild(el('div', 'chart-sub', 'Volume by week · 8 weeks'));
     c.appendChild(barChart(
       weeks.map((w, i) => ({ label: fmtDate(w.key), v: w.v, note: w.n ? w.n + '×' : '', dim: i === weeks.length - 1 })),
-      { height: 118, color: C_TRAIN, showValues: false }));
+      { height: 118, color: C_TRAIN, showValues: false, label: 'Training volume by week, 8 weeks', unit: ' lb' }));
   }
 
   // Where the month's sets went, as one bar split by muscle group. The
@@ -1240,7 +1243,7 @@ function goalCard(title, o) {
   const cell = el('div', 'ring-cell');
   cell.appendChild(ring(frac, {
     size: 84, thickness: 8, color: frac >= 1 ? 'var(--ok)' : o.color,
-    top: Math.round(frac * 100) + '%', sub: 'of goal'
+    top: Math.round(frac * 100) + '%', sub: 'of goal', label: title + ', seven-day average'
   }));
   cell.appendChild(el('div', 'ring-of num', o.fmt(o.avg) + ' a day'));
   c.appendChild(cell);
@@ -1251,7 +1254,7 @@ function goalCard(title, o) {
   // in the subject's, so "3 of 6 at goal" is visible in the bars before it is
   // read under them.
   bars.appendChild(barChart(o.bars.map(b => ({ ...b, color: b.v >= o.goal ? 'var(--ok)' : o.color })),
-    { width: 150, height: 96, color: o.color, target: o.goal, showValues: false }));
+    { width: 150, height: 96, color: o.color, target: o.goal, showValues: false, label: title + ' by day, last 7 days', targetLabel: 'Goal' }));
   c.appendChild(bars);
 
   c.appendChild(el('div', 'ring-lbl', o.hit + ' of ' + o.logged.length + ' days at goal'));
@@ -1564,7 +1567,7 @@ function reviewCard(found) {
   const keys = Object.keys(rec);
   if (keys.length) {
     c.appendChild(el('div', 'chart-sub', 'Days on record · 13 weeks'));
-    c.appendChild(heatStrip(rec, 91));
+    c.appendChild(heatStrip(rec, 91, 'Days with anything logged'));
     const streak = streakOf({ summaries, wmap: weighDayMap(), stepDays, sessions });
     const sr = statRow([
       [streak, 'Day streak'],

@@ -140,14 +140,14 @@ function renderOverview() {
   const volCard = card('Volume per week', weeks.length ? compact(totalVol) + ' lb total' : '');
   volCard.appendChild(barChart(
     weeks.map(w => ({ label: fmtDate(w.key).replace(/ /, ' '), v: w.volume })),
-    { color: 'var(--p-blue)', height: 158 }
+    { color: 'var(--p-blue)', height: 158, label: 'Volume per week', unit: ' lb' }
   ));
   volCard.appendChild(noteEl('Working sets only — warm-ups never count toward volume.'));
   wrap.appendChild(volCard);
 
   /* ---- consistency ---- */
   const consist = card('Consistency', trainedDays(inRange) + ' training days');
-  consist.appendChild(heatStrip(sessions, 91));
+  consist.appendChild(heatStrip(sessions, 91, 'Training days'));
   const streakInfo = streaks(sessions);
   consist.appendChild(statRow([
     [streakInfo.currentWeeks, 'Week streak'],
@@ -181,7 +181,7 @@ function renderOverview() {
   const freqCard = card('Sessions per week');
   freqCard.appendChild(barChart(
     weeks.map(w => ({ label: fmtDate(w.key).replace(/ /, ' '), v: w.sessions })),
-    { color: 'var(--p-green)', height: 132 }
+    { color: 'var(--p-green)', height: 132, label: 'Sessions per week' }
   ));
   wrap.appendChild(freqCard);
 
@@ -410,7 +410,7 @@ function renderDetail(exId) {
   } else {
     trend.appendChild(lineChart(
       entries.map(x => ({ t: x.startedAt, v: x.e1rm })),
-      { color: 'var(--p-yellow)', unit: 'lb', height: 176 }
+      { color: 'var(--p-yellow)', unit: 'lb', height: 176, label: 'Estimated one-rep max, ' + e.name }
     ));
     trend.appendChild(noteEl('Epley estimate from your best working set each session. The ring marks your peak.'));
   }
@@ -421,7 +421,7 @@ function renderDetail(exId) {
     const wt = card('Heaviest set');
     wt.appendChild(lineChart(
       entries.map(x => ({ t: x.startedAt, v: x.topWeight })),
-      { color: 'var(--p-red)', unit: 'lb', height: 152 }
+      { color: 'var(--p-red)', unit: 'lb', height: 152, label: 'Heaviest set, ' + e.name }
     ));
     wrap.appendChild(wt);
   }
@@ -430,7 +430,7 @@ function renderDetail(exId) {
   const volCard = card('Volume per session');
   volCard.appendChild(barChart(
     entries.slice(-12).map(x => ({ label: fmtDate(x.date).replace(/ /, ' '), v: x.volume })),
-    { color: 'var(--p-blue)', height: 150 }
+    { color: 'var(--p-blue)', height: 150, label: 'Volume per session, ' + e.name, unit: ' lb' }
   ));
   wrap.appendChild(volCard);
 

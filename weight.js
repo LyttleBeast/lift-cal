@@ -294,6 +294,7 @@ function renderChart(s) {
 
   const avg = movingAvg(source).filter(p => parseKey(p.d).getTime() > since);
 
+  const tr = trendRate(entries);
   card.appendChild(lineChart(
     avg.map(p => ({ t: parseKey(p.d).getTime(), v: p.lb })),
     {
@@ -302,7 +303,9 @@ function renderChart(s) {
       unit: 'lb',
       dots: false,
       markMax: false,
-      scatter: raw.map(e => ({ t: e.t, v: e.lb }))
+      scatter: raw.map(e => ({ t: e.t, v: e.lb })),
+      label: 'Body weight, last ' + (range === 365 ? 'year' : range + ' days'),
+      describe: tr.rateWk != null ? 'Trending ' + (tr.rateWk < 0 ? 'down ' : 'up ') + r1(Math.abs(tr.rateWk)) + ' pounds a week' : ''
     }
   ));
 
