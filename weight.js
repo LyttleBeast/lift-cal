@@ -46,10 +46,17 @@ function dailyMeans() { return meansOf(entries); }
 function stats() { return weightStats(entries); }
 
 /* ================= RENDER ================= */
-export async function render() {
+// Synchronous, the way you.js paints. This used to be async: it emptied the
+// view and then awaited the maintenance card's two reads, so every visit to
+// the tab flashed blank for as long as the database took to answer. Now the
+// whole screen goes up in one swap with a placeholder where the estimate will
+// be, and fillTDEE() replaces that card when the reads land.
+let renderSeq = 0;
+
+export function render() {
   const root = $('#view-weight');
   if (!root) return;
-  root.innerHTML = '';
+  const seq = ++renderSeq;
   const wrap = el('div', 'screen-pad');
 
   const hd = el('div', 'cal-hd');
@@ -113,11 +120,28 @@ export async function render() {
 
   wrap.appendChild(renderChart(s));
   wrap.appendChild(renderTOD());
-  wrap.appendChild(await renderTDEE(s));
+
+  const pending = el('div', 'card');
+  const phd = el('div', 'card-hd');
+  phd.appendChild(el('div', 'eyebrow', 'Maintenance estimate'));
+  pending.appendChild(phd);
+  pending.appendChild(noteEl('Reading your food log…'));
+  wrap.appendChild(pending);
+
   wrap.appendChild(renderRecent());
   // The settings card that used to end this screen is now the You tab's gear.
 
-  root.appendChild(wrap);
+  root.replaceChildren(wrap);
+  fillTDEE(pending, s, seq);
+}
+
+// A render that started after this one owns the screen; a read landing late
+// must not swap a stale card into it.
+async function fillTDEE(placeholder, s, seq) {
+  let card;
+  try { card = await renderTDEE(s); } catch { return; }
+  if (seq !== renderSeq || !placeholder.isConnected) return;
+  placeholder.replaceWith(card);
 }
 
 /* ---------- chart ---------- */
