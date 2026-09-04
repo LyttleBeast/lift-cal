@@ -140,7 +140,7 @@ function renderOverview() {
   const volCard = card('Volume per week', weeks.length ? compact(totalVol) + ' lb total' : '');
   volCard.appendChild(barChart(
     weeks.map(w => ({ label: fmtDate(w.key).replace(/ /, ' '), v: w.volume })),
-    { color: 'var(--p-blue)', height: 158, label: 'Volume per week', unit: ' lb' }
+    { color: 'var(--p-blue)', height: 158, label: 'Volume per week' }
   ));
   volCard.appendChild(noteEl('Working sets only — warm-ups never count toward volume.'));
   wrap.appendChild(volCard);
@@ -430,7 +430,7 @@ function renderDetail(exId) {
   const volCard = card('Volume per session');
   volCard.appendChild(barChart(
     entries.slice(-12).map(x => ({ label: fmtDate(x.date).replace(/ /, ' '), v: x.volume })),
-    { color: 'var(--p-blue)', height: 150, label: 'Volume per session, ' + e.name, unit: ' lb' }
+    { color: 'var(--p-blue)', height: 150, label: 'Volume per session, ' + e.name }
   ));
   wrap.appendChild(volCard);
 

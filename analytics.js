@@ -532,6 +532,10 @@ export function barChart(bars, opts = {}) {
                        ...lines.map(l => l && l.v > 0 ? l.v : 0), 1);
   const n = bars.length;
   const slot = (W - PADX * 2) / n;
+  // Fourteen weeks in a 340px chart is a 23px slot, and "Aug 28" is ~30px at
+  // 9px, so every label overprinted its neighbour. Label every kth bar instead,
+  // counted back from the newest so the latest bar always keeps its date.
+  const labelEvery = Math.max(1, Math.ceil(n / 8));
   const bw = Math.max(3, Math.min(30, slot * 0.62));
   const plotH = H - PADT - PADB;
 
@@ -586,7 +590,7 @@ export function barChart(bars, opts = {}) {
       t.textContent = above;
       svg.appendChild(t);
     }
-    if (b.label && n <= 14) {
+    if (b.label && n <= 14 && (n - 1 - i) % labelEvery === 0) {
       const t = svgEl('text', {
         x: (x + bw / 2).toFixed(1), y: H - 6, class: 'chart-axis', 'text-anchor': 'middle'
       });
