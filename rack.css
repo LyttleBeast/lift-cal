@@ -55,6 +55,19 @@
   --p-white:  #e8e5de;  /* arms       (5kg)  */
   --p-chrome: #a8aeb8;  /* core       (1.25) */
 
+  /* Subjects — which log a picture is about, so a colour means one thing on
+     every screen. Fuel yellow, Train blue, Steps green. Weight is chrome on
+     purpose: it is a measurement, not a verdict, and the goal decides whether
+     a fall is good news, so it gets no hue of its own to argue with. Water is
+     a tint of blue: it sits beside Train on You and must not be mistaken for it.
+     Fuel and Weight used to share yellow on the same screen, and Steps was
+     white on You but green on its own tab. */
+  --s-fuel:   var(--p-yellow);
+  --s-train:  var(--p-blue);
+  --s-steps:  var(--p-green);
+  --s-weight: var(--p-white);
+  --s-water:  #62a9f0;
+
   /* Judgement — doing well, watch this, missed. These used to be the same
      three hexes as the plates above, so green meant shoulders AND on track,
      yellow meant legs, Fuel, the primary button AND caution. The plates stay
@@ -1037,10 +1050,10 @@ body.peeking .view.active { padding-bottom: 58px; }
   background: var(--collar); border: 1px solid var(--knurl);
   position: relative; overflow: hidden;
 }
-.water-pip.on { background: var(--p-blue); border-color: var(--p-blue); }
+.water-pip.on { background: var(--s-water); border-color: var(--s-water); }
 .water-pip.part::after {
   content: ''; position: absolute; inset: 0 auto 0 0;
-  width: var(--fill, 50%); background: var(--p-blue);
+  width: var(--fill, 50%); background: var(--s-water);
 }
 
 .water-ctl { display: flex; gap: 8px; margin-top: 14px; }
@@ -1056,7 +1069,7 @@ body.peeking .view.active { padding-bottom: 58px; }
   background: var(--bar); border: 1px solid var(--collar); color: var(--chalk);
   text-align: left; cursor: pointer;
 }
-.water-preset:active { border-color: var(--p-blue); }
+.water-preset:active { border-color: var(--s-water); }
 .wp-label { font-size: 12px; font-variation-settings: 'wdth' 92, 'wght' 700; }
 .wp-amt { font-size: 12px; color: var(--steel); }
 
@@ -1073,7 +1086,7 @@ body.peeking .view.active { padding-bottom: 58px; }
   padding: 9px 10px; background: var(--rack); border: 1px solid var(--collar);
   border-radius: var(--r-sm); color: var(--chalk); font-size: 13px; min-width: 0;
 }
-.wpe-row input:focus { border-color: var(--p-blue); outline: none; }
+.wpe-row input:focus { border-color: var(--s-water); outline: none; }
 .wpe-amt { text-align: center; font-variation-settings: 'wdth' 100, 'wght' 700; }
 .wpe-del {
   background: none; border: 1px solid var(--collar); border-radius: var(--r-sm);
@@ -1089,7 +1102,7 @@ body.peeking .view.active { padding-bottom: 58px; }
   height: 74px; margin: 6px 0 14px; padding-bottom: 14px; position: relative;
 }
 .tod-col { flex: 1; height: 100%; display: flex; align-items: flex-end; justify-content: center; position: relative; }
-.tod-col i { display: block; width: 100%; border-radius: 2px 2px 0 0; background: var(--p-yellow); }
+.tod-col i { display: block; width: 100%; border-radius: 2px 2px 0 0; background: var(--s-weight); }
 .tod-col.empty i { background: var(--collar); }
 .tod-h {
   position: absolute; bottom: -14px; left: 50%; transform: translateX(-50%);

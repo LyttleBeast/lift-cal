@@ -55,7 +55,7 @@ export async function initSteps() {
    Same grid as the training one in analytics.js, over any {dateKey: number}.
    Deliberately duplicated rather than shared — see the import note above. */
 function heatMap(byDay, opts = {}) {
-  const { days = 91, color = 'var(--p-green)' } = opts;
+  const { days = 91, color = 'var(--s-steps)' } = opts;
   const max = Math.max(1, ...Object.values(byDay));
   const cols = Math.ceil(days / 7);
   const CELL = 9, GAP = 2.5;
@@ -226,7 +226,7 @@ function ring(frac, n, g) {
   if (shown > 0) {
     svg.appendChild(svgEl('circle', {
       cx: mid, cy: mid, r: R, fill: 'none',
-      stroke: over ? 'var(--ok)' : 'var(--p-green)',
+      stroke: over ? 'var(--ok)' : 'var(--s-steps)',
       'stroke-width': 11, 'stroke-linecap': 'round',
       'stroke-dasharray': `${(C * shown).toFixed(1)} ${C.toFixed(1)}`,
       transform: `rotate(-90 ${mid} ${mid})`
@@ -283,17 +283,17 @@ function renderTrend() {
       bars.push({
         label: d.toLocaleDateString('en-US', { month: 'narrow' }),
         v: Math.round(mean(vals)),
-        color: mean(vals) >= goal() ? 'var(--ok)' : 'var(--p-green)'
+        color: mean(vals) >= goal() ? 'var(--ok)' : 'var(--s-steps)'
       });
     }
   } else {
     bars = keysBack(range).map(k => ({
       label: range <= 7 ? parseKey(k).toLocaleDateString('en-US', { weekday: 'narrow' }) : '',
       v: stepsOn(k),
-      color: stepsOn(k) >= goal() ? 'var(--ok)' : 'var(--p-green)'
+      color: stepsOn(k) >= goal() ? 'var(--ok)' : 'var(--s-steps)'
     }));
   }
-  card.appendChild(barChart(bars, { height: 170, color: 'var(--p-green)', showValues: range <= 7 }));
+  card.appendChild(barChart(bars, { height: 170, color: 'var(--s-steps)', showValues: range <= 7 }));
 
   const foot = el('div', 'chart-foot');
   foot.appendChild(el('span', 'num', range === 365 ? 'monthly average' : 'daily'));
@@ -392,7 +392,7 @@ function renderConsistency() {
     card.appendChild(noteEl('Thirteen weeks of days, darker where you walked more.'));
     return card;
   }
-  card.appendChild(heatMap(byDay, { days: 91, color: 'var(--p-green)' }));
+  card.appendChild(heatMap(byDay, { days: 91, color: 'var(--s-steps)' }));
   card.appendChild(noteEl('Thirteen weeks — darker is more. Same grid as your training heat map, so the two read the same way.'));
   return card;
 }
@@ -414,9 +414,9 @@ function renderWeekdays() {
   const bars = buckets.map((b, i) => ({
     label: names[i],
     v: Math.round(mean(b)),
-    color: mean(b) >= goal() ? 'var(--ok)' : 'var(--p-green)'
+    color: mean(b) >= goal() ? 'var(--ok)' : 'var(--s-steps)'
   }));
-  card.appendChild(barChart(bars, { height: 140, color: 'var(--p-green)', showValues: true }));
+  card.appendChild(barChart(bars, { height: 140, color: 'var(--s-steps)', showValues: true }));
 
   const top = bars.reduce((b, x, i) => x.v > bars[b].v ? i : b, 0);
   const low = bars.reduce((b, x, i) => (x.v > 0 && x.v < bars[b].v) || bars[b].v === 0 ? i : b, 0);

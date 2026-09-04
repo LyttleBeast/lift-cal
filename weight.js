@@ -297,7 +297,7 @@ function renderChart(s) {
   card.appendChild(lineChart(
     avg.map(p => ({ t: parseKey(p.d).getTime(), v: p.lb })),
     {
-      color: 'var(--p-yellow)',
+      color: 'var(--s-weight)',
       height: 178,
       unit: 'lb',
       dots: false,
@@ -358,7 +358,7 @@ function renderTOD() {
     const hr = pk.h === 0 ? '12am' : pk.h === 12 ? '12pm' : (pk.h % 12) + (pk.h < 12 ? 'am' : 'pm');
     const big = el('div', 'load-num num', '+' + r1(pk.lb));
     big.style.fontSize = '28px';
-    big.style.color = 'var(--p-yellow)';
+    big.style.color = 'var(--s-weight)';
     card.appendChild(big);
     card.appendChild(el('div', 'eyebrow', 'lb heavier by ' + hr));
 

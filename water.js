@@ -149,7 +149,7 @@ export function renderWater(editable = true) {
 
   const big = el('div', 'load-num num', String(toDisplay(total).toLocaleString()));
   big.style.fontSize = '34px';
-  big.style.color = frac >= 1 ? 'var(--ok)' : 'var(--p-blue)';
+  big.style.color = frac >= 1 ? 'var(--ok)' : 'var(--s-water)';
   right.appendChild(big);
   right.appendChild(el('div', 'eyebrow',
     (UNITS[settings.unit] || UNITS.ml).label + ' of ' + fmtWater(goal)));
@@ -224,10 +224,10 @@ function vessel(frac) {
   const g = svgEl('g', { 'clip-path': `url(#${id})` });
   if (frac > 0.001) {
     g.appendChild(svgEl('path', {
-      d: wave(W, H, y + 3, 4, 14), fill: 'var(--p-blue)', opacity: '0.45'
+      d: wave(W, H, y + 3, 4, 14), fill: 'var(--s-water)', opacity: '0.45'
     }));
     g.appendChild(svgEl('path', {
-      d: wave(W, H, y, 5, 0), fill: 'var(--p-blue)', opacity: '0.9'
+      d: wave(W, H, y, 5, 0), fill: 'var(--s-water)', opacity: '0.9'
     }));
   }
   svg.appendChild(g);

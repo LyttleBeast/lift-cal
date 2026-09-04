@@ -91,11 +91,14 @@ const WATER_GOAL_DEFAULT = 3785;
 // yellow line anywhere on this screen is food or the scale and a blue bar is
 // water or training. Status colours (good / bad) are reserved for judgements
 // and never stand in for a subject.
-const C_FUEL   = 'var(--p-yellow)';
-const C_WEIGHT = 'var(--p-yellow)';
-const C_STEPS  = 'var(--p-white)';   // chrome reads as the muted "last week" stroke beside it
-const C_WATER  = 'var(--p-blue)';
-const C_TRAIN  = 'var(--p-blue)';
+// The subject tokens in rack.css, one per log, so this screen agrees with
+// the tab each picture points at. Weight is chrome because it is a
+// measurement the goal decides the meaning of, not a subject with a mood.
+const C_FUEL   = 'var(--s-fuel)';
+const C_WEIGHT = 'var(--s-weight)';
+const C_STEPS  = 'var(--s-steps)';
+const C_WATER  = 'var(--s-water)';
+const C_TRAIN  = 'var(--s-train)';
 // The three macros wear the colours the Fuel tab's rows already gave them
 // (food.js renderSummary), so a red segment is protein on both screens.
 const C_PROT   = 'var(--p-red)';
@@ -796,7 +799,7 @@ function weekCard(maint) {
   grid.appendChild(kpi({
     label: 'Weight', unit: 'lb',
     now: meanBy(thisWk, weighOn), prev: meanBy(lastWk, weighOn),
-    fmt: trimNum, judge: towardGoal, color: C_WEIGHT, rgb: '240,190,30',
+    fmt: trimNum, judge: towardGoal, color: C_WEIGHT, rgb: '232,229,222',
     series: both.map(weighOn),
     days: thisWk.map(k => weighOn(k) != null)
   }));
@@ -810,7 +813,7 @@ function weekCard(maint) {
   grid.appendChild(kpi({
     label: 'Steps', unit: '/ day',
     now: meanBy(thisWk, stepsOn), prev: meanBy(lastWk, stepsOn),
-    fmt: fmtInt, judge: higherBetter, color: C_STEPS, rgb: '232,229,222',
+    fmt: fmtInt, judge: higherBetter, color: C_STEPS, rgb: '42,168,92',
     series: both.map(stepsOn), ref: stepGoal(),
     days: thisWk.map(k => stepsOn(k) != null)
   }));
@@ -981,7 +984,7 @@ function weightCard(maint) {
   const c = card('Body weight', 'last 45 days', {
     title: 'The weight trend',
     body: [
-      'The yellow line is the daily average of your weigh-ins. The dashed line is the trend: every reading first corrected for the food and water that were in you when you stood on the scale — a weigh-in after dinner runs pounds heavier than one before breakfast, and the model learns your own numbers for that from the log — then smoothed so a week of wobble reads as one slope.',
+      'The white line is the daily average of your weigh-ins. The dashed line is the trend: every reading first corrected for the food and water that were in you when you stood on the scale — a weigh-in after dinner runs pounds heavier than one before breakfast, and the model learns your own numbers for that from the log — then smoothed so a week of wobble reads as one slope.',
       'The rate beside the headline is that slope in pounds a week, with a ✓ when it comes from the fitted model rather than the plain seven-day averages. The 30-day arrow is the first and last daily average in the window. Both are green when they move the way your goal wants and amber the other way.',
       'Weighing more than once a day is a feature: two readings a day is what lets the model learn how much of a reading is breakfast.'
     ]
@@ -1064,12 +1067,12 @@ function weightCard(maint) {
   chart.appendChild(pts.length >= 2
     ? lineChart(pts, { color: C_WEIGHT, height: 148, unit: 'lb', dots: pts.length < 30, markMax: false,
                        scatter: scatter.length > pts.length ? scatter : null,
-                       line2: trend.length >= 2 ? trend : null, yLabels: true })
+                       line2: trend.length >= 2 ? trend : null, color2: 'var(--p-chrome)', yLabels: true })
     : emptyChart('Two days of weigh-ins draw the first line'));
   c.appendChild(chart);
   if (pts.length >= 2) {
     const items = [['daily average', C_WEIGHT]];
-    if (trend.length >= 2) items.push(['trend', 'var(--chalk)', 'dash']);
+    if (trend.length >= 2) items.push(['trend', 'var(--p-chrome)', 'dash']);
     if (scatter.length > pts.length) items.push(['each weigh-in', 'var(--steel)', 'dot']);
     c.appendChild(legendRow(items));
   }
