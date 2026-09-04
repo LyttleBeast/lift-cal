@@ -380,13 +380,17 @@ function smoothPath(pts) {
  *          trend over the raw day means with it. `color2` is its stroke.
  * yLabels: print the top and bottom of the scale on the grid, so the reader
  *          knows what a pixel of slope is worth without a second chart.
+ * minSpan: the least the vertical scale may cover, in the data's units. The
+ *          padding is a fraction of the span, so with no floor four weigh-ins
+ *          inside 0.4 lb filled the whole chart and read as a swing — the one
+ *          place these charts actively misled.
  */
 export function lineChart(points, opts = {}) {
   const {
     color = 'var(--p-yellow)', height = 168, markMax = true,
     unit = '', dots = true, scatter = null,
     line2 = null, color2 = 'var(--chalk)', yLabels = false,
-    label = 'Trend', describe = ''
+    label = 'Trend', describe = '', minSpan = 0
   } = opts;
 
   const W = 340, H = height, PADX = 10, PADT = 16, PADB = 22;
@@ -406,6 +410,7 @@ export function lineChart(points, opts = {}) {
   const extra = (scatter || []).concat(line2 || []);
   const vals = points.map(p => p.v).concat(extra.map(p => p.v));
   let lo = Math.min(...vals), hi = Math.max(...vals);
+  if (minSpan > 0 && hi - lo < minSpan) { const mid = (hi + lo) / 2; lo = mid - minSpan / 2; hi = mid + minSpan / 2; }
   const span = hi - lo;
   if (span < 1e-6) { lo = lo - Math.max(1, lo * 0.05); hi = hi + Math.max(1, hi * 0.05); }
   else { lo -= span * 0.12; hi += span * 0.12; }
@@ -686,11 +691,13 @@ export function ring(frac, opts = {}) {
  * with two days off into confetti. Points from `accentFrom` onward draw in
  * `color`; the ones before it in the muted stroke, so "this week" stands out
  * of "last week" without a legend.
- * values: [number | null]      opts: { width, height, color, accentFrom }
+ * values: [number | null]      opts: { width, height, color, accentFrom, minSpan }
+ * minSpan is the same floor lineChart has: a quiet fortnight must not fill the
+ * whole height and read as a swing.
  */
 export function sparkline(values, opts = {}) {
   const { width = 150, height = 40, color = 'var(--p-yellow)', accentFrom = 0,
-          area = false, glow = false, ref = null, kind = 'line', label = 'Last days' } = opts;
+          area = false, glow = false, ref = null, kind = 'line', label = 'Last days', minSpan = 0 } = opts;
   const W = width, H = height, PADX = 4, PADY = 5;
   const svg = svgEl('svg', { viewBox: '0 0 ' + W + ' ' + H, class: 'chart chart-spark' });
 
@@ -741,6 +748,7 @@ export function sparkline(values, opts = {}) {
   // picture can show.
   const scaled = pts.map(p => p.v).concat(ref > 0 ? [ref] : []);
   let lo = Math.min(...scaled), hi = Math.max(...scaled);
+  if (minSpan > 0 && hi - lo < minSpan) { const mid = (hi + lo) / 2; lo = mid - minSpan / 2; hi = mid + minSpan / 2; }
   if (hi - lo < 1e-6) { lo -= 1; hi += 1; }
   const X = i => PADX + i / (n - 1) * (W - PADX * 2);
   const Y = v => PADY + (1 - (v - lo) / (hi - lo)) * (H - PADY * 2);

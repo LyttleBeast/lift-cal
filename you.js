@@ -416,7 +416,7 @@ function arrowEl(diff, cls, text, unit) {
    average is built on, in the same tile as the average. `rgb` is the subject
    colour as bare channels for the tile's corner tint; CSS variables cannot be
    given an alpha, so the channels are passed rather than the variable. */
-function kpi({ label, now, prev, fmt, dfmt, unit, judge, series, color, rgb, ref, kind, days, ready = loaded }) {
+function kpi({ label, now, prev, fmt, dfmt, unit, judge, series, color, rgb, ref, kind, days, minSpan, ready = loaded }) {
   const t = el('div', 'kpi');
   if (rgb) t.style.setProperty('--kpi-rgb', rgb);
 
@@ -450,7 +450,8 @@ function kpi({ label, now, prev, fmt, dfmt, unit, judge, series, color, rgb, ref
 
   t.appendChild(sparkline(series || [], {
     color, accentFrom: 7, height: 46, area: kind !== 'bars', glow: kind !== 'bars',
-    ref: ref > 0 ? ref : null, kind: kind || 'line', label: label + ', this week against last'
+    ref: ref > 0 ? ref : null, kind: kind || 'line', label: label + ', this week against last',
+    minSpan: minSpan || 0
   }));
 
   if (days && days.length) {
@@ -800,7 +801,7 @@ function weekCard(maint) {
     label: 'Weight', unit: 'lb',
     now: meanBy(thisWk, weighOn), prev: meanBy(lastWk, weighOn),
     fmt: trimNum, judge: towardGoal, color: C_WEIGHT, rgb: '232,229,222',
-    series: both.map(weighOn),
+    series: both.map(weighOn), minSpan: 4,
     days: thisWk.map(k => weighOn(k) != null)
   }));
   grid.appendChild(kpi({
@@ -1066,7 +1067,7 @@ function weightCard(maint) {
   const chart = el('div');
   chart.style.marginTop = '12px';
   chart.appendChild(pts.length >= 2
-    ? lineChart(pts, { color: C_WEIGHT, height: 148, unit: 'lb', dots: pts.length < 30, markMax: false,
+    ? lineChart(pts, { color: C_WEIGHT, height: 148, unit: 'lb', dots: pts.length < 30, markMax: false, minSpan: 4,
                        scatter: scatter.length > pts.length ? scatter : null,
                        line2: trend.length >= 2 ? trend : null, color2: 'var(--p-chrome)', yLabels: true,
                        label: 'Body weight, last 45 days',

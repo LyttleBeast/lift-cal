@@ -301,6 +301,7 @@ function renderChart(s) {
       color: 'var(--s-weight)',
       height: 178,
       unit: 'lb',
+      minSpan: 4,
       dots: false,
       markMax: false,
       scatter: raw.map(e => ({ t: e.t, v: e.lb })),
