@@ -16,7 +16,8 @@
 // Sheets never nest. Every row that opens another sheet closes this one first.
 
 import { el, sheet, toast, noteEl, confirmSheet, segmented, LIMITS, clamp, saveText } from './ui.js';
-import { LS, uid, read, readExact, currentEmail, write, purgeDevice, logout } from './store.js';
+import { LS, uid, read, readExact, currentEmail, write, purgeDevice, logout, lastSyncAt, queuedWrites, online } from './store.js';
+import { appVersion, isStandalone } from './usage.js';
 import { openTargets, openAiSettings, openRecallList, openImportPaste,
          foodTargets, latestLb, goalId, previewGoal, setGoal, goalFits } from './food.js';
 import { openWaterSettings, waterSettings, fmtWater } from './water.js';
@@ -179,6 +180,7 @@ export function openSettings(onEdit) {
     if (typeof window.__rackTour === 'function') window.__rackTour();
     else toast('Reload the app and try again');
   });
+  navRow(appList, 'About Rack', appVersion(), () => { close(); openAbout(); });
   navRow(appList, 'Export my data', null, () => { close(); openExport(); });
 
   const out = el('button', 'btn btn-danger btn-block', 'Sign out');
@@ -527,6 +529,77 @@ export function openGoal(onEdit) {
   cancel.style.marginTop = '8px';
   cancel.onclick = close;
   sh.appendChild(cancel);
+}
+
+/* ================= ABOUT =================
+   The three facts that answer "did the update take": the build this page is
+   running, the build the service worker is serving, and when this device last
+   heard from the database. DEPLOY.md has them read out of the admin panel and
+   the database; now they are on the phone. */
+function swVersion() {
+  return new Promise(res => {
+    const sw = navigator.serviceWorker;
+    const c = sw && sw.controller;
+    if (!c) return res(null);
+    const t = setTimeout(() => { sw.removeEventListener('message', h); res(null); }, 1500);
+    function h(e) {
+      if (e.data && e.data.version) { clearTimeout(t); sw.removeEventListener('message', h); res(e.data.version); }
+    }
+    sw.addEventListener('message', h);
+    try { c.postMessage('version'); } catch { clearTimeout(t); sw.removeEventListener('message', h); res(null); }
+  });
+}
+
+function ago(t) {
+  if (!t) return 'never';
+  const s = Math.round((Date.now() - t) / 1000);
+  if (s < 60) return 'just now';
+  const m = Math.round(s / 60);
+  if (m < 60) return m + ' min ago';
+  const h = Math.round(m / 60);
+  if (h < 48) return h + ' h ago';
+  return Math.round(h / 24) + ' days ago';
+}
+
+export function openAbout() {
+  const { sh, close } = sheet();
+  sh.appendChild(el('div', 'eyebrow', 'App'));
+  sh.appendChild(el('h2', null, 'About Rack'));
+
+  const list = el('div', 'set-list');
+  sh.appendChild(list);
+  const kv = (k, v) => {
+    const r = el('div', 'set-row-nav about-row');
+    r.appendChild(el('span', 'set-row-l', k));
+    const val = el('span', 'set-row-v num', v);
+    r.appendChild(val);
+    list.appendChild(r);
+    return val;
+  };
+  kv('App build', appVersion());
+  const swv = kv('Service worker', '…');
+  kv('Last synced', ago(lastSyncAt()));
+  const q = queuedWrites();
+  kv('Waiting to sync', q ? q + (q === 1 ? ' write' : ' writes') : 'nothing');
+  kv('Connection', online.value ? 'online' : 'offline');
+  kv('Installed', isStandalone() ? 'home screen' : 'browser tab');
+
+  const note = noteEl('');
+  note.style.marginTop = '12px';
+  sh.appendChild(note);
+  swVersion().then(v => {
+    swv.textContent = v || 'not running';
+    note.textContent = !v
+      ? 'No service worker is controlling this page yet — a first visit, or a browser without one. Working offline needs it.'
+      : v === appVersion()
+        ? 'The worker and the app are the same build.'
+        : 'The worker is serving ' + v + ' while this page is ' + appVersion() + '. Close Rack from the app switcher and open it twice: the first launch fetches the new build, the second runs it.';
+  });
+
+  const done = el('button', 'btn btn-ghost btn-block', 'Close');
+  done.style.marginTop = '16px';
+  done.onclick = close;
+  sh.appendChild(done);
 }
 
 /* ================= EXPORT =================

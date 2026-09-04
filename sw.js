@@ -22,6 +22,12 @@ self.addEventListener('install', e => {
   );
 });
 
+// The About sheet in settings asks the running worker which build it is, so
+// an update that never took can be seen on the phone instead of guessed at.
+self.addEventListener('message', e => {
+  if (e.data === 'version' && e.source) e.source.postMessage({ version: CACHE });
+});
+
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys()

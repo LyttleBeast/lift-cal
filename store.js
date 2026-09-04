@@ -158,6 +158,20 @@ export function purgeDevice(forUid) {
   return doomed.length;
 }
 
+/* ---------- last sync ----------
+   When this device last heard from the database: any successful read, write
+   or live update. Kept for the About sheet in settings, persisted so it can
+   answer after a reload, and written to localStorage at most once a minute
+   because reads are constant. */
+let lastSyncT = 0;
+let lastSyncSaved = 0;
+function markSync() {
+  lastSyncT = Date.now();
+  if (lastSyncT - lastSyncSaved > 60e3) { lastSyncSaved = lastSyncT; LS.set('lastSync', lastSyncT); }
+}
+export function lastSyncAt() { return lastSyncT || LS.get('lastSync', 0) || 0; }
+export function queuedWrites() { return queue().length; }
+
 /* ---------- write queue (survives offline) ---------- */
 function queue() { return LS.get('queue', []); }
 function pushQueue(path, value) {
@@ -193,7 +207,7 @@ export async function write(path, value) {
   LS.set('mirror:' + path, value);
   const full = userPath(path);
   if (!online.value) { pushQueue(full, value); return; }
-  try { await set(ref(db, full), value); }
+  try { await set(ref(db, full), value); markSync(); }
   catch { pushQueue(full, value); }
 }
 
@@ -205,6 +219,7 @@ export async function read(path, fallback = null) {
     const snap = await get(ref(db, userPath(path)));
     const v = snap.exists() ? snap.val() : fallback;
     LS.set('mirror:' + path, v);
+    markSync();
     return v;
   } catch {
     return cached === undefined ? fallback : cached;
@@ -228,6 +243,7 @@ export async function readExact(path) {
   const snap = await get(ref(db, userPath(path)));
   const v = snap.exists() ? snap.val() : null;
   LS.set('mirror:' + path, v);
+  markSync();
   return v;
 }
 
@@ -243,6 +259,7 @@ export function watch(path, cb) {
       if (UID !== owner) return;
       const v = snap.exists() ? snap.val() : null;
       LS.set('mirror:' + path, v);
+      markSync();
       cb(v);
     }, () => {});
   } catch {

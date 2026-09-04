@@ -1011,6 +1011,10 @@ body.peeking .view.active { padding-bottom: 58px; }
 .fuel-eaten { font-size: 12px; color: var(--dim-text); }
 
 .meal-right { display: flex; align-items: center; gap: 8px; }
+/* About sheet rows: the same row shape as settings, but nothing to tap */
+.about-row { cursor: default; }
+.about-row .set-row-v { color: var(--chalk); }
+
 /* copy a meal forward — a small text button in the meal card header */
 .meal-copy {
   font-size: 11px; color: var(--steel); padding: 4px 8px; border-radius: 999px;
