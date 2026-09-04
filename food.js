@@ -524,7 +524,7 @@ function renderSummary() {
   // but over maintenance reads red before the small print is read at all.
   const zone = z ? zoneOf(t.cal, z) : null;
   big.textContent = Math.abs(remain).toLocaleString();
-  big.style.color = z ? zoneColor(zone) : (remain < 0 ? 'var(--bad)' : 'var(--chalk)');
+  big.style.color = z ? zoneColor(zone) : (remain < 0 ? 'var(--miss)' : 'var(--chalk)');
   sub.appendChild(el('div', 'eyebrow', remain < 0 ? 'kcal over target' : 'kcal left today'));
   sub.appendChild(el('div', 'num fuel-eaten',
     t.cal.toLocaleString() + ' eaten  ·  target ' + targets.cal.toLocaleString()));
@@ -1873,9 +1873,9 @@ function openAiError(e, ctx) {
 }
 
 const CONF = {
-  high:   ['var(--good)', 'confident'],
-  medium: ['var(--warn)', 'a fair guess'],
-  low:    ['var(--bad)',  'a rough guess']
+  high:   ['var(--ok)', 'confident'],
+  medium: ['var(--caution)', 'a fair guess'],
+  low:    ['var(--miss)',  'a rough guess']
 };
 
 /* The check-before-you-log screen. Every row is editable and removable, because
@@ -2012,7 +2012,7 @@ function openRecallHit(hit, ctx) {
     const when = hit.last ? new Date(hit.last).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
     const pill = el('div', 'conf');
     const dot = el('i');
-    dot.style.background = hit.exact ? 'var(--good)' : 'var(--warn)';
+    dot.style.background = hit.exact ? 'var(--ok)' : 'var(--caution)';
     pill.append(dot, el('span', null,
       (hit.exact ? 'exact match' : 'close match') +
       (hit.n > 1 ? ' · logged ' + hit.n + ' times' : '') +
@@ -2180,7 +2180,7 @@ export function openAiSettings() {
     test.disabled = true;
     try {
       const q = await quota();
-      status.style.color = 'var(--good)';
+      status.style.color = 'var(--ok)';
       // Photo and describe have separate daily budgets — showing one combined
       // number would say "4 left" to somebody who has no photos left at all.
       const photo = q.left.photo != null ? q.left.photo : q.left.day;
@@ -2191,7 +2191,7 @@ export function openAiSettings() {
         text + ' of ' + tMax + ' describes left · $' + Number(q.spend.monthUsd).toFixed(3) +
         ' of $' + q.spend.capUsd + ' used this month.';
     } catch (err) {
-      status.style.color = 'var(--bad)';
+      status.style.color = 'var(--miss)';
       status.textContent = err.message || 'Could not reach it.';
     }
     test.disabled = false;

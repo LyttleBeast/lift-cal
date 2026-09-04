@@ -184,7 +184,7 @@ function renderToday() {
   side.appendChild(el('div', 'eyebrow', n >= g ? 'goal met' : 'to go'));
   const big = el('div', 'load-num num', (n >= g ? n - g : left).toLocaleString());
   big.style.fontSize = '26px';
-  big.style.color = n >= g ? 'var(--good)' : 'var(--chalk)';
+  big.style.color = n >= g ? 'var(--ok)' : 'var(--chalk)';
   side.appendChild(big);
   side.appendChild(el('div', 'st-side-lbl', n >= g ? 'steps past goal' : 'steps'));
 
@@ -226,7 +226,7 @@ function ring(frac, n, g) {
   if (shown > 0) {
     svg.appendChild(svgEl('circle', {
       cx: mid, cy: mid, r: R, fill: 'none',
-      stroke: over ? 'var(--good)' : 'var(--p-green)',
+      stroke: over ? 'var(--ok)' : 'var(--p-green)',
       'stroke-width': 11, 'stroke-linecap': 'round',
       'stroke-dasharray': `${(C * shown).toFixed(1)} ${C.toFixed(1)}`,
       transform: `rotate(-90 ${mid} ${mid})`
@@ -283,14 +283,14 @@ function renderTrend() {
       bars.push({
         label: d.toLocaleDateString('en-US', { month: 'narrow' }),
         v: Math.round(mean(vals)),
-        color: mean(vals) >= goal() ? 'var(--good)' : 'var(--p-green)'
+        color: mean(vals) >= goal() ? 'var(--ok)' : 'var(--p-green)'
       });
     }
   } else {
     bars = keysBack(range).map(k => ({
       label: range <= 7 ? parseKey(k).toLocaleDateString('en-US', { weekday: 'narrow' }) : '',
       v: stepsOn(k),
-      color: stepsOn(k) >= goal() ? 'var(--good)' : 'var(--p-green)'
+      color: stepsOn(k) >= goal() ? 'var(--ok)' : 'var(--p-green)'
     }));
   }
   card.appendChild(barChart(bars, { height: 170, color: 'var(--p-green)', showValues: range <= 7 }));
@@ -326,7 +326,7 @@ function renderStats() {
   r1.append(
     cell(vals.length ? compact(Math.round(mean(vals))) : '–', 'Daily avg'),
     cell(vals.length ? compact(vals.reduce((s, x) => s + x, 0)) : '–', 'Total'),
-    cell(String(hit), 'Goal days', hit ? 'var(--good)' : null)
+    cell(String(hit), 'Goal days', hit ? 'var(--ok)' : null)
   );
   card.appendChild(r1);
 
@@ -343,7 +343,7 @@ function renderStats() {
     cell(bestK ? compact(stepsOn(bestK)) : '–', bestK ? 'Best · ' + fmtDate(bestK) : 'Best day'),
     cell(all.length ? compact(Math.round(mean(all.map(stepsOn)))) : '–', 'All-time avg'),
     cell(delta == null ? '–' : (delta > 0 ? '+' : '') + Math.round(delta) + '%', 'vs last week',
-         delta == null ? null : delta >= 0 ? 'var(--good)' : 'var(--warn)')
+         delta == null ? null : delta >= 0 ? 'var(--ok)' : 'var(--caution)')
   );
   card.appendChild(r2);
   return card;
@@ -414,7 +414,7 @@ function renderWeekdays() {
   const bars = buckets.map((b, i) => ({
     label: names[i],
     v: Math.round(mean(b)),
-    color: mean(b) >= goal() ? 'var(--good)' : 'var(--p-green)'
+    color: mean(b) >= goal() ? 'var(--ok)' : 'var(--p-green)'
   }));
   card.appendChild(barChart(bars, { height: 140, color: 'var(--p-green)', showValues: true }));
 
@@ -442,7 +442,7 @@ function renderRecent() {
     const row = el('div', 'st-row');
     row.appendChild(el('span', 'st-row-d', k === todayKey() ? 'Today' : fmtDateFull(k)));
     const v = el('span', 'st-row-n num', n ? n.toLocaleString() : '–');
-    if (n >= goal()) v.style.color = 'var(--good)';
+    if (n >= goal()) v.style.color = 'var(--ok)';
     row.appendChild(v);
     const pct = el('span', 'st-row-p', n ? Math.round(n / goal() * 100) + '%' : '');
     row.appendChild(pct);

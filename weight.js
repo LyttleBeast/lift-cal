@@ -219,7 +219,7 @@ export function render() {
     sr.appendChild(cell(
       rate != null ? (rate > 0 ? '+' : '') + r1(rate) : '–',
       tr.model ? 'lb / week ✓' : 'lb / week',
-      right == null ? null : right ? 'var(--good)' : 'var(--warn)'
+      right == null ? null : right ? 'var(--ok)' : 'var(--caution)'
     ));
     sr.style.marginBottom = '12px';
     wrap.appendChild(sr);

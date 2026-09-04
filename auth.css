@@ -55,7 +55,7 @@
 }
 .auth-sub { margin: 0 0 20px; font-size: 13px; color: var(--dim); line-height: 1.5; }
 
-.auth-ok { color: var(--good); font-size: 13px; min-height: 0; line-height: 1.5; }
+.auth-ok { color: var(--ok); font-size: 13px; min-height: 0; line-height: 1.5; }
 .auth-err:empty, .auth-ok:empty { min-height: 0; }
 .auth-err { min-height: 0; line-height: 1.5; }
 .auth-err:not(:empty), .auth-ok:not(:empty) { margin-bottom: 10px; }
@@ -286,7 +286,7 @@ body.tour-on #dock { z-index: 212; pointer-events: none; }
   font-size: 11px; color: var(--dim); margin-top: 2px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.person-sub.live { color: var(--good); }
+.person-sub.live { color: var(--ok); }
 .person-note { font-size: 12px; color: var(--steel); margin-top: 5px; line-height: 1.45; }
 .person-acts { display: flex; gap: 6px; flex: none; }
 

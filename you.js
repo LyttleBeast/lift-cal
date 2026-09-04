@@ -1236,7 +1236,7 @@ function goalCard(title, o) {
   const frac = o.avg / o.goal;
   const cell = el('div', 'ring-cell');
   cell.appendChild(ring(frac, {
-    size: 84, thickness: 8, color: frac >= 1 ? 'var(--good)' : o.color,
+    size: 84, thickness: 8, color: frac >= 1 ? 'var(--ok)' : o.color,
     top: Math.round(frac * 100) + '%', sub: 'of goal'
   }));
   cell.appendChild(el('div', 'ring-of num', o.fmt(o.avg) + ' a day'));
@@ -1247,7 +1247,7 @@ function goalCard(title, o) {
   // The days that cleared the goal are drawn in the good colour and the rest
   // in the subject's, so "3 of 6 at goal" is visible in the bars before it is
   // read under them.
-  bars.appendChild(barChart(o.bars.map(b => ({ ...b, color: b.v >= o.goal ? 'var(--good)' : o.color })),
+  bars.appendChild(barChart(o.bars.map(b => ({ ...b, color: b.v >= o.goal ? 'var(--ok)' : o.color })),
     { width: 150, height: 96, color: o.color, target: o.goal, showValues: false }));
   c.appendChild(bars);
 
@@ -1460,7 +1460,7 @@ function trajectoryCard(found, est, maint) {
       const bar = el('div', 'traj-bar');
       const fill = el('div', 'traj-fill');
       fill.style.width = Math.round(t.progress * 100) + '%';
-      fill.style.background = t.status === 'wrong' || t.status === 'drift' ? 'var(--warn)' : C_WEIGHT;
+      fill.style.background = t.status === 'wrong' || t.status === 'drift' ? 'var(--caution)' : C_WEIGHT;
       bar.appendChild(fill);
       c.appendChild(bar);
       const ends = el('div', 'traj-ends');

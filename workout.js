@@ -1078,7 +1078,7 @@ function renderSummary() {
     card.appendChild(hd);
     const big = el('div', 'load-num num', (pct >= 0 ? '+' : '') + pct + '%');
     big.style.fontSize = '34px';
-    big.style.color = pct >= 0 ? 'var(--good)' : 'var(--steel)';
+    big.style.color = pct >= 0 ? 'var(--ok)' : 'var(--steel)';
     card.appendChild(big);
     card.appendChild(noteEl(
       compact(record.volume) + ' lb today against a ' + compact(Math.round(avg)) +

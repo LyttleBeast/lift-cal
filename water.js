@@ -149,7 +149,7 @@ export function renderWater(editable = true) {
 
   const big = el('div', 'load-num num', String(toDisplay(total).toLocaleString()));
   big.style.fontSize = '34px';
-  big.style.color = frac >= 1 ? 'var(--good)' : 'var(--p-blue)';
+  big.style.color = frac >= 1 ? 'var(--ok)' : 'var(--p-blue)';
   right.appendChild(big);
   right.appendChild(el('div', 'eyebrow',
     (UNITS[settings.unit] || UNITS.ml).label + ' of ' + fmtWater(goal)));

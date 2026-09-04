@@ -55,9 +55,16 @@
   --p-white:  #e8e5de;  /* arms       (5kg)  */
   --p-chrome: #a8aeb8;  /* core       (1.25) */
 
-  --good:    #2aa85c;
-  --warn:    #f0be1e;
-  --bad:     #d6252b;
+  /* Judgement — doing well, watch this, missed. These used to be the same
+     three hexes as the plates above, so green meant shoulders AND on track,
+     yellow meant legs, Fuel, the primary button AND caution. The plates stay
+     hard and saturated for muscle groups and subjects; a verdict is drawn in
+     these softer tints, which also clear 4.5:1 as text on --bar (the plate red
+     never did, at 3.3:1). If they start reading plastic beside the plates, go
+     darker or more saturated here — nothing else needs to move. */
+  --ok:      #4ec38a;
+  --caution: #ffcf5c;
+  --miss:    #ff7a6b;
 
   --dock-h: 64px;
   /* The notch / status bar. Zero in Safari, where the browser chrome already
@@ -479,11 +486,11 @@ body.peeking .view.active { padding-bottom: 58px; }
 .set-hd span:nth-child(2), .set-hd span:nth-child(3) { text-align: center; }
 
 .set-row { border-top: 1px solid var(--collar); }
-.set-row.done { background: rgba(42,168,92,.07); }
+.set-row.done { background: rgba(78,195,138,.07); }
 .set-row.flash { animation: setFlash 600ms var(--ease); }
 @keyframes setFlash {
   0%   { background: rgba(240,190,30,.28); }
-  100% { background: rgba(42,168,92,.07); }
+  100% { background: rgba(78,195,138,.07); }
 }
 
 .set-idx {
@@ -589,8 +596,8 @@ body.peeking .view.active { padding-bottom: 58px; }
   color: var(--dim); display: flex; align-items: center; gap: 5px;
   font-variation-settings: 'wdth' 88, 'wght' 700;
 }
-.sync-pip i { width: 6px; height: 6px; border-radius: 50%; background: var(--good); display: block; }
-.sync-pip.off i { background: var(--warn); }
+.sync-pip i { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); display: block; }
+.sync-pip.off i { background: var(--caution); }
 
 /* ============ DESKTOP ============ */
 @media (min-width: 900px) {
@@ -791,7 +798,7 @@ body.peeking .view.active { padding-bottom: 58px; }
   font-size: 19px; font-variation-settings: 'wdth' 110, 'wght' 800;
   color: var(--p-yellow); line-height: 1;
 }
-.pr-delta { font-size: 10px; color: var(--good); margin-top: 3px; }
+.pr-delta { font-size: 10px; color: var(--ok); margin-top: 3px; }
 
 /* ============ PERSONAL BEST ROWS ============ */
 .pb-row {
@@ -1072,7 +1079,7 @@ body.peeking .view.active { padding-bottom: 58px; }
   background: none; border: 1px solid var(--collar); border-radius: var(--r-sm);
   color: var(--dim); font-size: 17px; cursor: pointer;
 }
-.wpe-del:active { color: var(--bad); border-color: var(--bad); }
+.wpe-del:active { color: var(--miss); border-color: var(--miss); }
 
 /* ============================================================
    TIME-OF-DAY CURVE
@@ -1244,8 +1251,8 @@ body.peeking .view.active { padding-bottom: 58px; }
    number, because the sign does not know which way is good. The caller
    picks the class; if it can't tell, it uses `.flat`. */
 .delta { display: inline-flex; align-items: baseline; gap: 5px; color: var(--steel); }
-.delta.up   { color: var(--good); }
-.delta.down { color: var(--bad); }
+.delta.up   { color: var(--ok); }
+.delta.down { color: var(--miss); }
 .delta.flat { color: var(--dim); }
 .delta-v {
   font-size: 13px; font-variant-numeric: tabular-nums;
@@ -1322,8 +1329,8 @@ body.peeking .view.active { padding-bottom: 58px; }
   font-size: 9px; letter-spacing: .1em; text-transform: uppercase;
   font-variation-settings: 'wdth' 88, 'wght' 700;
 }
-.adm-flag.on  { border-color: rgba(42,168,92,.45);  color: var(--good); }
-.adm-flag.off { border-color: rgba(214,37,43,.45);  color: var(--bad); }
+.adm-flag.on  { border-color: rgba(78,195,138,.45);  color: var(--ok); }
+.adm-flag.off { border-color: rgba(255,122,107,.45);  color: var(--miss); }
 
 /* ---------- add to home screen ----------
    Numbered steps in the same shape as the Steps setup walkthrough, on a card
@@ -1477,7 +1484,7 @@ body.peeking .view.active { padding-bottom: 58px; }
   border-radius: var(--r-sm);
   border: 1px solid rgba(240, 190, 30, .32);
   background: rgba(240, 190, 30, .07);
-  color: var(--warn); font-size: 11.5px; line-height: 1.38;
+  color: var(--caution); font-size: 11.5px; line-height: 1.38;
 }
 .ai-warn svg { width: 16px; height: 16px; flex-shrink: 0; }
 
@@ -1500,7 +1507,7 @@ body.peeking .view.active { padding-bottom: 58px; }
   border-radius: var(--r-sm);
   transition: color var(--fast) var(--ease), background var(--fast) var(--ease);
 }
-.ex-del:active { color: var(--bad); background: rgba(214, 37, 43, .12); }
+.ex-del:active { color: var(--miss); background: rgba(255, 122, 107, .12); }
 
 /* ---------- estimator ---------- */
 .ai-shot {
@@ -1668,7 +1675,7 @@ body.peeking .view.active { padding-bottom: 58px; }
 /* The third judgement, for the weight card's rate: the wrong way for the
    stated goal is a caution, not a failure — a pound up on a cut is a week to
    look at, not a red mark on the screen the app opens on. */
-.delta.warn { color: var(--warn); }
+.delta.warn { color: var(--caution); }
 
 /* ---------- You, second pass: the pictures got more to say ----------
    Additions only; the selectors above are untouched. */
@@ -1711,7 +1718,7 @@ body.peeking .view.active { padding-bottom: 58px; }
   width: 38px; text-align: right; font-size: 11px; color: var(--dim);
   font-variation-settings: 'wdth' 100, 'wght' 700;
 }
-.macro-pct.good { color: var(--good); }
+.macro-pct.good { color: var(--ok); }
 
 /* the month's working sets as one bar split by muscle */
 .split-bar { display: flex; gap: 2px; height: 14px; border-radius: 4px; overflow: hidden; }
@@ -1766,9 +1773,9 @@ body.peeking .view.active { padding-bottom: 58px; }
   padding: 2px 7px 2px 5px; border-radius: 999px; gap: 3px;
   background: rgba(255,255,255,.05);
 }
-.delta-pill.up   { background: rgba(42,168,92,.16); }
-.delta-pill.down { background: rgba(214,37,43,.16); }
-.delta-pill.warn { background: rgba(240,190,30,.16); }
+.delta-pill.up   { background: rgba(78,195,138,.16); }
+.delta-pill.down { background: rgba(255,122,107,.16); }
+.delta-pill.warn { background: rgba(255,207,92,.16); }
 .delta-pill .delta-v { font-size: 11.5px; }
 .delta-pill .delta-a { font-size: 10px; }
 .kpi-prev { font-size: 10.5px; color: var(--dim); margin-top: 4px; letter-spacing: .02em; }
@@ -1843,14 +1850,14 @@ body.peeking .view.active { padding-bottom: 58px; }
 .find-d { font-size: 12px; color: var(--steel); line-height: 1.45; margin-top: 2px; }
 .find-row.good .find-t { color: var(--chalk); }
 .find-row.warn .find-t { color: var(--chalk); }
-.card-wins { border-left: 3px solid var(--good); }
-.card-improve { border-left: 3px solid var(--warn); }
+.card-wins { border-left: 3px solid var(--ok); }
+.card-improve { border-left: 3px solid var(--caution); }
 
 /* goal trajectory */
 .traj-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--knurl); align-self: center; }
-.traj-dot.good { background: var(--good); box-shadow: 0 0 0 4px rgba(42,168,92,.18); }
-.traj-dot.warn { background: var(--warn); box-shadow: 0 0 0 4px rgba(240,190,30,.18); }
-.traj-dot.bad  { background: var(--bad);  box-shadow: 0 0 0 4px rgba(214,37,43,.18); }
+.traj-dot.good { background: var(--ok); box-shadow: 0 0 0 4px rgba(78,195,138,.18); }
+.traj-dot.warn { background: var(--caution); box-shadow: 0 0 0 4px rgba(255,207,92,.18); }
+.traj-dot.bad  { background: var(--miss);  box-shadow: 0 0 0 4px rgba(255,122,107,.18); }
 .traj-reason { font-size: 12.5px; color: var(--steel); margin-top: 6px; line-height: 1.45; }
 .traj-bar { height: 8px; border-radius: 4px; background: var(--collar); overflow: hidden; margin-top: 14px; }
 .traj-fill { height: 100%; border-radius: 4px; transition: width 500ms var(--ease); }
