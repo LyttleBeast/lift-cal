@@ -130,6 +130,25 @@ function legacyMaintenance(weightEntries, daySummaries) {
   return out;
 }
 
+/* ---------- goal direction ----------
+   Which way is "better" for bodyweight: -1 on a cut, +1 on a bulk, 0 holding,
+   null when the account has not said. The goal stated at onboarding is written
+   into targets.auto.rateWk whether or not auto targets are on, so that is the
+   first answer; failing that, a calorie target well below maintenance is a
+   cut and one well above it is a gain. Shared here because You, Weight and
+   Fuel all colour a change in weight by it, and three private copies is how
+   a deliberate bulk ends up green on one tab and amber on the next. */
+export function goalDir(targets, maintCal) {
+  const a = targets && targets.auto;
+  if (a && Number.isFinite(a.rateWk) && a.rateWk !== 0) return a.rateWk < 0 ? -1 : 1;
+  if (maintCal > 0 && targets && targets.cal > 0) {
+    if (targets.cal < maintCal - 100) return -1;
+    if (targets.cal > maintCal + 100) return 1;
+    return 0;
+  }
+  return null;
+}
+
 /* ---------- calorie zones ----------
    One maintenance number turns into three bands: under it you're cutting,
    within a collar of it you're holding, over it you're gaining.

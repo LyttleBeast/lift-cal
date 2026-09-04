@@ -14,7 +14,7 @@
 
 import { read, write, watch, LS, todayKey, uid } from './store.js';
 import { maintenance, calorieZones, zoneOf, refreshModel,
-         autoTargets, trendWeight, MIN_CARB_G } from './tdee.js';
+         autoTargets, trendWeight, MIN_CARB_G, goalDir } from './tdee.js';
 import { initWater, loadWaterDay, renderWater, openWaterSettings } from './water.js';
 import { OWNER_UID } from './firebase-config.js';
 import { $, el, svgEl, sheet, toast, noteEl, confirmSheet, copyText, readClipboard,
@@ -575,18 +575,11 @@ function maintInfo() {
    three bands: everything left of the first tick is a deficit, between the two
    is holding, past the second you're gaining. The dashed mark is the day's
    calorie target, wherever you've set it. */
-/* Which way the account said it was going: the sign of the onboarding rate
-   (food/targets.auto.rateWk, written whether or not auto targets are on),
-   failing that where the target sits against maintenance. The same rule the
-   You tab uses (you.js goalDir), so the two screens lean the same way. */
+/* Which way the account said it was going. The rule is tdee.js goalDir — the
+   one You and Weight read too, so the three screens lean the same way; this
+   only folds its "unknown" into "hold", which is what the bar draws for both. */
 function goalSign(maintCal) {
-  const a = targets.auto;
-  if (a && Number.isFinite(a.rateWk) && a.rateWk !== 0) return a.rateWk < 0 ? -1 : 1;
-  if (maintCal > 0 && targets.cal > 0) {
-    if (targets.cal < maintCal - 100) return -1;
-    if (targets.cal > maintCal + 100) return 1;
-  }
-  return 0;
+  return goalDir(targets, maintCal) || 0;
 }
 
 function renderCalMeter(cal) {

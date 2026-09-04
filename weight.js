@@ -3,7 +3,7 @@
 
 import { read, write, watch, todayKey } from './store.js';
 import { weightStats, dailyMeans as meansOf, movingAvg, maintenance,
-         refreshModel, modelState, adjustedDays, peakOffset, trendRate } from './tdee.js';
+         refreshModel, modelState, adjustedDays, peakOffset, trendRate, goalDir } from './tdee.js';
 import { lineChart } from './analytics.js';
 import { bump } from './usage.js';
 import { $, el, toast, noteEl, confirmSheet, r1, parseKey, fmtDateFull, LIMITS, within } from './ui.js';
@@ -12,9 +12,16 @@ let entries = {};      // id -> { lb, t }
 let range   = 30;      // chart window, days
 let adjusted = true;   // chart shows normalised weigh-ins, not raw ones
 let summaries = {};    // dateKey -> {cal,...} for TDEE
+let targets   = {};    // food/targets — the stated goal, and a pinned maintenance if any
 
 export async function initWeight() {
-  entries = (await read('weight/entries', null)) || {};
+  // The rate's colour needs the goal direction on the first paint, and that
+  // reads targets and, failing a stated goal, maintenance — so both come in
+  // with the weigh-ins rather than trailing them by a render.
+  const [we, ds, tg] = await Promise.all([
+    read('weight/entries', null), read('food/daySummaries', null), read('food/targets', null)
+  ]);
+  entries = we || {}; summaries = ds || {}; targets = tg || {};
   await refit();
   // Stay subscribed: this node is written whole, so a stale copy in memory
   // would silently drop a weigh-in logged on another device the next time you
@@ -44,6 +51,13 @@ function sorted() {
 }
 function dailyMeans() { return meansOf(entries); }
 function stats() { return weightStats(entries); }
+
+// Same precedence as Fuel and You: a pinned number wins, then the estimate.
+function maintCal() {
+  if (Number(targets.maint) > 0) return Math.round(Number(targets.maint));
+  const m = maintenance(entries, summaries);
+  return m.tdee > 0 ? m.tdee : null;
+}
 
 /* ================= RENDER ================= */
 // Synchronous, the way you.js paints. This used to be async: it emptied the
@@ -109,10 +123,16 @@ export function render() {
     sr.appendChild(cell(s.avg7 != null ? String(r1(s.avg7)) : '–', '7-day avg'));
     const tr = trendRate(entries);
     const rate = tr.rateWk;
+    // Losing is only good on a cut. This used to colour any fall green and any
+    // rise amber, which contradicted You for anybody bulking; both tabs now ask
+    // tdee.js goalDir, and stay uncoloured when the goal is unknown.
+    const dir = goalDir(targets, maintCal());
+    const right = dir == null || rate == null ? null
+      : dir === 0 ? Math.abs(rate) <= 0.5 : dir < 0 ? rate <= 0 : rate >= 0;
     sr.appendChild(cell(
       rate != null ? (rate > 0 ? '+' : '') + r1(rate) : '–',
       tr.model ? 'lb / week ✓' : 'lb / week',
-      rate != null ? (rate <= 0 ? 'var(--good)' : 'var(--warn)') : null
+      right == null ? null : right ? 'var(--good)' : 'var(--warn)'
     ));
     sr.style.marginBottom = '12px';
     wrap.appendChild(sr);
@@ -290,8 +310,8 @@ async function renderTDEE(s) {
   // Fuel only draws its marks off this estimate when nothing is pinned
   // (food.js:565) — and setup writes a starting number there for everybody who
   // did not skip it, so "Fuel uses this" is false more often than it is true.
-  const t = (await read('food/targets', null)) || {};
-  const pinned = Number(t.maint) > 0 ? Math.round(Number(t.maint)) : null;
+  targets = (await read('food/targets', null)) || {};
+  const pinned = Number(targets.maint) > 0 ? Math.round(Number(targets.maint)) : null;
 
   if (m.tdee == null) {
     card.appendChild(noteEl('Needs ' + m.need.join(' and ') +

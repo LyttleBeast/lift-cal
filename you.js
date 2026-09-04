@@ -68,7 +68,8 @@ import { assess, keysBack as keysBackI, streakOf, fmtRange } from './insights.js
 import { allSessions, exerciseIndex, filterByRange, groupSplit, topBy, weeklyVolume,
          lineChart, barChart, ring, sparkline, heatStrip, emptyChart, legend,
          groupColor } from './analytics.js';
-import { weightStats, maintenance, trendRate, refreshModel, trendWeight, adjustedDays } from './tdee.js';
+import { weightStats, maintenance, trendRate, refreshModel, trendWeight, adjustedDays,
+         goalDir as goalDirOf } from './tdee.js';
 import { fmtWater } from './water.js';
 import { isStandalone } from './usage.js';
 import { openInstallGuide } from './onboarding.js';
@@ -692,20 +693,11 @@ function sessionsIn(keys) {
   return sessions.filter(s => s && set.has(s._date));
 }
 
-/* Which way is "better" for bodyweight. The goal the account stated at
-   onboarding is written into targets.auto.rateWk whether or not auto targets
-   are switched on, so that is the first answer; failing that, a calorie target
-   that sits well below maintenance is a cut and one well above it is a gain.
-   When neither is knowable the delta stays neutral rather than guessing. */
+/* Which way is "better" for bodyweight. The rule lives in tdee.js now, because
+   the Weight tab colours the same rate and used to assume a cut; this is just
+   that rule fed this module's targets and maintenance. */
 function goalDir(maint) {
-  const a = targets && targets.auto;
-  if (a && Number.isFinite(a.rateWk) && a.rateWk !== 0) return a.rateWk < 0 ? -1 : 1;
-  if (maint && targets && targets.cal > 0) {
-    if (targets.cal < maint.cal - 100) return -1;
-    if (targets.cal > maint.cal + 100) return 1;
-    return 0;
-  }
-  return null;
+  return goalDirOf(targets, maint ? maint.cal : null);
 }
 
 const higherBetter = (n, p) => n > p ? 'up' : n < p ? 'down' : 'flat';
