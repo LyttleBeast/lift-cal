@@ -1,5 +1,12 @@
 # Overnight improvement pass — report
 
+> **Reverted on 4 September 2026 at Micah's request.** The app is back at the
+> `before-improvements` state (plus a service-worker bump so phones take the
+> reverted build). Every commit below is still in history, so any single item
+> can be brought back with `git cherry-pick <sha>` — check §4 first for the
+> ones that were never run on a phone. This file is kept as the record of what
+> was tried.
+
 Run unattended on the night of 3–4 September 2026 against the tag
 `before-improvements` (`cfb1101`). Four phases, four deploys: the live site
 moved `rack-v24 → v25 → v26 → v27 → v28`, one bump per completed phase. Every
