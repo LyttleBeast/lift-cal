@@ -832,14 +832,19 @@ function beep() {
 }
 
 /* ---------- collect ---------- */
-// Keeps only sets that are marked done and carry both a weight and reps.
+// Keeps only sets that are marked done and carry reps. A blank weight is a
+// bodyweight set — pull-ups, dips, planks — and this used to drop it, which
+// took the whole exercise out of the record when every set was blank. It is
+// kept as 0 lb: still a working set for the sets-by-muscle counts and the
+// "last time" line, while 0 lb adds nothing to volume and e1rm() returns 0 for
+// a zero load, so it can never surface as a record or a strongest lift.
 function collectDone() {
   return session.exercises
     .map(ex => ({
       ...ex,
       // tw/tr are routine targets — live-session scaffolding, not part of the record.
-      sets: ex.sets.filter(s => s.done && s.w !== '' && s.r !== '')
-                   .map(({ tw, tr, ...keep }) => keep)
+      sets: ex.sets.filter(s => s.done && s.r !== '' && s.r != null)
+                   .map(({ tw, tr, ...keep }) => ({ ...keep, w: keep.w === '' || keep.w == null ? '0' : keep.w }))
     }))
     .filter(ex => ex.sets.length);
 }
