@@ -258,16 +258,22 @@ chars.
 | `qty` | free text — "1 bowl", "150 g", "2 × scoop (88 g)" |
 | `cal` `p` `c` `f` | kcal and grams, for the amount actually eaten |
 | `meal` | `breakfast` \| `lunch` \| `dinner` \| `snack` |
-| `src` | provenance — `manual`, `lib`, `barcode`, `meal`, `copy`, `repeat`, `claude` (pasted JSON), `ai-photo` and `ai-text` (the in-app estimator), `recall` (answered from `food/recall` without spending a request) |
+| `src` | provenance — `manual`, `lib`, `barcode`, `meal`, `copy` (a meal or day copied forward, or "log this again"), `repeat` (tapped from the recent row or "log on today"), `quick` (calories only: `p`/`c`/`f` are written as 0 and mean *unknown*, not zero — see `daySummaries.q`), `claude` (pasted JSON), `ai-photo` and `ai-text` (the in-app estimator), `recall` (answered from `food/recall` without spending a request) |
 | `micro` | optional, any subset of the six keys above |
 | `itemId` `amt` `unit` | only on entries linked to the saved-food library |
 | `baseN` `qtyBase` `mult` | portion bookkeeping for entries with no library item behind them: `baseN` is one portion's macros, `mult` what it was scaled by. If you rewrite `cal`/`p`/`c`/`f` on an existing entry, delete all three, or the next tap of a ×2 chip scales the numbers you replaced |
 
-## `food/daySummaries/{YYYY-MM-DD}` → `{ cal, p, c, f }`
+## `food/daySummaries/{YYYY-MM-DD}` → `{ cal, p, c, f, q? }`
 
 Integer sums of that day's log. The maintenance estimate reads this, not the raw
 log, so a stale summary skews the TDEE number for two weeks. The app recomputes
 it on every change to a day.
+
+`q` is present only when some of the day's calories were quick-logged (entries
+with `src: "quick"`), and is that many kcal. It means "macros unknown for this
+much of the day": You and `insights.js` keep such a day in every calorie
+average and leave it out of the macro averages and the protein verdicts. If you
+recompute a summary by hand, carry `q` or the day reads as protein-free.
 
 ## `food/targets` → `{ cal, p, f, maint, goalLb, auto }`
 
@@ -389,6 +395,15 @@ empirical, reading intake against the real scale trend, so activity is already
 inside it. A step term would count the same walking twice.
 
 ## `settings/steps` → `{ goal }`
+
+## `settings/train` → `{ restSec }`
+
+The default rest between sets, so it follows the person rather than the phone.
+Written by the settings hub alongside the device's localStorage copy;
+`workout.js` copies it into localStorage at boot and the rest timer keeps
+reading localStorage, so a phone with no connection still has a number. It
+lives here and not on `profile` because `profile` ends in `$other: false` and
+refuses any key it does not list, while `settings` has no validation block.
 
 ## `routines/{routineId}` → one pre-planned workout
 
