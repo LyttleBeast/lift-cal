@@ -442,7 +442,17 @@ export function render() {
   left.appendChild(el('div', 'eyebrow', 'Fuel'));
   const title = isToday() ? 'Today'
     : viewDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-  left.appendChild(el('h1', null, title));
+  const h1 = el('h1', isToday() ? null : 'h1-link', title);
+  if (!isToday()) {
+    // Browsing back a week is one tap a day; getting home used to be the same
+    // again. The date itself is the way back.
+    h1.setAttribute('role', 'button');
+    h1.setAttribute('aria-label', 'Back to today');
+    h1.tabIndex = 0;
+    h1.onclick = async () => { viewDate = new Date(); await loadDay(); render(); };
+    h1.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); h1.onclick(); } };
+  }
+  left.appendChild(h1);
   hd.appendChild(left);
 
   const nav = el('div', 'cal-nav');
