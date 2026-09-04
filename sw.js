@@ -1,6 +1,6 @@
 // Rack's service worker. Bump CACHE with every change to a file the phone
 // loads (CLAUDE.md), and keep usage.js's VERSION on the same string.
-const CACHE = 'rack-v25';
+const CACHE = 'rack-v26';
 
 // How long to give the network before a cached copy is served instead. Long
 // enough that a normal fetch on a normal connection always wins, short enough
