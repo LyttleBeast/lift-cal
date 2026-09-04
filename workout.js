@@ -25,6 +25,7 @@ let restTotal  = 0;
 let wakeLock   = null;
 let tickHandle = null;
 let peek       = false;     // live session parked out of sight, calendar on top
+let weekLoading = false;    // renderWeekVolume is fetching a month it found missing
 
 export { allExercises } from './picker.js';
 
@@ -38,6 +39,7 @@ export async function initWorkout() {
   if (saved) session = saved;
 
   await loadMonth(monthKey(viewMonth));
+  await weekMonths();
   render();
   startTick();
 }
@@ -66,12 +68,28 @@ async function requestWakeLock() {
 function releaseWakeLock() { try { wakeLock && wakeLock.release(); } catch {} wakeLock = null; }
 
 /* ================= DATA ================= */
+// Fills the cache for a month and nothing else. Split out of loadMonth because
+// the live subscription below follows whatever loadMonth was last asked for,
+// and the "last 7 days" card needs a second month in memory without stealing
+// the watch from the month the calendar is actually showing.
+async function fetchMonth(mk) {
+  if (!monthCache[mk]) monthCache[mk] = (await read(`workouts/${mk}`, null)) || {};
+  return monthCache[mk];
+}
+
 async function loadMonth(mk) {
-  if (monthCache[mk]) { watchMonth(mk); return monthCache[mk]; }
-  const data = (await read(`workouts/${mk}`, null)) || {};
-  monthCache[mk] = data;
+  await fetchMonth(mk);
   watchMonth(mk);
-  return data;
+  return monthCache[mk];
+}
+
+// The months the trailing seven days touch: two of them for the first six
+// days of every month. The card used to sum only what happened to be cached,
+// which on those days was the current month alone, so it undercounted and
+// disagreed with You, which reads the whole tree.
+function weekMonths() {
+  const mks = [...new Set([monthKey(new Date(Date.now() - 7 * 864e5)), monthKey()])];
+  return Promise.all(mks.map(fetchMonth));
 }
 
 // Keep the month on screen subscribed, so a session written straight to the
@@ -313,6 +331,19 @@ function renderWeekVolume() {
   card.appendChild(hd);
 
   const since = Date.now() - 7 * 864e5;
+
+  // initWorkout fetched both months, but a phone keeps this tab alive for
+  // days, so the window can cross into a month nobody has fetched yet. Fetch
+  // it and repaint once; fetchMonth leaves an empty month as {}, so a month
+  // with no training cannot trigger this twice.
+  const missing = [...new Set([monthKey(new Date(since)), monthKey()])].filter(mk => !monthCache[mk]);
+  if (missing.length && !weekLoading) {
+    weekLoading = true;
+    Promise.all(missing.map(fetchMonth))
+      .then(() => { weekLoading = false; if (!session && !summary && !isStatsOpen()) render(); })
+      .catch(() => { weekLoading = false; });
+  }
+
   const counts = {};
   Object.values(monthCache).forEach(month => {
     Object.values(month).forEach(day => {
