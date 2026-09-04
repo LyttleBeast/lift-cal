@@ -2,8 +2,8 @@ import { login, signup, logout, resetPassword, watchAuth, flushQueue, syncPip,
          LS, uid, isOwner, watchShared } from './store.js';
 import { accessState, renderGate, claimInvite, ensureAiRecord, normalizeCode, APPROVED } from './access.js';
 import { onboardingState, runSetup, runTour } from './onboarding.js';
-import { initWorkout, render as renderWorkout, hasActiveSession } from './workout.js';
-import { initFood, render as renderFood } from './food.js';
+import { initWorkout, render as renderWorkout, hasActiveSession, startFresh } from './workout.js';
+import { initFood, render as renderFood, openLogFood } from './food.js';
 import { initWeight, render as renderWeight } from './weight.js';
 import { initSteps, render as renderSteps } from './steps.js';
 import { initYou, render as renderYou } from './you.js';
@@ -245,7 +245,25 @@ dock.addEventListener('click', e => {
    `openOn` is 'you' | 'workout' | 'last'; 'last' defers to `lastView`, which
    switchView has been writing all along. And if You failed to initialise, we
    send them to Train rather than to a view whose render() will throw next. */
+/* Home-screen shortcuts (manifest.json) open the app at #go=<view>[-<action>].
+   One-shot: the hash is cleared so a reload lands normally. A live workout is
+   left alone — startFresh() never replaces one — but a shortcut to Fuel or
+   Weight is honoured over it, the parked session being safe in localStorage. */
+function shortcut() {
+  const m = /^#go=(you|workout|food|weight|steps)(?:-([a-z]+))?$/.exec(location.hash || '');
+  if (!m) return null;
+  try { history.replaceState(null, '', location.pathname + location.search); } catch {}
+  return { view: m[1], action: m[2] || null };
+}
+
 function restoreView() {
+  const sc = shortcut();
+  if (sc && (sc.view !== 'you' || youOk)) {
+    switchView(sc.view);
+    if (sc.view === 'food' && sc.action === 'add') openLogFood();
+    if (sc.view === 'workout' && sc.action === 'start') startFresh();
+    return;
+  }
   if (hasActiveSession()) { switchView('workout'); return; }
   let want = youOk ? LS.get('openOn', 'you') : 'workout';
   if (want === 'last') want = LS.get('lastView', 'you');

@@ -1130,3 +1130,7 @@ function renderSummary() {
 // Re-exported so older imports of `toast` from this module keep working.
 export { toast } from './ui.js';
 export function hasActiveSession() { return !!session && !session._edit; }
+// The home-screen shortcut's way in (app.js restoreView). A live session is
+// never replaced — starting a second would orphan the first — so the shortcut
+// simply lands on it.
+export function startFresh() { if (hasActiveSession()) { render(); return; } startWorkout(); }

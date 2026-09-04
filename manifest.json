@@ -11,5 +11,13 @@
   "icons": [
     { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
     { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Log food", "short_name": "Log food", "description": "Open Fuel with the log sheet up",
+      "url": "./index.html#go=food-add", "icons": [{ "src": "icon-192.png", "sizes": "192x192" }] },
+    { "name": "Start workout", "short_name": "Workout", "description": "Open Train and start a session",
+      "url": "./index.html#go=workout-start", "icons": [{ "src": "icon-192.png", "sizes": "192x192" }] },
+    { "name": "Weigh in", "short_name": "Weigh in", "description": "Open the Weight tab",
+      "url": "./index.html#go=weight", "icons": [{ "src": "icon-192.png", "sizes": "192x192" }] }
   ]
 }

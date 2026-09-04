@@ -1082,6 +1082,10 @@ function openAdd(mealId) {
   sh.appendChild(cancel);
 }
 
+// The home-screen shortcut's way in (app.js restoreView): Fuel, with the log
+// sheet already up.
+export function openLogFood() { openAdd(null); }
+
 /* ---------- saved foods ----------
    Deleting was the missing half of this screen: everything scanned or typed
    piled up here forever, including the one-off protein bar from a gas station
