@@ -192,9 +192,11 @@ input, select, textarea { font-family: inherit; font-size: 16px; } /* 16px stops
   align-items: center; justify-content: center;
   gap: 3px;
   color: var(--dim-text);
-  font-size: 10px;
-  letter-spacing: .09em;
-  text-transform: uppercase;
+  /* Sentence case at 11px. The labels were 10px capitals with the tracking
+     squeezed to fit WEIGHT at 320px; capitals are read letter by letter, and
+     the word shapes come back with mixed case. The wdth-88 compression stays. */
+  font-size: 11px;
+  letter-spacing: .01em;
   font-variation-settings: 'wdth' 88, 'wght' 600;
   transition: color var(--fast) var(--ease);
   position: relative;
