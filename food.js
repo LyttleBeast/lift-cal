@@ -1053,6 +1053,32 @@ function openAdd(mealId) {
   sh.appendChild(el('div', 'eyebrow', isToday() ? 'Add to' : 'Add to ' + fmtViewDate()));
   sh.appendChild(mealChips(meal, v => { meal = v; }));
 
+  /* ---- recent ----
+     The last ten distinct things logged, out of the last fortnight. Food
+     memory holds these and more but sits in settings, two layers away, and
+     the things you eat every week belong at the top of the sheet you log
+     from. Painted when the reads land so the sheet never waits on them. */
+  const recentWrap = el('div', 'recent-wrap');
+  sh.appendChild(recentWrap);
+  recentEntries().then(list => {
+    if (!list.length || !sh.isConnected) return;
+    recentWrap.appendChild(el('div', 'field-lbl', 'Recent'));
+    const row = el('div', 'recent-row');
+    list.forEach(e => {
+      const b = el('button', 'recent-chip');
+      b.appendChild(el('span', 'rc-name', e.name));
+      b.appendChild(el('span', 'rc-cal num', (e.cal || 0) + ' kcal' + (e.qty ? ' · ' + e.qty : '')));
+      b.onclick = () => {
+        close();
+        bump('foodRepeat');
+        addEntry({ ...cleanIng(e), meal, src: 'repeat' });
+        toast('Logged ' + e.name);
+      };
+      row.appendChild(b);
+    });
+    recentWrap.appendChild(row);
+  }).catch(() => {});
+
   const grid = el('div', 'add-grid');
   const tile = (cls, ic, title, desc, tag, fn) => {
     const b = el('button', 'add-tile' + (cls ? ' ' + cls : ''));
@@ -1128,6 +1154,27 @@ function openAdd(mealId) {
 // The home-screen shortcut's way in (app.js restoreView): Fuel, with the log
 // sheet already up.
 export function openLogFood() { openAdd(null); }
+
+/* The most recent distinct entries across the last fortnight, newest first,
+   by name. Quick logs are left out — there is nothing to repeat. store.read()
+   is mirror-cached, so this is fourteen cheap reads on a warm device. */
+async function recentEntries(n = 10, days = 14) {
+  const keys = [];
+  for (let i = 0; i < days; i++) keys.push(todayKey(new Date(Date.now() - i * 864e5)));
+  const logs = await Promise.all(keys.map(k => k === dk(viewDate) ? dayLog : read('food/log/' + k, null)));
+  const all = [];
+  logs.forEach(l => Object.values(l || {}).forEach(e => { if (e && e.name && e.src !== 'quick') all.push(e); }));
+  all.sort((a, b) => (b.t || 0) - (a.t || 0));
+  const seen = new Set(), out = [];
+  for (const e of all) {
+    const k = String(e.name).trim().toLowerCase();
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(e);
+    if (out.length >= n) break;
+  }
+  return out;
+}
 
 /* ---------- saved foods ----------
    Deleting was the missing half of this screen: everything scanned or typed

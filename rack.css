@@ -1764,6 +1764,22 @@ body.peeking .view.active { padding-bottom: 58px; }
 }
 .macro-pct.good { color: var(--ok); }
 
+/* recent foods: a scrolling row of chips at the top of the log-food sheet */
+.recent-wrap { margin-top: 4px; }
+.recent-row {
+  display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none;
+  margin: 0 calc(-1 * var(--pad)); padding: 2px var(--pad) 8px;
+}
+.recent-row::-webkit-scrollbar { display: none; }
+.recent-chip {
+  flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  max-width: 160px; padding: 9px 12px; text-align: left;
+  background: var(--rack); border: 1px solid var(--collar); border-radius: 10px;
+}
+.recent-chip:active { border-color: var(--knurl); transform: scale(.97); }
+.rc-name { font-size: 12.5px; max-width: 136px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variation-settings: 'wdth' 94, 'wght' 650; }
+.rc-cal { font-size: 10.5px; color: var(--dim-text); white-space: nowrap; }
+
 /* quick log: one number and a button, on the log-food sheet */
 .quick-log { display: flex; gap: 8px; margin-top: 6px; }
 .quick-log input {
