@@ -63,7 +63,7 @@
 // imports back.
 
 import { read, LS, todayKey, isOwner } from './store.js';
-import { $, el, noteEl, trimNum, r1, parseKey, fmtDate, compact, fmtDuration, sheet } from './ui.js';
+import { $, el, noteEl, trimNum, r1, parseKey, fmtDate, compact, fmtDuration, sheet, segmented } from './ui.js';
 import { assess, keysBack as keysBackI, streakOf, fmtRange } from './insights.js';
 import { allSessions, exerciseIndex, filterByRange, groupSplit, topBy, weeklyVolume,
          lineChart, barChart, ring, sparkline, heatStrip, emptyChart, legend,
@@ -526,42 +526,51 @@ function build() {
   // chart can never be counting different days.
   const found = loaded && modelReady ? safeAssess(est, maint) : null;
 
-  // The order is the order a person wants the answers in: how am I doing,
-  // where is it heading, what happened this week, what did Rack notice, then
-  // the pictures, then the week written up. Nothing here is a wall of stats
-  // first and a meaning second.
-  const s1 = section('How you’re doing');
-  s1.appendChild(assessCard(found, 'wins'));
-  s1.appendChild(assessCard(found, 'improve'));
-  wrap.appendChild(s1);
+  // Two pages on one screen. Ten cards was a long scroll from the verdicts
+  // to the pictures, and the person opening the app at six in the morning
+  // wants the answers first and the evidence second: Today is how am I doing,
+  // where is it heading and what happened this week; Trends is what Rack
+  // noticed, the pictures, and the week written up. The choice is remembered
+  // on the device. Nothing has been dropped from either page.
+  const view = LS.get('youView', 'today') === 'trends' ? 'trends' : 'today';
+  const seg = segmented([['today', 'Today'], ['trends', 'Trends']], view, v => { LS.set('youView', v); render(); });
+  seg.classList.add('you-seg');
+  wrap.appendChild(seg);
 
-  const s2 = section('Goal');
-  s2.appendChild(trajectoryCard(found, est, maint));
-  wrap.appendChild(s2);
+  if (view === 'today') {
+    const s1 = section('How you’re doing');
+    s1.appendChild(assessCard(found, 'wins'));
+    s1.appendChild(assessCard(found, 'improve'));
+    wrap.appendChild(s1);
 
-  const s3 = section('This week');
-  s3.appendChild(weekCard(maint));
-  wrap.appendChild(s3);
+    const s2 = section('Goal');
+    s2.appendChild(trajectoryCard(found, est, maint));
+    wrap.appendChild(s2);
 
-  if (found && found.insights.length) {
-    const s4 = section('Rack noticed');
-    s4.appendChild(insightsCard(found));
-    wrap.appendChild(s4);
+    const s3 = section('This week');
+    s3.appendChild(weekCard(maint));
+    wrap.appendChild(s3);
+  } else {
+    if (found && found.insights.length) {
+      const s4 = section('Rack noticed');
+      s4.appendChild(insightsCard(found));
+      wrap.appendChild(s4);
+    }
+
+    const s5 = section('Trends');
+    s5.appendChild(weightCard(maint));
+    s5.appendChild(fuelCard(maint));
+    s5.appendChild(trainingCard());
+    const pair = el('div', 'you-pair');
+    pair.appendChild(stepsCard());
+    pair.appendChild(waterCard());
+    s5.appendChild(pair);
+    wrap.appendChild(s5);
+
+    const s6 = section('Weekly review');
+    s6.appendChild(reviewCard(found));
+    wrap.appendChild(s6);
   }
-
-  const s5 = section('Trends');
-  s5.appendChild(weightCard(maint));
-  s5.appendChild(fuelCard(maint));
-  s5.appendChild(trainingCard());
-  const pair = el('div', 'you-pair');
-  pair.appendChild(stepsCard());
-  pair.appendChild(waterCard());
-  s5.appendChild(pair);
-  wrap.appendChild(s5);
-
-  const s6 = section('Weekly review');
-  s6.appendChild(reviewCard(found));
-  wrap.appendChild(s6);
 
   const showInstall = !isStandalone() && !LS.get('installDismissed', false);
   const owner = isOwner();

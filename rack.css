@@ -1285,6 +1285,9 @@ body.peeking .view.active { padding-bottom: 58px; }
 
 /* This is a long screen — the headings are what make it scannable. */
 .you-sec { margin-top: 26px; }
+/* Today / Trends, under the hero. Sections carry their own top margin, so the
+   control gives some of its own back. */
+.you-seg { margin: 18px 0 -6px; }
 .you-sec-t {
   display: flex; align-items: center; gap: 10px;
   margin-bottom: 10px;
