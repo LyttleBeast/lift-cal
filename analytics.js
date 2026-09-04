@@ -387,13 +387,16 @@ function smoothPath(pts) {
  *          padding is a fraction of the span, so with no floor four weigh-ins
  *          inside 0.4 lb filled the whole chart and read as a swing — the one
  *          place these charts actively misled.
+ * scrub:   { line, scatter, line2 } — names for the readout, and switching it
+ *          on: drag or hover and a rule snaps to the nearest point of the line
+ *          and prints that day's numbers (attachScrub below).
  */
 export function lineChart(points, opts = {}) {
   const {
     color = 'var(--p-yellow)', height = 168, markMax = false,
     unit = '', dots = true, scatter = null,
     line2 = null, color2 = 'var(--chalk)', yLabels = false,
-    label = 'Trend', describe = '', minSpan = 0
+    label = 'Trend', describe = '', minSpan = 0, scrub = null
   } = opts;
 
   const W = 340, H = height, PADX = 10, PADT = 16, PADB = 22;
@@ -502,6 +505,8 @@ export function lineChart(points, opts = {}) {
   hi1.textContent = new Date(t1).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   svg.append(lo1, hi1);
 
+  if (scrub) attachScrub(svg, { W, H, PADX, PADT, PADB, pts, scatter, line2, unit, names: scrub });
+
   const first = points[0].v, last = points[points.length - 1].v;
   const move = Math.abs(last - first) < 0.05 ? 'flat' : (last < first ? 'down' : 'up');
   describeSvg(svg, label + ', ' + fmtDay(t0) + ' to ' + fmtDay(t1) + ': ' +
@@ -509,6 +514,111 @@ export function lineChart(points, opts = {}) {
     (describe ? '. ' + describe : '') + '.');
 
   return svg;
+}
+
+/* ---------- scrub to read ----------
+   A finger on a chart used to do nothing, so every number in it had to be
+   guessed off the axis. Dragging (or hovering) snaps a rule to the nearest
+   point of the line and prints that day: the line's value, any scatter
+   readings from the same day, and the second line's value. The gesture is
+   decided the way swipeToDelete decides it (ui.js): nothing is claimed until
+   the pointer has moved 8px, a mostly-vertical move is a scroll and is left
+   alone, and touch-action: pan-y on the svg means the browser never has to
+   wait on us to find that out. A tap reads one point and a second tap on the
+   same spot puts the readout away; a mouse just hovers. */
+function attachScrub(svg, o) {
+  const { W, H, PADX, PADT, PADB, pts, scatter, line2, unit, names } = o;
+  if (pts.length < 2) return;
+  svg.classList.add('chart-scrub');
+  // Something to receive events over the empty parts of the plot.
+  svg.appendChild(svgEl('rect', { x: 0, y: 0, width: W, height: H, fill: 'transparent' }));
+
+  const g = svgEl('g', { class: 'chart-readout', 'pointer-events': 'none' });
+  g.style.display = 'none';
+  const rule = svgEl('line', { class: 'chart-scrub-rule', y1: PADT, y2: H - PADB });
+  const dot  = svgEl('circle', { class: 'chart-scrub-dot', r: 4 });
+  const box  = svgEl('rect', { rx: 6, ry: 6 });
+  const rows = [0, 1, 2, 3].map(i => svgEl('text', { class: i ? 'ro-val' : 'ro-date', x: 0, y: 0 }));
+  g.append(rule, dot, box, ...rows);
+  svg.appendChild(g);
+
+  const sameDay = (a, b) => {
+    const d1 = new Date(a), d2 = new Date(b);
+    return d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
+  };
+  // One decimal up to four figures: 199.2 lb is the whole point of reading a weigh-in.
+  const fmt = v => (Math.abs(v) >= 1000 ? Math.round(v) : Math.round(v * 10) / 10).toLocaleString();
+  const withUnit = v => fmt(v) + (unit ? ' ' + unit : '');
+  const toX = e => { const r = svg.getBoundingClientRect(); return (e.clientX - r.left) / Math.max(1, r.width) * W; };
+
+  let shownAt = null;
+  const show = vx => {
+    let best = pts[0];
+    for (const p of pts) if (Math.abs(p.x - vx) < Math.abs(best.x - vx)) best = p;
+    shownAt = best.x;
+    rule.setAttribute('x1', best.x.toFixed(1)); rule.setAttribute('x2', best.x.toFixed(1));
+    dot.setAttribute('cx', best.x.toFixed(1)); dot.setAttribute('cy', best.y.toFixed(1));
+
+    const text = [new Date(best.t).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })];
+    text.push((names.line || 'value') + '  ' + withUnit(best.v));
+    const sc = (scatter || []).filter(p => sameDay(p.t, best.t)).map(p => fmt(p.v));
+    if (sc.length) text.push((names.scatter || 'readings') + '  ' + sc.join(', '));
+    if (line2 && line2.length) {
+      const l2 = line2.reduce((a, b) => Math.abs(b.t - best.t) < Math.abs(a.t - best.t) ? b : a);
+      if (sameDay(l2.t, best.t)) text.push((names.line2 || 'trend') + '  ' + withUnit(l2.v));
+    }
+    rows.forEach((t, i) => { t.textContent = text[i] || ''; t.style.display = text[i] ? '' : 'none'; });
+    g.style.display = '';
+
+    // Size the box to its text and keep it on the side away from the finger.
+    const lh = 12, padX = 8, padY = 6;
+    let w = 0;
+    rows.forEach(t => {
+      if (!t.textContent) return;
+      let len = 0;
+      try { len = t.getComputedTextLength(); } catch {}
+      w = Math.max(w, len || t.textContent.length * 5.4);
+    });
+    const bw = w + padX * 2, bh = text.length * lh + padY * 2 - 2;
+    const bx = best.x > W / 2 ? Math.max(PADX, best.x - 14 - bw) : Math.min(W - PADX - bw, best.x + 14);
+    const by = 2;
+    box.setAttribute('x', bx.toFixed(1)); box.setAttribute('y', by);
+    box.setAttribute('width', bw.toFixed(1)); box.setAttribute('height', bh.toFixed(1));
+    rows.forEach((t, i) => {
+      t.setAttribute('x', (bx + padX).toFixed(1));
+      t.setAttribute('y', (by + padY + lh * (i + 1) - 3).toFixed(1));
+    });
+  };
+  const hide = () => { g.style.display = 'none'; shownAt = null; };
+
+  let startX = 0, startY = 0, tracking = false, decided = false, moved = false;
+  svg.addEventListener('pointerdown', e => {
+    if (e.pointerType === 'mouse') return;          // hover handles the mouse
+    startX = e.clientX; startY = e.clientY;
+    tracking = true; decided = false; moved = false;
+  });
+  svg.addEventListener('pointermove', e => {
+    if (e.pointerType === 'mouse') { show(toX(e)); return; }
+    if (!tracking) return;
+    const dx = e.clientX - startX, dy = e.clientY - startY;
+    if (!decided) {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      if (Math.abs(dy) > Math.abs(dx)) { tracking = false; return; }   // a scroll, not ours
+      decided = true;
+      try { svg.setPointerCapture(e.pointerId); } catch {}
+    }
+    moved = true;
+    show(toX(e));
+  });
+  svg.addEventListener('pointerup', e => {
+    if (e.pointerType === 'mouse' || !tracking) return;
+    tracking = false;
+    if (moved) return;
+    const vx = toX(e);
+    if (shownAt != null && Math.abs(shownAt - vx) < 12) hide(); else show(vx);
+  });
+  svg.addEventListener('pointercancel', () => { tracking = false; });
+  svg.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') hide(); });
 }
 
 /**

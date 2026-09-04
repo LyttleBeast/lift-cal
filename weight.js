@@ -305,6 +305,7 @@ function renderChart(s) {
       dots: false,
       markMax: false,
       scatter: raw.map(e => ({ t: e.t, v: e.lb })),
+      scrub: { line: '7-day avg', scatter: useAdj ? 'normalised' : 'weigh-ins' },
       label: 'Body weight, last ' + (range === 365 ? 'year' : range + ' days'),
       describe: tr.rateWk != null ? 'Trending ' + (tr.rateWk < 0 ? 'down ' : 'up ') + r1(Math.abs(tr.rateWk)) + ' pounds a week' : ''
     }

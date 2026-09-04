@@ -1070,6 +1070,7 @@ function weightCard(maint) {
     ? lineChart(pts, { color: C_WEIGHT, height: 148, unit: 'lb', dots: pts.length < 30, markMax: false, minSpan: 4,
                        scatter: scatter.length > pts.length ? scatter : null,
                        line2: trend.length >= 2 ? trend : null, color2: 'var(--p-chrome)', yLabels: true,
+                       scrub: { line: 'daily avg', scatter: 'weigh-ins', line2: 'trend' },
                        label: 'Body weight, last 45 days',
                        describe: rate != null ? 'Trending ' + (rate < 0 ? 'down ' : 'up ') + r1(Math.abs(rate)) + ' pounds a week' : '' })
     : emptyChart('Two days of weigh-ins draw the first line'));

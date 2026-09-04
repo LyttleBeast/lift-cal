@@ -1645,6 +1645,22 @@ body.peeking .view.active { padding-bottom: 58px; }
 
 /* a goal line across a bar chart, and a bar for a day that isn't over */
 .chart-target { stroke: var(--steel); stroke-width: 1; stroke-dasharray: 4 4; opacity: .8; }
+
+/* scrub-to-read (analytics.js attachScrub). pan-y hands vertical drags to the
+   browser before we ever see them; only sideways ones reach the chart. */
+.chart-scrub { touch-action: pan-y; cursor: crosshair; }
+.chart-scrub-rule { stroke: var(--steel); stroke-width: 1; stroke-dasharray: 3 3; }
+.chart-scrub-dot { fill: var(--chalk); stroke: var(--rack); stroke-width: 1.5; }
+.chart-readout rect { fill: var(--collar); stroke: var(--knurl); stroke-width: 1; }
+.chart-readout text {
+  font-size: 9.5px; fill: var(--chalk); font-family: inherit;
+  font-variant-numeric: tabular-nums;
+  font-variation-settings: 'wdth' 96, 'wght' 600;
+}
+.chart-readout .ro-date {
+  font-size: 8px; fill: var(--dim-text); letter-spacing: .08em; text-transform: uppercase;
+  font-variation-settings: 'wdth' 88, 'wght' 700;
+}
 .chart-bar-dim { opacity: .38; }
 
 /* rings — one value against its goal, several side by side */
