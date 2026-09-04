@@ -42,7 +42,7 @@ import { LS, uid, todayKey, readShared, updateShared } from './store.js';
 
 // Must be bumped alongside CACHE in sw.js. It is duplicated rather than
 // imported because sw.js is a service worker, not a module the app can load.
-const VERSION = 'rack-v27';
+const VERSION = 'rack-v28';
 // For the About sheet in settings, which shows this beside the build the
 // service worker is actually serving — the two disagreeing is what an update
 // that never took looks like.
