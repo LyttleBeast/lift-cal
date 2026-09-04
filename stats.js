@@ -412,7 +412,7 @@ function renderDetail(exId) {
   } else {
     trend.appendChild(lineChart(
       entries.map(x => ({ t: x.startedAt, v: x.e1rm })),
-      { color: 'var(--p-yellow)', unit: 'lb', height: 176, label: 'Estimated one-rep max, ' + e.name }
+      { color: 'var(--p-yellow)', unit: 'lb', height: 176, markMax: true, label: 'Estimated one-rep max, ' + e.name }
     ));
     trend.appendChild(noteEl('Epley estimate from your best working set each session. The ring marks your peak.'));
   }
@@ -423,7 +423,7 @@ function renderDetail(exId) {
     const wt = card('Heaviest set');
     wt.appendChild(lineChart(
       entries.map(x => ({ t: x.startedAt, v: x.topWeight })),
-      { color: 'var(--p-red)', unit: 'lb', height: 152, label: 'Heaviest set, ' + e.name }
+      { color: 'var(--p-red)', unit: 'lb', height: 152, markMax: true, label: 'Heaviest set, ' + e.name }
     ));
     wrap.appendChild(wt);
   }

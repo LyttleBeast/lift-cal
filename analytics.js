@@ -373,6 +373,9 @@ function smoothPath(pts) {
  * A trend line with a gradient area fill.
  * points:  [{ t: msTimestamp, v: number }]   the line itself
  * opts:    { color, height, markMax, unit, dots, scatter }
+ * markMax: ring and label the highest point. Off unless asked for: it was on
+ *          by default and drew a "peak" on charts where the peak means nothing,
+ *          like a body-weight trend on a cut.
  * scatter: optional second series drawn as faint dots behind the line —
  *          used by the weight tab to show raw weigh-ins under the average.
  * line2:   optional second line, dashed and without an area, for a derived
@@ -387,7 +390,7 @@ function smoothPath(pts) {
  */
 export function lineChart(points, opts = {}) {
   const {
-    color = 'var(--p-yellow)', height = 168, markMax = true,
+    color = 'var(--p-yellow)', height = 168, markMax = false,
     unit = '', dots = true, scatter = null,
     line2 = null, color2 = 'var(--chalk)', yLabels = false,
     label = 'Trend', describe = '', minSpan = 0
@@ -642,12 +645,14 @@ export function barChart(bars, opts = {}) {
  * remainder in the surface colour, so a ring that is nearly closed reads as
  * "nearly there" before the number in the middle is read at all. Past 100% the
  * ring simply closes — a bigger-than-full arc is not a thing anyone can read.
- * frac: 0..∞      opts: { size, thickness, color, top, sub }
+ * frac: 0..∞      opts: { size, thickness, color, top, sub, label, cls }
+ * cls is an extra class for the caller's CSS to size the text by — the Steps
+ * hero draws this ring at 132px and needs a 22px number in it.
  */
 export function ring(frac, opts = {}) {
-  const { size = 76, thickness = 7, color = 'var(--p-yellow)', top = '', sub = '', label = '' } = opts;
+  const { size = 76, thickness = 7, color = 'var(--p-yellow)', top = '', sub = '', label = '', cls = '' } = opts;
   const R = size / 2, r = R - thickness / 2;
-  const svg = svgEl('svg', { viewBox: '0 0 ' + size + ' ' + size, class: 'chart chart-ring' });
+  const svg = svgEl('svg', { viewBox: '0 0 ' + size + ' ' + size, class: 'chart chart-ring' + (cls ? ' ' + cls : '') });
   svg.style.width = size + 'px';
   svg.style.height = size + 'px';
 

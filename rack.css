@@ -1156,11 +1156,9 @@ body.peeking .view.active { padding-bottom: 58px; }
 
 .st-hero { display: flex; align-items: center; gap: 18px; margin-top: 4px; }
 .st-ring { width: 132px; height: 132px; flex: 0 0 132px; display: block; }
-.st-ring-n {
-  fill: var(--chalk); font-size: 22px;
-  font-variation-settings: 'wdth' 104, 'wght' 800;
-}
-.st-ring-s { fill: var(--steel); font-size: 9.5px; letter-spacing: .06em; }
+/* The shared ring (analytics.js) sized for a hero rather than an 84px tile. */
+.st-ring .ring-top { font-size: 22px; font-variation-settings: 'wdth' 104, 'wght' 800; }
+.st-ring .ring-sub { fill: var(--steel); font-size: 9.5px; letter-spacing: .06em; text-transform: none; }
 
 .st-hero-side { flex: 1; min-width: 0; }
 .st-side-lbl { font-size: 12px; color: var(--steel); margin-top: 2px;

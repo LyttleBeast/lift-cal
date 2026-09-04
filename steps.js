@@ -21,7 +21,7 @@ import { firebaseConfig } from './firebase-config.js';
 // browser is holding even one stale file, the import fails and this whole tab
 // renders blank with no error the user can see. That is exactly what happened
 // on the first deploy of this tab. The heat map below is therefore local.
-import { barChart, emptyChart } from './analytics.js';
+import { barChart, emptyChart, ring } from './analytics.js';
 import { bump } from './usage.js';
 import { $, el, svgEl, sheet, toast, noteEl, confirmSheet, swipeToDelete,
          segmented, compact, copyText, parseKey, fmtDate, fmtDateFull, LIMITS, within } from './ui.js';
@@ -183,7 +183,14 @@ function renderToday() {
   const card = el('div', 'card');
 
   const row = el('div', 'st-hero');
-  row.appendChild(ring(n / g, n, g));
+  // Third distinct shape in the app on purpose: Fuel is a bar, Water is a
+  // filling vessel, this is an arc. The shared ring closes at 100% rather than
+  // lapping itself; the caption under the number carries the overshoot.
+  row.appendChild(ring(n / g, {
+    size: 132, thickness: 11, cls: 'st-ring', label: 'Steps today',
+    color: n >= g ? 'var(--ok)' : 'var(--s-steps)',
+    top: n.toLocaleString(), sub: Math.round(n / g * 100) + '% of ' + compact(g)
+  }));
 
   const side = el('div', 'st-hero-side');
   const left = Math.max(0, g - n);
@@ -212,50 +219,6 @@ function renderToday() {
   ctl.appendChild(set);
   card.appendChild(ctl);
   return card;
-}
-
-/* ---------- the ring ----------
-   Third distinct shape in the app on purpose: Fuel is a bar, Water is a
-   filling vessel, this is an arc. You should know which screen you're on from
-   across the room. */
-function ring(frac, n, g) {
-  const S = 132, R = 54, C = 2 * Math.PI * R, mid = S / 2;
-  const svg = svgEl('svg', { viewBox: `0 0 ${S} ${S}`, class: 'st-ring' });
-
-  svg.appendChild(svgEl('circle', {
-    cx: mid, cy: mid, r: R, fill: 'none',
-    stroke: 'var(--collar)', 'stroke-width': 11
-  }));
-
-  const over = frac > 1;
-  const shown = Math.max(0, Math.min(1, frac));
-  if (shown > 0) {
-    svg.appendChild(svgEl('circle', {
-      cx: mid, cy: mid, r: R, fill: 'none',
-      stroke: over ? 'var(--ok)' : 'var(--s-steps)',
-      'stroke-width': 11, 'stroke-linecap': 'round',
-      'stroke-dasharray': `${(C * shown).toFixed(1)} ${C.toFixed(1)}`,
-      transform: `rotate(-90 ${mid} ${mid})`
-    }));
-  }
-  // A second, brighter arc for the part past the goal.
-  if (over) {
-    const extra = Math.min(1, frac - 1);
-    svg.appendChild(svgEl('circle', {
-      cx: mid, cy: mid, r: R, fill: 'none',
-      stroke: 'var(--p-yellow)', 'stroke-width': 11, 'stroke-linecap': 'round',
-      'stroke-dasharray': `${(C * extra).toFixed(1)} ${C.toFixed(1)}`,
-      transform: `rotate(-90 ${mid} ${mid})`
-    }));
-  }
-
-  const t1 = svgEl('text', { x: mid, y: mid - 2, class: 'st-ring-n', 'text-anchor': 'middle' });
-  t1.textContent = n.toLocaleString();
-  svg.appendChild(t1);
-  const t2 = svgEl('text', { x: mid, y: mid + 16, class: 'st-ring-s', 'text-anchor': 'middle' });
-  t2.textContent = Math.round(frac * 100) + '% of ' + compact(g);
-  svg.appendChild(t2);
-  return svg;
 }
 
 /* ---------- trend ---------- */
