@@ -15,7 +15,7 @@
 import { read, write, watch, LS, todayKey, uid } from './store.js';
 import { maintenance, calorieZones, zoneOf, refreshModel,
          autoTargets, trendWeight, MIN_CARB_G, goalDir } from './tdee.js';
-import { initWater, loadWaterDay, renderWater, openWaterSettings } from './water.js';
+import { initWater, loadWaterDay, renderWater, renderWaterStrip, openWaterSettings } from './water.js';
 import { OWNER_UID } from './firebase-config.js';
 import { $, el, svgEl, sheet, toast, noteEl, confirmSheet, copyText, readClipboard,
          segmented, r1, trimNum, LIMITS, clamp, within } from './ui.js';
@@ -466,6 +466,7 @@ export function render() {
   wrap.appendChild(hd);
 
   wrap.appendChild(renderSummary());
+  wrap.appendChild(renderWaterStrip(!isFuture()));
 
   MEALS.forEach(([id, label]) => wrap.appendChild(renderMeal(id, label)));
 

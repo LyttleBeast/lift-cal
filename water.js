@@ -196,6 +196,37 @@ export function renderWater(editable = true) {
   return card;
 }
 
+/* ---------- the strip ----------
+   Six taps a day were buried under four meal cards. One slim row under the
+   calorie summary: how far along, and a + that logs the usual bottle. The
+   full card further down still does everything else. */
+export function renderWaterStrip(editable = true) {
+  const total = waterTotal();
+  const goal  = settings.goalMl > 0 ? settings.goalMl : DEFAULTS.goalMl;
+  const frac  = Math.max(0, Math.min(1, total / goal));
+  const dp    = defaultPreset();
+
+  const row = el('div', 'water-strip');
+  const left = el('div', 'water-strip-l');
+  left.appendChild(el('div', 'water-strip-t', 'Water'));
+  left.appendChild(el('div', 'water-strip-v num',
+    toDisplay(total).toLocaleString() + ' / ' + fmtWater(goal) + (total >= goal ? '  ·  goal hit' : '')));
+  const track = el('div', 'water-strip-track');
+  const fill = el('div', 'water-strip-fill' + (frac >= 1 ? ' done' : ''));
+  fill.style.width = Math.round(frac * 100) + '%';
+  track.appendChild(fill);
+  left.appendChild(track);
+  row.appendChild(left);
+
+  if (editable) {
+    const plus = el('button', 'btn btn-primary water-strip-add', '+');
+    plus.setAttribute('aria-label', 'Log ' + dp.label + ', ' + fmtWater(dp.ml));
+    plus.onclick = async () => { await addWater(dp.ml); toast('+ ' + fmtWater(dp.ml)); };
+    row.appendChild(plus);
+  }
+  return row;
+}
+
 /* ---------- the vessel ----------
    A bottle that fills, with a wave for the waterline. A bar is a bar; the
    calorie meter is already a bar and this needs to read as a different thing
