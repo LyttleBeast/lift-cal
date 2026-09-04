@@ -16,7 +16,7 @@
 // Sheets never nest. Every row that opens another sheet closes this one first.
 
 import { el, sheet, toast, noteEl, confirmSheet, segmented, LIMITS, clamp, saveText } from './ui.js';
-import { LS, uid, read, readExact, currentEmail, write, purgeDevice, logout, lastSyncAt, queuedWrites, online } from './store.js';
+import { LS, uid, read, readExact, currentEmail, write, mergeUpdate, purgeDevice, logout, lastSyncAt, queuedWrites, online } from './store.js';
 import { appVersion, isStandalone } from './usage.js';
 import { openTargets, openAiSettings, openRecallList, openImportPaste,
          foodTargets, latestLb, goalId, previewGoal, setGoal, goalFits } from './food.js';
@@ -150,12 +150,26 @@ export function openSettings(onEdit) {
   restRow.appendChild(lab);
   const restIn = el('input');
   restIn.id = 'restDef'; restIn.type = 'number'; restIn.inputMode = 'numeric';
+  // The device's copy paints first; the account's (settings/train.restSec)
+  // corrects it when the read lands. Both are written on change, so a second
+  // phone picks the number up at its next boot (workout.js initWorkout) and a
+  // phone with no connection keeps working from localStorage. It would have
+  // gone on profile, but the published rules refuse any key profile does not
+  // list, and settings is the section with room.
   restIn.value = LS.get('restDefault', 150);
   restIn.min = LIMITS.rest[0]; restIn.max = LIMITS.rest[1];
+  read('settings/train', null).then(t => {
+    if (t && Number.isFinite(t.restSec) && sh.isConnected && document.activeElement !== restIn) {
+      restIn.value = t.restSec;
+      LS.set('restDefault', t.restSec);
+    }
+  }).catch(() => {});
   restIn.onchange = e => {
     const r = clamp(parseInt(e.target.value) || 150, LIMITS.rest);
     e.target.value = r;
-    LS.set('restDefault', r); toast('Rest updated');
+    LS.set('restDefault', r);
+    mergeUpdate('settings/train', { restSec: r });
+    toast('Rest updated');
   };
   restRow.appendChild(restIn);
   train.appendChild(restRow);

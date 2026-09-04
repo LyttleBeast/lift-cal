@@ -35,6 +35,15 @@ export async function initWorkout() {
   await initRoutines();
   history  = (await read('history', null)) || {};
 
+  // The account's default rest (settings/train.restSec, written by the
+  // settings hub) wins over this device's copy: it is what makes the number
+  // follow the person from phone to phone. startRest() keeps reading
+  // localStorage, so a device with no connection still has a number.
+  try {
+    const tr = await read('settings/train', null);
+    if (tr && Number.isFinite(tr.restSec)) LS.set('restDefault', tr.restSec);
+  } catch {}
+
   const saved = LS.get('activeSession', null);
   if (saved) session = saved;
 
