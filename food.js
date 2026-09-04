@@ -44,6 +44,7 @@ const MICROS = [
 
 let viewDate = new Date();
 let dayLog   = {};      // entryId -> entry for viewDate
+let prevLog  = {};      // the day before viewDate, for "copy yesterday's"
 let items    = {};      // itemId  -> library item
 let meals    = {};      // mealId  -> saved meal
 let targets  = { cal: 2700, p: 215, f: 80, maint: null, auto: null };
@@ -75,9 +76,36 @@ export async function initFood() {
 }
 
 async function loadDay() {
-  dayLog = (await read('food/log/' + dk(viewDate), null)) || {};
+  const prev = new Date(viewDate.getTime() - 864e5);
+  const [cur, before] = await Promise.all([
+    read('food/log/' + dk(viewDate), null),
+    read('food/log/' + dk(prev), null)
+  ]);
+  dayLog = cur || {};
+  prevLog = before || {};
   await loadWaterDay(dk(viewDate));
   watchDay();
+}
+
+/* ---------- copying forward ----------
+   "Same as yesterday" is the commonest meal there is, and it used to be a
+   search or a saved meal away. Copies are new entries — fresh ids, stamped
+   now, src 'copy' — so editing one later never touches the day it came from. */
+function copyOf(e, meal) {
+  return { ...cleanIng(e), meal: meal || e.meal || defaultMeal(), src: 'copy' };
+}
+function copyFromPrev(mealId) {
+  const list = Object.values(prevLog).filter(e => e && e.meal === mealId).sort((a, b) => (a.t || 0) - (b.t || 0));
+  if (!list.length) return;
+  bump('foodCopy');
+  addEntries(list.map(e => copyOf(e, mealId)));
+  toast('Copied ' + list.length + (list.length === 1 ? ' entry' : ' entries') + ' from yesterday');
+}
+async function copyToToday(list) {
+  if (!list.length) return;
+  bump('foodCopy');
+  await logOnToday(list.map(e => copyOf(e, e.meal)));
+  toast('Copied ' + list.length + (list.length === 1 ? ' entry' : ' entries') + ' to today');
 }
 
 // Live listener on whichever day is on screen. It keeps a second device — the
@@ -493,6 +521,16 @@ export function render() {
 
   MEALS.forEach(([id, label]) => wrap.appendChild(renderMeal(id, label)));
 
+  // A whole past day, forward in one go: the same breakfast, lunch and dinner
+  // as the day you are looking at.
+  const all = Object.values(dayLog).filter(e => e && e.name);
+  if (!isToday() && all.length) {
+    const b = el('button', 'btn btn-ghost btn-block', 'Copy this whole day to today');
+    b.style.marginBottom = '12px';
+    b.onclick = () => copyToToday(all.sort((a, b) => (a.t || 0) - (b.t || 0)));
+    wrap.appendChild(b);
+  }
+
   wrap.appendChild(renderWater(!isFuture()));
   wrap.appendChild(renderMicros());
   root.appendChild(wrap);
@@ -749,6 +787,14 @@ function renderMeal(mealId, label) {
   const right = el('div', 'meal-right');
   if (entries.length) {
     right.appendChild(el('div', 'num meal-kcal', kcal + ' kcal'));
+    if (!isToday()) {
+      // Looking back at a day: bring this meal forward as it was.
+      const fwd = el('button', 'meal-copy', 'to today ›');
+      fwd.title = 'Copy this meal to today';
+      fwd.setAttribute('aria-label', 'Copy ' + label + ' to today');
+      fwd.onclick = () => copyToToday(entries);
+      right.appendChild(fwd);
+    }
     const save = el('button', 'ex-menu', '⋯');
     save.title = 'Turn this into a meal';
     save.onclick = () => openMealBuilder({
@@ -758,6 +804,12 @@ function renderMeal(mealId, label) {
       saved: false
     }, mealId);
     right.appendChild(save);
+  } else if (isToday() && !isFuture() && Object.values(prevLog).some(e => e && e.meal === mealId)) {
+    // Nothing here yet, and yesterday had this meal: one tap repeats it.
+    const again = el('button', 'meal-copy', 'copy yesterday’s ›');
+    again.setAttribute('aria-label', 'Copy yesterday’s ' + label);
+    again.onclick = () => copyFromPrev(mealId);
+    right.appendChild(again);
   } else {
     right.appendChild(el('div', 'meal-kcal', 'nothing yet'));
   }

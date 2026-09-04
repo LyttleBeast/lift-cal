@@ -1011,6 +1011,13 @@ body.peeking .view.active { padding-bottom: 58px; }
 .fuel-eaten { font-size: 12px; color: var(--dim-text); }
 
 .meal-right { display: flex; align-items: center; gap: 8px; }
+/* copy a meal forward — a small text button in the meal card header */
+.meal-copy {
+  font-size: 11px; color: var(--steel); padding: 4px 8px; border-radius: 999px;
+  border: 1px solid var(--collar); white-space: nowrap;
+  font-variation-settings: 'wdth' 92, 'wght' 600;
+}
+.meal-copy:active { border-color: var(--knurl); color: var(--chalk); }
 .meal-kcal { font-size: 11px; color: var(--dim-text); }
 
 .fe-body { min-width: 0; }
