@@ -74,6 +74,46 @@ export async function copyText(text, okMsg) {
   return false;
 }
 
+/* ---------- files out ----------
+   Getting a file off a phone is three different problems. On a touch device
+   the share sheet is the way to Files, Mail or a computer, where the Web Share
+   API can carry a file (iOS 15+, Android). Elsewhere an anchor download — which
+   iOS in home-screen mode quietly ignores, which is why touch devices try the
+   share sheet first. Failing both, the copy sheet above, so the data is never
+   stuck behind a button that does nothing. Returns how it went out. */
+export async function saveText(filename, text, mime = 'text/plain') {
+  const blob = new Blob([text], { type: mime });
+  const touch = (navigator.maxTouchPoints || 0) > 1;
+  if (touch && navigator.canShare && typeof File === 'function') {
+    try {
+      const file = new File([blob], filename, { type: mime });
+      if (navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: filename });
+        return 'shared';
+      }
+    } catch (e) {
+      if (e && e.name === 'AbortError') return 'cancelled';
+    }
+  }
+  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent || '') ||
+              (/Mac/.test(navigator.platform || '') && (navigator.maxTouchPoints || 0) > 1);
+  if (!(ios && navigator.standalone)) {
+    try {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+      toast('Saved ' + filename);
+      return 'downloaded';
+    } catch {}
+  }
+  await copyText(text, 'Copied ' + filename + ' to the clipboard');
+  return 'copied';
+}
+
 export async function readClipboard() {
   try {
     if (navigator.clipboard && navigator.clipboard.readText) return await navigator.clipboard.readText();

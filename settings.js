@@ -15,8 +15,8 @@
 //
 // Sheets never nest. Every row that opens another sheet closes this one first.
 
-import { el, sheet, toast, noteEl, confirmSheet, segmented, LIMITS, clamp } from './ui.js';
-import { LS, uid, readExact, currentEmail, write, purgeDevice, logout } from './store.js';
+import { el, sheet, toast, noteEl, confirmSheet, segmented, LIMITS, clamp, saveText } from './ui.js';
+import { LS, uid, read, readExact, currentEmail, write, purgeDevice, logout } from './store.js';
 import { openTargets, openAiSettings, openRecallList, openImportPaste,
          foodTargets, latestLb, goalId, previewGoal, setGoal, goalFits } from './food.js';
 import { openWaterSettings, waterSettings, fmtWater } from './water.js';
@@ -179,6 +179,7 @@ export function openSettings(onEdit) {
     if (typeof window.__rackTour === 'function') window.__rackTour();
     else toast('Reload the app and try again');
   });
+  navRow(appList, 'Export my data', null, () => { close(); openExport(); });
 
   const out = el('button', 'btn btn-danger btn-block', 'Sign out');
   out.style.marginTop = '16px';
@@ -526,6 +527,109 @@ export function openGoal(onEdit) {
   cancel.style.marginTop = '8px';
   cancel.onclick = close;
   sh.appendChild(cancel);
+}
+
+/* ================= EXPORT =================
+   Two ways in — the workout importer and pasted JSON — and until now no way
+   out. Everything the account holds as one JSON file, and each log as a CSV a
+   spreadsheet opens. Read fresh from the database rather than from the tabs'
+   memory: the tabs hold the day and the month on screen, not the history. */
+const EXPORT_NODES = [
+  'profile', 'onboarding', 'food/targets', 'food/items', 'food/meals', 'food/log', 'food/daySummaries',
+  'weight/entries', 'workouts', 'history', 'water/log', 'steps', 'routines', 'exercises', 'settings'
+];
+
+export async function readAllForExport() {
+  const vals = await Promise.all(EXPORT_NODES.map(p => read(p, null)));
+  const out = {};
+  EXPORT_NODES.forEach((p, i) => {
+    const parts = p.split('/');
+    let n = out;
+    for (let j = 0; j < parts.length - 1; j++) n = n[parts[j]] = n[parts[j]] || {};
+    n[parts[parts.length - 1]] = vals[i];
+  });
+  return out;
+}
+
+const pad2 = n => String(n).padStart(2, '0');
+const ymd = t => { const d = new Date(t); return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); };
+const hm  = t => (Number.isFinite(t) ? pad2(new Date(t).getHours()) + ':' + pad2(new Date(t).getMinutes()) : '');
+
+// RFC 4180: quote a cell that holds a comma, a quote or a line break, and
+// double the quotes inside it. CRLF line ends, which is what Excel expects.
+function csv(rows) {
+  const cell = v => { const s = v == null ? '' : String(v); return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  return rows.map(r => r.map(cell).join(',')).join('\r\n') + '\r\n';
+}
+
+export function buildExport(data) {
+  const food = [['date', 'time', 'meal', 'name', 'qty', 'kcal', 'protein_g', 'carbs_g', 'fat_g', 'source']];
+  const log = (data.food && data.food.log) || {};
+  Object.keys(log).sort().forEach(d => Object.values(log[d] || {})
+    .filter(e => e && e.name).sort((a, b) => (a.t || 0) - (b.t || 0))
+    .forEach(e => food.push([d, hm(e.t), e.meal, e.name, e.qty, e.cal, e.p, e.c, e.f, e.src])));
+
+  const weight = [['date', 'time', 'lb']];
+  Object.values((data.weight && data.weight.entries) || {})
+    .filter(e => e && e.lb > 0).sort((a, b) => (a.t || 0) - (b.t || 0))
+    .forEach(e => weight.push([ymd(e.t), hm(e.t), e.lb]));
+
+  const workouts = [['date', 'session', 'exercise', 'group', 'set', 'type', 'lb', 'reps']];
+  const tree = data.workouts || {};
+  Object.keys(tree).sort().forEach(mk => Object.keys(tree[mk] || {}).sort().forEach(dd =>
+    Object.values(tree[mk][dd] || {}).forEach(s => (s && s.exercises || []).forEach(ex =>
+      (ex.sets || []).forEach((st, i) => workouts.push([mk + '-' + dd, s.name, ex.name, ex.group, i + 1, st.type || 'N', st.w, st.r]))))));
+
+  const water = [['date', 'time', 'ml', 'source']];
+  const wl = (data.water && data.water.log) || {};
+  Object.keys(wl).sort().forEach(d => Object.values(wl[d] || {})
+    .filter(e => e && e.ml > 0).sort((a, b) => (a.t || 0) - (b.t || 0))
+    .forEach(e => water.push([d, hm(e.t), e.ml, e.src])));
+
+  const steps = [['date', 'steps', 'mi', 'source']];
+  Object.keys(data.steps || {}).sort().forEach(d => { const s = data.steps[d]; if (s && s.steps > 0) steps.push([d, s.steps, s.mi, s.src]); });
+
+  return {
+    json: JSON.stringify({ app: 'Rack', exportedAt: new Date().toISOString(), ...data }, null, 2),
+    csv: { food: csv(food), weight: csv(weight), workouts: csv(workouts), water: csv(water), steps: csv(steps) }
+  };
+}
+
+export function openExport() {
+  const { sh, close } = sheet();
+  sh.appendChild(el('div', 'eyebrow', 'App'));
+  sh.appendChild(el('h2', null, 'Export my data'));
+  sh.appendChild(noteEl('Everything in your account as one JSON file, or each log as a spreadsheet. On a phone the share sheet opens so it can go to Files, Mail or a computer. Nothing leaves the device unless you send it.'));
+
+  const list = el('div', 'set-list');
+  sh.appendChild(list);
+  const stamp = ymd(Date.now());
+  let built = null;
+  const data = async () => built || (built = buildExport(await readAllForExport()));
+  const row = (label, sub, name, mime, pick) => {
+    const b = el('button', 'set-row-nav');
+    b.appendChild(el('span', 'set-row-l', label));
+    b.appendChild(el('span', 'set-row-v', sub));
+    b.appendChild(el('span', 'set-row-x', '›'));
+    b.onclick = async () => {
+      b.disabled = true;
+      try { const d = await data(); await saveText(name, pick(d), mime); }
+      catch { toast('Couldn’t read your data just now'); }
+      b.disabled = false;
+    };
+    list.appendChild(b);
+  };
+  row('Everything',  'JSON', 'rack-' + stamp + '.json',          'application/json', d => d.json);
+  row('Food log',    'CSV',  'rack-food-' + stamp + '.csv',      'text/csv',         d => d.csv.food);
+  row('Weigh-ins',   'CSV',  'rack-weight-' + stamp + '.csv',    'text/csv',         d => d.csv.weight);
+  row('Workouts',    'CSV',  'rack-workouts-' + stamp + '.csv',  'text/csv',         d => d.csv.workouts);
+  row('Water',       'CSV',  'rack-water-' + stamp + '.csv',     'text/csv',         d => d.csv.water);
+  row('Steps',       'CSV',  'rack-steps-' + stamp + '.csv',     'text/csv',         d => d.csv.steps);
+
+  const done = el('button', 'btn btn-ghost btn-block', 'Close');
+  done.style.marginTop = '16px';
+  done.onclick = close;
+  sh.appendChild(done);
 }
 
 /* The goal weight lives in Daily targets. You needs a way there that does
