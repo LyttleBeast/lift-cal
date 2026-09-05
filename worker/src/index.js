@@ -82,13 +82,13 @@ const MEDIA_TYPES   = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 const MAX_IMAGE_B64 = 900000;    // ~675 KB of image. The app sends ~150 KB.
 const MAX_TEXT      = 600;       // characters of description
 const MAX_BODY      = 1400000;   // bytes on the wire, checked before parsing
-const MAX_TOKENS    = 6000;      // ceiling on what one answer can cost. This is a
-                                 // ceiling, not a spend: the model thinks by
-                                 // default, and its thinking, the search queries
-                                 // and the numbers all come out of this one
-                                 // budget. At 2200 a five-item takeaway order was
-                                 // cut off before log_food every round, and the
-                                 // person saw "Could not read that one".
+const MAX_TOKENS    = 3000;      // ceiling on what one answer can cost. The
+                                 // search queries and the numbers both come out
+                                 // of this budget. A five-item order answered in
+                                 // 1268 with the model narrating; the prompt now
+                                 // tells it not to, so this is more than double
+                                 // a real answer. 2200 with thinking on was too
+                                 // small — that is why thinking is off below.
 const TIMEOUT_MS    = 60000;     // per round, answering from memory. Generous;
                                  // those rounds take seconds.
 const SEARCH_TIMEOUT_MS = 45000; // per round with the search tool attached.
@@ -96,9 +96,12 @@ const SEARCH_TIMEOUT_MS = 45000; // per round with the search tool attached.
                                  // answer comes from memory instead, so this
                                  // is the longest anyone waits before seeing
                                  // numbers of some kind.
-const MAX_ROUNDS    = 3;         // attempts before log_food is forced. The model
-                                 // may search on the first two; the last one has
-                                 // to produce numbers.
+const MAX_ROUNDS    = 2;         // attempts before log_food is forced. The model
+                                 // may search on the first; the second has to
+                                 // produce numbers. Two, not three, because the
+                                 // worst case is what bounds one request's cost
+                                 // — every round pays to re-read the search
+                                 // results — and a good round answers in one.
 const OVERALL_MS    = 130000;    // total wall clock across those rounds. Somebody
                                  // is standing there holding a plate; past this
                                  // the next round is the forced one.
@@ -222,6 +225,8 @@ const SYSTEM = [
   '- Search the chain’s or manufacturer’s own nutrition page, or the nutrition PDF it publishes. Aggregator and user-submitted sites (MyFitnessPal, Nutritionix, FatSecret, Eat This Much) copy each other’s mistakes: use one only when nothing official turns up, and drop confidence to medium when you do.',
   '- Menu items are published per unit, not per order. Take the official per-piece or per-serving figure and multiply it out for the count or the size he actually gave — a 30-count of something listed per 8-count is 3.75 servings, not one — and put that arithmetic in qty so a wrong assumption is visible on screen.',
   '- Do not search for home cooking or generic food. "Two eggs and toast", "a chicken breast and rice" — you already know those, and every search costs him money. Search when a name, a brand, a chain or a package is what makes the numbers knowable.',
+  '- You get one search per turn, so make it the right one: the chain or brand name plus "nutrition", which lands on the page that lists every item. A second attempt is refused, not answered.',
+  '- Write no prose. No summary of what you found, no working shown, no preamble — every sentence before the tool call is paid for and nobody ever sees it. Read the results and call log_food. The one sentence that matters goes in note.',
   '- Where a picture shows a brand or a package, the same rule holds: read the label if it is legible, and look the product up if it is not.',
   '- Calories should roughly reconcile with the macros (4/4/9). If they cannot, trust the macros and adjust calories.',
   '- If the user’s description and the photo disagree, the description wins — he was there.'
