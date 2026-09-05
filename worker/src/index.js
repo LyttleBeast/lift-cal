@@ -82,10 +82,13 @@ const MEDIA_TYPES   = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 const MAX_IMAGE_B64 = 900000;    // ~675 KB of image. The app sends ~150 KB.
 const MAX_TEXT      = 600;       // characters of description
 const MAX_BODY      = 1400000;   // bytes on the wire, checked before parsing
-const MAX_TOKENS    = 2200;      // ceiling on what one answer can cost. Higher
-                                 // than it was: a search query, the reading of
-                                 // the result and the numbers all come out of
-                                 // this one budget.
+const MAX_TOKENS    = 6000;      // ceiling on what one answer can cost. This is a
+                                 // ceiling, not a spend: the model thinks by
+                                 // default, and its thinking, the search queries
+                                 // and the numbers all come out of this one
+                                 // budget. At 2200 a five-item takeaway order was
+                                 // cut off before log_food every round, and the
+                                 // person saw "Could not read that one".
 const TIMEOUT_MS    = 75000;     // a lookup is several round trips inside the
                                  // one call, so it takes noticeably longer than
                                  // an answer from memory did
@@ -733,11 +736,28 @@ export default {
       searches += (used.server_tool_use && used.server_tool_use.web_search_requests) || 0;
 
       block = (data.content || []).find(b => b.type === 'tool_use' && b.name === 'log_food');
+
+      // One line per round in `wrangler tail`. When this goes wrong the question
+      // is always the same — did it stop for tokens, for time, or on its own —
+      // and the answer is here rather than in a 400-character slice of JSON.
+      console.log('round ' + (round + 1) + '/' + MAX_ROUNDS + ' ' + mode + ':',
+        'stop=' + data.stop_reason, 'out=' + (used.output_tokens || 0),
+        'searches=' + ((used.server_tool_use && used.server_tool_use.web_search_requests) || 0),
+        'blocks=' + (data.content || []).map(b => b.type).join(','),
+        block ? 'ANSWERED' : 'no answer', Math.round((Date.now() - started) / 1000) + 's');
       if (block) break;
 
       round++;
       if (round >= MAX_ROUNDS || !Array.isArray(data.content) || !data.content.length) break;
-      if (Date.now() - started > OVERALL_MS) { console.log('out of time after round ' + round); break; }
+
+      // Out of time is not a reason to give up with nothing: skip straight to
+      // the forced round, which cannot end without numbers. It costs one more
+      // call on top of what has already been spent, and the alternative is
+      // throwing all of that away.
+      if (Date.now() - started > OVERALL_MS && round < MAX_ROUNDS - 1) {
+        console.log('out of time after round ' + round + ', forcing the answer');
+        round = MAX_ROUNDS - 1;
+      }
 
       // It searched, or it talked, without answering. Hand its own turn back
       // verbatim — the search results live in those blocks and dropping them
@@ -768,7 +788,8 @@ export default {
 
     /* ---- unwrap the tool call ---- */
     if (!block || !block.input || !Array.isArray(block.input.items) || !block.input.items.length) {
-      console.log('no log_food after ' + MAX_ROUNDS + ' rounds:', JSON.stringify(data).slice(0, 400));
+      console.log('no usable log_food, last stop=' + (data && data.stop_reason) + ':',
+        JSON.stringify(block ? block.input : data).slice(0, 400));
       return reply({ error: 'no_result', message: 'Could not read that one. Try again, or describe it in words.' }, 502);
     }
 
