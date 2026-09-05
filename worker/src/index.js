@@ -89,10 +89,13 @@ const MAX_TOKENS    = 6000;      // ceiling on what one answer can cost. This is
                                  // budget. At 2200 a five-item takeaway order was
                                  // cut off before log_food every round, and the
                                  // person saw "Could not read that one".
-const TIMEOUT_MS    = 100000;    // per round. A lookup is several round trips
-                                 // inside the one call, so it takes noticeably
-                                 // longer than an answer from memory did; 75s
-                                 // was tripped by a five-item order.
+const TIMEOUT_MS    = 60000;     // per round, answering from memory. Generous;
+                                 // those rounds take seconds.
+const SEARCH_TIMEOUT_MS = 45000; // per round with the search tool attached.
+                                 // Past this the lookup is dropped and the
+                                 // answer comes from memory instead, so this
+                                 // is the longest anyone waits before seeing
+                                 // numbers of some kind.
 const MAX_ROUNDS    = 3;         // attempts before log_food is forced. The model
                                  // may search on the first two; the last one has
                                  // to produce numbers.
@@ -709,11 +712,22 @@ export default {
             'anthropic-version': ANTHROPIC_VERSION
           },
           body: JSON.stringify(payload),
-          signal: AbortSignal.timeout(TIMEOUT_MS)
+          signal: AbortSignal.timeout(useSearch ? SEARCH_TIMEOUT_MS : TIMEOUT_MS)
         });
         data = await res.json();
       } catch (e) {
         console.log('upstream error:', e.message);
+        // A search round that runs long is dropped, not fatal. The lookup is
+        // the better answer, but the answer from memory is the one this Worker
+        // gave for months, and a person holding a plate would rather have that
+        // than "try again". The tail says when this happens.
+        if (useSearch && !droppedSearch) {
+          console.log('search round timed out, answering without the lookup');
+          useSearch = false;
+          droppedSearch = true;
+          messages.length = 1;
+          continue;
+        }
         return reply({ error: 'upstream', message: 'Claude did not answer in time. Try again.' }, 502);
       }
 
