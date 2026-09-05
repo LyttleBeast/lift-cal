@@ -31,11 +31,11 @@ FIREBASE_PROJECT_ID = "lift-cal"
 # Rate limits — PER ACCOUNT, per day. Every person gets their own counters, so
 # a second user can never eat the first one's allowance.
 #
-# Photo and text are counted separately on purpose. A photo costs roughly ten
-# times what the same meal costs described, so a single shared counter lets a
-# run of cheap text estimates quietly spend the expensive ones — and you find
-# out at dinner, holding a plate. Using one of each in a day counts one against
-# each, not two against one.
+# Photo and text are counted separately on purpose. They cost differently — a
+# photo more than a described home-cooked meal, a described chain order more
+# than either, since that one gets looked up — so a single shared counter lets
+# one kind quietly spend the other, and you find out at dinner, holding a plate.
+# Using one of each in a day counts one against each, not two against one.
 #
 # The two per-day numbers are the DEFAULT allowance. The owner can raise a single
 # account past them from the app, and never past the ceiling in src/index.js —
@@ -53,9 +53,12 @@ AI_TEXT_PER_DAY   = "3"
 # be given room without giving it to everybody, which is the whole point.
 #
 # Scale, from the price table above: a photo estimate is about $0.006 and a
-# typed description a fraction of a cent, so ordinary use at 3 photos a day is
-# roughly $0.55 a month. $2 is about three times that -- slack enough not to
-# bite an honest month, tight enough to stop a loop.
+# typed description about $0.002 -- but either one that names a brand or a chain
+# costs $0.03-$0.06, because the Worker sends the model to that brand's own
+# nutrition page rather than letting it answer from memory. Ordinary use at 3
+# photos a day is roughly $0.55 a month; a month of nothing but branded lookups
+# at 3 a day is closer to $4 and would hit this cap. $2 still fits normal use --
+# raise it to "5" if the estimator is mostly being used on restaurant food.
 MONTHLY_USD_CAP = "2"
 
 # The ceiling for EVERYONE COMBINED, in the same month. Per-account caps bound

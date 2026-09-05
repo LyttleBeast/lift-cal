@@ -1767,9 +1767,10 @@ function openShotSheet(shot, mealId, prefill) {
   sh.appendChild(cancel);
 }
 
-/* Words only. Roughly a tenth of what a photo costs, and for anything you
-   cooked yourself and can describe precisely it is often the better answer —
-   a picture cannot see the oil that already went into the pan. */
+/* Words only. Cheaper than a photo for anything you cooked yourself, and often
+   the better answer for it too — a picture cannot see the oil that already went
+   into the pan. Naming a chain or a brand is the dearer case, not the cheaper
+   one: that sends the Worker off to find the published numbers. */
 function openDescribeFlow(mealId, prefill, onPick) {
   const { sh, close } = sheet();
   let meal = mealId || defaultMeal();
@@ -1843,7 +1844,7 @@ function openEstimating(label) {
   row.appendChild(el('div', 'ai-spin'));
   const txt = el('div');
   txt.appendChild(el('div', 'ai-busy-t', label));
-  txt.appendChild(el('div', 'note', 'A couple of seconds.'));
+  txt.appendChild(el('div', 'note', 'A few seconds — longer when it has to look a brand up.'));
   row.appendChild(txt);
   sh.appendChild(row);
   return close;
@@ -1889,7 +1890,11 @@ const CONF = {
    an estimate you cannot correct is an estimate you stop trusting — and one
    wrong item shouldn't mean redoing the whole meal. */
 function openAiReview(res, ctx) {
-  const src = /haiku/.test(res.model || '') ? 'ai-text' : 'ai-photo';
+  // The Worker names the path it took. Older builds did not, and both paths run
+  // the same model now, so the model name can no longer stand in for it — the
+  // regex is only there for a phone still talking to a Worker from before.
+  const src = res.mode ? (res.mode === 'text' ? 'ai-text' : 'ai-photo')
+                       : (/haiku/.test(res.model || '') ? 'ai-text' : 'ai-photo');
   const entries = normalizeImport({ items: res.items }).map(e => ({ ...e, src }));
   if (!entries.length) { openAiError({ message: 'Nothing came back for that one.' }, ctx); return; }
 

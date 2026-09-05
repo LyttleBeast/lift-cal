@@ -137,8 +137,11 @@ export function estimatePhoto(shot, text) {
   });
 }
 
-/* Words only. A tenth of the cost of a photo and, for anything you cooked
-   yourself and can describe precisely, usually the better answer. */
+/* Words only. Cheaper than a photo for anything you cooked yourself, and
+   usually the better answer for it too. Naming a brand or a chain costs more
+   than that — the Worker looks the official numbers up rather than recalling
+   them — and takes longer, which is what the estimating screen is warning
+   about. Worth it: recalled menu macros are confidently wrong. */
 export function estimateText(text) {
   return call('/estimate', {
     method: 'POST',

@@ -54,24 +54,47 @@ const ANTHROPIC_VERSION = '2023-06-01';
 // import them directly (the x509 endpoint would need DER parsing by hand).
 const JWKS_URL = 'https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com';
 
-// Pinned server-side. A photo gets the sharper eye; plain text is a fraction of
-// the tokens and does not need it.
+// Pinned server-side. Both paths run the same model now. A typed order from a
+// chain is not a recall question — it is a lookup and some arithmetic off the
+// published listing — and the cheap model was answering it from memory, which
+// is how "chick fil a 30ct grilled nugget" came back with a fraction of the
+// protein Chick-fil-A publishes. Words are still a fraction of what a photo
+// costs: the image is the expensive part, not the model.
 const MODEL_PHOTO = 'claude-sonnet-5';
-const MODEL_TEXT  = 'claude-haiku-4-5-20251001';
+const MODEL_TEXT  = 'claude-sonnet-5';
 
 // USD per token. Update these if Anthropic's prices move — they only feed the
 // spend cap, so being slightly stale makes the cap slightly wrong, nothing else.
+// The Haiku row is unused now; it stays so that swapping a model back into the
+// lines above still gets counted instead of silently costing nothing.
 const PRICE = {
   'claude-sonnet-5':           { in: 2 / 1e6, out: 10 / 1e6 },
   'claude-haiku-4-5-20251001': { in: 1 / 1e6, out:  5 / 1e6 }
 };
 
+// Web search is billed per search — $10 per thousand — on top of the tokens the
+// results then add to the input. A branded lookup runs around $0.03–$0.06
+// against $0.006 for a plain estimate, which is why the prompt is explicit that
+// home cooking is not worth searching for.
+const WEB_SEARCH_USD = 10 / 1000;
+
 const MEDIA_TYPES   = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 const MAX_IMAGE_B64 = 900000;    // ~675 KB of image. The app sends ~150 KB.
 const MAX_TEXT      = 600;       // characters of description
 const MAX_BODY      = 1400000;   // bytes on the wire, checked before parsing
-const MAX_TOKENS    = 900;       // ceiling on what one answer can cost
-const TIMEOUT_MS    = 45000;
+const MAX_TOKENS    = 2200;      // ceiling on what one answer can cost. Higher
+                                 // than it was: a search query, the reading of
+                                 // the result and the numbers all come out of
+                                 // this one budget.
+const TIMEOUT_MS    = 75000;     // a lookup is several round trips inside the
+                                 // one call, so it takes noticeably longer than
+                                 // an answer from memory did
+const MAX_ROUNDS    = 3;         // attempts before log_food is forced. The model
+                                 // may search on the first two; the last one has
+                                 // to produce numbers.
+const OVERALL_MS    = 110000;    // total wall clock across those rounds. Somebody
+                                 // is standing there holding a plate; past this
+                                 // it is better to fail than to keep them there.
 
 // Defaults if the matching env var is unset. Per PERSON, per day — every
 // account gets its own counters, so a second user cannot eat the first one's.
@@ -129,7 +152,7 @@ const LOG_FOOD_TOOL = {
           type: 'object',
           properties: {
             name:  { type: 'string', description: 'Short specific name, e.g. "Grilled chicken breast", not "Meat".' },
-            qty:   { type: 'string', description: 'The portion you assumed, e.g. "6 oz cooked" or "1 cup". Always fill this in.' },
+            qty:   { type: 'string', description: 'The portion you assumed, e.g. "6 oz cooked" or "1 cup". When you scaled a published serving, show the arithmetic: "30 pieces = 3.75 x 8-ct serving". Always fill this in.' },
             cal:   { type: 'number', description: 'Calories (kcal).' },
             p:     { type: 'number', description: 'Protein, grams.' },
             c:     { type: 'number', description: 'Carbohydrate, grams.' },
@@ -142,15 +165,31 @@ const LOG_FOOD_TOOL = {
       confidence: {
         type: 'string',
         enum: ['high', 'medium', 'low'],
-        description: 'high = a packaged or clearly measured food. medium = a normal plate you can size by eye. low = hidden fats, unknown sauces, or a bad angle.'
+        description: 'high = official published numbers you looked up or read off a label, or a weighed portion. medium = a normal plate you can size by eye, or a brand whose official figures you could not find. low = hidden fats, unknown sauces, or a bad angle.'
       },
       note: {
         type: 'string',
-        description: 'One short sentence, only if a specific assumption is worth correcting — the oil you assumed, the cut of beef, a portion you could not see. Skip it when the estimate is unremarkable.'
+        description: 'One short sentence. Name the source when you looked the numbers up ("Chick-fil-A published values, scaled from the 8-count"), and say so when you searched and could not find them and are estimating instead. Otherwise use it only for an assumption worth correcting — the oil you assumed, the cut of beef, a portion you could not see.'
       }
     },
     required: ['items', 'confidence']
   }
+};
+
+/* ============ the lookup ============
+   The reason this Worker got slower and dearer. A chain menu item, a protein
+   bar, a supermarket ready meal — all of those have numbers somebody published,
+   and a model answering from memory gets them plausibly, confidently wrong. It
+   is a server-side tool: Anthropic runs the search inside the same API call, so
+   there is nothing to execute here, only a bill to count (see WEB_SEARCH_USD).
+
+   max_uses is per request, and each round below is its own request, so the real
+   ceiling is this times MAX_ROUNDS. Two is enough for "find the official page,
+   then read the right line of it". */
+const WEB_SEARCH_TOOL = {
+  type: 'web_search_20260209',
+  name: 'web_search',
+  max_uses: 2
 };
 
 /* ---------- the prompt ----------
@@ -160,12 +199,16 @@ const SYSTEM = [
   'You estimate nutrition for a training log. You are looking at one meal, logged by a lifter who tracks macros seriously and needs numbers he can act on, not a lecture about accuracy.',
   '',
   'Rules:',
-  '- Always return an estimate. Never refuse, never ask a question back, never return an empty item list. A rough number beats nothing, and the flagged confidence is how you say you are unsure.',
+  '- Always return an estimate. Never refuse, never ask a question back, never return an empty item list. A lookup that found nothing is not a reason to stop — fall back on your own estimate and say so. A rough number beats nothing, and the flagged confidence is how you say you are unsure.',
   '- Break a plate into its components — the chicken, the rice, the sauce — each as its own item. That way one wrong guess can be fixed without redoing the meal.',
   '- Fill in qty with the portion you actually assumed. He checks that field first; it is what makes a wrong answer fixable.',
   '- Weights are cooked unless stated otherwise. Ground beef is 85/15, cheese is cheddar, milk is 2 percent, unless told otherwise or clearly something else.',
   '- Assume restaurant and takeaway food carries more oil, butter and sugar than a home kitchen version of the same dish.',
-  '- Where the picture shows a brand or a package, use that brand’s published numbers.',
+  '- Brands, restaurant chains and packaged products publish their own numbers, and those are the ones he wants — not your recollection of them, which is reliably wrong on menu items. Use web_search and get the official figure before you answer.',
+  '- Search the chain’s or manufacturer’s own nutrition page, or the nutrition PDF it publishes. Aggregator and user-submitted sites (MyFitnessPal, Nutritionix, FatSecret, Eat This Much) copy each other’s mistakes: use one only when nothing official turns up, and drop confidence to medium when you do.',
+  '- Menu items are published per unit, not per order. Take the official per-piece or per-serving figure and multiply it out for the count or the size he actually gave — a 30-count of something listed per 8-count is 3.75 servings, not one — and put that arithmetic in qty so a wrong assumption is visible on screen.',
+  '- Do not search for home cooking or generic food. "Two eggs and toast", "a chicken breast and rice" — you already know those, and every search costs him money. Search when a name, a brand, a chain or a package is what makes the numbers knowable.',
+  '- Where a picture shows a brand or a package, the same rule holds: read the label if it is legible, and look the product up if it is not.',
   '- Calories should roughly reconcile with the macros (4/4/9). If they cannot, trust the macros and adjust calories.',
   '- If the user’s description and the photo disagree, the description wins — he was there.'
 ].join('\n');
@@ -572,10 +615,11 @@ export default {
       return reply({ error: 'global_spend_cap',
         message: 'Rack\u2019s $' + cfg.globalMonthUsd + ' AI budget for this month is used up across everyone. It resets on the 1st.' }, 402);
     }
-    // Photos and words have their own daily budgets. A photo costs roughly ten
-    // times what the same meal costs described, so one shared counter lets a run
-    // of cheap text estimates quietly spend the expensive ones — and the person
-    // finds out at dinner, holding a plate.
+    // Photos and words have their own daily budgets, because they cost
+    // differently: a photo more than a described home-cooked meal, a described
+    // chain order more than either, since that one gets looked up. One shared
+    // counter would let a run of one kind quietly spend the other — and the
+    // person finds out at dinner, holding a plate.
     if (dayUsed(state, mode) >= dayLimit(cfg, mode)) {
       const other = mode === 'photo' ? 'text' : 'photo';
       const spare = Math.max(0, dayLimit(cfg, other) - dayUsed(state, other));
@@ -611,49 +655,101 @@ export default {
       content.push({ type: 'text', text: 'Here is what I ate: ' + note + '\n\nEstimate the nutrition and call log_food.' });
     }
 
-    const payload = {
-      model,
-      max_tokens: MAX_TOKENS,
-      system: SYSTEM,
-      tools: [LOG_FOOD_TOOL],
-      tool_choice: { type: 'tool', name: 'log_food' },
-      messages: [{ role: 'user', content }]
-    };
+    /* ---- the rounds ----
+       One call used to be enough, because the model answered out of memory.
+       Looking something up is a conversation: it searches, reads what came
+       back, and only then has numbers. So the turn can end without log_food in
+       it, and that is not an error — it is a turn that needs handing back.
 
-    let res, data;
-    try {
-      res = await fetch(ANTHROPIC_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type':      'application/json',
-          'x-api-key':         env.ANTHROPIC_API_KEY,
-          'anthropic-version': ANTHROPIC_VERSION
-        },
-        body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(TIMEOUT_MS)
-      });
-      data = await res.json();
-    } catch (e) {
-      console.log('upstream error:', e.message);
-      return reply({ error: 'upstream', message: 'Claude did not answer in time. Try again.' }, 502);
-    }
+       tool_choice cannot be the forced log_food it used to be while any of that
+       is happening: forcing a custom tool makes the model answer immediately,
+       which is exactly the guess this change exists to stop. So it is `auto`
+       while searching is still allowed and forced on the final round, where the
+       only acceptable outcome is numbers. */
+    const messages = [{ role: 'user', content }];
 
-    if (!res.ok) {
-      // Anthropic's error text can name the key, the org and the account state.
-      // It goes to the log, never to the phone.
-      console.log('anthropic ' + res.status + ':', JSON.stringify(data).slice(0, 500));
-      const msg = res.status === 429 ? 'Claude is rate-limiting the account. Wait a minute.'
-                : res.status === 400 ? 'That image or description was rejected. Try a clearer photo.'
-                : res.status === 401 ? 'The API key on the server is wrong or revoked.'
-                : 'Something went wrong upstream.';
-      return reply({ error: 'upstream', status: res.status, message: msg }, 502);
+    const started = Date.now();
+    let res = null, data = null, block = null;
+    let inTok = 0, outTok = 0, searches = 0;
+    let useSearch = true, droppedSearch = false;
+
+    for (let round = 0; round < MAX_ROUNDS; ) {
+      const payload = {
+        model,
+        max_tokens: MAX_TOKENS,
+        system: SYSTEM,
+        tools: useSearch ? [WEB_SEARCH_TOOL, LOG_FOOD_TOOL] : [LOG_FOOD_TOOL],
+        tool_choice: round === MAX_ROUNDS - 1 ? { type: 'tool', name: 'log_food' } : { type: 'auto' },
+        messages
+      };
+
+      try {
+        res = await fetch(ANTHROPIC_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type':      'application/json',
+            'x-api-key':         env.ANTHROPIC_API_KEY,
+            'anthropic-version': ANTHROPIC_VERSION
+          },
+          body: JSON.stringify(payload),
+          signal: AbortSignal.timeout(TIMEOUT_MS)
+        });
+        data = await res.json();
+      } catch (e) {
+        console.log('upstream error:', e.message);
+        return reply({ error: 'upstream', message: 'Claude did not answer in time. Try again.' }, 502);
+      }
+
+      if (!res.ok) {
+        // Anthropic's error text can name the key, the org and the account state.
+        // It goes to the log, never to the phone.
+        console.log('anthropic ' + res.status + ':', JSON.stringify(data).slice(0, 500));
+
+        // A 400 while the search tool is attached is most likely the search tool
+        // itself — web search switched off for the account, or a tool version
+        // this model no longer takes. Losing the lookup is a far smaller loss
+        // than losing the estimator, so drop it and ask the old way once. This
+        // can only happen once per request: droppedSearch latches.
+        if (res.status === 400 && useSearch && !droppedSearch) {
+          console.log('dropping web_search and retrying without it');
+          useSearch = false;
+          droppedSearch = true;
+          messages.length = 1;
+          continue;
+        }
+
+        const msg = res.status === 429 ? 'Claude is rate-limiting the account. Wait a minute.'
+                  : res.status === 400 ? 'That image or description was rejected. Try a clearer photo.'
+                  : res.status === 401 ? 'The API key on the server is wrong or revoked.'
+                  : 'Something went wrong upstream.';
+        return reply({ error: 'upstream', status: res.status, message: msg }, 502);
+      }
+
+      // Count every round, including the ones that only searched. The bill is
+      // the sum of them and so is the spend cap.
+      const used = data.usage || {};
+      inTok    += (used.input_tokens || 0) + (used.cache_read_input_tokens || 0);
+      outTok   += used.output_tokens || 0;
+      searches += (used.server_tool_use && used.server_tool_use.web_search_requests) || 0;
+
+      block = (data.content || []).find(b => b.type === 'tool_use' && b.name === 'log_food');
+      if (block) break;
+
+      round++;
+      if (round >= MAX_ROUNDS || !Array.isArray(data.content) || !data.content.length) break;
+      if (Date.now() - started > OVERALL_MS) { console.log('out of time after round ' + round); break; }
+
+      // It searched, or it talked, without answering. Hand its own turn back
+      // verbatim — the search results live in those blocks and dropping them
+      // would mean paying for the lookup twice — and ask for the numbers.
+      messages.push({ role: 'assistant', content: data.content });
+      messages.push({ role: 'user', content: [{ type: 'text',
+        text: 'Now call log_food with your final numbers, using the official figures if you found them.' }] });
     }
 
     /* ---- record what it cost ---- */
     const price = PRICE[model] || { in: 0, out: 0 };
-    const used  = data.usage || {};
-    const inTok = (used.input_tokens || 0) + (used.cache_read_input_tokens || 0);
-    const usd   = inTok * price.in + (used.output_tokens || 0) * price.out;
+    const usd   = inTok * price.in + outTok * price.out + searches * WEB_SEARCH_USD;
 
     state = roll(state, Date.now());
     state.monthUsd = Number(((state.monthUsd || 0) + usd).toFixed(6));
@@ -671,9 +767,8 @@ export default {
     } catch {}
 
     /* ---- unwrap the tool call ---- */
-    const block = (data.content || []).find(b => b.type === 'tool_use' && b.name === 'log_food');
     if (!block || !block.input || !Array.isArray(block.input.items) || !block.input.items.length) {
-      console.log('no tool_use in response:', JSON.stringify(data).slice(0, 400));
+      console.log('no log_food after ' + MAX_ROUNDS + ' rounds:', JSON.stringify(data).slice(0, 400));
       return reply({ error: 'no_result', message: 'Could not read that one. Try again, or describe it in words.' }, 502);
     }
 
@@ -693,7 +788,11 @@ export default {
       confidence: block.input.confidence || 'medium',
       note: String(block.input.note || '').slice(0, 240),
       model,
-      usage: { in: inTok, out: used.output_tokens || 0, usd: Number(usd.toFixed(5)) },
+      // `mode` so the app can tell a described meal from a photographed one
+      // without inferring it from the model name — both paths run the same
+      // model now, so that inference no longer works.
+      mode,
+      usage: { in: inTok, out: outTok, searches, usd: Number(usd.toFixed(5)) },
       left: { minute: Math.max(0, cfg.perMinute - state.minCount),
               kind:   mode,
               photo:  Math.max(0, cfg.photoPerDay - dayUsed(state, 'photo')),

@@ -146,10 +146,13 @@ kind at all.
 
 Set the counts and the cap together or they hit whichever wall comes first, and
 the refusal will name the wrong one. For scale: a photo estimate costs about
-**$0.006**, a typed description a fraction of a cent. Ordinary use at 3 photos a
-day is roughly **$0.55 a month**. Somebody at the 12-photo ceiling runs about
-**$2.20** — so 12 photos a day on the default $2 cap runs out of money in ten
-days.
+**$0.006** and a typed description about **$0.002** — but either one that names
+a brand or a chain costs **$0.03–$0.06**, because it goes and reads that brand's
+published nutrition page instead of answering from memory. Ordinary use at 3
+photos a day is roughly **$0.55 a month**; somebody who describes three
+restaurant meals a day is closer to **$4**, which is over the default $2 cap.
+Somebody at the 12-photo ceiling runs about **$2.20** — so 12 photos a day on
+the default $2 cap runs out of money in ten days.
 
 **4. Check the isolation once, with the first person.** On your phone: none of
 their entries anywhere, no target moved, nothing in your saved foods. On theirs:

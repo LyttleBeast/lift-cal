@@ -415,7 +415,7 @@ in the log lives behind it, ordered by how often it actually gets used:
 | | |
 |---|---|
 | **Photo** | Camera → optional one-line description → Claude estimates → you check and edit → log |
-| **Describe** | Type what you ate. Roughly a tenth of the cost of a photo, and often *more* accurate for something you cooked yourself, because a picture cannot see the oil that went in the pan |
+| **Describe** | Type what you ate. Cheaper than a photo, and often *more* accurate for something you cooked yourself, because a picture cannot see the oil that went in the pan. Name a brand or a chain and it looks the official numbers up rather than recalling them — slower and dearer, and the only way a menu item comes back right |
 | **Barcode** | Open Food Facts lookup, as before |
 | **Manual** | The numbers, typed, as before |
 

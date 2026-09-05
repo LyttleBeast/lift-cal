@@ -138,15 +138,26 @@ again. Changing a var takes seconds and does not touch the secret.
 
 ## What it costs
 
-Charged per token. A photo shrunk to 1024 px is about 1,370 input tokens.
+Charged per token, plus $10 per thousand web searches. A photo shrunk to
+1024 px is about 1,370 input tokens.
 
 | | model | roughly |
 |---|---|---|
 | Photo | `claude-sonnet-5` | $0.006 |
-| Description | `claude-haiku-4-5` | $0.0005 |
+| Description | `claude-sonnet-5` | $0.002 |
+| Either, when it looks a brand up | `claude-sonnet-5` + web search | $0.03–$0.06 |
 
-At two or three photos a day that is about **$0.50 a month** — a $5 balance
-lasts most of a year. Ten a day would be about $1.80 a month.
+The third row is the one to plan around. A named chain or packaged product sends
+the model to that brand's published nutrition page instead of its own memory —
+which is the only way the numbers come back right — and a search plus the page
+it returns costs an order of magnitude more than answering from memory did. Home
+cooking does not trigger it: the prompt is explicit that "two eggs and toast"
+needs no lookup.
+
+At two or three photos a day and the odd branded lookup that is roughly
+**$1 a month**. A month of nothing but branded lookups at the 3-a-day default
+would be about **$4**, which is above the default $2 per-account cap — raise
+`MONTHLY_USD_CAP` if that is the way it actually gets used.
 
 The app shrinks every photo before it uploads. That is not politeness about
 bandwidth: an untouched iPhone photo costs roughly twenty times as much and
