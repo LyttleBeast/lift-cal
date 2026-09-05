@@ -187,13 +187,20 @@ const LOG_FOOD_TOOL = {
    is a server-side tool: Anthropic runs the search inside the same API call, so
    there is nothing to execute here, only a bill to count (see WEB_SEARCH_USD).
 
+   The type is the plain search, on purpose. The newer web_search_20260209
+   variant runs a filtering pass over every result set behind the scenes, and
+   with two searches in a round that pushed a single request past 100 seconds
+   — three "did not answer in time" failures in a row before this was found.
+   The plain variant returns in seconds, and a chain's nutrition page is not a
+   hard thing to find.
+
    max_uses is per request, and each round below is its own request, so the real
-   ceiling is this times MAX_ROUNDS. Two is enough for "find the official page,
-   then read the right line of it". */
+   ceiling is this times MAX_ROUNDS. One is enough to land on the official page;
+   the nudge into round two lets it search again if it has to. */
 const WEB_SEARCH_TOOL = {
-  type: 'web_search_20260209',
+  type: 'web_search_20250305',
   name: 'web_search',
-  max_uses: 2
+  max_uses: 1
 };
 
 /* ---------- the prompt ----------
