@@ -89,15 +89,16 @@ const MAX_TOKENS    = 6000;      // ceiling on what one answer can cost. This is
                                  // budget. At 2200 a five-item takeaway order was
                                  // cut off before log_food every round, and the
                                  // person saw "Could not read that one".
-const TIMEOUT_MS    = 75000;     // a lookup is several round trips inside the
-                                 // one call, so it takes noticeably longer than
-                                 // an answer from memory did
+const TIMEOUT_MS    = 100000;    // per round. A lookup is several round trips
+                                 // inside the one call, so it takes noticeably
+                                 // longer than an answer from memory did; 75s
+                                 // was tripped by a five-item order.
 const MAX_ROUNDS    = 3;         // attempts before log_food is forced. The model
                                  // may search on the first two; the last one has
                                  // to produce numbers.
-const OVERALL_MS    = 110000;    // total wall clock across those rounds. Somebody
+const OVERALL_MS    = 130000;    // total wall clock across those rounds. Somebody
                                  // is standing there holding a plate; past this
-                                 // it is better to fail than to keep them there.
+                                 // the next round is the forced one.
 
 // Defaults if the matching env var is unset. Per PERSON, per day — every
 // account gets its own counters, so a second user cannot eat the first one's.
@@ -680,6 +681,12 @@ export default {
       const payload = {
         model,
         max_tokens: MAX_TOKENS,
+        // This model thinks before it answers unless told not to, and on a
+        // five-item order that thinking ran past a minute before the first
+        // search went out. Reading a nutrition page and multiplying is not a
+        // task that needs it; the forced tool call the old code used never
+        // thought either, and it was fine.
+        thinking: { type: 'disabled' },
         system: SYSTEM,
         tools: useSearch ? [WEB_SEARCH_TOOL, LOG_FOOD_TOOL] : [LOG_FOOD_TOOL],
         tool_choice: round === MAX_ROUNDS - 1 ? { type: 'tool', name: 'log_food' } : { type: 'auto' },
