@@ -62,8 +62,67 @@ function tokens(text) {
   return n ? n.split(' ') : [];
 }
 
-function numbersIn(list) {
-  return list.filter(t => /^[0-9]/.test(t)).sort().join(',');
+/* Each number is bound to the first non-numeric token after it, so a quantity
+   and the food it counts travel together.
+
+   This replaced a version that sorted the numeric tokens into a multiset:
+
+       return list.filter(t => /^[0-9]/.test(t)).sort().join(',');
+
+   which threw away WHICH food each number counted, so "2 eggs 3 bacon" and
+   "3 eggs 2 bacon" both reduced to "2,3". The keys differ, so the exact path
+   was safe -- but the near-miss loop below then scored the two sentences with
+   Dice over their token SETS, which are identical, got 1.0, and handed back
+   the wrong breakfast with nothing on screen saying so.
+
+       "2 eggs 3 slices bacon"  ->  "2|eggs,3|slices"
+       "3 eggs 2 slices bacon"  ->  "2|slices,3|eggs"     (different -> rejected)
+
+   The separator is '|' because normalize() leaves only [a-z0-9.] in a token,
+   so it cannot appear inside one and cannot forge a pair boundary.
+
+   This is STRICTER than what it replaces and costs some legitimate hits:
+   "2 fried eggs" no longer matches a stored "2 eggs", because the number binds
+   to 'fried' in one and 'eggs' in the other. That is the direction to err in.
+   A rejected near-miss falls through to the estimator and comes back with a
+   real answer for a fraction of a cent; an accepted wrong one silently books
+   the wrong macros against a cut. */
+function quantities(list) {
+  const out = [];
+  for (let i = 0; i < list.length; i++) {
+    if (!/^[0-9]/.test(list[i])) continue;
+    let j = i + 1;
+    while (j < list.length && /^[0-9]/.test(list[j])) j++;   // "2 3 eggs" -> both bind to 'eggs'
+    out.push(list[i] + '|' + (list[j] || ''));
+  }
+  return out.sort().join(',');
+}
+
+/* The foods a sentence explicitly excludes.
+
+   FILLER does not contain 'no', so it survives normalisation as a token -- and
+   because Dice counts shared tokens, a sentence saying "no cheese" scored MORE
+   similar to one saying "cheese" than one that omitted cheese entirely.
+   Negation was making a match MORE likely. Measured: a Chipotle bowl differing
+   only by "no cheese" scores 0.957 against the with-cheese version, which is
+   over MIN_SCORE, so it hit and returned the with-cheese macros -- about 110
+   kcal and 9 g of fat, confidently wrong, every time.
+
+   A bag of words cannot represent "not", so the negated foods are pulled out
+   and compared exactly: two sentences may only match if they exclude the same
+   things.
+
+   NOT ADDRESSED HERE: the same blindness applies to intensifiers. "extra
+   cheese" still scores close to "cheese" and will still hit, returning the
+   single-cheese macros for a double order. Smaller error, different fix. */
+const NEGATION = new Set(['no', 'without', 'hold', 'skip', 'sans', 'minus']);
+
+function negations(list) {
+  const out = [];
+  for (let i = 0; i < list.length; i++) {
+    if (NEGATION.has(list[i]) && list[i + 1]) out.push(list[i + 1]);
+  }
+  return out.sort().join(',');
 }
 
 // Dice coefficient over the word sets. Cheap, order-blind, and good enough for
@@ -95,7 +154,8 @@ export function recallList() {
    Exact key first, then the closest sentence above the bar. A near-miss whose
    numbers disagree is rejected outright, however similar the words: matching
    "3 slices of pizza" to a stored "2 slices of pizza" would hand back macros
-   that are confidently a third short. */
+   that are confidently a third short. Two gates now, not one -- quantities must
+   attach to the same foods, and both sentences must exclude the same things. */
 export function lookup(text) {
   const key = keyOf(text);
   if (!key) return null;
@@ -104,14 +164,18 @@ export function lookup(text) {
   if (exact && exact.items && exact.items.length) return { key, ...exact, score: 1, exact: true };
 
   const mine = tokens(text);
-  const myNums = numbersIn(mine);
+  const myQty = quantities(mine);
+  const myNeg = negations(mine);
   if (mine.length < 2) return null;
 
   let best = null;
   for (const [k, r] of Object.entries(recall)) {
     if (!r || !r.q || !r.items || !r.items.length) continue;
     const theirs = tokens(r.q);
-    if (numbersIn(theirs) !== myNums) continue;
+    // Both gates run BEFORE the similarity score, not after: Dice cannot see
+    // either problem, so no threshold on it would have caught them.
+    if (quantities(theirs) !== myQty) continue;
+    if (negations(theirs) !== myNeg) continue;
     const s = score(mine, theirs);
     if (s >= MIN_SCORE && (!best || s > best.score)) best = { key: k, ...r, score: s, exact: false };
   }
@@ -188,11 +252,44 @@ export function remember(question, items, kind) {
   });
 }
 
+/* What an entry's provenance says about how much the remembered row deserves
+   to be trusted. This replaced a /^ai-/ prefix test, which is binary and so
+   could only ever answer 'ai' or 'log':
+
+     'ai'       a model guessed it. Trust it least.
+     'curated'  the food layer read it off published data (src 'food-db').
+                Trust the number, but there is no reason to keep it here at
+                all -- the Worker answers it again for free, and correctly if
+                the seed is ever fixed.
+     'log'      a person put it in. Trust it most.
+
+   'food-db' fell to 'log' under the prefix test -- the same bucket as a
+   correction typed by hand, which is exactly the distinction a
+   tier-1-vs-curated policy needs to draw.
+
+   EXPORTED because rememberEntry is not the only writer: openAiReview
+   remembers the whole SENTENCE too, and that call had 'ai' hard-coded.
+
+   `kind` has exactly one reader in either client -- the dot colour in the
+   memory list, `r.kind === 'ai' ? yellow : dim` -- so a third value renders
+   dim, which is what 'log' renders as today. database.rules.json does not
+   validate it.
+
+   WHAT THIS DOES NOT DO. An entry EDITED on the review screen keeps whatever
+   src it arrived with, so a number corrected by hand is still filed as 'ai' or
+   'curated'. There is no signal for "a person changed this" in either client.
+*/
+export function kindForSrc(src) {
+  return /^ai-/.test(src || '') ? 'ai'
+       : src === 'food-db'      ? 'curated'
+       : 'log';
+}
+
 // A single food that just went into the log. Keyed on its own name, so the
 // next time it is typed or described it comes back without a round trip.
 export function rememberEntry(entry) {
   if (!entry || !entry.name) return;
-  remember(entry.name, [entry], entry.src && /^ai-/.test(entry.src) ? 'ai' : 'log');
+  remember(entry.name, [entry], kindForSrc(entry.src));
 }
 
 export function forget(key) {

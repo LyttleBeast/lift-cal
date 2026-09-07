@@ -22,7 +22,7 @@ import { $, el, svgEl, sheet, toast, noteEl, confirmSheet, copyText, readClipboa
 import { shrinkImage, estimatePhoto, estimateText, quota,
          proxyUrl, setProxyUrl, hasProxy } from './ai.js';
 import { initRecall, lookup as recallLookup, remember as recallRemember,
-         rememberEntry, recallList, recallCount,
+         rememberEntry, kindForSrc, recallList, recallCount,
          forget as recallForget, forgetAll as recallForgetAll } from './recall.js';
 import { bump } from './usage.js';
 
@@ -1890,11 +1890,32 @@ const CONF = {
    an estimate you cannot correct is an estimate you stop trusting — and one
    wrong item shouldn't mean redoing the whole meal. */
 function openAiReview(res, ctx) {
-  // The Worker names the path it took. Older builds did not, and both paths run
-  // the same model now, so the model name can no longer stand in for it — the
-  // regex is only there for a phone still talking to a Worker from before.
-  const src = res.mode ? (res.mode === 'text' ? 'ai-text' : 'ai-photo')
-                       : (/haiku/.test(res.model || '') ? 'ai-text' : 'ai-photo');
+  /* PROVENANCE. `mode` is what the Worker DID; the model id never was
+     provenance -- the old model-id regex stopped matching anything on 5 Sep
+     when MODEL_TEXT repointed to Sonnet 5, and every described meal was
+     recorded as 'ai-photo' from then until 40734cae fixed half of it.
+
+     `source` then separates the three things that are all "not a photo":
+
+       curated / parsed   the food layer answered out of published data. No
+                          model ran, now or ever. Recording that as an AI
+                          estimate is the same class of lie in the other
+                          direction, so it gets its own value.
+       cache              a model DID produce these numbers, just earlier.
+                          ai-text / ai-photo is honest; usage.usd === 0 is what
+                          says nothing was spent THIS time.
+       absent             the model ran. ai-text / ai-photo by mode.
+
+     res.mode is what the Worker did; ctx.mode is the fallback only, being what
+     this client asked for -- it, not the deleted regex, is what now catches a
+     reply from an older Worker that sends no mode at all.
+
+     THE IOS APP MUST LAND ON THE SAME VALUES -- both write the same shared
+     node, and an entry's src is read back to decide a recall row's kind. This
+     expression is the shipped iOS rule verbatim. */
+  const src = (res.source === 'curated' || res.source === 'parsed')
+    ? 'food-db'
+    : (res.mode || ctx.mode) === 'photo' ? 'ai-photo' : 'ai-text';
   const entries = normalizeImport({ items: res.items }).map(e => ({ ...e, src }));
   if (!entries.length) { openAiError({ message: 'Nothing came back for that one.' }, ctx); return; }
 
@@ -1959,7 +1980,13 @@ function openAiReview(res, ctx) {
     go.onclick = async () => {
       // Whatever it did with them, this question has now been answered once.
       // Only the words are kept — the picture never goes anywhere.
-      if (ctx.mode === 'text' && ctx.text) recallRemember(ctx.text, entries, 'ai');
+      /* `kind` was hard-coded 'ai' here, which is the same lie as the src line
+         above and in the same direction: a sentence the food layer answered for
+         free out of PUBLISHED DATA was filed as a model guess. The entries
+         already carry the honest answer, so it is read back off them. */
+      if (ctx.mode === 'text' && ctx.text) {
+        recallRemember(ctx.text, entries, kindForSrc(entries[0] && entries[0].src));
+      }
 
       if (ctx.onPick) {
         close();
