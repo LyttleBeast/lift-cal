@@ -19,6 +19,7 @@ A `designed` item has an agreed shape and no code.
 | 5 | [The maintenance algorithm — overhaul](#5-the-maintenance-algorithm--overhaul) | **largest** | **shipped** |
 | 6 | [Targets that follow the scale](#6-targets-that-follow-the-scale) | medium | **shipped** |
 | 7 | [Account isolation](#7-account-isolation) | medium | **shipped** |
+| 8 | [Weight units — lb or kg](#8-weight-units--lb-or-kg) | large | talked about |
 
 All seven built on 2026-08-23. Where the shipped version departed from the
 plan, the section says so inline — §1 in particular was redesigned once the
@@ -852,3 +853,54 @@ All kcal/day. Overall 378 → 47, and the normalised estimate was closer in
 102 of 120 runs. The bias column is the one that matters: the old arithmetic is
 not noisy, it is *wrong in a direction*, and the direction is the one that makes
 a real deficit look like maintenance.
+
+---
+
+## 8. Weight units — lb or kg
+
+**Status:** talked about — raised 2026-09-14, deferred the same day
+
+### Why it was pulled out of the Train overhaul
+
+It arrived as "a setting in account setup and Settings" alongside the Train tab
+work, and it is not that. `lb` is not a Train assumption, it is an app-wide one:
+
+| File | What assumes pounds |
+|---|---|
+| `analytics.js` | PR rows and "Heaviest session ever" append `' lb'` |
+| `insights.js` | every weight-trend string — "Losing 1.2 lb a week" |
+| `food.js` | the macro engine: `Goal lb / week`, `Protein g per lb`, `Fat g per lb`, `LIMITS.lb`, trend weight |
+| `onboarding.js` | `estimateMaintenance({lb})` converts lb->kg for BMR; `waterGoalFor(lb)` is half a fl oz per pound |
+| `weight.js`, `weightmodel.js` | body weight and the normalised trend throughout |
+| `workout.js` | set weights, volume |
+
+A kg user who weighs in at 90 kg and then reads a protein target *per pound* has
+a half-finished app, so the honest version of this change is all of it at once.
+That is a ship of its own, not a rider on the Train tab.
+
+### The decision already made: convert at the edges, never in storage
+
+**Pounds stay the single stored unit.** `settings/units` is a display-and-input
+preference: parse kg on the way in, format kg on the way out. Nothing in the
+database changes shape.
+
+The alternative — tagging each stored value with its unit — was rejected:
+
+- The 219 sessions already logged carry no unit tag, so there is no honest
+  migration, only a guess applied to real history.
+- `computeVolume`, `detectPRs` and `sessionMilestones` all do arithmetic
+  *across* history. Mixed units make every one of them unit-aware.
+- The `.validate` rules built on 13-14 Sep bound `w` to pound-scale ranges.
+- The native port has to agree exactly, and a shape change is a data migration
+  on two clients instead of a formatter on each.
+
+The cost is round-trip rounding: 100 kg stores as 220.46 and renders back as
+100.0. With one decimal of display precision that is invisible.
+
+### Open questions
+
+- Does the setting also flip *height* (in/cm) at setup, or is that separate?
+- Does the picker's plate-maths or any increment default need a kg step (2.5 kg
+  rather than 5 lb)?
+- Does an account that switches units mid-history want old PRs re-rendered in
+  the new unit (yes, if storage is single-unit — this falls out for free).
