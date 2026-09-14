@@ -85,16 +85,68 @@ export function topWeight(ex) {
   return Math.max(0, ...(ex.sets || []).filter(isWorking).map(s => parseFloat(s.w) || 0));
 }
 
+// The merge invariant, in one place: an exercise appearing more than once in
+// ONE session is ONE logical entry for that session, with its sets
+// concatenated in session order.
+//
+// It is reachable today by adding the same exercise twice by hand, and a
+// duplicated lifting block makes it routine. Everything downstream that counts
+// SESSIONS has to see one entry per exId or it reports the duplicates as extra
+// training days — a beta account that has trained once currently reads "4
+// sessions" against every lift on the Most-trained card. Concatenating rather
+// than discarding is the other half: the work was really done, so volume, set
+// and rep totals must come out exactly as they did before the merge. Only the
+// occurrence disappears.
+//
+// The first occurrence's naming (and any block annotation) stands for the
+// merged entry, with anything it is missing filled in from a later one — within
+// one session every occurrence of an exId normally carries the same library
+// metadata, but a rename between two adds is enough to break that, and a merged
+// entry with no name reaches the screen as the word "undefined". Nothing here
+// touches the input — each entry is copied
+// with a fresh sets array. The set objects themselves are shared, which is
+// safe because every reader of a set in this file only reads it.
+export function mergeSessionExercises(exercises) {
+  const out = [];
+  const at = new Map();                 // exId -> its index in out
+  (exercises || []).forEach(ex => {
+    if (!ex) return;
+    // Nothing to key on, so it passes through unmerged rather than collapsing
+    // every id-less block into a single entry.
+    if (!ex.exId) { out.push({ ...ex, sets: (ex.sets || []).slice() }); return; }
+    const i = at.get(ex.exId);
+    if (i === undefined) {
+      at.set(ex.exId, out.length);
+      out.push({ ...ex, sets: (ex.sets || []).slice() });
+      return;
+    }
+    const e = out[i];
+    e.sets = e.sets.concat(ex.sets || []);
+    // Filling only what the first occurrence is MISSING. Before the merge the
+    // index took the most recent naming per occurrence, so a library rename or
+    // refile between two picker adds inside one session could supply metadata
+    // the earlier block lacked; taking the first occurrence flat would have made
+    // the merged entry nameless and printed "undefined" on the group pill.
+    if (!e.name && ex.name) e.name = ex.name;
+    if (!e.group && ex.group) e.group = ex.group;
+    if (!e.equipment && ex.equipment) e.equipment = ex.equipment;
+  });
+  return out;
+}
+
 /* ================================================================
    3.  PER-EXERCISE INDEX
    ================================================================ */
 
 // Builds { exId: { exId, name, group, equipment, entries:[...], totals } }
-// `entries` is one row per session the exercise appeared in, oldest first.
+// `entries` is one row per session the exercise appeared in, oldest first —
+// which is why the session's exercises go through mergeSessionExercises first.
+// Without it `entries` and `sessions` count occurrences, and the card that
+// reads them says so on screen.
 export function exerciseIndex(sessions) {
   const idx = {};
   sessions.forEach(s => {
-    (s.exercises || []).forEach(ex => {
+    mergeSessionExercises(s.exercises).forEach(ex => {
       if (!ex.exId) return;
       const e = idx[ex.exId] || (idx[ex.exId] = {
         exId: ex.exId, name: ex.name, group: ex.group, equipment: ex.equipment,
@@ -156,7 +208,10 @@ export function detectPRs(record, prior) {
   const idx = exerciseIndex(prior);
   const prs = [], firsts = [];
 
-  (record.exercises || []).forEach(ex => {
+  // Merged for the same reason the index is: a session that hit bench in three
+  // blocks would otherwise push three "first time" cards, and judge each
+  // block's volume separately against a best that is a whole session's worth.
+  mergeSessionExercises(record.exercises).forEach(ex => {
     const working = (ex.sets || []).filter(isWorking);
     if (!working.length) return;
 
@@ -232,7 +287,9 @@ export function prTimeline(sessions) {
   const best = {};   // exId -> { e1rm, weight }
   const out = [];
   sessions.forEach(s => {
-    (s.exercises || []).forEach(ex => {
+    // Merged, or the second block of a session becomes a PR over the first one
+    // — a record set against itself, on its own date.
+    mergeSessionExercises(s.exercises).forEach(ex => {
       const working = (ex.sets || []).filter(isWorking);
       if (!working.length || !ex.exId) return;
       const b = bestSet(ex);

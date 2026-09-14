@@ -5,7 +5,8 @@ import {
   fmtDate, fmtDateFull, fmtDuration, compact, parseKey, clamp, setNum, LIMITS
 } from './ui.js';
 import {
-  allSessions, invalidate, detectPRs, sessionMilestones, isWorking, groupColor
+  allSessions, invalidate, detectPRs, sessionMilestones, isWorking, groupColor,
+  mergeSessionExercises
 } from './analytics.js';
 // One-way dependency: this file imports stats.js, stats.js never imports back.
 import { openStats, isStatsOpen, renderStats, refresh as refreshStats } from './stats.js';
@@ -31,20 +32,40 @@ let restTotal  = 0;
 let wakeLock   = null;
 let tickHandle = null;
 let peek       = false;     // live session parked out of sight, calendar on top
+// The first-workout coach mark. Several people never worked out that a set is
+// completed by tapping its check box — one account added the exercise a second
+// time instead of adding a set to it — so on a first workout the box says so
+// itself. It remembers nothing anywhere: `coachNone` is read back off the
+// training log, not stored, which is why it needs no flag under `onboarding`
+// (whose published rules refuse an unrecognised key) and why the native port
+// inherits the condition for free — both clients already load this history.
+// `null` is "not looked yet" and only `true` shows the mark, so an answer that
+// never arrives degrades to no hint rather than to a screen waiting on a read.
+let coachNone   = null;
+let coachTapped = false;
 
 export { allExercises } from './picker.js';
 
 /* ================= INIT ================= */
 export async function initWorkout() {
-  await initPicker();
-  await initRoutines();
+  // Read once and handed on. picker.js needs the same node for the Frequent
+  // chip's cold start and has no way to reach this file (the import only goes
+  // one way), so reading it there as well meant every launch downloading the
+  // whole index twice — store.js issues a fresh GET per call and does not
+  // dedupe.
   history  = (await read('history', null)) || {};
+  await initPicker(history);
+  await initRoutines();
 
   const saved = LS.get('activeSession', null);
   if (saved) session = saved;
 
   await loadMonth(monthKey(viewMonth));
   render();
+  // Only for a workout restored mid-flight, and deliberately not awaited. The
+  // calendar has no set row to mark, and this question costs a whole-tree read
+  // that nobody who is not actually training should pay for.
+  if (session) refreshCoachMark();
   startTick();
 }
 
@@ -178,24 +199,76 @@ async function deleteSession(mk, dd, id) {
   return true;
 }
 
+// What one exercise's rows are, whatever shape the database hands back. RTDB
+// returns an array as an object the moment its keys stop being contiguous from
+// zero, and `history` is read straight off the wire — so a bare `.slice()` here
+// throws inside finishWorkout, after the session has already been written to
+// the log and before the live session is cleared, which would leave a saved
+// workout on screen as though it were still in progress. Anything unreadable
+// becomes no rows rather than an exception: history is derived, so the next
+// edit or delete rebuilds it from the log in full.
+function historyRows(v) {
+  if (Array.isArray(v)) return v.slice();
+  if (v && typeof v === 'object') return Object.values(v).filter(e => e && e.date);
+  return [];
+}
+
+// The merge invariant, applied to the "last time" index: one entry per exId
+// per DATE, that date's sets in session order. Both of this file's history
+// writers fold through here, which is the entire reason it exists. They were
+// two implementations of one rule and they disagreed about the same data —
+// finishWorkout let each occurrence of an exId filter out the same-date entry
+// the previous occurrence had just written, so only the last one survived,
+// while rebuildHistoryFromLog pushed every occurrence and left one date on the
+// index N times. Which answer "last time" gave you depended on whether the
+// session had been edited since. The within-session half is
+// mergeSessionExercises() from analytics.js, imported rather than restated: a
+// second copy of the rule is precisely how the disagreement arose, and the
+// native port copies that one function across rather than rewriting it.
+//
+// A second session on the same day extends that day's entry instead of
+// replacing it, for the same reason a repeated block does — the work was
+// really done, so only the duplicate row disappears, never any sets.
+function foldSessionIntoHistory(h, dateK, exercises) {
+  const out = { ...h };
+  mergeSessionExercises(exercises).forEach(ex => {
+    if (!ex.exId) return;
+    const sets = (ex.sets || []).filter(isWorking).map(s => ({ w: s.w, r: s.r, type: s.type }));
+    if (!sets.length) return;
+    const list = historyRows(out[ex.exId]);
+    const at = list.findIndex(e => e.date === dateK);
+    if (at === -1) list.push({ date: dateK, sets });
+    else list[at] = { date: dateK, sets: list[at].sets.concat(sets) };
+    out[ex.exId] = list;
+  });
+  return out;
+}
+
+// Newest first, 20 max — the shape AGENTS.md documents for history/{exId}.
+// Ordering on the date rather than on startedAt is what lets both writers share
+// this pass: one entry per date makes the two orderings the same, and the
+// entries already on the index carry no timestamp to sort by. The rebuild feeds
+// it sessions oldest first, so a day's own sets stay in session order inside
+// the entry while the entries themselves come back newest first.
+function trimHistory(h) {
+  const out = {};
+  Object.keys(h || {}).forEach(k => {
+    const rows = historyRows(h[k])
+      .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
+      .slice(0, 20)
+      .map(({ date, sets }) => ({ date, sets }));
+    if (rows.length) out[k] = rows;
+  });
+  return out;
+}
+
 // After an edit or delete the per-exercise "last time" index can be wrong, so
 // it gets rebuilt from the log itself. Always correct, never incremental.
 async function rebuildHistoryFromLog() {
   const sessions = await allSessions(true);
-  const h = {};
-  sessions.forEach(s => {
-    (s.exercises || []).forEach(ex => {
-      if (!ex.exId) return;
-      const sets = (ex.sets || []).filter(isWorking).map(x => ({ w: x.w, r: x.r, type: x.type }));
-      if (!sets.length) return;
-      (h[ex.exId] = h[ex.exId] || []).push({ date: s._date, sets, _t: s.startedAt });
-    });
-  });
-  Object.keys(h).forEach(k => {
-    h[k].sort((a, b) => b._t - a._t);
-    h[k] = h[k].slice(0, 20).map(({ date, sets }) => ({ date, sets }));
-  });
-  history = h;
+  let h = {};
+  sessions.forEach(s => { h = foldSessionIntoHistory(h, s._date, s.exercises); });
+  history = trimHistory(h);
   await write('history', history);
 }
 
@@ -502,6 +575,58 @@ function openDay(mk, dd) {
 }
 
 /* ================= SESSION ================= */
+// "Has this account finished a workout yet?", asked in the background and never
+// awaited by a render: allSessions() goes to the network on a cold cache and the
+// first paint of a live session must not wait on it. Once the answer is "there
+// is history" it cannot go back on its own, so the question is asked at most
+// until it answers that way — and it is asked as a workout starts rather than
+// at boot, where finishWorkout would have had to pay for the same read anyway.
+async function refreshCoachMark() {
+  if (coachNone === false) return;
+  let none;
+  // Both sources, because neither alone can tell "nothing logged" from "the read
+  // failed": allSessions() resolves [] rather than rejecting when read('workouts')
+  // falls back, and an established account whose log was unreachable would
+  // otherwise be taught how to complete a set. Any finished session leaves rows
+  // on the per-exercise index, so requiring both to be empty puts the ambiguous
+  // answer on the side of showing nothing — which is the direction the whole
+  // feature is built to fail in.
+  try {
+    none = (await allSessions()).length === 0 && !Object.keys(history).length;
+  } catch { return; }
+  if (none === coachNone) return;
+  const was = coachNone;
+  coachNone = none;
+  // Only `true` draws anything, so the usual answer — an established account
+  // going from "not looked yet" to "there is history" — changes nothing on
+  // screen and is not worth rebuilding a live session for.
+  if (was !== true && none !== true) return;
+  // A late answer repaints the session it belongs to — but never over a box
+  // somebody is typing in, because a hint is not worth a half-entered weight.
+  const typing = document.activeElement && document.activeElement.tagName === 'INPUT';
+  if (session && !peek && !summary && !typing) render();
+}
+
+// Pure, and given everything it reads, so the native port copies the rule
+// rather than rewriting it from the description. The mark belongs to the very
+// first set row on screen and only while nothing at all has been ticked yet:
+// tapping any check anywhere is the lesson landing, so there is nothing left to
+// point at, and a relaunch mid-workout cannot restart it on a green box.
+function showCoach(s, none, tapped) {
+  return none === true && !tapped &&
+    !(s.exercises || []).some(ex => (ex.sets || []).some(x => x.done));
+}
+
+// Which exercise carries it. Normally the first one, but an exercise whose only
+// set has been swiped away renders no set row and no hint line, so anchoring on
+// index 0 flatly would take the mark off the screen entirely while the lesson
+// still has not landed. The array order is the order sessionLayout reads in, so
+// the first exercise with a row is the first row on screen, block or not.
+// Returns -1 when the session has no set rows at all, which matches no index.
+function coachExIdx(s) {
+  return ((s && s.exercises) || []).findIndex(ex => ex && (ex.sets || []).length);
+}
+
 function startWorkout(preset) {
   session = {
     id: 'w' + Date.now().toString(36),
@@ -512,20 +637,32 @@ function startWorkout(preset) {
   bump('workoutStart');
   persistSession();
   requestWakeLock();
+  refreshCoachMark();
   render();
 }
 
 // Reopen a finished session for editing. Sets are marked done because a saved
 // record only ever contains completed sets.
 function editWorkout(record, mk, dd) {
+  // The annotation on the exercises is the only trace a lifting block leaves in
+  // the record, so the blocks are rebuilt from it here. collectDone already
+  // renumbers 1..N on the way in, so this is normally the identity — it stays
+  // because a record written by an older build, or by hand, is still allowed to
+  // carry a gap, and a gap must not become "Block 2" sitting alone on screen.
+  const grouped = normalizeBlocks(
+    (record.exercises || []).map(ex => ({
+      exId: ex.exId, name: ex.name, group: ex.group, equipment: ex.equipment,
+      ...(ex.block ? { block: ex.block } : null),
+      sets: (ex.sets || []).map(s => ({ w: s.w, r: s.r, type: s.type || 'N', done: true }))
+    })),
+    blockOrder(record.exercises)
+  );
   session = {
     id: record.id,
     name: record.name || 'Workout',
     startedAt: record.startedAt,
-    exercises: (record.exercises || []).map(ex => ({
-      exId: ex.exId, name: ex.name, group: ex.group, equipment: ex.equipment,
-      sets: (ex.sets || []).map(s => ({ w: s.w, r: s.r, type: s.type || 'N', done: true }))
-    })),
+    exercises: grouped.exercises,
+    blocks: grouped.blocks,
     _edit: {
       mk, dd,
       dateKey: `${mk}-${dd}`,
@@ -548,6 +685,178 @@ function defaultName() {
 function persistSession() {
   if (session && session._edit) return;
   LS.set('activeSession', session);
+}
+
+/* ================= LIFTING BLOCKS =================
+   A lifting block is a CONTAINER, not a new set model. The exercises inside one
+   have the ordinary set rows, the ordinary weight and reps boxes and the
+   ordinary per-set check, and rest fires per set exactly as it does everywhere
+   else. What a block adds is one button — duplicate — because this training
+   style repeats the whole block rather than adding a fourth set to one exercise.
+
+   In the record a block is an ANNOTATION and nothing more: `block: 1` on the
+   exercise objects already in session.exercises. There is no new nesting level,
+   so detectPRs, computeVolume, sessionMilestones, history, analytics, stats,
+   the published rules and the native port all keep reading the shape they
+   already read, and the 219 sessions carrying no annotation keep meaning
+   "ungrouped". If this ever grows a level, it has gone wrong.
+
+   `session.blocks` is the one piece of state that is NOT in the record, and it
+   exists for one case: an empty block has no exercises to annotate, so the live
+   session has to remember it until something is put in it. It rides along on
+   the live session in localStorage only — collectDone builds the record from
+   named keys — which is also why an empty block simply vanishes at finish,
+   which is what it should do.
+
+   The number stored IS the number on screen. Every structural change renumbers
+   1..N by position, so there is no separate id to keep in step with the label.
+
+   Everything down to commitBlocks() is pure: it takes the session and returns
+   the next exercises/blocks pair, touching no module state and no DOM. That is
+   deliberate — the native port copies these five functions across verbatim and
+   drives them from its own store, rather than reimplementing the rule from a
+   description, which is exactly how finishWorkout and rebuildHistoryFromLog
+   came to disagree about the same data. */
+
+// Block numbers in the order they first appear. This is what reconstructs the
+// blocks of a past session: the annotation is all there is to go on.
+function blockOrder(exercises) {
+  const out = [];
+  (exercises || []).forEach(ex => {
+    if (ex && ex.block && out.indexOf(ex.block) === -1) out.push(ex.block);
+  });
+  return out;
+}
+
+// A live session carries its blocks explicitly; one restored from an older
+// localStorage copy, or reached before any block was made, falls back to what
+// the annotations say.
+function sessionBlocks(s) {
+  return (s && s.blocks) || blockOrder(s && s.exercises);
+}
+
+// Renumbers 1..N by position so the stored number and the label are the same
+// number. The order is the order the screen reads in — by where each block's
+// first exercise sits, with the empty ones, which have no position yet, after
+// them. Without that, taking the last exercise out of Block 1 by its own ⋯
+// menu leaves "Block 2" sitting above "Block 1".
+//
+// An exercise whose block is no longer there falls back to ungrouped rather
+// than vanishing with it — losing the grouping is a cosmetic failure, losing
+// the sets is not.
+function normalizeBlocks(exercises, blocks) {
+  const present = blockOrder(exercises).filter(b => (blocks || []).indexOf(b) !== -1);
+  const order = present.concat((blocks || []).filter(b => present.indexOf(b) === -1));
+  const to = new Map();
+  order.forEach((b, i) => to.set(b, i + 1));
+  return {
+    blocks: order.map((_, i) => i + 1),
+    exercises: (exercises || []).map(ex => {
+      if (!ex || !ex.block) return ex;
+      const n = to.get(ex.block);
+      if (!n) { const { block, ...rest } = ex; return rest; }
+      return ex.block === n ? ex : { ...ex, block: n };
+    })
+  };
+}
+
+// Where a new member of block `n` goes: straight after the block's last one.
+// Keeping a block's exercises contiguous is what makes the array order and the
+// order on screen the same order, which in turn is what "sets concatenated in
+// session order" means once the same exId is in the session twice.
+function blockEnd(exercises, n) {
+  let at = -1;
+  (exercises || []).forEach((ex, i) => { if (ex && ex.block === n) at = i; });
+  return at === -1 ? (exercises || []).length : at + 1;
+}
+
+function addBlock(s) {
+  const blocks = sessionBlocks(s);
+  const next = blocks.reduce((m, b) => Math.max(m, b), 0) + 1;
+  return normalizeBlocks(s.exercises, blocks.concat(next));
+}
+
+function addToBlock(s, n, added) {
+  const exercises = (s.exercises || []).slice();
+  exercises.splice(blockEnd(s.exercises, n), 0, ...added.map(ex => ({ ...ex, block: n })));
+  return normalizeBlocks(exercises, sessionBlocks(s));
+}
+
+// The point of the whole feature. The copy carries the same exercises with
+// their weights and reps already in and nothing ticked, and lands immediately
+// after the block it came from — the same idea as adding a set, which prefills
+// from the set before it.
+//
+// `done` follows the mode rather than being flatly false, for the reason every
+// other new set in this file does: collectDone keeps only sets marked done, so
+// an unticked copy made while editing a past session would silently disappear
+// on save. In a live workout `editing` is false and nothing is ticked, which is
+// the case the feature is about.
+function duplicateBlock(s, n, editing) {
+  const blocks = sessionBlocks(s);
+  const at = blocks.indexOf(n);
+  if (at === -1) return { exercises: s.exercises, blocks };
+  const next = blocks.reduce((m, b) => Math.max(m, b), 0) + 1;
+  const copies = (s.exercises || []).filter(ex => ex && ex.block === n).map(ex => ({
+    exId: ex.exId, name: ex.name, group: ex.group, equipment: ex.equipment,
+    block: next,
+    // tw/tr are routine targets and deliberately not carried: a repeat of a
+    // block is real work, not a plan for it.
+    sets: (ex.sets || []).map(x => ({ w: x.w, r: x.r, type: x.type || 'N', done: !!editing }))
+  }));
+  const exercises = (s.exercises || []).slice();
+  exercises.splice(blockEnd(s.exercises, n), 0, ...copies);
+  return normalizeBlocks(exercises, blocks.slice(0, at + 1).concat(next, blocks.slice(at + 1)));
+}
+
+function deleteBlock(s, n) {
+  return normalizeBlocks(
+    (s.exercises || []).filter(ex => !(ex && ex.block === n)),
+    sessionBlocks(s).filter(b => b !== n)
+  );
+}
+
+// Only a block with something logged in it is worth interrupting for.
+function blockHasLogged(exercises, n) {
+  return (exercises || []).some(ex =>
+    ex && ex.block === n && (ex.sets || []).some(x => x.done));
+}
+
+// The session as rows: one per ungrouped exercise, one per block, in the order
+// they appear. A block that holds nothing yet has no appearance to be ordered
+// by, so it comes last — which is where it was just created.
+function sessionLayout(exercises, blocks) {
+  const rows = [];
+  const byBlock = new Map();
+  (exercises || []).forEach((ex, i) => {
+    const b = ex && ex.block;
+    if (!b) { rows.push({ kind: 'ex', index: i }); return; }
+    let row = byBlock.get(b);
+    if (!row) { row = { kind: 'block', block: b, items: [] }; byBlock.set(b, row); rows.push(row); }
+    row.items.push(i);
+  });
+  (blocks || []).forEach(b => {
+    if (!byBlock.has(b)) rows.push({ kind: 'block', block: b, items: [] });
+  });
+  return rows;
+}
+
+// The only impure one: takes what the functions above return and puts it on the
+// session.
+function commitBlocks(next) {
+  session.exercises = next.exercises;
+  session.blocks = next.blocks;
+  persistSession();
+  render();
+}
+
+// One shape for a new exercise, so one added inside a block is the same object
+// as one added outside it and the annotation is the only difference.
+function newExercise(x, editing) {
+  return {
+    exId: x.id, name: x.name, group: x.group, equipment: x.equipment,
+    sets: [{ w: '', r: '', type: 'N', done: editing }]
+  };
 }
 
 function renderSession() {
@@ -591,7 +900,16 @@ function renderSession() {
 
   if (editing) body.appendChild(renderEditMeta());
 
-  if (!session.exercises.length) {
+  // Renumbered on the way in as well as on every change, because the per-
+  // exercise ⋯ menu can empty a block out and knows nothing about blocks.
+  // normalizeBlocks is a fixed point, so on every other render this is a no-op.
+  const laid = normalizeBlocks(session.exercises, sessionBlocks(session));
+  session.exercises = laid.exercises;
+  session.blocks = laid.blocks;
+  const blocks = laid.blocks;
+
+  // An empty block is something on screen, so the empty state would be a lie.
+  if (!session.exercises.length && !blocks.length) {
     const es = el('div', 'empty-state');
     es.appendChild(el('h3', null, editing ? 'No exercises left' : 'Empty session'));
     es.appendChild(el('p', null, editing
@@ -600,17 +918,26 @@ function renderSession() {
     body.appendChild(es);
   }
 
-  session.exercises.forEach((ex, i) => body.appendChild(renderExercise(ex, i)));
+  sessionLayout(session.exercises, blocks).forEach(row => {
+    if (row.kind === 'ex') {
+      body.appendChild(renderExercise(session.exercises[row.index], row.index));
+      return;
+    }
+    body.appendChild(renderBlock(row, editing));
+  });
 
-  const add = el('button', 'btn btn-ghost btn-block', '+  Add exercise');
+  // Half width each. An exercise added here is ungrouped and renders exactly as
+  // it always has; a block is a box to put the repeated ones in.
+  const addRow = el('div', 'add-row');
+  const add = el('button', 'btn btn-ghost', '+  Add exercise');
   add.onclick = () => openPicker(chosen => {
-    chosen.forEach(x => session.exercises.push({
-      exId: x.id, name: x.name, group: x.group, equipment: x.equipment,
-      sets: [{ w: '', r: '', type: 'N', done: editing }]
-    }));
+    chosen.forEach(x => session.exercises.push(newExercise(x, editing)));
     persistSession(); render();
   });
-  body.appendChild(add);
+  const addBlk = el('button', 'btn btn-ghost', '+  Add Lifting Block');
+  addBlk.onclick = () => commitBlocks(addBlock(session));
+  addRow.append(add, addBlk);
+  body.appendChild(addRow);
 
   const cancel = el('button', 'btn btn-danger btn-block', editing ? 'Cancel editing' : 'Discard workout');
   cancel.style.marginTop = '10px';
@@ -672,6 +999,54 @@ function renderEditMeta() {
   return card;
 }
 
+// The container. Everything inside it is an ordinary exercise card — this
+// function draws the box, the number and the two buttons, and nothing else.
+function renderBlock(row, editing) {
+  const n = row.block;
+  const card = el('div', 'wk-block');
+
+  const hd = el('div', 'wk-block-hd');
+  hd.appendChild(el('div', 'wk-block-title', 'Block ' + n));
+
+  const acts = el('div', 'wk-block-acts');
+  const dup = el('button', 'btn btn-ghost wk-block-btn', 'Duplicate');
+  // There is nothing to repeat until the block holds an exercise, and a button
+  // that quietly does nothing is worse than one that says it is not ready yet.
+  dup.disabled = !row.items.length;
+  dup.onclick = () => commitBlocks(duplicateBlock(session, n, editing));
+  acts.appendChild(dup);
+
+  const del = el('button', 'wk-block-x', '✕');
+  del.setAttribute('aria-label', 'Delete Block ' + n);
+  del.onclick = () => {
+    // Logged sets are worth stopping for — the same bar as discarding a
+    // workout. An empty block goes without a word.
+    if (!blockHasLogged(session.exercises, n)) { commitBlocks(deleteBlock(session, n)); return; }
+    confirmSheet({
+      title: 'Delete Block ' + n + '?',
+      body: 'Its exercises and the sets you have logged in them will be taken out of this workout.',
+      confirmLabel: 'Delete block',
+      danger: true,
+      onConfirm: () => commitBlocks(deleteBlock(session, n))
+    });
+  };
+  acts.appendChild(del);
+  hd.appendChild(acts);
+  card.appendChild(hd);
+
+  const inner = el('div', 'wk-block-body');
+  row.items.forEach(i => inner.appendChild(renderExercise(session.exercises[i], i)));
+  if (!row.items.length) inner.appendChild(noteEl('Nothing in this block yet — add the exercises you will repeat.'));
+
+  const add = el('button', 'btn btn-ghost btn-block wk-block-add', '+  Add exercise');
+  add.onclick = () => openPicker(chosen =>
+    commitBlocks(addToBlock(session, n, chosen.map(x => newExercise(x, editing)))));
+  inner.appendChild(add);
+
+  card.appendChild(inner);
+  return card;
+}
+
 function renderExercise(ex, exIdx) {
   const block = el('div', 'ex-block');
   const color = (GROUPS[ex.group] || {}).color || 'var(--dim)';
@@ -709,7 +1084,14 @@ function renderExercise(ex, exIdx) {
 
   ex.sets.forEach((s, i) => block.appendChild(renderSet(ex, exIdx, s, i)));
 
-  if (ex.sets.length) block.appendChild(el('div', 'swipe-hint', 'Swipe a set left to delete it'));
+  // While the coach mark is up the first exercise's hint line says what the
+  // pulsing box is for instead — the pulse draws the eye, the words say why.
+  // Swiping to delete is the less urgent lesson and it comes back on the first
+  // tick.
+  if (ex.sets.length) block.appendChild(el('div', 'swipe-hint',
+    exIdx === coachExIdx(session) && showCoach(session, coachNone, coachTapped)
+      ? 'Fill in the weight and reps, then tap the box on the right to log the set'
+      : 'Swipe a set left to delete it'));
 
   // plate math for the heaviest entered load
   const heaviest = Math.max(0, ...ex.sets.map(s => parseFloat(s.w) || 0));
@@ -758,7 +1140,9 @@ function renderSet(ex, exIdx, s, i) {
 
   const chk = el('button', 'set-check' + (s.done ? ' on' : ''), s.done ? '✓' : '');
   chk.setAttribute('aria-label', s.done ? 'Mark set incomplete' : 'Mark set complete');
+  if (exIdx === coachExIdx(session) && i === 0 && showCoach(session, coachNone, coachTapped)) chk.classList.add('coach');
   chk.onclick = () => {
+    coachTapped = true;
     s.done = !s.done;
     if (s.done) bump('setLogged');
     persistSession();
@@ -881,7 +1265,7 @@ function beep() {
 /* ---------- collect ---------- */
 // Keeps only sets that are marked done and carry both a weight and reps.
 function collectDone() {
-  return session.exercises
+  const kept = session.exercises
     .map(ex => ({
       ...ex,
       // tw/tr are routine targets — live-session scaffolding, not part of the record.
@@ -889,6 +1273,15 @@ function collectDone() {
                    .map(({ tw, tr, ...keep }) => keep)
     }))
     .filter(ex => ex.sets.length);
+  // A block whose exercises all went unlogged never reaches the record, so the
+  // annotations that survive can start at 2 or skip a number — and the stored
+  // number is then not the number that was on screen. Renumbering on the way IN
+  // is what keeps the record self-describing: a reader labels blocks straight
+  // off the annotation, and re-opening the session for an edit and saving it
+  // again changes nothing. Doing it on the way out instead would make the label
+  // depend on whether the session had been edited since, which is the exact
+  // failure the history merge exists to remove.
+  return normalizeBlocks(kept, blockOrder(kept)).exercises;
 }
 
 function computeVolume(done) {
@@ -897,7 +1290,23 @@ function computeVolume(done) {
 }
 
 /* ---------- finish ---------- */
+// Finish awaits the network twice before it touches the index, and the button
+// stays live the whole time, so a second tap re-entered the whole function.
+// That was harmless while the history write REPLACED the day's entry; folding
+// onto it instead makes a second run concatenate the same sets again, and
+// "Last ·" starts reading six sets where three were done. The flag is released
+// in a finally, so a failed write cannot strand the session with a dead Finish.
+// saveEdit needs no such guard: it rebuilds the index from the log, which is
+// the same answer however many times it runs.
+let finishing = false;
+
 async function finishWorkout() {
+  if (finishing) return;
+  finishing = true;
+  try { await runFinish(); } finally { finishing = false; }
+}
+
+async function runFinish() {
   const done = collectDone();
 
   if (!done.length) {
@@ -941,12 +1350,19 @@ async function finishWorkout() {
   await write(`workouts/${mk}/${dd}/${session.id}`, record);
   bump('workoutFinish');
 
-  // update per-exercise history for the "last time" line
-  done.forEach(ex => {
-    const entry = { date: dateK, sets: ex.sets.filter(isWorking).map(s => ({ w: s.w, r: s.r, type: s.type })) };
-    if (!entry.sets.length) return;
-    history[ex.exId] = [entry, ...(history[ex.exId] || []).filter(h => h.date !== dateK)].slice(0, 20);
-  });
+  // The log is now the record of this session, so the localStorage copy is the
+  // stale one — and it is what a relaunch after a kill would replay into a
+  // second finish, folding this day's sets onto the index twice. Dropping it
+  // the moment the record exists, rather than at the end of the function,
+  // closes that window; everything after this point is derived and is rebuilt
+  // from the log by the next edit or delete.
+  LS.del('activeSession');
+
+  // update per-exercise history for the "last time" line, through the same fold
+  // rebuildHistoryFromLog uses — the two used to disagree about a session that
+  // holds one exId more than once, so an edit could change what "last time" said
+  // without changing a single set.
+  history = trimHistory(foldSessionIntoHistory(history, dateK, done));
   await write('history', history);
 
   // Hydrate before touching the cache. A workout is filed under the day it
@@ -968,7 +1384,6 @@ async function finishWorkout() {
   summary = { record, prs, firsts, milestones, prior: priorSessions };
   session = null;
   peek = false;
-  LS.del('activeSession');
   releaseWakeLock();
   clearRest();
   render();

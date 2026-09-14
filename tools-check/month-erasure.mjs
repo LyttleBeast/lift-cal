@@ -42,7 +42,9 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
-const SRC = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'workout.js'), 'utf8');
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SRC  = readFileSync(join(HERE, '..', 'workout.js'), 'utf8');
+const ASRC = readFileSync(join(HERE, '..', 'analytics.js'), 'utf8');
 
 const clone = v => (v === undefined ? undefined : JSON.parse(JSON.stringify(v)));
 
@@ -50,14 +52,26 @@ const clone = v => (v === undefined ? undefined : JSON.parse(JSON.stringify(v)))
    Top-level functions in this file close with a `}` in column one, which is
    the whole grammar needed here. If that ever stops being true the slice stops
    parsing and this file throws rather than quietly testing nothing. */
-function lift(name) {
-  const re = new RegExp('^(?:async )?function ' + name + '\\(', 'm');
-  const m = re.exec(SRC);
-  if (!m) throw new Error(`month-erasure: ${name}() is gone from workout.js — the fix or this check is stale`);
-  const end = SRC.indexOf('\n}\n', m.index);
+function liftFrom(src, where, name) {
+  const re = new RegExp('^(?:export )?(?:async )?function ' + name + '\\(', 'm');
+  const m = re.exec(src);
+  if (!m) throw new Error(`month-erasure: ${name}() is gone from ${where} — the fix or this check is stale`);
+  const end = src.indexOf('\n}\n', m.index);
   if (end < 0) throw new Error(`month-erasure: could not find the end of ${name}()`);
-  return SRC.slice(m.index, end + 3);
+  return src.slice(m.index, end + 3);
 }
+const lift = name => liftFrom(SRC, 'workout.js', name);
+
+/* finishWorkout now folds the finished session onto the per-exercise index
+   through mergeSessionExercises, which lives in analytics.js. It is lifted out
+   of the REAL file rather than stubbed with something convenient: this harness
+   exists to run the shipped finishWorkout against a model of RTDB, and a fake
+   merge inside it would let the file print "all good" while exercising a fold
+   the app never runs. The function has no dependencies of its own, so it
+   evaluates on its own; if it ever grows one this throws rather than passing. */
+const mergeSessionExercises = new Function(
+  liftFrom(ASRC, 'analytics.js', 'mergeSessionExercises').replace(/^export /, '') +
+  '\nreturn mergeSessionExercises;')();
 
 /* ---------- RTDB + store.js, modelled ----------
    set() replaces a node outright, and storing `{}` or null is a DELETE — that
@@ -131,11 +145,12 @@ let monthCache = {};
 let hydrated = new Set();
 let session = null, summary = null, peek = false, history = {};
 let unwatchMonth = null, watchedMk = null;
+let finishing = false;
 `;
 
 const STUBS = [
   'read', 'readExact', 'write', 'watch', 'invalidate', 'toast', 'todayKey', 'LS',
-  'bump', 'isWorking', 'allSessions', 'detectPRs', 'sessionMilestones',
+  'bump', 'isWorking', 'mergeSessionExercises', 'allSessions', 'detectPRs', 'sessionMilestones',
   'computeVolume', 'collectDone', 'confirmSheet', 'releaseWakeLock', 'clearRest',
   'render', 'rebuildHistoryFromLog'
 ];
@@ -151,6 +166,7 @@ function build(body, store, held) {
     LS: { get: (k, f) => f, set: () => {}, del: () => {} },
     bump: () => {},
     isWorking: s => s && s.type !== 'W',
+    mergeSessionExercises,
     allSessions: async () => [],
     detectPRs: () => ({ prs: [], firsts: [] }),
     sessionMilestones: () => [],
@@ -176,7 +192,12 @@ return {
 
 const CURRENT = () =>
   [lift('loadMonth'), lift('watchMonth'), lift('saveMonth'), lift('refuseUnread'),
-   lift('hydrateForWrite'), lift('deleteSession'), lift('finishWorkout'), lift('saveEdit')].join('\n');
+   lift('hydrateForWrite'), lift('deleteSession'),
+   // The history fold finishWorkout now goes through. Lifted, not stubbed, for
+   // the same reason as everything else here: the write being asserted about is
+   // the one the app makes.
+   lift('historyRows'), lift('foldSessionIntoHistory'), lift('trimHistory'),
+   lift('finishWorkout'), lift('runFinish'), lift('saveEdit')].join('\n');
 
 /* The code as it stood before the fix, kept verbatim so the scenarios below
    can be shown to go red on it. Do not "improve" it — its bugs are the point. */

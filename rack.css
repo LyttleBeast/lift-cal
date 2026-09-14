@@ -484,8 +484,59 @@ body.peeking .view.active { padding-bottom: 58px; }
 .set-check.on { background: var(--p-green); border-color: var(--p-green); color: #0d1a11; }
 .set-check:active { transform: scale(.88); }
 
+/* First-workout coach mark: the box people did not realise completes a set.
+   The steady yellow is what carries it and the fill pulsing under it is on top
+   of that, so that anyone who asked for less movement still gets the hint. The
+   global reduced-motion rule is not enough on its own here: it shortens every
+   animation but never stops a repeating one, and an animation in effect beats
+   the plain background below it — so without the block underneath, the steady
+   fill would never paint and the box would strobe for exactly the people it is
+   meant to be calm for. It stays inside the button on
+   purpose: each set row is clipped by its own swipe-to-delete wrapper, so a
+   ring drawn outside would come out as a band. Nothing draws a ✓ — the one
+   thing worse than not knowing how to complete a set is a box that looks
+   already ticked. */
+.set-check.coach {
+  border-color: var(--p-yellow); color: var(--p-yellow);
+  background: rgba(240,190,30,.14);
+  animation: coachPulse 1.6s var(--ease) infinite;
+}
+@keyframes coachPulse {
+  0%, 100% { background: rgba(240,190,30,.07); }
+  50%      { background: rgba(240,190,30,.38); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .set-check.coach { animation: none; }
+}
+
 .ex-actions { display: flex; gap: 8px; padding: 10px 12px 12px; }
 .ex-actions .btn { flex: 1; padding: 9px; font-size: 12px; }
+
+/* lifting block — the container the exercise cards above sit inside. It has no
+   set rows of its own on purpose: a block repeats whole exercises, it is not a
+   new kind of set. */
+.wk-block {
+  border: 1px solid var(--knurl);
+  border-radius: var(--r);
+  background: rgba(240,190,30,.03);
+  margin-bottom: 12px;
+}
+.wk-block-hd { display: flex; align-items: center; gap: 8px; padding: 10px 12px 6px; }
+.wk-block-title {
+  flex: 1; font-size: 10px; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--p-yellow);
+  font-variation-settings: 'wdth' 88, 'wght' 800;
+}
+.wk-block-acts { display: flex; align-items: center; gap: 4px; }
+.wk-block-btn { padding: 6px 10px; font-size: 11px; }
+.wk-block-x { color: var(--dim); padding: 4px 8px; font-size: 13px; line-height: 1; }
+.wk-block-x:active { color: var(--bad); }
+.wk-block-body { padding: 0 8px 8px; }
+.wk-block-add { padding: 9px; font-size: 12px; }
+
+/* Add exercise and Add Lifting Block, half the width each. */
+.add-row { display: flex; gap: 8px; }
+.add-row .btn { flex: 1; min-width: 0; padding: 12px 6px; font-size: 12px; letter-spacing: 0; }
 
 /* plate math strip */
 .plate-strip {

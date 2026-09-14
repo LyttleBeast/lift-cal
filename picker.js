@@ -18,17 +18,28 @@
 
 import { GROUPS, GROUP_ORDER, EXERCISES, EQUIPMENT, makeCustomExercise } from './exercises.js';
 import { read, write } from './store.js';
+// One way, like everything else this file imports: analytics.js reads the
+// training log and knows nothing about the picker, so there is still no cycle.
+import { allSessions, mergeSessionExercises } from './analytics.js';
 import { bump } from './usage.js';
 import { el, sheet, toast, noteEl, confirmSheet } from './ui.js';
 
 let customEx  = [];
 let overrides = {};
 let hidden    = [];
+// The cold-start stand-in for the Frequent chip, and the only thing that reads
+// it. It is handed in by workout.js, which reads the same node a line earlier
+// for the "last time" lines — this file cannot import that one back, and a
+// second GET of the whole index on every launch is a real cost paid by everyone
+// who never opens the picker. It goes stale after a finished session, and that
+// costs nothing: the real counts come off the log and answer over the top of it.
+let history   = {};
 
-export async function initPicker() {
+export async function initPicker(seedHistory) {
   customEx  = (await read('exercises/custom',    null)) || [];
   overrides = (await read('exercises/overrides', null)) || {};
   hidden    = (await read('exercises/hidden',    null)) || [];
+  history   = seedHistory || {};
 }
 
 function applyOverride(x) {
@@ -58,13 +69,105 @@ async function addCustom(x) {
   await write('exercises/custom', customEx);
 }
 
+/* ---------- Frequent ----------
+   Ordering is by how many SESSIONS an exercise has been logged in — not sets,
+   not occurrences — descending, all time.
+
+   The source is the whole log, never `history/{exId}`: history keeps 20 rows
+   per exercise, so the lifts this chip exists to put at the top would all
+   saturate at 20 and tie with one another at exactly the place the ordering
+   matters. Only the log can tell 43 sessions of bench from 40 of deadlift.
+
+   Distinct sessions is the other half of it. A duplicated lifting block puts
+   the same exId in one session several times, and counting occurrences would
+   let the block feature inflate its own ordering. `mergeSessionExercises` is
+   where that invariant lives — one logical entry per exId per session — so
+   this counts merged entries rather than dedupe a second time here and risk
+   the two drifting apart the way finishWorkout and rebuildHistoryFromLog did.
+
+   Everything below is pure and takes its data as arguments, because the native
+   picker has to order the list identically and copies these rather than being
+   written a second time from the same description. */
+
+export function sessionCounts(sessions) {
+  const n = {};
+  (sessions || []).forEach(s => {
+    mergeSessionExercises(s && s.exercises).forEach(ex => {
+      if (!ex.exId) return;
+      n[ex.exId] = (n[ex.exId] || 0) + 1;
+    });
+  });
+  return n;
+}
+
+/* The stand-in, capped at 20 per exercise and knowingly wrong at the top of the
+   list — it only has to fill the first frame. RTDB hands an array back as an
+   object once its keys stop being contiguous from 0, so the length is taken
+   either way. */
+export function historyCounts(history) {
+  const n = {};
+  Object.keys(history || {}).forEach(exId => {
+    const rows = history[exId];
+    n[exId] = Array.isArray(rows) ? rows.length : Object.keys(rows || {}).length;
+  });
+  return n;
+}
+
+/* Everything ever logged, most sessions first. No cap: the list is scrollable
+   and searchable already. Ties break on name so two clients reading the same
+   log show the same order, rather than whatever order the counts enumerated.
+
+   `keep` is the ids that stay in the list at a count of zero — what is selected
+   right now, which is how an exercise created from the New button is visible on
+   the chip it was created from. Without it the one flow that exists BECAUSE the
+   exercise has never been logged is the one flow whose result the default chip
+   hides. They sort to the bottom, among themselves by name. */
+export function frequentOrder(exercises, counts, keep) {
+  const also = new Set(keep || []);
+  return (exercises || [])
+    .filter(x => (counts[x.id] || 0) > 0 || also.has(x.id))
+    .sort((a, b) => ((counts[b.id] || 0) - (counts[a.id] || 0)) || a.name.localeCompare(b.name));
+}
+
+/* Frequent is the default chip, except on an account with nothing logged,
+   where it would open on an empty screen — All takes the default there. Asked
+   once with the stand-in counts when the picker opens, and again when the real
+   ones land. */
+export function frequentDefault(exercises, counts) {
+  return frequentOrder(exercises, counts).length ? 'freq' : 'all';
+}
+
+/* The picker's chip row. Frequent leads because it is the default, the muscle
+   groups keep the order they have always had between them, and All moves to
+   the end. (The exercise manager's row is a different job and is untouched.) */
+export const PICKER_FILTERS = [
+  { id: 'freq', label: 'Frequent' },
+  ...GROUP_ORDER.map(g => ({ id: g, label: GROUPS[g].label })),
+  { id: 'all', label: 'All' }
+];
+
+/* "Frequent" is all that fits on a chip beside the muscle groups. The full
+   phrase goes in the copy that has room for it. There is no second note for a
+   search that finds nothing here: a search on this chip falls through to the
+   whole library instead of explaining itself. */
+export function frequentEmptyNote() {
+  return 'Frequently performed fills in as you log workouts. Tap All to pick from the whole library.';
+}
+
 /* ================= PICKER ================= */
 // Multi-select. Hands back [{ id, name, group, equipment }, …].
 export function openPicker(onPick) {
   const { sh, close } = sheet();
 
   const selected = [];
-  let filter = 'all', q = '';
+  let counts  = historyCounts(history);
+  let filter  = frequentDefault(allExercises(), counts), q = '';
+  let touched = false;   // a chip has been tapped; stop choosing one for them
+  let shown   = '';      // the chip and row order currently drawn
+  // Ids that stay on the Frequent list at a count of zero. Once picked, never
+  // unpicked: untick an exercise you have just created and the row vanishing
+  // out from under the finger reads as the app losing it.
+  const kept  = new Set();
 
   const search = el('div', 'picker-search');
   const inp = el('input');
@@ -75,7 +178,7 @@ export function openPicker(onPick) {
   const chips = el('div', 'filter-row');
   const mkChip = (id, label) => {
     const c = el('button', 'chip' + (filter === id ? ' on' : ''), label);
-    c.onclick = () => { filter = id; paint(); };
+    c.onclick = () => { filter = id; touched = true; paint(); };
     return c;
   };
   search.appendChild(chips);
@@ -89,6 +192,10 @@ export function openPicker(onPick) {
   custom.onclick = () => openCustomExercise(async x => {
     await addCustom(x);
     selected.push(x);
+    // Nothing made from in here has ever been logged, so on the default chip it
+    // would be filtered straight back out — and this is the one flow somebody
+    // takes BECAUSE the exercise is not in their history.
+    kept.add(x.id);
     paint();
   });
   const addBtn = el('button', 'btn btn-primary', 'Add');
@@ -99,16 +206,35 @@ export function openPicker(onPick) {
   foot.append(closeBtn, custom, addBtn);
   sh.appendChild(foot);
 
+  /* What the list holds right now, separately from drawing it — the background
+     read below needs to know whether the order it would paint is the order
+     already on screen. */
+  function poolFor() {
+    const byName = (a, b) => a.name.localeCompare(b.name);
+    const matches = allExercises()
+      .filter(x => !q || x.name.toLowerCase().includes(q));
+    if (filter !== 'freq') {
+      return matches.filter(x => filter === 'all' || x.group === filter).sort(byName);
+    }
+    const freq = frequentOrder(matches, counts, kept);
+    // A search that finds nothing in Frequent falls through to the whole
+    // library rather than dead-ending on a note. This chip is a default nobody
+    // chose, looking up an exercise you have never done is exactly why the
+    // sheet gets opened mid-workout, and All is the last of eight chips and off
+    // the end of the row on a phone. Un-searched the note stands, because
+    // falling through there would only be All under another name.
+    return (q && !freq.length) ? matches.slice().sort(byName) : freq;
+  }
+
   function paint() {
     chips.innerHTML = '';
-    chips.appendChild(mkChip('all', 'All'));
-    GROUP_ORDER.forEach(g => chips.appendChild(mkChip(g, GROUPS[g].label)));
+    PICKER_FILTERS.forEach(f => chips.appendChild(mkChip(f.id, f.label)));
 
     list.innerHTML = '';
-    const pool = allExercises()
-      .filter(x => filter === 'all' || x.group === filter)
-      .filter(x => !q || x.name.toLowerCase().includes(q))
-      .sort((a, b) => a.name.localeCompare(b.name));
+    const pool = poolFor();
+    shown = filter + '|' + pool.map(x => x.id).join(',');
+
+    if (filter === 'freq' && !q && !pool.length) list.appendChild(noteEl(frequentEmptyNote()));
 
     pool.slice(0, 260).forEach(x => {
       const on = selected.some(s => s.id === x.id);
@@ -119,7 +245,7 @@ export function openPicker(onPick) {
       b.appendChild(el('span', 'eq', x.equipment));
       b.onclick = () => {
         const i = selected.findIndex(s => s.id === x.id);
-        if (i >= 0) selected.splice(i, 1); else selected.push(x);
+        if (i >= 0) selected.splice(i, 1); else { selected.push(x); kept.add(x.id); }
         paint();
       };
       list.appendChild(b);
@@ -131,6 +257,29 @@ export function openPicker(onPick) {
 
   inp.oninput = e => { q = e.target.value.toLowerCase().trim(); paint(); };
   paint();
+
+  /* Warmed behind the picker rather than awaited. This sheet opens mid workout
+     and must not sit behind a spinner while the whole log is read; until the
+     real counts land the capped history orders the list, which is close enough
+     for one frame. Usually there is no wait at all — the You tab reads the
+     whole log at every boot and analytics caches it — but a finished session
+     invalidates that cache, so the one moment this really does go to the
+     network is the picker opened during the next workout. */
+  allSessions().then(sessions => {
+    // An unreadable log is indistinguishable from an empty one here:
+    // allSessions() resolves [] rather than rejecting when the read falls back,
+    // so adopting it would replace a populated stand-in with nothing and tell
+    // an account with 219 sessions that Frequent fills in as it logs workouts.
+    // An account that really has logged nothing loses nothing by keeping the
+    // stand-in, because the stand-in is empty too.
+    if (!sessions.length) return;
+    counts = sessionCounts(sessions);
+    if (!touched) filter = frequentDefault(allExercises(), counts);
+    // Only when it changes what is on screen. On a cold read this lands with
+    // the sheet open and a finger already moving, and rebuilding the rows under
+    // a tap hands that tap to whichever exercise the re-sort put there.
+    if (filter + '|' + poolFor().map(x => x.id).join(',') !== shown) paint();
+  }).catch(() => {});
 }
 
 /* ================= MANAGER =================

@@ -570,7 +570,7 @@ const TOUR = [
     body: 'Everything the app knows about you, in one place — how the week went, what your numbers are doing, and how they pull on each other. Nothing is edited here; it just shows you where you stand.',
     tip: 'The gear in the top right is where every setting in the app now lives.' },
   { view: 'workout', title: 'Train',
-    body: 'Start a session, add exercises, tap out your sets. Under every exercise it shows what you did last time, so you always know what to beat.',
+    body: 'Start a session, add exercises, tap out your sets. Fill in the weight and reps, then tap the check box at the end of the row — that is what logs the set. Under every exercise it shows what you did last time, so you always know what to beat.',
     tip: 'Long sessions survive a locked phone — nothing is lost if you get interrupted.' },
   { view: 'food', title: 'Fuel',
     body: 'The big button is the fastest way in: photograph the plate or describe it in a sentence and Claude fills in the macros for you to check before it logs.',

@@ -366,6 +366,16 @@ from volume, records and history. `exId` must match an exercise in
 `exercises.js` or one in `exercises/custom`. Personal records are **derived**,
 never stored.
 
+An exercise object may also carry **`block`** — a whole number, the lifting
+block it was performed in, numbered 1..N by position within the session. It is a
+grouping annotation and nothing more: there is no extra nesting level, and an
+exercise with no `block` is ungrouped, which is every one of the 219 sessions
+that predate the feature. Duplicating a block puts the same `exId` in one
+session more than once, which is legal and is why every consumer that counts
+sessions merges a session's exercises by `exId` first
+(`mergeSessionExercises` in `analytics.js`) — one logical entry per exId per
+session, sets concatenated in session order.
+
 `history/{exId}` → `[ { date, sets: [ {w,r,type} ] }, … ]`, newest first, 20 max
 — the per-exercise "last time" index.
 
