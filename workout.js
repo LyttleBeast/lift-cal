@@ -1,5 +1,5 @@
 import { GROUPS, GROUP_ORDER } from './exercises.js';
-import { read, write, watch, LS, todayKey, monthKey } from './store.js';
+import { read, readExact, write, watch, LS, todayKey, monthKey } from './store.js';
 import {
   $, el, sheet, toast, noteEl, confirmSheet, swipeToDelete,
   fmtDate, fmtDateFull, fmtDuration, compact, parseKey, clamp, setNum, LIMITS
@@ -16,6 +16,12 @@ import { initRoutines, openRoutines, saveSessionAsRoutine } from './routines.js'
 import { bump } from './usage.js';
 
 let monthCache = {};        // 'YYYY-MM' -> { 'DD': { sessionId: record } }
+// The months this client has actually read from the database. monthCache alone
+// cannot tell a month that came off the wire from one this file built locally
+// out of a single session, and saveMonth() PUTs the WHOLE month — so without
+// this mark a one-session synthesis gets written back as though it were the
+// month, deleting every other day in it.
+let hydrated   = new Set();
 let viewMonth  = new Date();
 let history    = {};        // exId -> [{date, sets}]
 let session    = null;      // active workout (or a past one being edited)
@@ -66,12 +72,30 @@ async function requestWakeLock() {
 function releaseWakeLock() { try { wakeLock && wakeLock.release(); } catch {} wakeLock = null; }
 
 /* ================= DATA ================= */
+// The one hydrator. Nothing else may put a month into `hydrated`, because this
+// is the only place that knows the value came from the database.
+//
+// Two things here are load-bearing. The early return tests `hydrated.has(mk)`
+// as well as the cache: the old test was the cache alone, which is what made
+// the bug permanent — finishWorkout built a cache for a month it had never
+// read, and from then on every loadMonth saw a cache and returned it, so the
+// month could never correct itself. And it reads through readExact() rather
+// than read(): read() folds "the node isn't there" into "the node couldn't be
+// reached", and a blank that came from a failed read is precisely the value
+// that must not be trusted with a whole-month PUT.
 async function loadMonth(mk) {
-  if (monthCache[mk]) { watchMonth(mk); return monthCache[mk]; }
-  const data = (await read(`workouts/${mk}`, null)) || {};
-  monthCache[mk] = data;
+  if (monthCache[mk] && hydrated.has(mk)) { watchMonth(mk); return monthCache[mk]; }
+  try {
+    monthCache[mk] = (await readExact(`workouts/${mk}`)) || {};
+    hydrated.add(mk);
+  } catch {
+    // Unreachable. Keep whatever is already on screen so the calendar still
+    // renders, but do not mark it hydrated — a whole-month write built on this
+    // would be a guess, and saveMonth refuses guesses.
+    if (!monthCache[mk]) monthCache[mk] = (await read(`workouts/${mk}`, null)) || {};
+  }
   watchMonth(mk);
-  return data;
+  return monthCache[mk];
 }
 
 // Keep the month on screen subscribed, so a session written straight to the
@@ -85,6 +109,11 @@ function watchMonth(mk) {
   if (unwatchMonth) unwatchMonth();
   watchedMk = mk;
   unwatchMonth = watch(`workouts/${mk}`, val => {
+    // The subscription delivering IS a read from the database, so it hydrates
+    // the month even when loadMonth could not. Above the equality check,
+    // because what is being recorded is that the server answered at all, not
+    // whether the answer differed from what is cached.
+    hydrated.add(mk);
     const next = val || {};
     if (JSON.stringify(next) === JSON.stringify(monthCache[mk] || {})) return;
     monthCache[mk] = next;
@@ -95,9 +124,58 @@ function watchMonth(mk) {
 
 // Whole-month write. Used whenever a session is edited, moved or deleted,
 // because store.write() replaces a node rather than merging into it.
+//
+// It refuses a month this client never read. Every caller below hydrates
+// first, so the refusal is a backstop rather than a normal outcome — but
+// failing closed is the only safe direction here, because the value it would
+// otherwise send is `{}`, which RTDB stores as a delete of the whole node, and
+// .validate is not evaluated for a delete. No rule on the server can catch
+// this one; it has to be stopped here.
+//
+// On a refusal it also drops the cache, because by then the caller has already
+// taken the session out of it and the in-memory copy is a lie. The next
+// loadMonth re-reads.
 async function saveMonth(mk) {
+  if (!hydrated.has(mk)) {
+    delete monthCache[mk];
+    if (watchedMk === mk) {
+      if (unwatchMonth) { try { unwatchMonth(); } catch {} unwatchMonth = null; }
+      watchedMk = null;
+    }
+    refuseUnread(mk);
+    throw new Error(`workouts/${mk} was never read on this device`);
+  }
   await write(`workouts/${mk}`, monthCache[mk] || {});
   invalidate();
+}
+
+function refuseUnread(mk) {
+  toast(`Couldn’t load ${mk} — nothing was changed. Open that month online, then try again.`);
+}
+
+// Hydrate a month BEFORE its cache is mutated, so a refusal leaves nothing
+// half-changed. Returns false, having said why, when the month cannot be read.
+async function hydrateForWrite(mk) {
+  if (!hydrated.has(mk)) await loadMonth(mk);
+  if (hydrated.has(mk)) return true;
+  refuseUnread(mk);
+  return false;
+}
+
+// Returns true if the session was deleted, false if the write was refused —
+// the caller must not claim success on false. The hydrate runs before a single
+// key is removed: deleting the last session on a day drops the day key too,
+// and on a month that was never read that empties the cache to `{}`, which is
+// a delete of the entire month rather than an empty one.
+async function deleteSession(mk, dd, id) {
+  if (!monthCache[mk] || !monthCache[mk][dd]) return false;
+  if (!(await hydrateForWrite(mk))) return false;
+  if (!monthCache[mk] || !monthCache[mk][dd]) return false;   // the read may have moved it
+  delete monthCache[mk][dd][id];
+  if (!Object.keys(monthCache[mk][dd]).length) delete monthCache[mk][dd];
+  await saveMonth(mk);
+  await rebuildHistoryFromLog();
+  return true;
 }
 
 // After an edit or delete the per-exercise "last time" index can be wrong, so
@@ -401,12 +479,12 @@ function openDay(mk, dd) {
         confirmLabel: 'Delete workout',
         danger: true,
         onConfirm: async () => {
-          delete monthCache[mk][dd][w.id];
-          if (!Object.keys(monthCache[mk][dd]).length) delete monthCache[mk][dd];
-          await saveMonth(mk);
-          await rebuildHistoryFromLog();
+          // deleteSession says no rather than erasing a month it never read,
+          // and has already said why — so a refusal must not be reported as a
+          // deletion that worked.
+          const gone = await deleteSession(mk, dd, w.id).catch(() => false);
           close();
-          toast('Workout deleted');
+          if (gone) toast('Workout deleted');
           render();
         }
       });
@@ -871,6 +949,16 @@ async function finishWorkout() {
   });
   await write('history', history);
 
+  // Hydrate before touching the cache. A workout is filed under the day it
+  // STARTED, so `mk` is not always the month on screen — a session begun on the
+  // last evening of a month, or simply restored from localStorage after a
+  // relaunch, lands in a month this client may never have read. Building a
+  // cache for it makes a one-day object that claims to be the whole month, and
+  // the next whole-month write then erases every other day. The record itself
+  // is already safe by this point: the write above addresses one session and
+  // cannot erase anything, so reading the month after it is idempotent. If the
+  // read fails the month is left unhydrated and saveMonth refuses.
+  try { await loadMonth(mk); } catch {}
   monthCache[mk] = monthCache[mk] || {};
   monthCache[mk][dd] = monthCache[mk][dd] || {};
   monthCache[mk][dd][session.id] = record;
@@ -909,6 +997,13 @@ async function saveEdit() {
 
   const mk = dateK.slice(0, 7), dd = dateK.slice(8, 10);
 
+  // Both months, and before a single key of either cache is touched. The old
+  // code hydrated only the destination, and did it after emptying the source —
+  // so a refusal would have left the session out of a cache that never gets
+  // written, and it would vanish from the calendar until the next launch.
+  if (!(await hydrateForWrite(oldMk))) return;
+  if (mk !== oldMk && !(await hydrateForWrite(mk))) return;
+
   const record = {
     id: session.id,
     name: session.name || 'Workout',
@@ -925,8 +1020,7 @@ async function saveEdit() {
     delete monthCache[oldMk][oldDd][session.id];
     if (!Object.keys(monthCache[oldMk][oldDd]).length) delete monthCache[oldMk][oldDd];
   }
-  // write into the new slot
-  await loadMonth(mk);
+  // write into the new slot — both months were hydrated above
   monthCache[mk] = monthCache[mk] || {};
   monthCache[mk][dd] = monthCache[mk][dd] || {};
   monthCache[mk][dd][record.id] = record;

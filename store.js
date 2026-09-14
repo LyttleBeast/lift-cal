@@ -160,9 +160,12 @@ export function purgeDevice(forUid) {
 
 /* ---------- write queue (survives offline) ---------- */
 function queue() { return LS.get('queue', []); }
-function pushQueue(path, value) {
+// A queued item is a PUT unless it is marked as a merge, which is what the
+// guard falls back to when it cannot tell whether a PUT would erase anything.
+// An old queue holds no `merge` key and replays as it always did.
+function pushQueue(path, value, merge) {
   const q = queue();
-  q.push({ path, value, at: Date.now() });
+  q.push(merge ? { path, value, merge: true, at: Date.now() } : { path, value, at: Date.now() });
   LS.set('queue', q);
 }
 
@@ -177,21 +180,306 @@ export async function flushQueue() {
     // by a bug or a shared device. It would be refused by the rules anyway;
     // dropping it here stops it retrying on every reconnect forever.
     if (!item.path || !item.path.startsWith(mine)) continue;
-    try { await set(ref(db, item.path), item.value); }
+    try {
+      if (item.merge) await update(ref(db, item.path), item.value);
+      else            await set(ref(db, item.path), item.value);
+    }
     catch { remaining.push(item); }
   }
   LS.set('queue', remaining);
 }
 
+/* ---------- the destructive-write guard ----------
+
+   A validation rule stops a MALFORMED write. Nothing on the server stops a
+   WELL-FORMED one that erases everything it does not carry: a half-loaded
+   container PUT over a full node is perfectly good data, and `{}` and `null`
+   are not validated at all, because `.validate` is not evaluated for a delete.
+
+   The rule that would catch it — a `numChildren()` floor — was written and
+   proved and then deliberately not published, because it also refuses
+   legitimate offline work. flushQueue() replays a node's queued PUTs and only
+   the last one survives, so N deletions made one at a time over an afternoon
+   land on the server as a single net drop of N children, which is exactly what
+   a wipe looks like. No threshold fixes that; somebody can always delete one
+   more row than the threshold allows.
+
+   The distinction the client has and the rule does not is INTENT, and the only
+   place it still exists is here, at the moment write() is called: one call, one
+   thing the user did. By the time the queue replays it is gone.
+
+   So the check is per CALL, measured against the mirror — this device's own
+   belief about what the server holds, which write() steps down on every call
+   INCLUDING one that only got queued. That is what makes three offline deletes
+   measure 1, 1 and 1 rather than 3: the coalesced replay never passes through
+   here at all, so the case that sank the server rule passes by construction
+   rather than by tuning a number.
+
+   Refusal is the last resort, not the first. When the mirror is silent and the
+   database cannot be reached there is no measurement to make, and a guard that
+   answered that by throwing the write away would take the offline log — the
+   thing the queue exists for — with it. So that case goes out as a merge
+   instead: an update() cannot erase a child it does not name, which makes it
+   safe without knowing what is there. What is left to refuse is a write that
+   can only be said as a PUT and cannot be measured, and a write that was
+   measured and really does drop more than one user action's worth. */
+
+/* The nodes this app PUTs WHOLE, and how many children ONE user action may
+   remove from each. The numbers come from tracing every write() call site in
+   the repo: each of them adds a row, edits a row, or deletes exactly one. A
+   caller that means to remove more says so with write()'s third argument, which
+   is what a deliberate bulk delete would have to do.
+
+   NOT listed, each for a reason: profile, onboarding, settings/*, food/targets,
+   steps/$day and food/daySummaries/$day are fixed-key records rather than lists
+   of rows; workouts/$month/$dd/$id is a descendant write and cannot erase a
+   sibling; food/recall goes through mergeUpdate(), one child per key.
+
+   `history` is listed but unbounded, because rebuildHistoryFromLog() rebuilds
+   the whole node from the log — deleting a session that was the only appearance
+   of five exercises legitimately drops five children — and it is the one
+   container whose loss is recoverable, since that same function reconstructs it
+   from `workouts`, which is what the rest of this guard exists to protect. */
+const CONTAINERS = [
+  [/^weight\/entries$/,                      1],
+  [/^food\/items$/,                          1],
+  [/^food\/meals$/,                          1],
+  [/^food\/log\/[^/]+$/,                     1],
+  [/^water\/log\/[^/]+$/,                    1],
+  [/^routines$/,                             1],
+  [/^workouts\/[^/]+$/,                      1],
+  [/^exercises\/(custom|overrides|hidden)$/, 1],
+  [/^history$/,                       Infinity]
+];
+
+function budgetFor(path) {
+  for (const [re, n] of CONTAINERS) if (re.test(path)) return n;
+  return null;
+}
+export function isContainer(path) { return budgetFor(path) !== null; }
+
+// A list of plain ids rather than of records. exercises/hidden is the only one.
+function isIdList(v) {
+  return Array.isArray(v) && v.length > 0 &&
+         v.every(x => x !== null && typeof x !== 'object');
+}
+
+/* What the write DROPS, counted BY KEY — not a child count, because a write
+   that removes two rows and adds three has a HIGHER count and still dropped
+   two. Counting keys is also what makes the array-shaped containers come out
+   right: RTDB stores an array keyed '0','1','2' and a removal renumbers it, so
+   the keys that disappear are the tail.
+
+   An array of plain ids is counted by id instead, and today that means
+   exercises/hidden alone. picker.js appends without checking for a duplicate,
+   so a live account can hold the same id twice over, and one tap of "put it
+   back in the picker" filters out both copies — two keys gone for one thing the
+   user did. Counting ids makes that pass by construction rather than by raising
+   a number, and a real wipe still drops every id there is. */
+export function droppedChildren(prior, value) {
+  if (prior === null || typeof prior !== 'object') return 0;
+  const after = (value !== null && typeof value === 'object') ? value : {};
+  if (isIdList(prior)) {
+    const kept = new Set(Array.isArray(after) ? after : Object.values(after));
+    let n = 0;
+    for (const id of new Set(prior)) if (!kept.has(id)) n++;
+    return n;
+  }
+  const before = Object.keys(prior);
+  if (!before.length) return 0;
+  let n = 0;
+  for (const k of before) {
+    // undefined and null both mean "not there after this write": the SDK drops
+    // an undefined, and RTDB stores a null as a delete.
+    const v = after[k];
+    if (v === undefined || v === null) n++;
+  }
+  return n;
+}
+
+/* A guard that refuses quietly is worse than no guard, because the app carries
+   on looking as though it saved. There is no one place to hand a listener to —
+   mergeUpdate() swallows its errors and half the write() call sites are
+   fire-and-forget — so the banner goes up from here, the same way syncPip()
+   reaches for its own element. It does not fade, because the whole point is
+   that it is still there when somebody finally looks at the screen. */
+let onBlock = null;
+export function onGuardBlock(fn) {
+  onBlock = fn;
+  return () => { if (onBlock === fn) onBlock = null; };
+}
+
+export function reportBlock(why) {
+  try { if (onBlock) onBlock(why); } catch {}   // never masks the thing it reports
+  try { console.error('[store] ' + why); } catch {}
+  try { showBlockBanner(why); } catch {}
+  return why;
+}
+
+function showBlockBanner(why) {
+  if (typeof document === 'undefined' || !document.body) return;
+  const old = document.getElementById('writeBlock');
+  if (old) old.remove();
+  const box = document.createElement('div');
+  box.id = 'writeBlock';
+  box.setAttribute('role', 'alert');
+  box.style.cssText =
+    'position:fixed;left:10px;right:10px;bottom:10px;z-index:9999;' +
+    'background:#7f1d1d;color:#fff;padding:12px 14px;border-radius:12px;' +
+    'font:13px/1.45 system-ui,-apple-system,sans-serif;white-space:pre-wrap;' +
+    'box-shadow:0 8px 28px rgba(0,0,0,.45)';
+  const msg = document.createElement('div');
+  msg.textContent = why;
+  const x = document.createElement('button');
+  x.textContent = 'Dismiss';
+  x.style.cssText =
+    'margin-top:10px;background:#fff;color:#7f1d1d;border:0;border-radius:8px;' +
+    'padding:6px 12px;font:inherit;font-weight:600';
+  x.onclick = () => box.remove();
+  box.appendChild(msg);
+  box.appendChild(x);
+  document.body.appendChild(box);
+}
+
+/* readExact()'s decision logic — it throws when it could not reach the database
+   and resolves null only when the database itself said "nothing" — without
+   readExact's side effect of writing the mirror. A guard must not leave a trace
+   in the very place write()'s own reasoning starts from: `undefined` there has
+   to keep meaning "this device has never read that node". */
+async function peekServer(path) {
+  // No mirror fallback, deliberately. This is only ever called because the
+  // mirror is not to be believed — absent, or written by this device over a
+  // node it has never read — so handing it back here would answer the question
+  // with the very thing that prompted it.
+  if (!online.value) throw new Error('offline');
+  const snap = await get(ref(db, userPath(path)));
+  return snap.exists() ? snap.val() : null;
+}
+
+/* A mirror written by a read is a picture of the server. A mirror written by
+   write() is only this device's own belief, and for a node this device has
+   never read those are not the same thing — the server may hold rows nobody
+   here has ever seen. Those paths are remembered, because the difference is
+   exactly whether a later write may safely be a PUT. A read while online
+   replaces the mirror with the real node and the mark goes with it. */
+function partialMirrors() { return LS.get('mirrorPartial', {}); }
+function isPartial(path)  { return !!partialMirrors()[path]; }
+function markPartial(path) {
+  const m = partialMirrors();
+  if (!m[path]) { m[path] = 1; LS.set('mirrorPartial', m); }
+}
+function clearPartial(path) {
+  const m = partialMirrors();
+  if (m[path]) { delete m[path]; LS.set('mirrorPartial', m); }
+}
+
+/* The same write expressed as an update() instead of a set(): every key the
+   value carries, plus an explicit null for each key this device put in the
+   mirror itself and has now removed. An update() cannot touch a child it does
+   not name, so this lands the user's work without risking rows the device has
+   never seen — and the deletions it does carry are ones this device can account
+   for, so they still measure against the budget.
+
+   Returns null when the write cannot honestly be said that way. An array is the
+   main case: RTDB keys one by index, so merging would overwrite whichever rows
+   happen to share a position rather than the ones meant. `null` and `{}` are
+   the other: there is nothing to merge and the whole intent is deletion, which
+   is the one thing that must never go out unmeasured. */
+function mergeFor(local, value, budget) {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return null;
+  const obj = { ...value };
+  if (!Object.keys(obj).length) return null;
+  if (local !== null && typeof local === 'object' && !Array.isArray(local)) {
+    for (const k of Object.keys(local)) if (!(k in obj)) obj[k] = null;
+  }
+  let gone = 0;
+  for (const k of Object.keys(obj)) if (obj[k] === null) gone++;
+  return gone <= budget ? obj : null;
+}
+
+// What write() should do: { put: true }, { merge: obj }, or { why: reason }.
+async function writePlan(path, value, intent) {
+  const listed = budgetFor(path);
+  if (listed === null) return { put: true };    // not a whole-container PUT
+  if (intent && intent.derived) return { put: true };
+  const budget = intent && typeof intent.removes === 'number' && intent.removes >= 0
+    ? intent.removes : listed;
+  if (budget === Infinity) return { put: true };
+
+  const local = LS.get('mirror:' + path, undefined);
+  let prior = local;
+  if (local === undefined || isPartial(path)) {
+    /* Never read on this device, or mirrored only from this device's own
+       offline writes, which is not evidence about the server. Guessing here is
+       the exact shape of the disaster — a failed boot read yields an empty list
+       which is then PUT over a full node — so go and look instead. One GET per
+       node per device until a read settles it.
+
+       If the look fails there is still no honest measurement, but that is a
+       reason not to PUT rather than a reason to throw the user's work away.
+       This is the ordinary first-of-the-month and first-of-the-day case:
+       food/log/{date} and water/log/{date} get a new key every midnight, so
+       any day begun without a signal starts with a mirror that does not exist
+       yet, and refusing there would lose a whole day's logging — the path the
+       offline queue exists for. So the write goes out as a merge, which cannot
+       erase, and the node stays marked partial so the next write reasons the
+       same way until a real read settles it. */
+    try { prior = await peekServer(path); }
+    catch {
+      const obj = mergeFor(local, value, budget);
+      if (obj) return { merge: obj };
+      return { why: 'Not saved — ' + path + '\n' +
+        'This device has never read that list from the database and cannot ' +
+        'reach it now, so there is no way to tell whether this write would ' +
+        'erase it. Nothing was saved. Try again once you are online.' };
+    }
+  }
+
+  const dropped = droppedChildren(prior, value);
+  if (dropped <= budget) return { put: true };
+  return { why: 'Not saved — ' + path + '\n' +
+    'This write would have removed ' + dropped + ' item' + (dropped === 1 ? '' : 's') +
+    ' at once, from a list where one thing you do removes at most ' + budget + '.\n' +
+    'Nothing was saved and nothing was queued — the data on the server is ' +
+    'untouched. This usually means this device loaded only part of that node. ' +
+    'Reopen the tab while online and try again.' };
+}
+
 /* ---------- generic read/write, always inside users/{uid} ---------- */
 function userPath(p) { return `users/${UID}/${p}`; }
 
-export async function write(path, value) {
+/**
+ * @param {string} path   under users/{uid}
+ * @param {*}      value  the whole node — write() is a set(), a PUT, except on
+ *                        a container this device has never read and cannot
+ *                        reach, where it goes out as the equivalent merge
+ * @param {object} intent optional, and only read for the container paths above:
+ *                          { removes: N }   at most N children may vanish
+ *                          { derived: true} this node is rebuilt from another,
+ *                                           so a shrink carries no information
+ * @throws if the write is refused, so that a caller cannot carry on as though
+ *         it saved. Assign module state AFTER this resolves, not before.
+ */
+export async function write(path, value, intent) {
   // Mirroring before the sign-in check would write the value into the `anon`
   // namespace, where the next account to sign in on this device inherits it.
   if (!UID) return;
+  // Before the mirror is touched, so a refusal leaves nothing behind claiming
+  // the write happened.
+  const plan = await writePlan(path, value, intent);
+  if (plan.why) throw new Error(reportBlock(plan.why));
   LS.set('mirror:' + path, value);
+  // A mirror this write put there over a node nobody here has read is still not
+  // a picture of the server, and saying so is what keeps the next write from
+  // treating it as one.
+  if (plan.merge) markPartial(path); else clearPartial(path);
   const full = userPath(path);
+  if (plan.merge) {
+    if (!online.value) { pushQueue(full, plan.merge, true); return; }
+    try { await update(ref(db, full), plan.merge); }
+    catch { pushQueue(full, plan.merge, true); }
+    return;
+  }
   if (!online.value) { pushQueue(full, value); return; }
   try { await set(ref(db, full), value); }
   catch { pushQueue(full, value); }
@@ -205,6 +493,7 @@ export async function read(path, fallback = null) {
     const snap = await get(ref(db, userPath(path)));
     const v = snap.exists() ? snap.val() : fallback;
     LS.set('mirror:' + path, v);
+    clearPartial(path);
     return v;
   } catch {
     return cached === undefined ? fallback : cached;
@@ -228,6 +517,7 @@ export async function readExact(path) {
   const snap = await get(ref(db, userPath(path)));
   const v = snap.exists() ? snap.val() : null;
   LS.set('mirror:' + path, v);
+  clearPartial(path);
   return v;
 }
 
@@ -243,6 +533,7 @@ export function watch(path, cb) {
       if (UID !== owner) return;
       const v = snap.exists() ? snap.val() : null;
       LS.set('mirror:' + path, v);
+      clearPartial(path);
       cb(v);
     }, () => {});
   } catch {

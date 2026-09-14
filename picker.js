@@ -342,10 +342,19 @@ function openExerciseEdit(id, onDone) {
       confirmLabel: 'Delete',
       danger: true,
       onConfirm: async () => {
+        const wasHidden   = hidden.includes(id);
+        const hadOverride = Object.prototype.hasOwnProperty.call(overrides, id);
         customEx = customEx.filter(e => e.id !== id);
         hidden = hidden.filter(h => h !== id);
         delete overrides[id];
         await write('exercises/custom', customEx);
+        /* The other two nodes were only ever being narrowed in memory, which
+           left this device holding one id fewer than the server for the rest of
+           the session — and the next perfectly ordinary hide or rename then
+           looks like a write that drops two things at once. Write what was
+           actually changed. */
+        if (wasHidden)   await write('exercises/hidden', hidden);
+        if (hadOverride) await write('exercises/overrides', overrides);
         close();
         toast('Deleted');
         if (onDone) onDone();

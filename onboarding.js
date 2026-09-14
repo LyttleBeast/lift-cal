@@ -536,16 +536,24 @@ export function runSetup(user) {
         } else if (a.name.trim()) {
           await write('profile', { name: a.name.trim().slice(0, 60), createdAt: Date.now() });
         }
-
-        await write('onboarding', {
-          done: true, at: Date.now(), version: ONBOARDING_VERSION,
-          skipped: !!skipped, tourDone: false
-        });
       } catch (e) {
         // Never trap somebody on the setup screen because a write failed. They
         // land in the app with defaults, which is recoverable; a dead-end is not.
         toast('Saved what it could — check your connection.');
       }
+
+      /* The done flag is written on its own, and after the catch, because a
+         failure above must not be the reason setup comes back. write() refuses
+         a container write it cannot measure — weight/entries is one — and the
+         old shared try meant one refusal there skipped every write below it,
+         this one included. onboardingState() tests nothing but `done`, so
+         losing it repeats this entire screen on every launch. */
+      try {
+        await write('onboarding', {
+          done: true, at: Date.now(), version: ONBOARDING_VERSION,
+          skipped: !!skipped, tourDone: false
+        });
+      } catch {}
 
       host.classList.add('hidden');
       host.innerHTML = '';
