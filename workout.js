@@ -816,6 +816,40 @@ function deleteBlock(s, n) {
   );
 }
 
+// The block check box, in three pure pieces.
+//
+// It only ever touches sets that are ready to be logged — both weight and reps
+// in. collectDone drops a set with a blank in either box, so ticking one would
+// promise a set that never reaches the record, and the promise is the whole
+// value of a check box. The test is collectDone's own test, character for
+// character, so the two can never disagree about which sets those are.
+function blockFillableSets(exercises, n) {
+  const out = [];
+  (exercises || []).forEach((ex, i) => {
+    if (!ex || ex.block !== n) return;
+    (ex.sets || []).forEach((s, j) => { if (s.w !== '' && s.r !== '') out.push([i, j]); });
+  });
+  return out;
+}
+
+// Ticked when there is something to tick and every bit of it is ticked. A block
+// with nothing filled in yet is not ticked and is not tickable — the box is
+// disabled rather than doing nothing, the same call the Duplicate button makes.
+function blockTicked(exercises, n) {
+  const at = blockFillableSets(exercises, n);
+  return at.length > 0 && at.every(([i, j]) => !!exercises[i].sets[j].done);
+}
+
+// Ticking and unticking move the same rows, which is what makes the box a
+// toggle rather than two different buttons wearing one face.
+function setBlockDone(exercises, n, done) {
+  const mark = new Set(blockFillableSets(exercises, n).map(([i, j]) => i + ':' + j));
+  return (exercises || []).map((ex, i) => {
+    if (!ex || ex.block !== n) return ex;
+    return { ...ex, sets: (ex.sets || []).map((s, j) => mark.has(i + ':' + j) ? { ...s, done } : s) };
+  });
+}
+
 // Only a block with something logged in it is worth interrupting for.
 function blockHasLogged(exercises, n) {
   return (exercises || []).some(ex =>
@@ -1009,6 +1043,32 @@ function renderBlock(row, editing) {
   hd.appendChild(el('div', 'wk-block-title', 'Block ' + n));
 
   const acts = el('div', 'wk-block-acts');
+
+  // The block's own check box. This training style fills a whole block in and
+  // then ticks it off, so ticking each row by hand is the one bit of friction
+  // the container was supposed to remove. It reflects state rather than being a
+  // button: if everything fillable is already ticked, it shows ticked, and
+  // tapping it again unticks exactly the rows it ticked.
+  const fillable = blockFillableSets(session.exercises, n);
+  const ticked = blockTicked(session.exercises, n);
+  const chk = el('button', 'set-check wk-block-chk' + (ticked ? ' on' : ''), ticked ? '\u2713' : '');
+  chk.disabled = !fillable.length;
+  chk.setAttribute('aria-label', ticked
+    ? 'Mark Block ' + n + ' incomplete'
+    : 'Complete every filled-in set in Block ' + n);
+  chk.title = 'Tick every set in this block that has a weight and reps in it';
+  chk.onclick = () => {
+    const next = !ticked;
+    // Count the sets this actually logs, not the ones that were already ticked.
+    // No rest timer: a block has no round boundary for one to attach to, and
+    // rest already fires per set exactly as it does outside a block.
+    if (next) fillable.forEach(([i, j]) => { if (!session.exercises[i].sets[j].done) bump('setLogged'); });
+    session.exercises = setBlockDone(session.exercises, n, next);
+    persistSession();
+    render();
+  };
+  acts.appendChild(chk);
+
   const dup = el('button', 'btn btn-ghost wk-block-btn', 'Duplicate');
   // There is nothing to repeat until the block holds an exercise, and a button
   // that quietly does nothing is worse than one that says it is not ready yet.

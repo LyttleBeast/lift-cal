@@ -528,6 +528,10 @@ body.peeking .view.active { padding-bottom: 58px; }
   font-variation-settings: 'wdth' 88, 'wght' 800;
 }
 .wk-block-acts { display: flex; align-items: center; gap: 4px; }
+/* Deliberately the set row's box, one size down: it does the same thing to the
+   same rows, so it should not look like a different control. */
+.wk-block-chk { width: 26px; height: 26px; font-size: 13px; }
+.wk-block-chk:disabled { opacity: .4; }
 .wk-block-btn { padding: 6px 10px; font-size: 11px; }
 .wk-block-x { color: var(--dim); padding: 4px 8px; font-size: 13px; line-height: 1; }
 .wk-block-x:active { color: var(--bad); }
