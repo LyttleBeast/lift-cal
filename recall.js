@@ -125,6 +125,52 @@ function negations(list) {
   return out.sort().join(',');
 }
 
+/* The foods a sentence actually names.
+
+   quantities() and negations() each lift one dimension out of the token list
+   and compare it exactly. What was left over -- the plain food words -- had
+   only ever been compared by Dice, and Dice is partial overlap: a sentence that
+   DROPS or SWAPS a food while keeping the rest of the order still clears the
+   bar. Measured: a Panda plate stored as chow mein + orange chicken + Cantonese
+   BBQ brisket scores 0.750 against the same plate with teriyaki chicken in the
+   brisket's place -- over MIN_SCORE, so it hit and booked the brisket's macros
+   against a different entree, labelled "close match" and nothing else on
+   screen. Neither of the other two gates can see it: no numbers, no negations.
+
+   So the leftovers get the treatment the other two dimensions already get --
+   canonicalise, compare exactly. Two sentences may match only if they name the
+   SAME foods. Order and filler stay free; a food does not.
+
+   Dropped here because another gate already owns them:
+     - a token starting with a digit, which quantities() binds to its food
+     - a negation marker and the token after it, which negations() compares
+   Exactly the pair negations() consumes, so a trailing marker with nothing
+   after it stays a content token in both places.
+
+   The SET, not the list: score() has always compared token sets, so a word
+   said twice has never been the difference between a hit and a miss, and this
+   gate is not the place to make it one.
+
+   The cost is the same kind the pair-binding in quantities() costs, and runs
+   the same direction: "2 slices of pepperoni pizza" no longer matches a stored
+   "2 slices of pizza", because one names a food the other does not. A rejected
+   near-miss falls through to the estimator and comes back right for a fraction
+   of a cent.
+
+   STILL NOT ADDRESSED: intensifiers. "extra cheese" and "cheese" now land on
+   different content sets, so that pair falls to the estimator instead of
+   returning single-cheese macros. That is the safe direction, but it is a side
+   effect of comparing token sets -- nothing here understands "extra". */
+function composition(list) {
+  const out = new Set();
+  for (let i = 0; i < list.length; i++) {
+    if (/^[0-9]/.test(list[i])) continue;                    // quantities() has this one
+    if (NEGATION.has(list[i]) && list[i + 1]) { i++; continue; }   // negations() has the marker and its food
+    out.add(list[i]);
+  }
+  return [...out].sort().join(',');
+}
+
 // Dice coefficient over the word sets. Cheap, order-blind, and good enough for
 // "chicken burrito bowl" vs "burrito bowl with chicken".
 function score(a, b) {
@@ -154,8 +200,11 @@ export function recallList() {
    Exact key first, then the closest sentence above the bar. A near-miss whose
    numbers disagree is rejected outright, however similar the words: matching
    "3 slices of pizza" to a stored "2 slices of pizza" would hand back macros
-   that are confidently a third short. Two gates now, not one -- quantities must
-   attach to the same foods, and both sentences must exclude the same things. */
+   that are confidently a third short. Three gates now -- quantities must attach
+   to the same foods, both sentences must exclude the same things, and both must
+   name the same foods in the first place. Each one rejects a pair that Dice
+   scored high and got wrong; the score only ever ranks what all three let
+   through. */
 export function lookup(text) {
   const key = keyOf(text);
   if (!key) return null;
@@ -164,18 +213,22 @@ export function lookup(text) {
   if (exact && exact.items && exact.items.length) return { key, ...exact, score: 1, exact: true };
 
   const mine = tokens(text);
-  const myQty = quantities(mine);
-  const myNeg = negations(mine);
+  const myQty  = quantities(mine);
+  const myNeg  = negations(mine);
+  const myComp = composition(mine);
   if (mine.length < 2) return null;
 
   let best = null;
   for (const [k, r] of Object.entries(recall)) {
     if (!r || !r.q || !r.items || !r.items.length) continue;
     const theirs = tokens(r.q);
-    // Both gates run BEFORE the similarity score, not after: Dice cannot see
-    // either problem, so no threshold on it would have caught them.
+    // All three gates run BEFORE the similarity score, not after: Dice cannot
+    // see any of the three problems, so no threshold on it would have caught
+    // them. The wrong Panda plate scored 0.750 and the transposed breakfast
+    // scored 1.0.
     if (quantities(theirs) !== myQty) continue;
     if (negations(theirs) !== myNeg) continue;
+    if (composition(theirs) !== myComp) continue;
     const s = score(mine, theirs);
     if (s >= MIN_SCORE && (!best || s > best.score)) best = { key: k, ...r, score: s, exact: false };
   }
