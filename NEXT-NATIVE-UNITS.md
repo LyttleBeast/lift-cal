@@ -113,7 +113,7 @@ pressables). What must survive the substitution:
 | | |
 |---|---|
 | Web | `ui.js` `LIMITS` + `setNum()`; `units.js` `limW`/`limRate`/`limPer`/`limH` |
-| Native | `src/pure/limits.js` (or wherever `LIMITS` lives) and every numeric input |
+| Native | `src/pure/format.js:41` (where `LIMITS` lives — confirmed 15 Sep) and every numeric input |
 | Port | **Copy the limit converters; rework the inputs.** |
 
 `LIMITS.lb`, `setW`, `rateWk` and `perLb` are POUND-scale and stay that way.
@@ -295,3 +295,26 @@ and do the same thing.
 
 The check that matters most is F, the double-conversion scan, because that is
 the only failure in this whole feature that is completely silent.
+
+## 12. Three open items, answered against the real trees (15 Sep)
+
+Checked directly in `rack-mobile` and in the unpublished rules, which the build
+run could not read from this clone:
+
+- **The `w` rule accepts the converted decimal string.**
+  `database.rules.PROPOSED.json` bounds `w` as
+  `newData.isString() && newData.val().matches(/^$|^(0|[1-9][0-9]{0,4})([.][0-9]{1,6})?$/)`
+  — up to six decimal places, and `^$` keeps the empty string legal. `"220.46"`
+  passes. No change needed for `wIn`'s two-decimal rounding.
+- **`heightIn` may be fractional.** Its rule is
+  `newData.isNumber() && >= 0 && <= 120` with no integer constraint, so the
+  hundredths-of-an-inch metric height writes cleanly. Nothing to loosen.
+- **The PR row's `unit` field is dead in native too**, so removing it there is
+  safe. It is defined at `src/pure/analytics.js:199, 206, 213` and no file under
+  `src/` or `app/` reads it — `src/ui/you/cards.jsx:536` hard-codes `' lb'`
+  instead, which is one of the sites the port has to convert.
+
+Still outstanding and NOT closable from the web tree: `settings/units` is absent
+from `database.rules.PROPOSED.json` (0 occurrences). It has to be added there
+before those rules are published, or the first units write after that publish
+fails silently.
