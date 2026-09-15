@@ -494,6 +494,138 @@ const SET_KEYS = ['w', 'r', 'type', 'done'];
         !/session\.blocks[^\n]*write\(/.test(WSRC));
 }
 
+/* ---------- 9. the round trip through a routine ----------
+   A routine is the one place a block leaves the session and comes back. Both
+   directions live in routines.js as `exercises` maps that rebuild the object
+   key by key, so a key that is not named there is dropped — which is exactly
+   how blocks came to not survive being saved as a routine.
+
+   Neither direction is re-implemented here. `toSession` is a plain top-level
+   function and lifts the same way workout.js's do; the record -> routine map is
+   buried in a sheet full of DOM, so the expression itself is cut out and driven
+   on its own. What is being protected is that the two maps carry `block`, and
+   that they are still the ONLY thing that carries it — a routine that grew a
+   stored `blocks` array would be a second source of truth for the same fact. */
+
+{
+  const RSRC = readFileSync(join(HERE, '..', 'routines.js'), 'utf8');
+
+  // Same naive scan workout.js's fnSource uses, and sound for the same reason:
+  // none of these bodies has a bracket inside a string, a regex or a comment.
+  const scanBody = (src, at) => {
+    let depth = 0;
+    for (let j = src.indexOf('{', at); j < src.length; j++) {
+      if (src[j] === '{') depth++;
+      else if (src[j] === '}' && --depth === 0) return src.slice(at, j + 1);
+    }
+    throw new Error('unbalanced braces reading routines.js at ' + at);
+  };
+
+  // The record -> routine map is one expression inside a statement, so it is
+  // read to the semicolon that ends it rather than to a matching brace.
+  const scanExpr = (src, at) => {
+    let depth = 0;
+    for (let j = at; j < src.length; j++) {
+      const c = src[j];
+      if (c === '{' || c === '(' || c === '[') depth++;
+      else if (c === '}' || c === ')' || c === ']') depth--;
+      else if (c === ';' && depth === 0) return src.slice(at, j);
+    }
+    throw new Error('no statement end reading the record -> routine map');
+  };
+
+  const toSessionAt = RSRC.indexOf('\nfunction toSession(');
+  if (toSessionAt === -1) throw new Error(
+    'routines.js no longer declares function toSession — this verifier drives ' +
+    'the real source and has nothing to test');
+
+  const mapAt = RSRC.indexOf('r.exercises = (record.exercises || []).map(');
+  if (mapAt === -1) throw new Error(
+    'routines.js no longer builds r.exercises from record.exercises — the ' +
+    'record -> routine direction moved and this verifier cannot find it');
+
+  writeFileSync(
+    join(dir, 'routines-maps.mjs'),
+    scanBody(RSRC, toSessionAt + 1) + '\n' +
+    'export function routineFromRecord(record) { return ' +
+    scanExpr(RSRC, mapAt + 'r.exercises = '.length) + '; }\n' +
+    'export { toSession };\n'
+  );
+  const R = await import(pathToFileURL(join(dir, 'routines-maps.mjs')).href);
+
+  // A finished block workout, straight out of collectDone: two exercises in
+  // block 1, one ungrouped beside them.
+  B.setSession(live([
+    ex('bench', [set(225, 5), set(225, 5)], { block: 1 }),
+    ex('row',   [set(135, 8)],              { block: 1 }),
+    ex('curl',  [set(40, 12)])
+  ]));
+  const record = { name: 'Push day', exercises: B.collectDone() };
+  check('routine: the record going in carries the annotation',
+        record.exercises.map(e => e.block || 0).join(',') === '1,1,0',
+        JSON.stringify(record.exercises.map(e => e.block)));
+
+  // record -> routine
+  const rex = R.routineFromRecord(record);
+  check('routine: saving a block workout as a routine keeps block: 1',
+        rex[0].block === 1 && rex[1].block === 1, JSON.stringify(rex.map(e => e.block)));
+  check('routine: the ungrouped exercise gains no block key',
+        !('block' in rex[2]), JSON.stringify(rex[2]));
+  check('routine: the stored routine gains no blocks array of its own',
+        rex.every(e => !('blocks' in e)));
+  check('routine: the targets are still placeholders, never values',
+        rex[0].sets.every(s => s.tw !== '' && s.w === undefined && s.r === undefined),
+        JSON.stringify(rex[0].sets));
+
+  // routine -> live session
+  const s = R.toSession({ name: 'Push day', exercises: rex });
+  check('routine: starting it brings the annotation back',
+        s.exercises[0].block === 1 && s.exercises[1].block === 1,
+        JSON.stringify(s.exercises.map(e => e.block)));
+  check('routine: and still no blocks array on the session object',
+        s.blocks === undefined);
+  check('routine: the weights come back blank, the targets come back set',
+        s.exercises[0].sets.every(x => x.w === '' && x.r === '' && x.tw !== ''),
+        JSON.stringify(s.exercises[0].sets));
+
+  // startWorkout spreads that object as-is and sets no `blocks`, so this is the
+  // session the screen actually gets.
+  const started = { id: 'w2', name: s.name, startedAt: 1, exercises: s.exercises };
+  check('routine: sessionBlocks reconstructs the block from the annotation alone',
+        JSON.stringify(B.sessionBlocks(started)) === '[1]',
+        JSON.stringify(B.sessionBlocks(started)));
+
+  const rows = B.sessionLayout(started.exercises, B.sessionBlocks(started));
+  check('routine: the block gets its own row on screen',
+        kinds(rows) === 'block1,ex', kinds(rows));
+  // Found rather than indexed: with the annotation dropped there is no block
+  // row at all, and that has to read as a failed check, not a thrown report.
+  const blockRow = rows.find(row => row.kind !== 'ex');
+  check('routine: the duplicate button is live — the block holds two exercises',
+        !!blockRow && blockRow.items.length === 2,
+        blockRow ? String(blockRow.items.length) : 'there is no block row at all');
+
+  // The two operations the bug report named.
+  const dup = B.duplicateBlock(started, 1, false);
+  check('routine: duplicating the restored block makes block 2',
+        JSON.stringify(dup.blocks) === '[1,2]' &&
+        dup.exercises.filter(e => e.block === 2).length === 2,
+        JSON.stringify(dup.exercises.map(e => e.block)));
+
+  check('routine: the block check box has sets to act on',
+        B.blockHasLogged(started.exercises, 1) === false &&
+        started.exercises.filter(e => e.block === 1)
+          .every(e => e.sets.every(x => !x.done)),
+        'a freshly started routine has nothing ticked yet');
+
+  // Pinned as text, because the maps are what the bug was.
+  const CARRY = '...(ex.block ? { block: ex.block } : null)';
+  check('routine: both maps in routines.js use the record path\'s own idiom',
+        (RSRC.split(CARRY).length - 1) === 2, (RSRC.split(CARRY).length - 1) + ' occurrences');
+  check('routine: routines.js stores no blocks array anywhere',
+        !/blocks\s*[:=]/.test(RSRC));
+}
+
 /* ---------- report ---------- */
 
 console.log('\nlifting blocks — a container, and an annotation in the record\n');

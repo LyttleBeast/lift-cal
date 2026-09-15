@@ -159,11 +159,17 @@ function openRoutine(id, onStart) {
 }
 
 // Routine -> the object startWorkout() already knows how to take.
+//
+// The block annotation is carried straight through. startWorkout sets no
+// `blocks` on the session, so sessionBlocks falls back to blockOrder and reads
+// the blocks back off these annotations — which is why a routine needs no
+// stored blocks array of its own, and must not grow one.
 function toSession(r) {
   return {
     name: r.name || 'Workout',
     exercises: (r.exercises || []).map(ex => ({
       exId: ex.exId, name: ex.name, group: ex.group, equipment: ex.equipment,
+      ...(ex.block ? { block: ex.block } : null),
       sets: (ex.sets || []).map(s => ({
         w: '', r: '', type: s.type || 'N', done: false,
         tw: s.tw || '', tr: s.tr || ''
@@ -362,8 +368,13 @@ export function saveSessionAsRoutine(record, onDone) {
     if (!name) { toast('Give it a name'); nameIn.focus(); return; }
     const r = blankRoutine();
     r.name = name;
+    // Same idiom as editWorkout's map in workout.js: the block number is the
+    // only trace a block leaves, so keeping it here is the whole of what makes
+    // a block workout reusable. collectDone already left the record's
+    // exercises block-contiguous and renumbered, so nothing is reordered.
     r.exercises = (record.exercises || []).map(ex => ({
       exId: ex.exId, name: ex.name, group: ex.group, equipment: ex.equipment,
+      ...(ex.block ? { block: ex.block } : null),
       sets: (ex.sets || []).map(s => ({ tw: s.w || '', tr: s.r || '', type: s.type || 'N' }))
     }));
     routines[r.id] = r;
