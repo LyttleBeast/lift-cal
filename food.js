@@ -12,7 +12,7 @@
 // owner-only (see seedItems): they are one person's reference values for a
 // specific job's pizza dough, not a food database.
 
-import { read, write, watch, LS, todayKey, uid } from './store.js';
+import { read, write, watch, LS, todayKey, uid, wu } from './store.js';
 import { maintenance, calorieZones, zoneOf, refreshModel,
          autoTargets, trendWeight, MIN_CARB_G } from './tdee.js';
 import { initWater, loadWaterDay, renderWater, openWaterSettings } from './water.js';
@@ -25,6 +25,8 @@ import { initRecall, lookup as recallLookup, remember as recallRemember,
          rememberEntry, kindForSrc, recallList, recallCount,
          forget as recallForget, forgetAll as recallForgetAll } from './recall.js';
 import { bump } from './usage.js';
+import { wIn, fmtW, labelW, unitW, rateIn, boxRate, perIn, boxPer,
+         kcalPerUnit, limW, limRate, limPer } from './units.js';
 
 const MEALS = [
   ['breakfast', 'Breakfast'],
@@ -2814,6 +2816,8 @@ export function openTargets(onSaved) {
     i.type = 'number';
     i.inputMode = opts.decimal ? 'decimal' : 'numeric';
     if (opts.step) i.step = opts.step;
+    if (opts.min != null) i.min = opts.min;
+    if (opts.max != null) i.max = opts.max;
     if (opts.placeholder) i.placeholder = opts.placeholder;
     i.value = value;
     w.appendChild(i);
@@ -2843,14 +2847,26 @@ export function openTargets(onSaved) {
 
   /* ---------- auto ---------- */
   const autoPane = el('div', 'tg-auto');
+  // Everything stored under `auto` is per POUND — that is what tdee.js
+  // multiplies by, and it does not change. These three boxes are the only
+  // place it is ever seen or typed, so they are where it converts.
+  const u = wu(), W = unitW(u);
+  const rLim = limRate(LIMITS.rateWk, u);
+  const pLim = limPer(LIMITS.perLb, u);
   autoPane.appendChild(noteEl(
     'You set the goal; the numbers follow the scale. Protein and fat are grams ' +
-    'per pound of bodyweight, so they track your weight down as you cut. Calories ' +
+    'per ' + (u === 'kg' ? 'kilo' : 'pound') + ' of bodyweight, so they track your weight down as you cut. Calories ' +
     'are your maintenance estimate shifted by the rate you pick. Carbs stay the remainder.'));
 
-  const ra = field('Goal lb / week', auto.rateWk, { decimal: true, step: '0.25' });
-  const pl = field('Protein g per lb', auto.pPerLb, { decimal: true, step: '0.05' });
-  const fl = field('Fat g per lb', auto.fPerLb, { decimal: true, step: '0.05' });
+  // A quarter of a pound is the natural nudge on pounds; a tenth of a kilo is
+  // the natural one on kilos, and 0.25 kg would be a coarser step than the
+  // control it replaced.
+  const ra = field('Goal ' + W + ' / week', boxRate(auto.rateWk, u),
+                   { decimal: true, step: u === 'kg' ? '0.1' : '0.25', min: rLim[0], max: rLim[1] });
+  const pl = field('Protein g per ' + W, boxPer(auto.pPerLb, u),
+                   { decimal: true, step: u === 'kg' ? '0.1' : '0.05', min: pLim[0], max: pLim[1] });
+  const fl = field('Fat g per ' + W, boxPer(auto.fPerLb, u),
+                   { decimal: true, step: u === 'kg' ? '0.1' : '0.05', min: pLim[0], max: pLim[1] });
   const fo = field('Never go below (kcal)', auto.floor > 0 ? auto.floor : '',
                    { placeholder: 'auto' });
   autoPane.append(ra, pl, fl, fo);
@@ -2860,11 +2876,14 @@ export function openTargets(onSaved) {
   preview.style.marginTop = '12px';
   autoPane.appendChild(preview);
 
+  // Convert first, clamp second. Clamping the typed number against a
+  // per-pound bound would let a kilos account ask for 3 g per kilo — which is
+  // 1.36 g per pound and legal — and refuse 4, which is 1.81 and also legal.
   const readAuto = () => ({
     on: true,
-    rateWk: clamp(parseFloat(ra.input.value) || 0, LIMITS.rateWk),
-    pPerLb: clamp(parseFloat(pl.input.value) || 0, LIMITS.perLb),
-    fPerLb: clamp(parseFloat(fl.input.value) || 0, LIMITS.perLb),
+    rateWk: clamp(rateIn(parseFloat(ra.input.value) || 0, u), LIMITS.rateWk),
+    pPerLb: clamp(perIn(parseFloat(pl.input.value) || 0, u), LIMITS.perLb),
+    fPerLb: clamp(perIn(parseFloat(fl.input.value) || 0, u), LIMITS.perLb),
     floor:  parseInt(fo.input.value) > 0 ? clamp(parseInt(fo.input.value), LIMITS.cal) : 0,
     lastAdj: auto.lastAdj || 0
   });
@@ -2879,7 +2898,7 @@ export function openTargets(onSaved) {
     if (!mi || !(lb > 0)) {
       preview.appendChild(noteEl(
         !mi ? 'Needs a maintenance number first \u2014 either type one below, or log a week of food alongside your weigh-ins and it estimates itself.'
-            : 'Needs enough weigh-ins to fit a trend. Your bodyweight has to come off the trend line, not the last reading \u2014 that one swings by pounds depending on the time of day.'));
+            : 'Needs enough weigh-ins to fit a trend. Your bodyweight has to come off the trend line, not the last reading \u2014 that one swings by ' + (u === 'kg' ? 'most of a kilo' : 'pounds') + ' depending on the time of day.'));
       return;
     }
     const n = autoTargets(readAuto(), mi.cal, lb);
@@ -2902,7 +2921,7 @@ export function openTargets(onSaved) {
 
     preview.appendChild(noteEl(
       'From maintenance ' + mi.cal.toLocaleString() + (mi.auto ? ' (estimated)' : ' (pinned)') +
-      ' at a trend weight of ' + n.lb + ' lb.'));
+      ' at a trend weight of ' + labelW(n.lb, u) + '.'));
 
     if (n.floored) {
       preview.appendChild(noteEl(
@@ -2945,10 +2964,12 @@ export function openTargets(onSaved) {
      this is where the goal's rate already lives, and a goal is one thing. */
   const tg = el('div', 'field');
   tg.style.marginTop = '14px';
-  tg.appendChild(el('label', null, 'Goal weight (lb)'));
+  tg.appendChild(el('label', null, 'Goal weight (' + W + ')'));
   const gw = el('input');
-  gw.type = 'number'; gw.inputMode = 'decimal'; gw.step = '0.5';
-  gw.value = targets.goalLb > 0 ? targets.goalLb : '';
+  gw.type = 'number'; gw.inputMode = 'decimal'; gw.step = u === 'kg' ? '0.25' : '0.5';
+  const gLim = limW(LIMITS.lb, u);
+  gw.min = gLim[0]; gw.max = gLim[1];
+  gw.value = targets.goalLb > 0 ? fmtW(targets.goalLb, u) : '';
   gw.placeholder = 'optional';
   tg.appendChild(gw);
   sh.appendChild(tg);
@@ -2963,9 +2984,9 @@ export function openTargets(onSaved) {
       toast('Maintenance should be between ' + LIMITS.cal[0].toLocaleString() + ' and ' + LIMITS.cal[1].toLocaleString() + ' kcal');
       return;
     }
-    const g = parseFloat(gw.value);
+    const g = wIn(parseFloat(gw.value), u);
     if (gw.value.trim() && !within(g, LIMITS.lb)) {
-      toast('Goal weight should be between ' + LIMITS.lb[0] + ' and ' + LIMITS.lb[1] + ' lb');
+      toast('Goal weight should be between ' + gLim[0] + ' and ' + gLim[1] + ' ' + W);
       return;
     }
     const goalLb = within(g, LIMITS.lb) ? Math.round(g * 10) / 10 : null;
@@ -3229,7 +3250,13 @@ function openBarGuide(t) {
     n(targets.p) + ' g protein and ' + n(targets.f) + ' g fat leave ' + n(carbsTarget()) + ' g of carbs inside ' + n(targets.cal) + ' kcal.');
 
   sh.appendChild(list);
-  sh.appendChild(noteEl('Roughly 3,500 kcal is a pound, so a pound a week is about 500 a day. Every number on this sheet is live — open it again tomorrow and it will have moved with you.'));
+  // The arithmetic never converts: 500 kcal a day is 500 kcal a day. What
+  // converts is the weight that many calories is worth — 3,500 to a pound,
+  // 7,716 to a kilo.
+  const gu = wu();
+  sh.appendChild(noteEl('Roughly ' + kcalPerUnit(gu).toLocaleString() + ' kcal is a ' + (gu === 'kg' ? 'kilo' : 'pound') +
+    ', so a ' + (gu === 'kg' ? 'kilo' : 'pound') + ' a week is about ' + (gu === 'kg' ? '1,100' : '500') +
+    ' a day. Every number on this sheet is live — open it again tomorrow and it will have moved with you.'));
 }
 
 /* ================= THE GOAL, AS ONE WORD =================

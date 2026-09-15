@@ -1,12 +1,12 @@
 import { GROUPS, GROUP_ORDER } from './exercises.js';
-import { read, readExact, write, watch, LS, todayKey, monthKey } from './store.js';
+import { read, readExact, write, watch, LS, todayKey, monthKey, wu } from './store.js';
 import {
   $, el, sheet, toast, noteEl, confirmSheet, swipeToDelete,
-  fmtDate, fmtDateFull, fmtDuration, compact, parseKey, clamp, setNum, LIMITS
+  fmtDate, fmtDateFull, fmtDuration, parseKey, clamp, setNum, LIMITS
 } from './ui.js';
 import {
   allSessions, invalidate, detectPRs, sessionMilestones, isWorking, groupColor,
-  mergeSessionExercises
+  mergeSessionExercises, prDetail
 } from './analytics.js';
 // One-way dependency: this file imports stats.js, stats.js never imports back.
 import { openStats, isStatsOpen, renderStats, refresh as refreshStats } from './stats.js';
@@ -15,6 +15,12 @@ import { openStats, isStatsOpen, renderStats, refresh as refreshStats } from './
 import { initPicker, allExercises, openPicker, openExerciseManager } from './picker.js';
 import { initRoutines, openRoutines, saveSessionAsRoutine } from './routines.js';
 import { bump } from './usage.js';
+import { wOut, wIn, fmtSetW, fmtVol, volOut, unitW, limW } from './units.js';
+
+// Volume is a sum of stored pounds, so it converts like a weight. Round to a
+// whole number BEFORE the abbreviation, never after: "41.3k" is a string and
+// there is no converting one of those.
+const volDisp = v => Math.round(volOut(v || 0, wu()));
 
 let monthCache = {};        // 'YYYY-MM' -> { 'DD': { sessionId: record } }
 // The months this client has actually read from the database. monthCache alone
@@ -444,7 +450,8 @@ function renderMonthStats(days) {
   const mins = Math.round(all.reduce((s, w) => s + (w.durationSec || 0), 0) / 60);
 
   const row = el('div', 'stat-row');
-  [[sessions, 'Sessions'], [vol >= 1000 ? (vol / 1000).toFixed(1) + 'k' : vol, 'Volume lb'], [mins, 'Minutes']]
+  const v = volDisp(vol);
+  [[sessions, 'Sessions'], [v >= 1000 ? (v / 1000).toFixed(1) + 'k' : v, 'Volume ' + unitW(wu())], [mins, 'Minutes']]
     .forEach(([v, l]) => {
       const s = el('div', 'stat');
       s.appendChild(el('div', 'stat-val num', String(v)));
@@ -520,7 +527,7 @@ function openDay(mk, dd) {
     const hd = el('div', 'card-hd');
     hd.appendChild(el('div', 'day-title', w.name || 'Workout'));
     hd.appendChild(el('div', 'eyebrow',
-      fmtDuration(w.durationSec) + ' · ' + (w.volume || 0).toLocaleString() + ' lb'));
+      fmtDuration(w.durationSec) + ' · ' + volDisp(w.volume || 0).toLocaleString() + ' ' + unitW(wu())));
     c.appendChild(hd);
 
     (w.exercises || []).forEach(ex => {
@@ -530,7 +537,7 @@ function openDay(mk, dd) {
       const body = el('div', 'day-ex-body');
       body.appendChild(el('div', 'day-ex-name', ex.name));
       const sets = (ex.sets || []).filter(s => s.done !== false)
-        .map(s => `${s.w || 0}×${s.r || 0}${s.type !== 'N' ? s.type : ''}`).join('   ');
+        .map(s => `${fmtSetW(s.w || 0, wu())}×${s.r || 0}${s.type !== 'N' ? s.type : ''}`).join('   ');
       body.appendChild(el('div', 'day-ex-sets num', sets));
       r.append(tag, body);
       c.appendChild(r);
@@ -1132,14 +1139,14 @@ function renderExercise(ex, exIdx) {
   // previous performance — the single most useful thing on the screen
   const prev = (history[ex.exId] || []).find(h => !session._edit || h.date !== session._edit.dateKey);
   if (prev) {
-    const txt = prev.sets.map(s => `${s.w}×${s.r}`).join('  ');
+    const txt = prev.sets.map(s => `${fmtSetW(s.w, wu())}×${s.r}`).join('  ');
     block.appendChild(el('div', 'ex-prev', `Last · ${fmtDate(prev.date)}   ${txt}`));
   } else {
     block.appendChild(el('div', 'ex-prev', 'No previous record'));
   }
 
   const shd = el('div', 'set-hd');
-  ['Set', 'lb', 'Reps', 'e1RM', ''].forEach(t => shd.appendChild(el('span', null, t)));
+  ['Set', unitW(wu()), 'Reps', 'e1RM', ''].forEach(t => shd.appendChild(el('span', null, t)));
   block.appendChild(shd);
 
   ex.sets.forEach((s, i) => block.appendChild(renderSet(ex, exIdx, s, i)));
@@ -1153,9 +1160,11 @@ function renderExercise(ex, exIdx) {
       ? 'Fill in the weight and reps, then tap the box on the right to log the set'
       : 'Swipe a set left to delete it'));
 
-  // plate math for the heaviest entered load
+  // plate math for the heaviest entered load. s.w is stored pounds and so is
+  // every plate below it, so this stays in pounds end to end and says so on
+  // screen when the rest of the app is in kilos.
   const heaviest = Math.max(0, ...ex.sets.map(s => parseFloat(s.w) || 0));
-  if (heaviest >= 45 && ex.equipment === 'barbell') block.appendChild(renderPlates(heaviest));
+  if (heaviest >= 45 && ex.equipment === 'barbell') block.appendChild(renderPlates(heaviest, 45, wu()));
 
   const acts = el('div', 'ex-actions');
   const addSet = el('button', 'btn btn-ghost', '+ Set');
@@ -1185,9 +1194,19 @@ function renderSet(ex, exIdx, s, i) {
 
   // A set carried in from a routine shows its target greyed out. Filling the
   // box in would be a number you forgot to change reading as a number you lifted.
+  //
+  // s.w and s.tw are stored POUNDS held as strings, and '' has to survive both
+  // ways — it is how an unfilled set is told from a logged zero. So the box
+  // shows the weight converted and setW() converts it back before the clamp,
+  // which means a kilos account is bounded at 2,267.96 kg rather than at 5,000
+  // of something.
+  const u = wu();
   const w = el('input'); w.type = 'number'; w.inputMode = 'decimal';
-  w.placeholder = s.tw ? String(s.tw) : '–';
-  w.value = s.w; w.onchange = e => { s.w = setNum(e.target.value, LIMITS.setW); persistSession(); render(); };
+  const lim = limW(LIMITS.setW, u);
+  w.min = lim[0]; w.max = lim[1];
+  w.placeholder = s.tw ? fmtSetW(s.tw, u) : '–';
+  w.value = fmtSetW(s.w, u);
+  w.onchange = e => { s.w = setW(e.target.value, u); persistSession(); render(); };
   row.appendChild(w);
 
   const r = el('input'); r.type = 'number'; r.inputMode = 'numeric';
@@ -1196,7 +1215,7 @@ function renderSet(ex, exIdx, s, i) {
   row.appendChild(r);
 
   const e1 = e1rm(s.w, s.r);
-  row.appendChild(el('div', 'set-e1rm num', s.type === 'W' || !e1 ? '' : String(e1)));
+  row.appendChild(el('div', 'set-e1rm num', s.type === 'W' || !e1 ? '' : String(Math.round(wOut(e1, u)))));
 
   const chk = el('button', 'set-check' + (s.done ? ' on' : ''), s.done ? '✓' : '');
   chk.setAttribute('aria-label', s.done ? 'Mark set incomplete' : 'Mark set complete');
@@ -1231,9 +1250,16 @@ const PLATES = [
   { w: 10, c: '#2aa85c' }, { w: 5, c: '#e8e5de' }, { w: 2.5, c: '#a8aeb8' }
 ];
 
-function renderPlates(total, barWeight = 45) {
+/* Deliberately NOT converted. These are the plates on an American rack — 45,
+   35, 25, 10, 5, 2½ — and a gym stocked in kilos has a different set (25, 20,
+   15, 10, 5, 2½, 1¼) on a 20 kg bar, not these six relabelled. Printing
+   "2 × 20.4" would be a number nobody can find on a rack. Which plate set a
+   kilo gym should get is an open question in ROADMAP §8 and it is not answered
+   here, so this keeps working in pounds and says which unit it is in whenever
+   that is not the unit everything else on screen is in. */
+function renderPlates(total, barWeight = 45, u = 'lb') {
   const strip = el('div', 'plate-strip');
-  strip.appendChild(el('span', 'lbl', 'Per side'));
+  strip.appendChild(el('span', 'lbl', u === 'lb' ? 'Per side' : 'Per side · lb plates'));
   let side = (total - barWeight) / 2;
   if (side <= 0) { strip.appendChild(el('span', 'lbl', 'bar only')); return strip; }
   PLATES.forEach(p => {
@@ -1249,6 +1275,17 @@ function renderPlates(total, barWeight = 45) {
 }
 
 /* ---------- math ---------- */
+// The one place a typed set weight becomes a stored one. setNum already keeps
+// '' as '' and pulls anything else inside the limit; this wraps it so the
+// conversion happens on the way in, before the clamp, and so the pounds that
+// come out are rounded to two decimals rather than stored as
+// "220.46226218" — the string form the published rules and the native port
+// both have to accept.
+function setW(v, u) {
+  const n = setNum(v, limW(LIMITS.setW, u));
+  return n === '' ? '' : String(wIn(parseFloat(n), u));
+}
+
 function e1rm(w, r) {
   const W = parseFloat(w), R = parseInt(r);
   if (!W || !R || R < 1) return 0;
@@ -1404,7 +1441,7 @@ async function runFinish() {
     priorSessions = all.filter(s => s.startedAt < record.startedAt);
     const found = detectPRs(record, priorSessions);
     prs = found.prs; firsts = found.firsts;
-    milestones = sessionMilestones(record, priorSessions);
+    milestones = sessionMilestones(record, priorSessions, wu());
   } catch {}
 
   await write(`workouts/${mk}/${dd}/${session.id}`, record);
@@ -1526,8 +1563,9 @@ function renderSummary() {
     a + ex.sets.filter(isWorking).reduce((b, s) => b + (parseInt(s.r) || 0), 0), 0);
 
   const row = el('div', 'stat-row');
+  const u = wu();
   [[fmtDuration(record.durationSec), 'Duration'],
-   [compact(record.volume), 'Volume lb'],
+   [fmtVol(record.volume, u), 'Volume ' + unitW(u)],
    [workingSets, 'Working sets']].forEach(([v, l]) => {
     const s = el('div', 'stat');
     s.appendChild(el('div', 'stat-val num', String(v)));
@@ -1551,12 +1589,15 @@ function renderSummary() {
       body.appendChild(el('div', 'pr-name', p.name));
       body.appendChild(el('div', 'pr-sub',
         (p.kind === 'e1rm' ? 'Estimated 1RM' : p.kind === 'weight' ? 'Heaviest ever' : 'Best session volume') +
-        (p.detail ? '  ·  ' + p.detail : '') +
-        (p.prev ? '  ·  previous ' + Math.round(p.prev) : '')));
+        (prDetail(p, u) ? '  ·  ' + prDetail(p, u) : '') +
+        (p.prev ? '  ·  previous ' + Math.round(wOut(p.prev, u)) : '')));
       r.appendChild(body);
       const right = el('div', 'pr-right');
-      right.appendChild(el('div', 'pr-val num', Math.round(p.value) + ''));
-      right.appendChild(el('div', 'pr-delta num', '+' + Math.round(p.delta)));
+      right.appendChild(el('div', 'pr-val num', Math.round(wOut(p.value, u)) + ''));
+      // delta is a difference between two pound figures, so it converts the
+      // same way. The volume PR's delta is a volume, which converts the same
+      // way again — they are all sums of weights.
+      right.appendChild(el('div', 'pr-delta num', '+' + Math.round(wOut(p.delta, u))));
       r.appendChild(right);
       card.appendChild(r);
     });
@@ -1593,7 +1634,7 @@ function renderSummary() {
       body.appendChild(el('div', 'pb-lbl', f.name));
       body.appendChild(el('div', 'pb-sub', 'baseline set — beat it next time'));
       r.appendChild(body);
-      r.appendChild(el('div', 'pb-val num', f.set ? f.set.w + ' × ' + f.set.r : ''));
+      r.appendChild(el('div', 'pb-val num', f.set ? fmtSetW(f.set.w, u) + ' × ' + f.set.r : ''));
       card.appendChild(r);
     });
     wrap.appendChild(card);
@@ -1614,8 +1655,8 @@ function renderSummary() {
     big.style.color = pct >= 0 ? 'var(--good)' : 'var(--steel)';
     card.appendChild(big);
     card.appendChild(noteEl(
-      compact(record.volume) + ' lb today against a ' + compact(Math.round(avg)) +
-      ' lb average across ' + recent.length + ' sessions.'));
+      fmtVol(record.volume, u) + ' ' + unitW(u) + ' today against a ' + fmtVol(Math.round(avg), u) +
+      ' ' + unitW(u) + ' average across ' + recent.length + ' sessions.'));
     wrap.appendChild(card);
   }
 
@@ -1632,7 +1673,7 @@ function renderSummary() {
     const body = el('div', 'day-ex-body');
     body.appendChild(el('div', 'day-ex-name', ex.name));
     body.appendChild(el('div', 'day-ex-sets num',
-      ex.sets.map(s => `${s.w}×${s.r}${s.type !== 'N' ? s.type : ''}`).join('   ')));
+      ex.sets.map(s => `${fmtSetW(s.w, u)}×${s.r}${s.type !== 'N' ? s.type : ''}`).join('   ')));
     r.append(tag, body);
     recap.appendChild(r);
   });

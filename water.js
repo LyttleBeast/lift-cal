@@ -14,10 +14,11 @@
 //
 // Imports store.js, ui.js and usage.js only, so it can never create a cycle.
 
-import { read, write, watch, todayKey } from './store.js';
+import { read, write, watch, todayKey, wu } from './store.js';
 import { bump } from './usage.js';
 import { el, svgEl, sheet, toast, noteEl, confirmSheet, segmented,
          swipeToDelete, r1, trimNum, parseKey, LIMITS, within } from './ui.js';
+import { labelW } from './units.js';
 
 /* ---------- units ---------- */
 export const UNITS = {
@@ -359,8 +360,11 @@ export function openWaterSettings(latestLb, onSaved) {
     const byWeight = latestLb > 0 ? Math.round(latestLb * 0.5 * UNITS.floz.ml) : null;
     gi.placeholder = String(toDisplay(byWeight || DEFAULTS.goalMl, unit));
     note.textContent = byWeight
+      // Half a fluid ounce per POUND is the rule and it is not restated in
+      // kilos — it is an imperial rule of thumb and there is no metric version
+      // of it. What converts is the bodyweight it is quoted against.
       ? 'Half an ounce per pound puts you around ' + fmtWater(byWeight, unit) +
-        ' at ' + r1(latestLb) + ' lb. A gallon is ' + fmtWater(3785, unit) + '.'
+        ' at ' + labelW(latestLb, wu()) + '. A gallon is ' + fmtWater(3785, unit) + '.'
       : 'A gallon is ' + fmtWater(3785, unit) + '. Log a weigh-in and this can suggest a number off your bodyweight.';
   };
   hint();

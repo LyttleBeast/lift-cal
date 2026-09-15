@@ -858,31 +858,26 @@ a real deficit look like maintenance.
 
 ## 8. Weight units — lb or kg
 
-**Status:** talked about — raised 2026-09-14, deferred the same day
+**Status:** SHIPPED, rack-v34, 15 Sep 2026. Raised and deferred 2026-09-14;
+built the next day as its own ship. What is below is the record of what was
+decided and what was left open — the how is in `README.md` ("Units — pounds or
+kilos"), `AGENTS.md` (`settings/units`) and `units.js` itself.
 
 ### Why it was pulled out of the Train overhaul
 
 It arrived as "a setting in account setup and Settings" alongside the Train tab
 work, and it is not that. `lb` is not a Train assumption, it is an app-wide one:
+roughly 290 mentions across 14 files — PR rows, every weight-trend sentence, the
+macro engine, the maintenance estimate's inputs, the weigh-in log, set weights
+and volume. A kg user who weighs in at 90 kg and then reads a protein target
+*per pound* has a half-finished app, so the honest version of this change is all
+of it at once. That is a ship of its own, not a rider on the Train tab.
 
-| File | What assumes pounds |
-|---|---|
-| `analytics.js` | PR rows and "Heaviest session ever" append `' lb'` |
-| `insights.js` | every weight-trend string — "Losing 1.2 lb a week" |
-| `food.js` | the macro engine: `Goal lb / week`, `Protein g per lb`, `Fat g per lb`, `LIMITS.lb`, trend weight |
-| `onboarding.js` | `estimateMaintenance({lb})` converts lb->kg for BMR; `waterGoalFor(lb)` is half a fl oz per pound |
-| `weight.js`, `weightmodel.js` | body weight and the normalised trend throughout |
-| `workout.js` | set weights, volume |
+### The decision made, and kept: convert at the edges, never in storage
 
-A kg user who weighs in at 90 kg and then reads a protein target *per pound* has
-a half-finished app, so the honest version of this change is all of it at once.
-That is a ship of its own, not a rider on the Train tab.
-
-### The decision already made: convert at the edges, never in storage
-
-**Pounds stay the single stored unit.** `settings/units` is a display-and-input
-preference: parse kg on the way in, format kg on the way out. Nothing in the
-database changes shape.
+**Pounds stay the single stored unit.** `settings/units` is a
+display-and-input preference: parse kg on the way in, format kg on the way out.
+Nothing in the database changed shape, changed name or changed magnitude.
 
 The alternative — tagging each stored value with its unit — was rejected:
 
@@ -897,10 +892,33 @@ The alternative — tagging each stored value with its unit — was rejected:
 The cost is round-trip rounding: 100 kg stores as 220.46 and renders back as
 100.0. With one decimal of display precision that is invisible.
 
-### Open questions
+### The open questions, answered
 
-- Does the setting also flip *height* (in/cm) at setup, or is that separate?
-- Does the picker's plate-maths or any increment default need a kg step (2.5 kg
-  rather than 5 lb)?
-- Does an account that switches units mid-history want old PRs re-rendered in
-  the new unit (yes, if storage is single-unit — this falls out for free).
+- **Does the setting also flip height (in/cm) at setup?** Yes, and as one
+  control. Metric means kilos *and* centimetres together. It is stored as two
+  fields (`{ weight, height }`) so a later split costs nothing, but nobody has
+  asked to weigh in kilos and stand 5'11", and two controls for that would be
+  two questions where there is one.
+- **Does an account that switches mid-history want old PRs re-rendered?** Yes,
+  and it falls out for free, exactly as predicted.
+- **Does the plate math or any increment default need a kg step?** *Still
+  open, and deliberately not guessed at.* The per-side strip is unchanged: it
+  computes an American plate set — 45, 35, 25, 10, 5, 2½ on a 45 lb bar — and a
+  gym stocked in kilos has 25, 20, 15, 10, 5, 2½, 1¼ on a 20 kg bar, which is a
+  different set and not these six relabelled. "2 × 20.4" is a number nobody can
+  find on a rack. So on a metric account the strip says **"Per side · lb
+  plates"** and keeps working, and the real answer — a second plate set, and
+  probably a bar-weight setting with it — is a small ship of its own.
+
+  The input *steps* were answered: 0.25 lb/week becomes 0.1 kg/week, 0.05 g/lb
+  becomes 0.1 g/kg, and the goal-weight step 0.5 lb becomes 0.25 kg.
+
+### Left in pounds on purpose, and said so on screen
+
+Per the rule this ship was built under — a wrong number is worse than no
+number — three places are still pounds and are labelled as pounds rather than
+guessed at: the plate strip above, the workout importer (its file is already in
+Rack's storage format, so its weights *are* pounds and converting them would
+multiply 219 sessions by 2.2), and the half-a-fluid-ounce-per-pound water rule
+of thumb, which has no metric form. The bodyweight that rule is quoted against
+does convert.

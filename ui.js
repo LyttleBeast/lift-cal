@@ -100,9 +100,18 @@ export function compact(n) {
    The most a typed number is allowed to be. Nothing here is a nudge toward a
    sensible value — that is what the target sheets and the You tab are for.
    These only stop a slipped digit, or a bored thumb, from writing a number the
-   charts and the weight model then have to live with. Each ceiling sits
-   comfortably past the real-world extreme so nobody who is actually training
-   ever meets one:
+   charts and the weight model then have to live with.
+
+   `lb`, `setW`, `rateWk` and `perLb` are POUND-scale and stay that way — they
+   bound what gets STORED, and storage is pounds whatever the person has chosen
+   under Units. A screen showing kilos converts the typed number first and
+   checks it against the bound afterwards, and puts limW()/limRate()/limPer()
+   from units.js on the input's own min/max so the browser agrees with the
+   clamp. Clamping a typed kilo figure against these numbers directly would let
+   somebody log 690 kg and refuse 20.
+
+   Each ceiling sits comfortably past the real-world extreme so nobody who is
+   actually training ever meets one:
      lb          heaviest living people are in the 600s; 1,400 is the record,
                  and nobody at that weight is logging lifts
      steps       a 100-mile day is roughly 200k
@@ -138,6 +147,10 @@ export const within = (v, [lo, hi]) => Number.isFinite(v) && v >= lo && v <= hi;
 // A set's weight and reps are kept as the strings the inputs hold, and '' has
 // to survive — it is how an unfilled set is told apart from a logged zero.
 // Anything else is pulled inside the limit before it is stored.
+//
+// `lim` is whatever the CALLER is working in. On kilos, workout.js and
+// routines.js hand it limW(LIMITS.setW, 'kg') and convert what comes back,
+// so the clamp and the conversion never happen in the wrong order.
 export function setNum(v, lim, whole = false) {
   if (String(v).trim() === '') return '';
   const n = whole ? parseInt(v) : parseFloat(v);

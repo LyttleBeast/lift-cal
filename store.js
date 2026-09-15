@@ -17,6 +17,7 @@
 // database any more.
 
 import { firebaseConfig, OWNER_UID } from './firebase-config.js';
+import { normUnits } from './units.js';
 
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
 import {
@@ -566,6 +567,43 @@ export function watchShared(path, cb) {
   try {
     return onValue(ref(db, path), snap => cb(snap.exists() ? snap.val() : null), () => {});
   } catch { return () => {}; }
+}
+
+/* ---------- units ----------
+   Pounds or kilos, inches or centimetres. The accessor lives here rather than
+   in units.js because units.js is pure — it takes the unit as an argument and
+   reads nothing — and because every module in the app already imports this one,
+   so there is no new edge in the dependency graph and no chance of a cycle.
+
+   `wu()` and `hu()` must answer SYNCHRONOUSLY and correctly before the first
+   paint. A screen that renders in pounds and then flips to kilos a moment later
+   is a bug, not a loading state, so initUnits() is awaited at the very top of
+   boot — ahead of setup and ahead of all five tabs — and again after setup,
+   which is where a new account picks its unit.
+
+   The default is imperial and it is the default everywhere: an absent node, a
+   failed read, a half-written offline queue and a value nobody recognises all
+   come back as pounds and inches. Eight live accounts have no units node and
+   this ship has to be invisible to every one of them. */
+let UNITS = normUnits(null);
+
+export async function initUnits() {
+  try { UNITS = normUnits(await read('settings/units', null)); }
+  catch { UNITS = normUnits(null); }
+  return UNITS;
+}
+
+export function units() { return UNITS; }
+export function wu() { return UNITS.weight; }
+export function hu() { return UNITS.height; }
+
+// Sets the cache first and writes second, so the re-render the caller fires on
+// the next line paints the unit that was just chosen even if the write is
+// queued offline.
+export async function setUnits(next) {
+  UNITS = normUnits(next);
+  await write('settings/units', UNITS);
+  return UNITS;
 }
 
 /* ---------- date helpers ---------- */

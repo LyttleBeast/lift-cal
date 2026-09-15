@@ -30,7 +30,18 @@
           ".write": "auth != null && auth.uid === $uid && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved').child(auth.uid).exists())"
         },
         "settings": {
-          ".write": "auth != null && auth.uid === $uid && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved').child(auth.uid).exists())"
+          ".write": "auth != null && auth.uid === $uid && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved').child(auth.uid).exists())",
+          "units": {
+            "weight": {
+              ".validate": "newData.val() === 'lb' || newData.val() === 'kg'"
+            },
+            "height": {
+              ".validate": "newData.val() === 'in' || newData.val() === 'cm'"
+            },
+            "$other": {
+              ".validate": false
+            }
+          }
         },
         "profile": {
           ".write": "auth != null && auth.uid === $uid && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved').child(auth.uid).exists())",

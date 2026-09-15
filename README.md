@@ -12,6 +12,7 @@ invite code, or by asking the owner and being approved. See *Access* below.
 - **Train** — full workout tracker: saved routines, plate-colored calendar, session timer, W/F/D set tags, 231-exercise library, last-time numbers, rest timer, per-side plate math, e1RM, swipe-to-delete sets, editable history, a post-workout recap with personal records, and a full statistics page.
 - **Fuel** — nutrition: **photograph a plate and Claude reads the macros off it**, or just describe what you ate. Plus macro targets, saved-food library, barcode scanning via Open Food Facts, manual entry, saved meals, one-tap portion multiplying, micronutrient floors, paste import.
 - **Weight** — body-weight log: 7-day moving average chart, weekly rate, a learned time-of-day curve, and a maintenance (TDEE) estimate built on normalised weigh-ins with a stated confidence interval.
+- **Pounds or kilos**, app-wide — body weight, set weights, volume, records, trend rates, goal weight, height and per-bodyweight macro targets, all of it. Picked at setup, changeable any time under ⚙ Units. Nothing in the database changes: pounds and inches are the stored unit and the setting converts at the edges.
 - **Water** — daily intake against a goal, in the Fuel tab: a filling bottle, one-tap common sizes, any unit you like, stored in millilitres.
 - **Steps** — its own tab: goal ring, 7-day / 30-day / 12-month trend, streaks, a 13-week heat map, day-of-week breakdown, and either manual entry or an automation pushing them from your phone.
 
@@ -102,6 +103,7 @@ node in the database. See *Access* below for what replaced them, and why.
 | `database.rules.json` | **The security rules.** Paste into the Firebase console |
 | `auth.css` | Styles for the sign-in box, waiting screen, onboarding and People |
 | `ui.js` | Shared primitives — sheets, toasts, confirms, swipe, date/number helpers |
+| `units.js` | Pounds/kilos and inches/centimetres. Pure, imports nothing, reads nothing — every function takes the unit as an argument |
 | `analytics.js` | Training aggregates, personal-record detection, SVG chart builders |
 | `stats.js` | The statistics page |
 | `workout.js` | Train tab — calendar, live session, editing, post-workout recap |
@@ -336,7 +338,7 @@ the app. The card at the bottom of the Weight tab is gone.
 
 | | |
 |---|---|
-| **You** | Your details — name, sex, height, birth year — and which tab the app opens on |
+| **You** | Your details — name, sex, height, birth year — **Units** (Imperial / Metric), and which tab the app opens on |
 | **Fuel** | Daily targets · Water goal and sizes · AI estimator · Food memory · Paste food JSON |
 | **Train** | Default rest · Exercise library · Import workout history |
 | **Steps** | Step goal · Step automation: the exact settings |
@@ -551,6 +553,50 @@ never leave the phone.
 - The public API lives in `tdee.js` because Fuel's calorie bar and the You tab's goal
   card need the same number, and three copies of it is how three screens start
   disagreeing. `weightmodel.js` holds the math.
+
+---
+
+## Units — pounds or kilos
+
+One control, in the **You** section of settings: *Imperial* or *Metric*. Metric
+means kilograms **and** centimetres together; setup asks before it asks for your
+height or your weight, because both of those are asked in the unit you picked.
+
+**Every number in the app that is a weight obeys it** — what you weigh, your
+goal weight, what is on the bar, volume totals, e1RM, personal records, the
+trend rate, the swing, the "3,500 kcal a pound" sentences, your height, and the
+grams-per-pound macro targets, which a metric account reads as grams per kilo.
+Switching re-renders everything already logged, records included; nothing needs
+a reload and nothing is migrated.
+
+**Pounds and inches stay the single stored unit, forever.** `settings/units` is
+display and input only: the typed number is converted on the way in and the
+stored number is converted on the way out, in the expression that reads the box
+or builds the string, and nowhere else. `units.js` is the whole of it — pure, no
+imports, every function takes the unit as an argument so the native port copies
+it across verbatim.
+
+Why not store both: 219 sessions predate the question and carry no unit tag, so
+there is no honest migration; `computeVolume`, `detectPRs` and
+`sessionMilestones` do arithmetic *across* that history; and the native client
+has to agree byte for byte. Mixed-unit storage makes every consumer unit-aware
+and makes the mixing permanent.
+
+The cost is round-trip rounding — 100 kg stores as 220.5 lb and renders back as
+100.0 — and at one decimal of display it is invisible.
+
+Three things deliberately left in pounds, and labelled:
+
+- **Per-side plate math.** Those are the plates on an American rack. A gym
+  stocked in kilos has a different set on a 20 kg bar, not these six relabelled,
+  so the strip says "Per side · lb plates" on a metric account and keeps working.
+- **The workout importer.** Its file is already in Rack's storage format, so its
+  weights are read as pounds and shown in your unit. The screen says so.
+- **The half-an-ounce-per-pound water rule**, which is an imperial rule of thumb
+  with no metric form. The bodyweight it is quoted against converts.
+
+Water keeps its own unit and its own presets — setup defaults it to millilitres
+for somebody who picks metric, and changing units afterwards never touches it.
 
 ---
 

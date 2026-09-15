@@ -11,11 +11,12 @@
 // Imports picker.js, never workout.js. workout.js passes its startWorkout in
 // as a callback, so the dependency only ever points one way.
 
-import { read, write, watch } from './store.js';
+import { read, write, watch, wu } from './store.js';
 import { GROUPS, GROUP_ORDER } from './exercises.js';
 import { openPicker } from './picker.js';
 import { bump } from './usage.js';
 import { el, sheet, toast, noteEl, confirmSheet, swipeToDelete, fmtDate, setNum, LIMITS } from './ui.js';
+import { wIn, fmtSetW, unitW, limW } from './units.js';
 
 let routines = {};
 
@@ -234,7 +235,8 @@ function openEditor(draft, isNew, onStart) {
 
     const sets = el('div', 'rt-sets');
     const shd = el('div', 'set-hd');
-    ['Set', 'Target lb', 'Reps', ''].forEach(t => shd.appendChild(el('span', null, t)));
+    const u = wu();
+    ['Set', 'Target ' + unitW(u), 'Reps', ''].forEach(t => shd.appendChild(el('span', null, t)));
     sets.appendChild(shd);
 
     ex.sets.forEach((s, si) => {
@@ -249,10 +251,20 @@ function openEditor(draft, isNew, onStart) {
       };
       row.appendChild(idx);
 
+      // tw is a stored POUND target held as a string, exactly like a logged
+      // set's w, and '' has to survive so an unset target stays unset. Convert
+      // on the way in, before the clamp, so a kilos routine is bounded in
+      // kilos; convert on the way out so the box shows what was typed.
       const w = el('input');
       w.type = 'number'; w.inputMode = 'decimal'; w.placeholder = '–';
-      w.value = s.tw != null ? s.tw : '';
-      w.onchange = e => { s.tw = setNum(e.target.value, LIMITS.setW); e.target.value = s.tw; };
+      const lim = limW(LIMITS.setW, u);
+      w.min = lim[0]; w.max = lim[1];
+      w.value = s.tw != null ? fmtSetW(s.tw, u) : '';
+      w.onchange = e => {
+        const n = setNum(e.target.value, lim);
+        s.tw = n === '' ? '' : String(wIn(parseFloat(n), u));
+        e.target.value = fmtSetW(s.tw, u);
+      };
       row.appendChild(w);
 
       const rr = el('input');

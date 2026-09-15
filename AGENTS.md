@@ -400,6 +400,36 @@ inside it. A step term would count the same walking twice.
 
 ## `settings/steps` → `{ goal }`
 
+## `settings/units` → `{ weight: 'lb'|'kg', height: 'in'|'cm' }`
+
+Display and input only. **Pounds and inches are the single stored unit and
+always have been** — `weight/entries[id].lb`, `history[exId].w`,
+`session.exercises[].sets[].w`, `routines[].sets[].tw`, `food/targets.goalLb`,
+`food/targets.auto.rateWk` / `.pPerLb` / `.fPerLb` and `profile.heightIn` all
+keep their names and their magnitudes whatever this node says. `units.js`
+converts in the expression that builds a string or reads an input, and nowhere
+else.
+
+**Absent means imperial**, and so does any value this node does not recognise
+or a half-written one from an offline queue (`normUnits` in `units.js`). Every
+account older than 15 Sep 2026 has no node here and nothing about their app
+changes. Two fields rather than one so splitting weight from height later costs
+nothing; there is one control on screen.
+
+It is stored `lb`/`kg` and `in`/`cm` because those are the words the app prints,
+so the value and the label are the same string. The read must be **synchronous
+and available before first render** — `store.js` caches it at boot (`initUnits`,
+`wu()`, `hu()`) and a screen that paints in pounds and then flips to kilos is a
+bug, not a loading state.
+
+This node never touches `settings/water`. Water has its own `unit` with
+user-chosen presets behind it; setup *defaults* it to `ml` for somebody who
+picks metric and nothing rewrites it afterwards.
+
+One thing that is not pounds: `profile.heightIn` from a **centimetre** entry
+keeps hundredths of an inch rather than whole ones, because 175 cm and 176 cm
+both round to 69 in. A ft + in entry still writes whole inches.
+
 ## `routines/{routineId}` → one pre-planned workout
 
 `tw` / `tr` are **target** weight and reps, both optional. They are deliberately
@@ -448,7 +478,12 @@ optional. Any food already in the log produces this exact shape — tap it →
    `workouts/{month}`). It erases everything else inside.
 3. **Update `food/daySummaries/{date}`** after touching a day's food log.
 4. **Don't invent library items or exercises** to make a log fit.
-5. **New top-level section under `users/{uid}` → add it to the rules**, or it
+5. **Never assume a weight on screen is a pound.** Everything stored is, and
+   everything in memory is — but a display string may be kilos, and a number
+   read off an input certainly may be. Convert with `units.js` in the expression
+   that builds the string or reads the box, never before and never twice.
+   `tools-check/units.mjs` scans every call site for the double conversion.
+6. **New top-level section under `users/{uid}` → add it to the rules**, or it
    will fail to save with no error the user can see. The same is true of a new
    tree at the root — `usage` is the most recent one. And editing
    `database.rules.json` publishes nothing: it is a copy, and somebody has to

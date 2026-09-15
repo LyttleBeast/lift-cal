@@ -23,8 +23,16 @@
 // (formatting). Nothing imports back.
 
 import { todayKey } from './store.js';
-import { parseKey, r1, compact, fmtDate } from './ui.js';
-import { prTimeline, groupSplit, GROUPS } from './analytics.js';
+import { parseKey, fmtDate } from './ui.js';
+import { prTimeline, groupSplit, GROUPS, prDetail } from './analytics.js';
+import { wOut, labelW, unitW, fmtRate, labelRate, fmtVol, labelVol } from './units.js';
+
+// Every threshold below stays in pounds — the bars do not move when somebody
+// switches to kilos, because moving them would mean two accounts training the
+// same way get different verdicts. Only the printed number converts. Read
+// defensively: a ctx built before this existed, or one carrying junk, is
+// imperial.
+const unitOf = ctx => (ctx && ctx.u === 'kg' ? 'kg' : 'lb');
 
 const DAY = 864e5;
 
@@ -92,7 +100,11 @@ export function windowStats(ctx, keys, { dropToday = false } = {}) {
    ctx: { targets, maint: {cal, pinned}|null, dir: -1|0|1|null, summaries,
           wmap: {dateKey: lb}, entries, rate: {rateWk, model}|null, tw: lb|null,
           sessions: []|null, stepDays, stepGoal, waterDays: {dateKey: ml}|null,
-          waterGoal, est: maintenance()|null, days: weightStats().days }
+          waterGoal, est: maintenance()|null, days: weightStats().days,
+          u: 'lb'|'kg' }
+
+   Every weight in ctx is pounds, the way it is stored. `u` says what to print
+   them as, and nothing else in here reads it.
 
    Returns { wins, improve, insights, review, trajectory }. Each finding is
    { id, subject, score, title, detail, why }. `score` is how much the reader
@@ -100,6 +112,7 @@ export function windowStats(ctx, keys, { dropToday = false } = {}) {
    whatever the percentages — and it is what the caller sorts by. */
 export function assess(ctx) {
   const { targets, dir, rate, tw } = ctx;
+  const u = unitOf(ctx), W = unitW(u);
   const wins = [], improve = [], insights = [];
   const win = f => wins.push(f), fix = f => improve.push(f), note = f => insights.push(f);
 
@@ -191,27 +204,28 @@ export function assess(ctx) {
 
   /* ---- weight against the goal ---- */
   if (rateWk != null && dir != null && thisWk.weighDays + lastWk.weighDays >= 4) {
-    const abs = r1(Math.abs(rateWk));
+    const abs = fmtRate(Math.abs(rateWk), u);
+    const plan = planned ? fmtRate(Math.abs(planned), u) : '';
     if (dir < 0 && rateWk <= -0.3) {
       win({ id: 'pace-good', subject: 'weight', score: 90,
-        title: 'Losing ' + abs + ' lb a week',
-        detail: planned ? 'Your plan is ' + r1(Math.abs(planned)) + ' lb a week.' : 'The trend is heading the way a cut should.',
-        why: 'The slope of your normalised trend weight, which corrects every weigh-in for the food and water in you at the time. Down at least 0.3 lb a week is the bar on a cut.' });
+        title: 'Losing ' + abs + ' ' + W + ' a week',
+        detail: planned ? 'Your plan is ' + plan + ' ' + W + ' a week.' : 'The trend is heading the way a cut should.',
+        why: 'The slope of your normalised trend weight, which corrects every weigh-in for the food and water in you at the time. Down at least ' + labelRate(0.3, u) + ' a week is the bar on a cut.' });
     } else if (dir > 0 && rateWk >= 0.2) {
       win({ id: 'pace-good', subject: 'weight', score: 90,
-        title: 'Gaining ' + abs + ' lb a week',
-        detail: planned ? 'Your plan is ' + r1(Math.abs(planned)) + ' lb a week.' : 'The trend is heading the way a bulk should.',
-        why: 'The slope of your normalised trend weight. Up at least 0.2 lb a week is the bar on a bulk.' });
+        title: 'Gaining ' + abs + ' ' + W + ' a week',
+        detail: planned ? 'Your plan is ' + plan + ' ' + W + ' a week.' : 'The trend is heading the way a bulk should.',
+        why: 'The slope of your normalised trend weight. Up at least ' + labelRate(0.2, u) + ' a week is the bar on a bulk.' });
     } else if (dir === 0 && Math.abs(rateWk) <= 0.3) {
       win({ id: 'pace-good', subject: 'weight', score: 75,
         title: 'Weight holding steady',
-        detail: 'Trend moving ' + abs + ' lb a week, which is noise.',
-        why: 'The slope of your normalised trend weight within 0.3 lb a week either way.' });
+        detail: 'Trend moving ' + abs + ' ' + W + ' a week, which is noise.',
+        why: 'The slope of your normalised trend weight within ' + labelRate(0.3, u) + ' a week either way.' });
     } else if ((dir < 0 && rateWk >= 0.2) || (dir > 0 && rateWk <= -0.2)) {
       fix({ id: 'pace-wrong', subject: 'weight', score: 92,
-        title: 'Weight ' + (rateWk > 0 ? 'up' : 'down') + ' ' + abs + ' lb a week on a ' + goalWord,
+        title: 'Weight ' + (rateWk > 0 ? 'up' : 'down') + ' ' + abs + ' ' + W + ' a week on a ' + goalWord,
         detail: 'Two weeks of that is a real move, not a wobble. The calorie line under Fuel is where it starts.',
-        why: 'The slope of your normalised trend weight, at least 0.2 lb a week the wrong way for your goal.' });
+        why: 'The slope of your normalised trend weight, at least ' + labelRate(0.2, u) + ' a week the wrong way for your goal.' });
     }
     // Faster or slower than the plan — a pattern, not a verdict.
     if (planned && planned !== 0 && Math.sign(rateWk) === Math.sign(planned)) {
@@ -219,12 +233,12 @@ export function assess(ctx) {
       if (ratio >= 1.6 && Math.abs(rateWk) >= 1.4 && dir < 0) {
         note({ id: 'pace-fast', subject: 'weight', score: 80,
           title: 'Losing faster than planned',
-          detail: abs + ' lb a week against a plan of ' + r1(Math.abs(planned)) + '. Past about 1.5 a week more of it is muscle.',
-          why: 'Trend slope at least 1.6 times the planned rate and above 1.4 lb a week.' });
+          detail: abs + ' ' + W + ' a week against a plan of ' + plan + '. Past about ' + fmtRate(1.5, u) + ' a week more of it is muscle.',
+          why: 'Trend slope at least 1.6 times the planned rate and above ' + labelRate(1.4, u) + ' a week.' });
       } else if (ratio <= 0.4 && Math.abs(planned) >= 0.5 && (thisWk.weighDays + lastWk.weighDays) >= 8) {
         note({ id: 'pace-slow', subject: 'weight', score: 72,
           title: (dir < 0 ? 'Losing' : 'Gaining') + ' slower than planned',
-          detail: abs + ' lb a week against a plan of ' + r1(Math.abs(planned)) + '. Not wrong — but the target may be sitting closer to maintenance than it looks.',
+          detail: abs + ' ' + W + ' a week against a plan of ' + plan + '. Not wrong — but the target may be sitting closer to maintenance than it looks.',
           why: 'Trend slope under 40% of the planned rate, with at least eight weigh-ins in the last fortnight so the slope is real.' });
       }
     }
@@ -248,7 +262,7 @@ export function assess(ctx) {
     if (thisWk.sessions >= 3) {
       win({ id: 'train-good', subject: 'train', score: 82,
         title: thisWk.sessions + ' sessions this week',
-        detail: thisWk.volume > 0 ? compact(thisWk.volume) + ' lb moved.' : '',
+        detail: thisWk.volume > 0 ? labelVol(thisWk.volume, u) + ' moved.' : '',
         why: 'Finished sessions in the last seven days, today included. Three is the bar.' });
     } else if (thisWk.sessions === 0 && ctx.sessions.length) {
       fix({ id: 'train-none', subject: 'train', score: 85,
@@ -261,7 +275,7 @@ export function assess(ctx) {
       if (Math.abs(ch) >= 25) {
         note({ id: 'vol-change', subject: 'train', score: 75,
           title: 'Training volume ' + (ch > 0 ? 'up' : 'down') + ' ' + Math.abs(ch) + '% on last week',
-          detail: compact(thisWk.volume) + ' lb over ' + thisWk.sessions + ' sessions, against ' + compact(lastWk.volume) + ' over ' + lastWk.sessions + '.',
+          detail: labelVol(thisWk.volume, u) + ' over ' + thisWk.sessions + ' sessions, against ' + fmtVol(lastWk.volume, u) + ' over ' + lastWk.sessions + '.',
           why: 'Working-set volume (weight × reps, warm-ups excluded) this seven days against the seven before, both with at least two sessions. A quarter either way is the bar.' });
       }
     }
@@ -272,7 +286,7 @@ export function assess(ctx) {
         const top = prs.slice().sort((a, b) => b.value - a.value)[0];
         note({ id: 'prs', subject: 'train', score: 78,
           title: prs.length === 1 ? 'A new record this week' : prs.length + ' new records this week',
-          detail: top.name + ' — ' + Math.round(top.value) + ' lb' + (top.kind === 'e1rm' ? ' estimated 1RM (' + top.detail + ')' : ', heaviest yet') + '.',
+          detail: top.name + ' — ' + Math.round(wOut(top.value, u)) + ' ' + W + (top.kind === 'e1rm' ? ' estimated 1RM (' + prDetail(top, u) + ')' : ', heaviest yet') + '.',
           why: 'A record is a best estimated one-rep max or a heaviest weight for an exercise, against everything logged before it. Warm-ups never count.' });
       }
     }
@@ -393,6 +407,7 @@ export function streakOf(ctx) {
    or null for "nothing to judge". */
 export function weeklyReview(ctx) {
   const { targets, dir } = ctx;
+  const u = unitOf(ctx);
   const cur  = windowStats(ctx, keysBack(7, 1));
   const prev = windowStats(ctx, keysBack(7, 8));
   const items = [];
@@ -405,7 +420,7 @@ export function weeklyReview(ctx) {
     item('train', 'Training',
       s === 0 && ctx.sessions.length ? false : s >= 2 ? true : s === 0 ? null : false,
       s === 0 ? (ctx.sessions.length ? 'No sessions.' + (prev.sessions ? ' ' + prev.sessions + ' the week before.' : '') : 'Nothing logged yet.')
-        : s + ' session' + (s === 1 ? '' : 's') + (cur.volume > 0 ? ', ' + compact(cur.volume) + ' lb' : '') +
+        : s + ' session' + (s === 1 ? '' : 's') + (cur.volume > 0 ? ', ' + labelVol(cur.volume, u) : '') +
           (delta != null && delta !== 0 ? ' — ' + (delta > 0 ? 'up ' : 'down ') + Math.abs(delta) + ' on the week before' : '') +
           (prev.volume > 0 && cur.volume > 0 && Math.abs(pct(cur.volume, prev.volume)) >= 15 ? ', volume ' + (cur.volume > prev.volume ? 'up ' : 'down ') + Math.abs(pct(cur.volume, prev.volume)) + '%' : '') + '.',
       s + (s === 1 ? ' session' : ' sessions'));
@@ -443,9 +458,9 @@ export function weeklyReview(ctx) {
              : dir < 0 ? d <= -0.2 ? true : d >= 0.5 ? false : null
              : d >= 0.2 ? true : d <= -0.5 ? false : null;
     item('weight', 'Weight', ok,
-      'Averaged ' + r1(cur.weightAvg) + ' lb, ' + (Math.abs(d) < 0.05 ? 'unchanged' : r1(Math.abs(d)) + ' lb ' + (d < 0 ? 'down' : 'up')) +
+      'Averaged ' + labelW(cur.weightAvg, u) + ', ' + (Math.abs(d) < 0.05 ? 'unchanged' : labelW(Math.abs(d), u) + ' ' + (d < 0 ? 'down' : 'up')) +
       ' on the week before, over ' + cur.weighDays + ' weigh-in day' + (cur.weighDays === 1 ? '' : 's') + '.',
-      r1(cur.weightAvg) + ' lb');
+      labelW(cur.weightAvg, u));
   } else if (cur.weighDays === 0 && Object.keys(ctx.wmap).length) {
     item('weight', 'Weight', false, 'No weigh-ins.', '–');
   }
@@ -502,6 +517,7 @@ export function weeklyReview(ctx) {
    goalLb, start, progress, weeks, eta, status, reason, enough }. */
 export function trajectory(ctx, rateWk, planned, tw) {
   const { dir, targets, days } = ctx;
+  const u = unitOf(ctx), W = unitW(u);
   if (dir == null) return null;
   const goalLb = targets && targets.goalLb > 0 ? targets.goalLb : null;
   const weighDays = Object.keys(ctx.wmap).length;
@@ -531,8 +547,12 @@ export function trajectory(ctx, rateWk, planned, tw) {
   const right = dir === 0 ? Math.abs(rateWk) <= 0.3 : Math.sign(rateWk) === dir;
   if (dir === 0) {
     out.status = right ? 'on' : 'drift';
-    out.reason = right ? 'Holding within a third of a pound a week.'
-                       : 'Drifting ' + r1(Math.abs(rateWk)) + ' lb a week ' + (rateWk > 0 ? 'up' : 'down') + '.';
+    // "A third of a pound" is the sentence on pounds and there is no kilo
+    // version of that phrase worth writing, so metric gets the number instead.
+    // The bar itself is unchanged either way: 0.3 lb.
+    out.reason = right
+      ? (u === 'kg' ? 'Holding within ' + labelRate(0.3, u) + ' a week.' : 'Holding within a third of a pound a week.')
+      : 'Drifting ' + fmtRate(Math.abs(rateWk), u) + ' ' + W + ' a week ' + (rateWk > 0 ? 'up' : 'down') + '.';
   } else if (!right || Math.abs(rateWk) < 0.1) {
     out.status = Math.abs(rateWk) < 0.1 ? 'flat' : 'wrong';
     out.reason = out.status === 'flat' ? 'The trend is flat at the moment.' : 'The trend is moving the wrong way for a ' + (dir < 0 ? 'cut' : 'bulk') + '.';
@@ -541,10 +561,10 @@ export function trajectory(ctx, rateWk, planned, tw) {
       const ratio = Math.abs(rateWk) / Math.abs(planned);
       out.status = ratio >= 1.25 ? 'ahead' : ratio <= 0.6 ? 'behind' : 'on';
       out.reason = (out.status === 'on' ? 'On pace: ' : out.status === 'ahead' ? 'Ahead of plan: ' : 'Behind plan: ') +
-        r1(Math.abs(rateWk)) + ' lb a week against ' + r1(Math.abs(planned)) + ' planned.';
+        fmtRate(Math.abs(rateWk), u) + ' ' + W + ' a week against ' + fmtRate(Math.abs(planned), u) + ' planned.';
     } else {
       out.status = 'on';
-      out.reason = r1(Math.abs(rateWk)) + ' lb a week, the right way.';
+      out.reason = fmtRate(Math.abs(rateWk), u) + ' ' + W + ' a week, the right way.';
     }
     if (goalLb && tw != null) {
       const left = (tw - goalLb) * (dir < 0 ? 1 : -1);

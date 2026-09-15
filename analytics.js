@@ -11,6 +11,7 @@
 import { read, todayKey } from './store.js';
 import { GROUPS, GROUP_ORDER } from './exercises.js';
 import { svgEl, el, compact, r1 } from './ui.js';
+import { fmtSetW, labelVol } from './units.js';
 
 /* ================================================================
    1.  LOADING
@@ -230,21 +231,27 @@ export function detectPRs(record, prior) {
       prs.push({
         kind: 'e1rm', exId: ex.exId, name: ex.name, group: ex.group,
         value: bE, prev: hist.bestE1rm, delta: bE - hist.bestE1rm,
-        detail: best ? best.w + ' x ' + best.r : '', unit: 'lb e1RM'
+        // The set behind the record travels as the set, not as a baked
+        // string: its weight is stored pounds like every other weight in here,
+        // and only a screen knows which unit to print it in. prDetail() below
+        // is where it becomes text. The old `unit: 'lb e1RM'` went with it —
+        // nothing read it, and a field that says "lb" to a kilos account is
+        // exactly the kind of wrong this is guarding against.
+        set: best, detail: ''
       });
     }
     if (tW > hist.bestWeight) {
       prs.push({
         kind: 'weight', exId: ex.exId, name: ex.name, group: ex.group,
         value: tW, prev: hist.bestWeight, delta: r1(tW - hist.bestWeight),
-        detail: 'heaviest ever', unit: 'lb'
+        detail: 'heaviest ever'
       });
     }
     if (vol > hist.bestVolume) {
       prs.push({
         kind: 'volume', exId: ex.exId, name: ex.name, group: ex.group,
         value: vol, prev: hist.bestVolume, delta: vol - hist.bestVolume,
-        detail: 'best session volume', unit: 'lb'
+        detail: 'best session volume'
       });
     }
   });
@@ -261,7 +268,7 @@ export function detectPRs(record, prior) {
 }
 
 // Session-level milestones — volume, duration, set count.
-export function sessionMilestones(record, prior) {
+export function sessionMilestones(record, prior, u) {
   const out = [];
   if (!prior.length) return out;
   const maxVol  = Math.max(...prior.map(s => s.volume || 0));
@@ -270,7 +277,7 @@ export function sessionMilestones(record, prior) {
   const maxSets = Math.max(...prior.map(setsOf));
 
   if ((record.volume || 0) > maxVol && maxVol > 0) {
-    out.push({ label: 'Heaviest session ever', value: compact(record.volume) + ' lb', prev: compact(maxVol) + ' lb' });
+    out.push({ label: 'Heaviest session ever', value: labelVol(record.volume, u), prev: labelVol(maxVol, u) });
   }
   const mySets = setsOf(record);
   if (mySets > maxSets && maxSets > 0) {
@@ -302,7 +309,7 @@ export function prTimeline(sessions) {
           out.push({
             date: s._date, exId: ex.exId, name: ex.name, group: ex.group,
             kind: 'e1rm', value: bE, prev: cur.e1rm,
-            detail: b ? b.w + ' x ' + b.r : ''
+            set: b, detail: ''
           });
         } else if (tW > cur.weight) {
           out.push({
@@ -317,6 +324,14 @@ export function prTimeline(sessions) {
     });
   });
   return out.reverse();
+}
+
+// The set behind an e1RM record, as text, in the unit on screen. Records whose
+// detail is a phrase rather than a number ("heaviest ever") pass straight
+// through. Both PR producers above hand back `set`, so there is one place that
+// decides what a record's set reads like and it is this one.
+export function prDetail(p, u) {
+  return p && p.set ? fmtSetW(p.set.w, u) + ' x ' + p.set.r : ((p && p.detail) || '');
 }
 
 /* ================================================================

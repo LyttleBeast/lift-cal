@@ -24,10 +24,12 @@
 // lives in the database (users/{uid}/onboarding), not localStorage, so it
 // follows the account to a new phone instead of greeting them again.
 
-import { read, write, uid, todayKey } from './store.js';
+import { read, write, uid, todayKey, setUnits } from './store.js';
 import { autoTargets } from './tdee.js';
 import { el, noteEl, segmented, sheet, r1, toast, LIMITS, within } from './ui.js';
 import { isStandalone, platform } from './usage.js';
+import { wIn, fmtW, unitW, fmtRate, fmtPer, hIn as inchesFrom, fmtH, unitH,
+         limW, limH, labelRate } from './units.js';
 
 // Stays 1 on purpose. onboardingState() below reads `done` and never reads
 // `version`, so bumping this re-runs nothing for anybody — it would only look
@@ -103,10 +105,16 @@ const ACTIVITY = [
 // writes (food/targets.auto.rateWk) and its sign is what the Fuel bar and the
 // You tab read the goal back from, so the three rates stay non-zero for the
 // two that move and exactly zero for the one that doesn't.
+// The rate is stored in POUNDS a week and stays that way — it is what
+// food/targets.auto.rateWk holds and what tdee.js multiplies by 500. Only the
+// sentence beside the word changes, and "a pound a week" has no kilo form
+// worth writing, so metric gets the number instead.
 const GOALS = [
-  ['cut',  'Cutting',     -1,   'Lose fat, keep muscle — about a pound a week down'],
-  ['hold', 'Maintaining',  0,   'Hold your weight and eat at maintenance'],
-  ['gain', 'Bulking',     0.5,  'Build muscle — about half a pound a week up']
+  ['cut',  'Cutting',     -1,   u => u === 'kg' ? 'Lose fat, keep muscle — about ' + labelRate(1, u) + ' a week down'
+                                                : 'Lose fat, keep muscle — about a pound a week down'],
+  ['hold', 'Maintaining',  0,   () => 'Hold your weight and eat at maintenance'],
+  ['gain', 'Bulking',     0.5,  u => u === 'kg' ? 'Build muscle — about ' + labelRate(0.5, u) + ' a week up'
+                                                : 'Build muscle — about half a pound a week up']
 ];
 
 export function estimateMaintenance({ sex, heightIn, birthYear, lb, activity }) {
@@ -224,10 +232,13 @@ export function runSetup(user) {
     host.classList.remove('hidden');
     host.classList.remove('ob-tour');
 
+    // `heightIn` and `lb` are the stored units and they stay that way whatever
+    // is picked below — `units` only decides what the boxes say and what the
+    // numbers typed into them are read as.
     const a = {
       name: (user && user.displayName) || '',
       sex: 'm', heightIn: 70, birthYear: new Date().getFullYear() - 25,
-      lb: 0, goal: 'cut', activity: 'light',
+      lb: 0, goal: 'cut', activity: 'light', units: 'lb',
       cal: 0, p: 0, f: 0, maint: 0
     };
 
@@ -244,7 +255,10 @@ export function runSetup(user) {
     // drawn: the progress bar divides by steps.length - 1, so a step that comes
     // and goes has to change the length, never just be jumped over. `numbers`
     // stays last — its Continue is what writes everything.
-    const steps = [welcome, aboutYou, weighIn, goalStep, activityStep,
+    // unitsStep comes BEFORE the height and weight questions on purpose: both
+    // of those are asked in the unit chosen here, and asking afterwards would
+    // be asking somebody to re-enter what they just typed.
+    const steps = [welcome, unitsStep, aboutYou, weighIn, goalStep, activityStep,
                    ...(isStandalone() ? [] : [installStep]), numbers];
     let i = 0;
     draw();
@@ -331,7 +345,22 @@ export function runSetup(user) {
       });
     }
 
-    /* ---- 1. about you ---- */
+    /* ---- 1. units ---- */
+    function unitsStep() {
+      body.appendChild(el('div', 'ob-kicker', 'Units'));
+      body.appendChild(el('h1', 'ob-title', 'Pounds or kilos?'));
+      body.appendChild(noteEl('Everything in Rack that is a weight follows this — what you weigh, what you lift, your volume totals and your protein and fat targets. You can change it later under ⚙ Units.'));
+
+      body.appendChild(segmented(
+        [['lb', 'Imperial — lb and ft/in'], ['kg', 'Metric — kg and cm']],
+        a.units,
+        v => { a.units = v; }));
+
+      body.appendChild(noteEl('Metric sets your water goal in millilitres to start with. Water keeps its own unit afterwards and this setting never touches it again.'));
+      nav({});
+    }
+
+    /* ---- 2. about you ---- */
     function aboutYou() {
       body.appendChild(el('div', 'ob-kicker', 'About you'));
       body.appendChild(el('h1', 'ob-title', 'The basics'));
@@ -345,13 +374,23 @@ export function runSetup(user) {
       const seg = segmented([['m', 'Male'], ['f', 'Female'], ['x', 'Rather not']], a.sex, v => a.sex = v);
       body.appendChild(field('Sex', seg));
 
-      const hrow = el('div', 'ob-row');
-      const ft = numInput(Math.floor(a.heightIn / 12), { min: 3, max: 8 });
-      const inch = numInput(a.heightIn % 12, { min: 0, max: 11 });
-      const syncH = () => a.heightIn = (parseFloat(ft.value) || 0) * 12 + (parseFloat(inch.value) || 0);
-      ft.oninput = syncH; inch.oninput = syncH;
-      hrow.append(field('Height (ft)', ft), field('in', inch));
-      body.appendChild(hrow);
+      // Metric replaces the ft + in pair with one box. Both paths write inches
+      // into a.heightIn, which is what estimateMaintenance and the profile node
+      // read — that maths is untouched, only what feeds it.
+      if (a.units === 'kg') {
+        const cmLim = limH([36, 96], 'cm');
+        const cm = numInput(fmtH(a.heightIn, 'cm'), { min: cmLim[0], max: cmLim[1] });
+        cm.oninput = () => { a.heightIn = inchesFrom(parseFloat(cm.value) || 0, 'cm'); };
+        body.appendChild(field('Height (' + unitH('cm') + ')', cm));
+      } else {
+        const hrow = el('div', 'ob-row');
+        const ft = numInput(Math.floor(a.heightIn / 12), { min: 3, max: 8 });
+        const inch = numInput(a.heightIn % 12, { min: 0, max: 11 });
+        const syncH = () => a.heightIn = (parseFloat(ft.value) || 0) * 12 + (parseFloat(inch.value) || 0);
+        ft.oninput = syncH; inch.oninput = syncH;
+        hrow.append(field('Height (ft)', ft), field('in', inch));
+        body.appendChild(hrow);
+      }
 
       const yr = numInput(a.birthYear, { min: 1920, max: new Date().getFullYear() - 12 });
       yr.oninput = e => a.birthYear = parseInt(e.target.value) || 0;
@@ -368,23 +407,29 @@ export function runSetup(user) {
       });
     }
 
-    /* ---- 2. weigh in ---- */
+    /* ---- 3. weigh in ---- */
     function weighIn() {
       body.appendChild(el('div', 'ob-kicker', 'Weight'));
       body.appendChild(el('h1', 'ob-title', 'What do you weigh?'));
       body.appendChild(noteEl('This becomes your first weigh-in. Rack learns your real maintenance calories from how this number moves against what you eat, so the more often you step on the scale, the better every other number gets.'));
 
-      const lb = numInput(a.lb || '', { min: LIMITS.lb[0], max: LIMITS.lb[1], placeholder: '185' });
-      lb.oninput = e => a.lb = parseFloat(e.target.value) || 0;
+      // a.lb is pounds, always. wIn is what turns the typed number into one,
+      // and the limit is checked in pounds afterwards so the bar is the same
+      // bar whichever unit was picked two steps ago.
+      const wLim = limW(LIMITS.lb, a.units);
+      const lb = numInput(a.lb ? fmtW(a.lb, a.units) : '',
+                          { min: wLim[0], max: wLim[1], placeholder: fmtW(185, a.units) });
+      lb.oninput = e => a.lb = wIn(parseFloat(e.target.value) || 0, a.units);
       setTimeout(() => lb.focus(), 120);
-      body.appendChild(field('Current weight (lb)', lb));
+      body.appendChild(field('Current weight (' + unitW(a.units) + ')', lb));
 
       nav({
-        canNext: () => within(a.lb, LIMITS.lb) ? true : 'Enter your weight in pounds.'
+        canNext: () => within(a.lb, LIMITS.lb) ? true
+          : 'Enter your weight in ' + (a.units === 'kg' ? 'kilograms.' : 'pounds.')
       });
     }
 
-    /* ---- 3. goal ---- */
+    /* ---- 4. goal ---- */
     function goalStep() {
       body.appendChild(el('div', 'ob-kicker', 'Goal'));
       body.appendChild(el('h1', 'ob-title', 'Cutting, maintaining or bulking?'));
@@ -393,7 +438,7 @@ export function runSetup(user) {
       GOALS.forEach(([id, label, rate, sub]) => {
         const b = el('button', 'ob-choice' + (a.goal === id ? ' on' : ''));
         b.appendChild(el('div', 'ob-choice-t', label));
-        b.appendChild(el('div', 'ob-choice-d', sub));
+        b.appendChild(el('div', 'ob-choice-d', sub(a.units)));
         b.onclick = () => { a.goal = id; wrap.querySelectorAll('.ob-choice').forEach(x => x.classList.remove('on')); b.classList.add('on'); };
         wrap.appendChild(b);
       });
@@ -402,7 +447,7 @@ export function runSetup(user) {
       nav({});
     }
 
-    /* ---- 4. activity ---- */
+    /* ---- 5. activity ---- */
     function activityStep() {
       body.appendChild(el('div', 'ob-kicker', 'Day to day'));
       body.appendChild(el('h1', 'ob-title', 'How much do you move?'));
@@ -432,7 +477,7 @@ export function runSetup(user) {
       nav({ nextLabel: 'See my numbers' });
     }
 
-    /* ---- 5. the numbers ---- */
+    /* ---- 6. the numbers ---- */
     function numbers() {
       const maint = estimateMaintenance(a);
       const rate  = (GOALS.find(g => g[0] === a.goal) || GOALS[1])[2];
@@ -454,8 +499,11 @@ export function runSetup(user) {
         return c;
       };
       grid.appendChild(cell('kcal a day', a.cal.toLocaleString(),
-        rate === 0 ? 'maintenance' : (rate < 0 ? '−' : '+') + Math.abs(rate) + ' lb/wk'));
-      grid.appendChild(cell('g protein', String(a.p), '1 g per lb'));
+        rate === 0 ? 'maintenance' : (rate < 0 ? '−' : '+') + fmtRate(Math.abs(rate), a.units) + ' ' + unitW(a.units) + '/wk'));
+      // Setup always writes 1 g of protein per POUND. That is 2.2 g per kilo,
+      // and printing the per-pound figure inside a kilos app is exactly the
+      // half-finished thing this is meant to prevent.
+      grid.appendChild(cell('g protein', String(a.p), fmtPer(1, a.units) + ' g per ' + unitW(a.units)));
       grid.appendChild(cell('g fat', String(a.f), 'carbs are the rest'));
       body.appendChild(grid);
 
@@ -470,8 +518,13 @@ export function runSetup(user) {
       adj.append(field('Calories', cIn), field('Protein (g)', pIn), field('Fat (g)', fIn));
       body.appendChild(adj);
 
-      body.appendChild(noteEl('Water goal ' + Math.round(waterGoalFor(a.lb) / 29.5735) +
-        ' fl oz · step goal ' + (ACTIVITY.find(x => x[0] === a.activity) || ACTIVITY[1])[3].toLocaleString() +
+      // The water goal itself is millilitres in storage and always was; this
+      // line just quotes it in whichever unit the water tab is about to start
+      // in — fl oz on imperial, ml on metric.
+      const wGoal = waterGoalFor(a.lb);
+      body.appendChild(noteEl('Water goal ' +
+        (a.units === 'kg' ? wGoal.toLocaleString() + ' ml' : Math.round(wGoal / 29.5735) + ' fl oz') +
+        ' · step goal ' + (ACTIVITY.find(x => x[0] === a.activity) || ACTIVITY[1])[3].toLocaleString() +
         '. Both adjustable on their own tabs.'));
 
       nav({
@@ -496,7 +549,9 @@ export function runSetup(user) {
             name: a.name.trim().slice(0, 60),
             email: ((user && user.email) || '').slice(0, 120),
             sex: a.sex,
-            heightIn: Math.round(a.heightIn),
+            // Whole inches from a ft + in pair; hundredths of an inch from a
+            // centimetre entry, because 175 and 176 cm both round to 69 in.
+            heightIn: a.units === 'kg' ? a.heightIn : Math.round(a.heightIn),
             birthYear: a.birthYear,
             createdAt: Date.now()
           });
@@ -528,11 +583,25 @@ export function runSetup(user) {
           }
 
           if (!(priorWater && Number(priorWater.goalMl) > 0)) {
-            await write('settings/water', { goalMl: waterGoalFor(a.lb), unit: 'floz', presets: null });
+            // Water has its own unit with its own presets behind it, and this
+            // setting never rewrites it again — it only picks the sensible one
+            // to start on.
+            await write('settings/water', {
+              goalMl: waterGoalFor(a.lb),
+              unit: a.units === 'kg' ? 'ml' : 'floz',
+              presets: null
+            });
           }
           if (!(priorSteps && Number(priorSteps.goal) > 0)) {
             await write('settings/steps', { goal: (ACTIVITY.find(x => x[0] === a.activity) || ACTIVITY[1])[3] });
           }
+          // Last of the setup writes and deliberately separate: it is the one
+          // node in here that nothing else in setup depends on, and it is the
+          // one whose absence means something real — no node at all is
+          // imperial, which is what every account that predates this ship is.
+          await setUnits(a.units === 'kg'
+            ? { weight: 'kg', height: 'cm' }
+            : { weight: 'lb', height: 'in' });
         } else if (a.name.trim()) {
           await write('profile', { name: a.name.trim().slice(0, 60), createdAt: Date.now() });
         }

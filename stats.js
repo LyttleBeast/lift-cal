@@ -6,14 +6,14 @@
 
 import {
   allSessions, exerciseIndex, filterByRange, weeklyVolume, groupSplit,
-  topBy, prTimeline, isWorking, lineChart, barChart, donut, heatStrip,
+  topBy, prTimeline, prDetail, isWorking, lineChart, barChart, donut, heatStrip,
   legend, emptyChart, groupColor, GROUPS, GROUP_ORDER
 } from './analytics.js';
-import { todayKey } from './store.js';
+import { todayKey, wu } from './store.js';
 import {
-  $, el, sheet, noteEl, compact, trimNum, fmtDate, fmtDateFull, parseKey,
-  segmented
+  $, el, sheet, noteEl, fmtDate, fmtDateFull, parseKey, segmented
 } from './ui.js';
+import { wOut, volOut, fmtW, fmtSetW, fmtVol, unitW } from './units.js';
 
 let open      = false;
 let backFn    = null;
@@ -124,22 +124,23 @@ function renderOverview() {
     a + (s.exercises || []).reduce((b, ex) => b + (ex.sets || []).filter(isWorking).length, 0), 0);
   const totalMin = Math.round(inRange.reduce((a, s) => a + (s.durationSec || 0), 0) / 60);
 
+  const u = wu(), W = unitW(u);
   wrap.appendChild(statRow([
     [inRange.length, 'Sessions'],
-    [compact(totalVol), 'Volume lb'],
+    [fmtVol(totalVol, u), 'Volume ' + W],
     [totalSets, 'Working sets']
   ]));
   wrap.appendChild(statRow([
     [totalMin >= 60 ? Math.round(totalMin / 60) + 'h' : totalMin + 'm', 'Time under bar'],
-    [inRange.length ? compact(Math.round(totalVol / inRange.length)) : '0', 'Avg session lb'],
+    [inRange.length ? fmtVol(Math.round(totalVol / inRange.length), u) : '0', 'Avg session ' + W],
     [inRange.length ? Math.round(totalSets / inRange.length) : '0', 'Avg sets']
   ]));
 
   /* ---- volume per week ---- */
   const weeks = weeklyVolume(inRange).slice(-14);
-  const volCard = card('Volume per week', weeks.length ? compact(totalVol) + ' lb total' : '');
+  const volCard = card('Volume per week', weeks.length ? fmtVol(totalVol, u) + ' ' + W + ' total' : '');
   volCard.appendChild(barChart(
-    weeks.map(w => ({ label: fmtDate(w.key).replace(/ /, ' '), v: w.volume })),
+    weeks.map(w => ({ label: fmtDate(w.key).replace(/ /, ' '), v: volOut(w.volume, u) })),
     { color: 'var(--p-blue)', height: 158 }
   ));
   volCard.appendChild(noteEl('Working sets only — warm-ups never count toward volume.'));
@@ -187,17 +188,17 @@ function renderOverview() {
 
   /* ---- leaderboards ---- */
   wrap.appendChild(rankCard('Strongest lifts', topBy(index, 'bestE1rm', 5), e => ({
-    primary: Math.round(e.bestE1rm) + ' lb',
-    secondary: e.bestE1rmSet ? e.bestE1rmSet.w + ' × ' + e.bestE1rmSet.r + ' · ' + fmtDate(e.bestE1rmDate) : ''
+    primary: Math.round(wOut(e.bestE1rm, u)) + ' ' + W,
+    secondary: e.bestE1rmSet ? fmtSetW(e.bestE1rmSet.w, u) + ' × ' + e.bestE1rmSet.r + ' · ' + fmtDate(e.bestE1rmDate) : ''
   }), 'All-time estimated 1RM.'));
 
   wrap.appendChild(rankCard('Most trained', topBy(idxRange, 'sessions', 5), e => ({
     primary: e.sessions + '×',
-    secondary: e.totalSets + ' sets · ' + compact(e.totalVolume) + ' lb'
+    secondary: e.totalSets + ' sets · ' + fmtVol(e.totalVolume, u) + ' ' + W
   }), 'Within the selected range.'));
 
   wrap.appendChild(rankCard('Most volume', topBy(idxRange, 'totalVolume', 5), e => ({
-    primary: compact(e.totalVolume) + ' lb',
+    primary: fmtVol(e.totalVolume, u) + ' ' + W,
     secondary: e.sessions + ' sessions'
   }), 'Within the selected range.'));
 
@@ -215,10 +216,10 @@ function renderOverview() {
       const body = el('div', 'pr-body');
       body.appendChild(el('div', 'pr-name', p.name));
       body.appendChild(el('div', 'pr-sub', fmtDate(p.date) + '  ·  ' +
-        (p.kind === 'e1rm' ? 'e1RM ' + p.detail : 'heaviest set') +
-        (p.prev ? '  ·  was ' + Math.round(p.prev) : '')));
+        (p.kind === 'e1rm' ? 'e1RM ' + prDetail(p, u) : 'heaviest set') +
+        (p.prev ? '  ·  was ' + Math.round(wOut(p.prev, u)) : '')));
       row.appendChild(body);
-      row.appendChild(el('div', 'pr-val num', Math.round(p.value)));
+      row.appendChild(el('div', 'pr-val num', Math.round(wOut(p.value, u))));
       row.onclick = () => { detailEx = p.exId; renderStats(); };
       prCard.appendChild(row);
     });
@@ -351,7 +352,7 @@ function openExercisePicker() {
       b.appendChild(dot);
       const nm = el('span', 'nm', e.name);
       b.appendChild(nm);
-      b.appendChild(el('span', 'eq num', e.sessions + '× · ' + Math.round(e.bestE1rm) + ' lb'));
+      b.appendChild(el('span', 'eq num', e.sessions + '× · ' + Math.round(wOut(e.bestE1rm, wu())) + ' ' + unitW(wu())));
       b.onclick = () => { close(); detailEx = e.exId; renderStats(); };
       list.appendChild(b);
     });
@@ -384,13 +385,14 @@ function renderDetail(exId) {
   wrap.appendChild(gtag);
 
   /* ---- headline ---- */
+  const u = wu(), W = unitW(u);
   wrap.appendChild(statRow([
-    [Math.round(e.bestE1rm), 'Best e1RM', 'var(--p-yellow)'],
-    [trimNum(e.bestWeight), 'Heaviest lb'],
+    [Math.round(wOut(e.bestE1rm, u)), 'Best e1RM', 'var(--p-yellow)'],
+    [fmtW(e.bestWeight, u), 'Heaviest ' + W],
     [e.sessions, 'Sessions']
   ]));
   wrap.appendChild(statRow([
-    [compact(e.totalVolume), 'Total lb'],
+    [fmtVol(e.totalVolume, u), 'Total ' + W],
     [e.totalSets, 'Working sets'],
     [e.totalReps, 'Total reps']
   ]));
@@ -409,8 +411,8 @@ function renderDetail(exId) {
     trend.appendChild(emptyChart('Two sessions draw the first line'));
   } else {
     trend.appendChild(lineChart(
-      entries.map(x => ({ t: x.startedAt, v: x.e1rm })),
-      { color: 'var(--p-yellow)', unit: 'lb', height: 176 }
+      entries.map(x => ({ t: x.startedAt, v: wOut(x.e1rm, u) })),
+      { color: 'var(--p-yellow)', unit: W, height: 176 }
     ));
     trend.appendChild(noteEl('Epley estimate from your best working set each session. The ring marks your peak.'));
   }
@@ -420,8 +422,8 @@ function renderDetail(exId) {
   if (entries.length >= 2) {
     const wt = card('Heaviest set');
     wt.appendChild(lineChart(
-      entries.map(x => ({ t: x.startedAt, v: x.topWeight })),
-      { color: 'var(--p-red)', unit: 'lb', height: 152 }
+      entries.map(x => ({ t: x.startedAt, v: wOut(x.topWeight, u) })),
+      { color: 'var(--p-red)', unit: W, height: 152 }
     ));
     wrap.appendChild(wt);
   }
@@ -429,7 +431,7 @@ function renderDetail(exId) {
   /* ---- volume per session ---- */
   const volCard = card('Volume per session');
   volCard.appendChild(barChart(
-    entries.slice(-12).map(x => ({ label: fmtDate(x.date).replace(/ /, ' '), v: x.volume })),
+    entries.slice(-12).map(x => ({ label: fmtDate(x.date).replace(/ /, ' '), v: volOut(x.volume, u) })),
     { color: 'var(--p-blue)', height: 150 }
   ));
   wrap.appendChild(volCard);
@@ -437,10 +439,10 @@ function renderDetail(exId) {
   /* ---- personal bests ---- */
   const pb = card('Personal bests');
   [
-    ['Estimated 1RM', Math.round(e.bestE1rm) + ' lb',
-      e.bestE1rmSet ? e.bestE1rmSet.w + ' × ' + e.bestE1rmSet.r + ' on ' + fmtDateFull(e.bestE1rmDate) : ''],
-    ['Heaviest weight', trimNum(e.bestWeight) + ' lb', fmtDateFull(e.bestWeightDate)],
-    ['Best session volume', compact(e.bestVolume) + ' lb', fmtDateFull(e.bestVolumeDate)]
+    ['Estimated 1RM', Math.round(wOut(e.bestE1rm, u)) + ' ' + W,
+      e.bestE1rmSet ? fmtSetW(e.bestE1rmSet.w, u) + ' × ' + e.bestE1rmSet.r + ' on ' + fmtDateFull(e.bestE1rmDate) : ''],
+    ['Heaviest weight', fmtW(e.bestWeight, u) + ' ' + W, fmtDateFull(e.bestWeightDate)],
+    ['Best session volume', fmtVol(e.bestVolume, u) + ' ' + W, fmtDateFull(e.bestVolumeDate)]
   ].forEach(([label, value, sub]) => {
     const row = el('div', 'pb-row');
     const body = el('div');
@@ -459,10 +461,10 @@ function renderDetail(exId) {
     const body = el('div');
     body.appendChild(el('div', 'sess-date', fmtDateFull(x.date)));
     body.appendChild(el('div', 'sess-sub num',
-      x.sets + ' sets · ' + x.reps + ' reps · ' + compact(x.volume) + ' lb'));
+      x.sets + ' sets · ' + x.reps + ' reps · ' + fmtVol(x.volume, u) + ' ' + W));
     row.appendChild(body);
     const right = el('div', 'sess-right');
-    right.appendChild(el('div', 'sess-e1 num', String(x.e1rm)));
+    right.appendChild(el('div', 'sess-e1 num', String(Math.round(wOut(x.e1rm, u)))));
     right.appendChild(el('div', 'sess-e1lbl', 'e1RM'));
     row.appendChild(right);
     if (x.date === e.bestE1rmDate) row.classList.add('is-pr');

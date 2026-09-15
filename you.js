@@ -62,8 +62,8 @@
 // onboarding.js and the two new modules it owns the entry points to. Nothing
 // imports back.
 
-import { read, LS, todayKey, isOwner } from './store.js';
-import { $, el, noteEl, trimNum, r1, parseKey, fmtDate, compact, fmtDuration, sheet } from './ui.js';
+import { read, LS, todayKey, isOwner, wu } from './store.js';
+import { $, el, noteEl, parseKey, fmtDate, compact, fmtDuration, sheet } from './ui.js';
 import { assess, keysBack as keysBackI, streakOf, fmtRange } from './insights.js';
 import { allSessions, exerciseIndex, filterByRange, groupSplit, topBy, weeklyVolume,
          lineChart, barChart, ring, sparkline, heatStrip, emptyChart, legend,
@@ -74,6 +74,8 @@ import { isStandalone } from './usage.js';
 import { openInstallGuide } from './onboarding.js';
 import { openSettings, openGoal, openDailyTargets, pickProfilePhoto } from './settings.js';
 import { openAdmin, isAdminOpen } from './admin.js';
+import { wOut, fmtW, fmtSetW, labelW, unitW, fmtRate, labelRate, fmtVol,
+         kcalPerUnit } from './units.js';
 
 const DAY = 864e5;
 // Exactly the two seven-day windows the week card compares, so the water reads
@@ -802,9 +804,11 @@ function weekCard(maint) {
     days: thisWk.map(k => !!(summaries[k] && summaries[k].cal > 0))
   }));
   grid.appendChild(kpi({
-    label: 'Weight', unit: 'lb',
+    label: 'Weight', unit: unitW(wu()),
     now: meanBy(thisWk, weighOn), prev: meanBy(lastWk, weighOn),
-    fmt: trimNum, judge: towardGoal, color: C_WEIGHT, rgb: '240,190,30',
+    // now, prev and the delta between them are all stored pounds, and `fmt`
+    // is the only thing that ever sees them, so one converter covers all three.
+    fmt: v => fmtW(v, wu()), judge: towardGoal, color: C_WEIGHT, rgb: '240,190,30',
     series: both.map(weighOn),
     days: thisWk.map(k => weighOn(k) != null)
   }));
@@ -840,7 +844,7 @@ function fuelCard(maint) {
     body: [
       targets && targets.cal > 0
         ? 'Your daily target is ' + fmtInt(targets.cal) + ' kcal, ' + Math.round(targets.p || 0) + ' g protein and ' + Math.round(targets.f || 0) + ' g fat. Carbs are whatever is left — ' + (carbTarget() || 0) + ' g — never a number you set. ' +
-          (targets.auto && targets.auto.on ? 'The targets follow your weight: protein and fat are grams per pound of trend weight and calories are maintenance shifted by your goal rate, re-checked at most once a week.'
+          (targets.auto && targets.auto.on ? 'The targets follow your weight: protein and fat are grams per ' + (wu() === 'kg' ? 'kilo' : 'pound') + ' of trend weight and calories are maintenance shifted by your goal rate, re-checked at most once a week.'
                                           : 'They were set by hand, or by setup from your height, weight, age and goal, and stay where they are until you change them under ⚙ Daily targets.')
         : 'No targets are set yet. Setup writes a starting set; the gear at the top of this screen is where they live.',
       maint ? 'Maintenance — what holds your weight steady — is ' + fmtInt(maint.cal) + ' kcal' + (maint.pinned ? ', a fixed number rather than a measured one.' : ', measured from what you ate against what the scale did.') + ' Your target sits ' + fmtInt(Math.abs(targets.cal - maint.cal)) + ' ' + (targets.cal < maint.cal ? 'under' : 'over') + ' it.' : 'Maintenance is not known yet, so the chart shows only the target.',
@@ -989,8 +993,8 @@ function weightCard(maint) {
   const c = card('Body weight', 'last 45 days', {
     title: 'The weight trend',
     body: [
-      'The yellow line is the daily average of your weigh-ins. The dashed line is the trend: every reading first corrected for the food and water that were in you when you stood on the scale — a weigh-in after dinner runs pounds heavier than one before breakfast, and the model learns your own numbers for that from the log — then smoothed so a week of wobble reads as one slope.',
-      'The rate beside the headline is that slope in pounds a week, with a ✓ when it comes from the fitted model rather than the plain seven-day averages. The 30-day arrow is the first and last daily average in the window. Both are green when they move the way your goal wants and amber the other way.',
+      'The yellow line is the daily average of your weigh-ins. The dashed line is the trend: every reading first corrected for the food and water that were in you when you stood on the scale — a weigh-in after dinner runs ' + (wu() === 'kg' ? 'most of a kilo' : 'pounds') + ' heavier than one before breakfast, and the model learns your own numbers for that from the log — then smoothed so a week of wobble reads as one slope.',
+      'The rate beside the headline is that slope in ' + (wu() === 'kg' ? 'kilos' : 'pounds') + ' a week, with a ✓ when it comes from the fitted model rather than the plain seven-day averages. The 30-day arrow is the first and last daily average in the window. Both are green when they move the way your goal wants and amber the other way.',
       'Weighing more than once a day is a feature: two readings a day is what lets the model learn how much of a reading is breakfast.'
     ]
   });
@@ -1024,14 +1028,15 @@ function weightCard(maint) {
     :             (v >= 0 ? 'up' : 'warn');
 
   // The newest reading is the headline; the rate and the month are its arrows.
+  const u = wu();
   const hl = el('div', 'headline');
-  hl.appendChild(el('span', 'headline-v num', trimNum(latest.lb)));
-  hl.appendChild(el('span', 'headline-u', 'lb'));
+  hl.appendChild(el('span', 'headline-v num', fmtW(latest.lb, u)));
+  hl.appendChild(el('span', 'headline-u', unitW(u)));
   if (!modelReady)       hl.appendChild(deltaEl('…', 'flat', '/ week'));
-  else if (rate != null) hl.appendChild(arrowEl(rate, judge(rate), r1(Math.abs(rate)) + ' lb', '/ week' + (tr.model ? ' ✓' : '')));
+  else if (rate != null) hl.appendChild(arrowEl(rate, judge(rate), labelRate(Math.abs(rate), u), '/ week' + (tr.model ? ' ✓' : '')));
   else                   hl.appendChild(deltaEl('–', 'flat', '/ week'));
   if (Number.isFinite(s.change30)) {
-    hl.appendChild(arrowEl(s.change30, judge(s.change30), r1(Math.abs(s.change30)) + ' lb', '30 days'));
+    hl.appendChild(arrowEl(s.change30, judge(s.change30), labelW(Math.abs(s.change30), u), '30 days'));
   }
   c.appendChild(hl);
 
@@ -1040,14 +1045,14 @@ function weightCard(maint) {
   const since = Date.now() - 45 * DAY;
   const pts = (s.days || [])
     .filter(p => p && Number.isFinite(p.lb) && parseKey(p.d).getTime() > since)
-    .map(p => ({ t: parseKey(p.d).getTime(), v: p.lb }));
+    .map(p => ({ t: parseKey(p.d).getTime(), v: wOut(p.lb, u) }));
 
   // Every raw reading behind the day means, and the normalised trend through
   // them: the three together say what one line cannot — how noisy the scale
   // is, and what the noise averages out to.
   const scatter = Object.values(entries || {})
     .filter(e => e && e.lb > 0 && Number.isFinite(e.t) && e.t > since)
-    .map(e => ({ t: e.t, v: e.lb }));
+    .map(e => ({ t: e.t, v: wOut(e.lb, u) }));
   // adjustedDays() is the day means with the food-and-water correction
   // applied, not a fitted line — on a quiet fortnight it sits on top of the
   // raw means, and a dashed copy of the yellow line says nothing. The trend
@@ -1058,7 +1063,7 @@ function weightCard(maint) {
   const adj = modelReady ? adjustedDays() : null;
   const src = (adj && adj.length >= 2 ? adj : (s.days || []))
     .filter(p => p && Number.isFinite(p.lb))
-    .map(p => ({ t: parseKey(p.d).getTime(), v: p.lb }))
+    .map(p => ({ t: parseKey(p.d).getTime(), v: wOut(p.lb, u) }))
     .sort((a, b) => a.t - b.t);
   const trend = [];
   let ema = null;
@@ -1070,7 +1075,7 @@ function weightCard(maint) {
   const chart = el('div');
   chart.style.marginTop = '12px';
   chart.appendChild(pts.length >= 2
-    ? lineChart(pts, { color: C_WEIGHT, height: 148, unit: 'lb', dots: pts.length < 30, markMax: false,
+    ? lineChart(pts, { color: C_WEIGHT, height: 148, unit: unitW(u), dots: pts.length < 30, markMax: false,
                        scatter: scatter.length > pts.length ? scatter : null,
                        line2: trend.length >= 2 ? trend : null, yLabels: true })
     : emptyChart('Two days of weigh-ins draw the first line'));
@@ -1088,12 +1093,17 @@ function weightCard(maint) {
   // window swung from its lowest day to its highest, so a 3 lb wobble can
   // be told from a 3 lb loss.
   if (pts.length >= 2) {
-    const lows = pts.map(p => p.v);
+    // `pts` has already been through wOut for the chart, so the swing comes off
+    // the stored day means instead. Converting a converted number is the bug
+    // this file is most exposed to and this is the one place it would be easy.
+    const lows = (s.days || [])
+      .filter(p => p && Number.isFinite(p.lb) && parseKey(p.d).getTime() > since)
+      .map(p => p.lb);
     const lo = Math.min(...lows), hi = Math.max(...lows);
     const sr = statRow([
-      [tw != null && Number.isFinite(tw) ? trimNum(tw) : '–', 'Trend today'],
-      [Number.isFinite(s.avg7) ? trimNum(s.avg7) : '–', '7-day avg'],
-      [trimNum(hi - lo), 'lb swing']
+      [tw != null && Number.isFinite(tw) ? fmtW(tw, u) : '–', 'Trend today'],
+      [Number.isFinite(s.avg7) ? fmtW(s.avg7, u) : '–', '7-day avg'],
+      [fmtW(hi - lo, u), unitW(u) + ' swing']
     ]);
     sr.style.marginTop = '12px';
     c.appendChild(sr);
@@ -1133,7 +1143,7 @@ function trainingCard() {
   const dur = mean(inRange.map(s => s.durationSec).filter(v => v > 0));
   c.appendChild(statRow([
     [inRange.length, inRange.length === 1 ? 'Session' : 'Sessions'],
-    [vol > 0 ? compact(vol) : '–', 'lb lifted'],
+    [vol > 0 ? fmtVol(vol, wu()) : '–', unitW(wu()) + ' lifted'],
     [dur != null ? fmtDuration(Math.round(dur)) : '–', 'Avg session']
   ]));
 
@@ -1189,7 +1199,7 @@ function trainingCard() {
       const body = el('div', 'pb-body');
       body.appendChild(el('div', 'pb-lbl', e.name));
       body.appendChild(el('div', 'pb-sub', e.bestE1rmSet
-        ? e.bestE1rmSet.w + ' × ' + e.bestE1rmSet.r + '  ·  ' + (e.bestE1rmDate ? fmtDate(e.bestE1rmDate) : '')
+        ? fmtSetW(e.bestE1rmSet.w, wu()) + ' × ' + e.bestE1rmSet.r + '  ·  ' + (e.bestE1rmDate ? fmtDate(e.bestE1rmDate) : '')
         : e.sessions + ' sessions'));
       const track = el('div', 'pb-track');
       const fill = el('div', 'pb-fill');
@@ -1198,7 +1208,7 @@ function trainingCard() {
       track.appendChild(fill);
       body.appendChild(track);
       row.appendChild(body);
-      row.appendChild(el('div', 'pb-val num', Math.round(e.bestE1rm) + ' lb'));
+      row.appendChild(el('div', 'pb-val num', Math.round(wOut(e.bestE1rm, wu())) + ' ' + unitW(wu())));
       c.appendChild(row);
     });
   }
@@ -1337,7 +1347,7 @@ function safeAssess(est, maint) {
       rate: tr && Number.isFinite(tr.rateWk) ? tr : null,
       tw: tw != null && Number.isFinite(tw) ? tw : null,
       sessions, stepDays, stepGoal: stepGoal(), waterDays, waterGoal: waterGoal(),
-      est, days: s.days || []
+      est, days: s.days || [], u: wu()
     });
   } catch {
     return null;
@@ -1371,7 +1381,7 @@ function assessCard(found, kind) {
     title: 'How these are chosen',
     body: [
       'Every time this screen paints, Rack checks about a dozen things over the last seven days against the same targets the other tabs use: how many days were logged, protein and calories against target, which way the trend weight is moving for your goal, sessions, steps, water, and the streak.',
-      'Each check has a plain bar — “protein on at least four of five logged days”, “trend down at least 0.3 lb a week on a cut” — and only the ones clearly on one side of their bar make the lists. The three that matter most are shown; tap any line for the exact rule behind it.',
+      'Each check has a plain bar — “protein on at least four of five logged days”, “trend down at least ' + labelRate(0.3, wu()) + ' a week on a cut” — and only the ones clearly on one side of their bar make the lists. The three that matter most are shown; tap any line for the exact rule behind it.',
       'Nothing here is generated. If a line cannot be checked against a number on another tab, it is not made.'
     ]
   });
@@ -1402,6 +1412,7 @@ function trajectoryCard(found, est, maint) {
   // The card's ⋯ is where the old "how it fits together" card went: the
   // arithmetic behind maintenance and the pace, with the reader's numbers in
   // it, derived from the estimate's own total so the sums close on screen.
+  const gu = wu();
   const why = { title: 'Where this is heading', body: [] };
   if (maint) {
     const avg = est && Number.isFinite(est.avgIntake) ? Math.round(est.avgIntake) : null;
@@ -1412,7 +1423,7 @@ function trajectoryCard(found, est, maint) {
       const rate  = est && Number.isFinite(est.rateWk) ? est.rateWk : null;
       why.body.push('Nobody typed your maintenance. You averaged ' + fmtInt(avg) + ' kcal a day over ' + (est.days || 0) + ' logged days; the scale ' +
         (rate == null || Math.abs(rate) < 0.05 ? 'held steady, so that is about what you spend' :
-         'went ' + (rate < 0 ? 'down' : 'up') + ' ' + r1(Math.abs(rate)) + ' lb a week, which at roughly 3,500 kcal a pound is ' + fmtInt(shift) + ' a day ' + (rate < 0 ? 'more' : 'less') + ' than you ate') +
+         'went ' + (rate < 0 ? 'down' : 'up') + ' ' + labelRate(Math.abs(rate), gu) + ' a week, which at roughly ' + kcalPerUnit(gu).toLocaleString() + ' kcal a ' + (gu === 'kg' ? 'kilo' : 'pound') + ' is ' + fmtInt(shift) + ' a day ' + (rate < 0 ? 'more' : 'less') + ' than you ate') +
         ' — so maintenance is ' + fmtInt(maint.cal) + ' kcal' + (est && est.se ? ', give or take ' + fmtInt(Math.round(1.96 * est.se / 5) * 5) : '') + '.');
     }
   } else {
@@ -1420,7 +1431,7 @@ function trajectoryCard(found, est, maint) {
   }
   why.body.push('The pace is the slope of your trend weight — every weigh-in corrected for the food and water in you at the time, then smoothed. It is not projected from fewer than two weeks of weigh-ins, and no finish date is printed more than two years out, because a slope over a handful of readings is noise dressed as a plan.');
   if (t && t.goalLb && t.start != null) {
-    why.body.push('Progress runs from your first recorded daily average, ' + trimNum(t.start) + ' lb on ' + fmtDate(t.startDate) + ', to your goal of ' + trimNum(t.goalLb) + '. The finish date is the distance left divided by the current pace, and it moves as the pace does.');
+    why.body.push('Progress runs from your first recorded daily average, ' + labelW(t.start, gu) + ' on ' + fmtDate(t.startDate) + ', to your goal of ' + fmtW(t.goalLb, gu) + '. The finish date is the distance left divided by the current pace, and it moves as the pace does.');
   }
 
   const c = card('Goal', t ? dirWord(t.dir).toLowerCase() : null, why);
@@ -1442,19 +1453,19 @@ function trajectoryCard(found, est, maint) {
   const dot = el('i', 'traj-dot ' + (t.status === 'on' || t.status === 'ahead' ? 'good' : t.status === 'wrong' || t.status === 'drift' ? 'bad' : t.status ? 'warn' : ''));
   hl.appendChild(dot);
   if (t.enough && t.rate != null) {
-    hl.appendChild(el('span', 'headline-v num', r1(Math.abs(t.rate)) + ''));
-    hl.appendChild(el('span', 'headline-u', 'lb / week ' + (t.rate < 0 ? 'down' : t.rate > 0 ? 'up' : 'flat')));
+    hl.appendChild(el('span', 'headline-v num', fmtRate(Math.abs(t.rate), gu)));
+    hl.appendChild(el('span', 'headline-u', unitW(gu) + ' / week ' + (t.rate < 0 ? 'down' : t.rate > 0 ? 'up' : 'flat')));
   } else {
     hl.appendChild(el('span', 'headline-v num', '–'));
-    hl.appendChild(el('span', 'headline-u', 'lb / week'));
+    hl.appendChild(el('span', 'headline-u', unitW(gu) + ' / week'));
   }
   c.appendChild(hl);
   c.appendChild(el('div', 'traj-reason', t.reason));
 
   if (t.goalLb) {
     const cells = [
-      [t.tw != null ? trimNum(t.tw) : '–', 'Trend now'],
-      [trimNum(t.goalLb), 'Goal lb']
+      [t.tw != null ? fmtW(t.tw, gu) : '–', 'Trend now'],
+      [fmtW(t.goalLb, gu), 'Goal ' + unitW(gu)]
     ];
     if (t.weeks === 0) cells.push(['✓', 'At goal']);
     else if (t.eta) cells.push([t.eta.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + (t.eta.getFullYear() !== new Date().getFullYear() ? ' ’' + String(t.eta.getFullYear()).slice(2) : ''), 'At this pace']);
@@ -1472,9 +1483,9 @@ function trajectoryCard(found, est, maint) {
       bar.appendChild(fill);
       c.appendChild(bar);
       const ends = el('div', 'traj-ends');
-      ends.appendChild(el('span', 'num', trimNum(t.start) + ' lb · ' + fmtDate(t.startDate)));
+      ends.appendChild(el('span', 'num', labelW(t.start, gu) + ' · ' + fmtDate(t.startDate)));
       ends.appendChild(el('span', 'num', Math.round(t.progress * 100) + '% there'));
-      ends.appendChild(el('span', 'num', trimNum(t.goalLb) + ' lb'));
+      ends.appendChild(el('span', 'num', labelW(t.goalLb, gu)));
       c.appendChild(ends);
     }
   } else if (t.dir !== 0) {

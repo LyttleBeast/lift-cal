@@ -53,6 +53,7 @@ writeFileSync(
     .replace("from './store.js'", "from './store-stub.mjs'")
     .replace("from './exercises.js'", 'from ' + real('exercises.js'))
     .replace("from './ui.js'", 'from ' + real('ui.js'))
+    .replace("from './units.js'", 'from ' + real('units.js'))
 );
 const A = await import(pathToFileURL(join(dir, 'analytics.mjs')).href);
 

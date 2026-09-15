@@ -1,5 +1,5 @@
 import { login, signup, logout, resetPassword, watchAuth, flushQueue, syncPip,
-         LS, uid, isOwner, watchShared } from './store.js';
+         LS, uid, isOwner, watchShared, initUnits } from './store.js';
 import { accessState, renderGate, claimInvite, ensureAiRecord, normalizeCode, APPROVED } from './access.js';
 import { onboardingState, runSetup, runTour } from './onboarding.js';
 import { initWorkout, render as renderWorkout, hasActiveSession } from './workout.js';
@@ -171,6 +171,12 @@ async function boot(user) {
   watchRevocation(user.uid);
   await flushQueue();
 
+  // Before anything paints. Every screen in the app formats weights against
+  // this, and a tab that draws in pounds and then redraws in kilos is a bug
+  // rather than a loading state. It is one small read and nothing below it can
+  // start without it.
+  await initUnits();
+
   // Setup runs before the tabs initialise, because what it writes — targets, a
   // first weigh-in, a water goal, a step goal — is what they read at boot.
   let wantTour = false;
@@ -180,6 +186,10 @@ async function boot(user) {
     if (ob.needsSetup) {
       const res = await runSetup(user);
       wantTour = !res.skipped;
+      // Setup is where a new account picks pounds or kilos, and the write it
+      // makes goes through setUnits(), which sets the cache before it sends —
+      // so there is nothing to re-read here, and re-reading would be the one
+      // way to lose the choice if the write were queued offline.
     }
   } catch {}
 

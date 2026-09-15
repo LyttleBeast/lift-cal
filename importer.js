@@ -1,13 +1,21 @@
 // One-time migration: bring a Liftoff export (converted to Rack format) into the app.
 // Merges by month so existing sessions are never clobbered.
 
-import { read, write } from './store.js';
+import { read, write, wu } from './store.js';
 import { el, sheet, toast, noteEl } from './ui.js';
+import { volOut, unitW } from './units.js';
 
 export function openImport() {
   const { sh, close } = sheet();
   sh.appendChild(el('h2', null, 'Import workout history'));
   sh.appendChild(noteEl('Pick the rack-import.json file Claude generated from your Liftoff export. Nothing is written until you confirm on the next screen.'));
+  /* Deliberately NOT read in the display unit, unlike every box a person types
+     into. This file is already in Rack's storage format — its `w` values are
+     pounds because that is what the format is — so reading it as kilos would
+     multiply 219 sessions of real history by 2.2 and there would be no way back.
+     What the person picked under Units decides how the numbers below are shown,
+     and nothing else. */
+  sh.appendChild(noteEl('Weights in the file are read as pounds, which is the format it is written in. They are shown here, and everywhere else in Rack, in whichever unit you have chosen.'));
 
   const pick = el('input', 'file-pick');
   pick.type = 'file';
@@ -79,7 +87,8 @@ function preview(data) {
   };
   row.appendChild(cell(String(s.work), 'working sets'));
   row.appendChild(cell(String(s.sets - s.work), 'warm-ups'));
-  row.appendChild(cell(Math.round(s.volume / 1000) + 'k', 'lb volume'));
+  const u = wu();
+  row.appendChild(cell(Math.round(volOut(s.volume, u) / 1000) + 'k', unitW(u) + ' volume'));
   sh.appendChild(row);
 
   sh.appendChild(noteEl(

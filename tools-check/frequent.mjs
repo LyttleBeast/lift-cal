@@ -66,6 +66,7 @@ writeFileSync(
     .replace("from './store.js'", "from './store-stub.mjs'")
     .replace("from './exercises.js'", 'from ' + real('exercises.js'))
     .replace("from './ui.js'", 'from ' + real('ui.js'))
+    .replace("from './units.js'", 'from ' + real('units.js'))
 );
 const PICKER_SRC = src('picker.js');
 writeFileSync(
@@ -76,6 +77,7 @@ writeFileSync(
     .replace("from './analytics.js'", "from './analytics.mjs'")
     .replace("from './exercises.js'", 'from ' + real('exercises.js'))
     .replace("from './ui.js'", 'from ' + real('ui.js'))
+    .replace("from './units.js'", 'from ' + real('units.js'))
 );
 const P = await import(pathToFileURL(join(dir, 'picker.mjs')).href);
 const X = await import(pathToFileURL(join(HERE, '..', 'exercises.js')).href);

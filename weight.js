@@ -1,12 +1,13 @@
 // Weight — body-weight log and trend math.
 //   weight/entries -> { id: { lb, t } }
 
-import { read, write, watch, todayKey } from './store.js';
+import { read, write, watch, todayKey, wu } from './store.js';
 import { weightStats, dailyMeans as meansOf, movingAvg, maintenance,
          refreshModel, modelState, adjustedDays, peakOffset, trendRate } from './tdee.js';
 import { lineChart } from './analytics.js';
 import { bump } from './usage.js';
 import { $, el, toast, noteEl, confirmSheet, r1, parseKey, fmtDateFull, LIMITS, within } from './ui.js';
+import { wOut, wIn, fmtW, labelW, unitW, fmtRate, limW } from './units.js';
 
 let entries = {};      // id -> { lb, t }
 let range   = 30;      // chart window, days
@@ -60,26 +61,33 @@ export async function render() {
   wrap.appendChild(hd);
 
   const s = stats();
+  // Read once per paint. Everything below is stored pounds until the expression
+  // that puts it on screen, and everything typed is converted before it is
+  // checked against a limit.
+  const u = wu();
+  const lim = limW(LIMITS.lb, u);
 
   // ---- log card ----
   const log = el('div', 'card');
   const row = el('div', 'qty-row');
   const inp = el('input');
   inp.type = 'number'; inp.inputMode = 'decimal'; inp.step = '0.1';
-  inp.min = LIMITS.lb[0]; inp.max = LIMITS.lb[1];
-  inp.placeholder = s.latest ? String(r1(s.latest.lb)) : '208.0';
+  inp.min = lim[0]; inp.max = lim[1];
+  inp.placeholder = s.latest ? fmtW(s.latest.lb, u) : fmtW(208, u);
   const btn = el('button', 'btn btn-primary', 'Log');
   btn.style.flex = '0 0 auto';
   btn.onclick = async () => {
-    const lb = parseFloat(inp.value);
-    if (!within(lb, LIMITS.lb)) { toast('Enter a weight between ' + LIMITS.lb[0] + ' and ' + LIMITS.lb[1] + ' lb'); return; }
+    // Convert, then clamp. Checking the typed number against a pound bound
+    // would let a kilos account log 690 kg and refuse 20.
+    const lb = wIn(parseFloat(inp.value), u);
+    if (!within(lb, LIMITS.lb)) { toast('Enter a weight between ' + lim[0] + ' and ' + lim[1] + ' ' + unitW(u)); return; }
     const id = 'wt' + Date.now().toString(36);
     entries[id] = { lb: r1(lb), t: Date.now() };
     await write('weight/entries', entries);
     bump('weighIn');
     await refit();
     inp.value = '';
-    toast('Logged ' + r1(lb) + ' lb');
+    toast('Logged ' + labelW(r1(lb), u));
     render();
   };
   row.append(inp, btn);
@@ -98,30 +106,30 @@ export async function render() {
       c.appendChild(el('div', 'stat-lbl', l));
       return c;
     };
-    sr.appendChild(cell(r1(s.latest.lb) + '', 'Latest lb'));
-    sr.appendChild(cell(s.avg7 != null ? String(r1(s.avg7)) : '–', '7-day avg'));
+    sr.appendChild(cell(fmtW(s.latest.lb, u), 'Latest ' + unitW(u)));
+    sr.appendChild(cell(s.avg7 != null ? fmtW(s.avg7, u) : '–', '7-day avg'));
     const tr = trendRate(entries);
     const rate = tr.rateWk;
     sr.appendChild(cell(
-      rate != null ? (rate > 0 ? '+' : '') + r1(rate) : '–',
-      tr.model ? 'lb / week ✓' : 'lb / week',
+      rate != null ? (rate > 0 ? '+' : '') + fmtRate(rate, u) : '–',
+      unitW(u) + ' / week' + (tr.model ? ' ✓' : ''),
       rate != null ? (rate <= 0 ? 'var(--good)' : 'var(--warn)') : null
     ));
     sr.style.marginBottom = '12px';
     wrap.appendChild(sr);
   }
 
-  wrap.appendChild(renderChart(s));
-  wrap.appendChild(renderTOD());
-  wrap.appendChild(await renderTDEE(s));
-  wrap.appendChild(renderRecent());
+  wrap.appendChild(renderChart(s, u));
+  wrap.appendChild(renderTOD(u));
+  wrap.appendChild(await renderTDEE(s, u));
+  wrap.appendChild(renderRecent(u));
   // The settings card that used to end this screen is now the You tab's gear.
 
   root.appendChild(wrap);
 }
 
 /* ---------- chart ---------- */
-function renderChart(s) {
+function renderChart(s, u) {
   const card = el('div', 'card');
   const hd = el('div', 'card-hd');
   hd.appendChild(el('div', 'eyebrow', 'Trend'));
@@ -164,21 +172,24 @@ function renderChart(s) {
   const avg = movingAvg(source).filter(p => parseKey(p.d).getTime() > since);
 
   card.appendChild(lineChart(
-    avg.map(p => ({ t: parseKey(p.d).getTime(), v: p.lb })),
+    avg.map(p => ({ t: parseKey(p.d).getTime(), v: wOut(p.lb, u) })),
     {
       color: 'var(--p-yellow)',
       height: 178,
-      unit: 'lb',
+      unit: unitW(u),
       dots: false,
       markMax: false,
-      scatter: raw.map(e => ({ t: e.t, v: e.lb }))
+      scatter: raw.map(e => ({ t: e.t, v: wOut(e.lb, u) }))
     }
   ));
 
+  // lo and hi come off the stored pounds, not off the points above — those
+  // have already been converted and running them through again is the one
+  // mistake this whole ship is built to avoid.
   const lo = Math.min(...raw.map(e => e.lb), ...avg.map(a => a.lb));
   const hi = Math.max(...raw.map(e => e.lb), ...avg.map(a => a.lb));
   const foot = el('div', 'chart-foot');
-  foot.appendChild(el('span', 'num', r1(hi) + ' – ' + r1(lo) + ' lb'));
+  foot.appendChild(el('span', 'num', fmtW(hi, u) + ' – ' + labelW(lo, u)));
   foot.appendChild(el('span', null, useAdj
     ? 'dots normalised · line 7-day avg'
     : 'dots raw · line 7-day avg'));
@@ -187,7 +198,7 @@ function renderChart(s) {
 }
 
 /* ---------- time of day ---------- */
-function renderTOD() {
+function renderTOD(u) {
   const card = el('div', 'card');
   const hd = el('div', 'card-hd');
   hd.appendChild(el('div', 'eyebrow', 'Time of day'));
@@ -225,14 +236,14 @@ function renderTOD() {
     card.appendChild(strip);
 
     const hr = pk.h === 0 ? '12am' : pk.h === 12 ? '12pm' : (pk.h % 12) + (pk.h < 12 ? 'am' : 'pm');
-    const big = el('div', 'load-num num', '+' + r1(pk.lb));
+    const big = el('div', 'load-num num', '+' + fmtW(pk.lb, u));
     big.style.fontSize = '28px';
     big.style.color = 'var(--p-yellow)';
     card.appendChild(big);
-    card.appendChild(el('div', 'eyebrow', 'lb heavier by ' + hr));
+    card.appendChild(el('div', 'eyebrow', unitW(u) + ' heavier by ' + hr));
 
     const parts = ['Every weigh-in is corrected by its own number before it counts toward the trend'];
-    if (m.spread != null) parts.push('your readings span ' + r1(m.spread) + ' lb within a day on average');
+    if (m.spread != null) parts.push('your readings span ' + labelW(m.spread, u) + ' within a day on average');
     card.appendChild(noteEl(parts.join(' — ') + '.'));
 
     if (m.anchorDays < 5) {
@@ -245,7 +256,7 @@ function renderTOD() {
   Object.entries(buckets).forEach(([label, lbs]) => {
     const c = el('div', 'stat');
     c.appendChild(el('div', 'stat-val num', lbs.length
-      ? String(r1(lbs.reduce((s, x) => s + x, 0) / lbs.length)) : '–'));
+      ? fmtW(lbs.reduce((s, x) => s + x, 0) / lbs.length, u) : '–'));
     c.appendChild(el('div', 'stat-lbl', label + ' · ' + lbs.length));
     grid.appendChild(c);
   });
@@ -255,7 +266,7 @@ function renderTOD() {
 }
 
 /* ---------- TDEE ---------- */
-async function renderTDEE(s) {
+async function renderTDEE(s, u) {
   const card = el('div', 'card');
   const hd = el('div', 'card-hd');
   hd.appendChild(el('div', 'eyebrow', 'Maintenance estimate'));
@@ -288,7 +299,7 @@ async function renderTDEE(s) {
 
   card.appendChild(noteEl(
     'kcal/day to hold steady \u2014 from ' + Math.round(m.avgIntake).toLocaleString() + ' avg intake over ' + m.days +
-    ' logged days and a ' + (m.rateWk > 0 ? '+' : '') + r1(m.rateWk) + ' lb/week trend' +
+    ' logged days and a ' + (m.rateWk > 0 ? '+' : '') + fmtRate(m.rateWk, u) + ' ' + unitW(u) + '/week trend' +
     (m.trendDays ? ' measured over ' + m.trendDays + ' days' : '') +
     (pinned == null
       ? '. Fuel uses this to place the cut / maintain / gain marks on the calorie bar.'
@@ -308,7 +319,7 @@ async function renderTDEE(s) {
 }
 
 /* ---------- recent entries ---------- */
-function renderRecent() {
+function renderRecent(u) {
   const card = el('div', 'card');
   const hd = el('div', 'card-hd');
   hd.appendChild(el('div', 'eyebrow', 'Recent weigh-ins'));
@@ -323,7 +334,7 @@ function renderRecent() {
     const row = el('button', 'food-entry');
     const body = el('div', 'fe-body');
     const d = new Date(e.t);
-    body.appendChild(el('div', 'fe-name num', r1(e.lb) + ' lb'));
+    body.appendChild(el('div', 'fe-name num', labelW(e.lb, u)));
     body.appendChild(el('div', 'fe-sub', d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
       + ' · ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })));
     row.appendChild(body);
@@ -331,7 +342,7 @@ function renderRecent() {
     row.onclick = () => {
       confirmSheet({
         title: 'Delete this weigh-in?',
-        body: r1(e.lb) + ' lb logged ' + fmtDateFull(todayKey(new Date(e.t))) + '.',
+        body: labelW(e.lb, u) + ' logged ' + fmtDateFull(todayKey(new Date(e.t))) + '.',
         confirmLabel: 'Delete',
         danger: true,
         onConfirm: async () => {

@@ -16,7 +16,8 @@
 // Sheets never nest. Every row that opens another sheet closes this one first.
 
 import { el, sheet, toast, noteEl, confirmSheet, segmented, LIMITS, clamp } from './ui.js';
-import { LS, uid, readExact, currentEmail, write, purgeDevice, logout } from './store.js';
+import { LS, uid, readExact, currentEmail, write, purgeDevice, logout,
+         wu, hu, setUnits } from './store.js';
 import { openTargets, openAiSettings, openRecallList, openImportPaste,
          foodTargets, latestLb, goalId, previewGoal, setGoal, goalFits } from './food.js';
 import { openWaterSettings, waterSettings, fmtWater } from './water.js';
@@ -26,6 +27,7 @@ import { openExerciseManager } from './picker.js';
 import { hasProxy } from './ai.js';
 import { hasActiveSession } from './workout.js';
 import { openInstallGuide } from './onboarding.js';
+import { hIn as inchesFrom, fmtH, unitH, limH, labelRate } from './units.js';
 
 /* ---------- pieces ---------- */
 
@@ -116,6 +118,35 @@ export function openSettings(onEdit) {
   const youList = rowList(you);
   navRow(youList, 'Goal', goalPill(), () => { close(); openGoal(onEdit); });
   navRow(youList, 'Your details', null, () => { close(); openProfile(onEdit); });
+
+  /* Pounds or kilos, and inches or centimetres, as one choice. It is stored as
+     two fields so splitting them later costs nothing, but nobody has asked to
+     weigh in kilos and stand 5'11", and two controls for that would be two
+     questions where there is one. It lives in You rather than App because it
+     governs body weight, height and macro targets — which is what this section
+     is about — and it is one binary choice, so it is the same inline segmented
+     control "Open the app on" uses rather than a row that opens a sheet. */
+  const unitsRow = el('div', 'field');
+  unitsRow.style.marginTop = '14px';
+  unitsRow.appendChild(el('label', null, 'Units'));
+  unitsRow.appendChild(segmented(
+    [['lb', 'Imperial'], ['kg', 'Metric']],
+    wu(),
+    async v => {
+      const metric = v === 'kg';
+      await setUnits(metric ? { weight: 'kg', height: 'cm' } : { weight: 'lb', height: 'in' });
+      // The screen behind this sheet repaints now; the other four repaint when
+      // they are next switched to, which is what switchView already does. No
+      // reload, and nothing is left showing the old unit.
+      if (onEdit) onEdit();
+      toast(metric ? 'Kilograms and centimetres' : 'Pounds and inches');
+    }));
+  you.appendChild(unitsRow);
+  you.appendChild(noteEl(
+    'Nothing is converted in storage — this changes how every weight is shown ' +
+    'and typed. Body weight, set weights, volume, records, your goal and your ' +
+    'per-bodyweight protein and fat targets all re-render in the new unit, ' +
+    'including everything already logged. Water keeps its own unit, under Fuel.'));
 
   const openOn = el('div', 'field');
   openOn.style.marginTop = '14px';
@@ -320,11 +351,22 @@ function openProfile(onEdit) {
     body.appendChild(field('Sex', segmented(
       [['m', 'Male'], ['f', 'Female'], ['x', 'Rather not']], sex, v => { sex = v; })));
 
-    const hrow = el('div', 'row-split');
-    const ft = numIn(Math.floor(heightIn / 12));
-    const inch = numIn(Math.round(heightIn % 12));
-    hrow.append(field('Height (ft)', ft), field('in', inch));
-    body.appendChild(hrow);
+    // Metric replaces the ft + in PAIR with one box, because "5 ft 11" has no
+    // two-part metric form. Both paths end at the same stored `heightIn`.
+    const metric = hu() === 'cm';
+    let cmIn = null, ft = null, inch = null;
+    if (metric) {
+      cmIn = numIn(fmtH(heightIn, 'cm'));
+      const cmLim = limH([36, 96], 'cm');
+      cmIn.min = cmLim[0]; cmIn.max = cmLim[1];
+      body.appendChild(field('Height (' + unitH('cm') + ')', cmIn));
+    } else {
+      const hrow = el('div', 'row-split');
+      ft = numIn(Math.floor(heightIn / 12));
+      inch = numIn(Math.round(heightIn % 12));
+      hrow.append(field('Height (ft)', ft), field('in', inch));
+      body.appendChild(hrow);
+    }
 
     const yr = numIn(birthYear);
     body.appendChild(field('Birth year', yr));
@@ -332,15 +374,22 @@ function openProfile(onEdit) {
     save.disabled = false;
     save.onclick = async () => {
       const name = nameIn.value.trim().slice(0, 60);
-      const hIn  = (parseFloat(ft.value) || 0) * 12 + (parseFloat(inch.value) || 0);
+      // Inches either way, and the 36–96 in sanity check is the same check on
+      // both paths — converted, not moved.
+      const inches = metric
+        ? inchesFrom(parseFloat(cmIn.value) || 0, 'cm')
+        : (parseFloat(ft.value) || 0) * 12 + (parseFloat(inch.value) || 0);
       const year = parseInt(yr.value, 10);
       if (!name) { toast('What should the app call you?'); return; }
-      if (!(hIn >= 36 && hIn <= 96)) { toast('That height doesn’t look right.'); return; }
+      if (!(inches >= 36 && inches <= 96)) { toast('That height doesn’t look right.'); return; }
       if (!(year >= 1920 && year <= thisYear - 12)) { toast('Check the birth year.'); return; }
 
-      // Whole inches, the way onboarding writes it — the two decimals a typed
-      // "5.5 ft" would produce mean nothing to any of the three formulas.
-      const next = { name, sex, heightIn: Math.round(hIn), birthYear: year };
+      // Whole inches from the ft + in pair, the way onboarding writes it — the
+      // two decimals a typed "5.5 ft" would produce mean nothing to any of the
+      // three formulas. A centimetre entry keeps its hundredths of an inch,
+      // because 175 cm and 176 cm both round to 69 in and somebody typing 176
+      // would be told on the next open that they are 175.
+      const next = { name, sex, heightIn: metric ? inches : Math.round(inches), birthYear: year };
       // A profile created here for the first time gets the email onboarding
       // would have written, but no createdAt: the account is older than this
       // node, and stamping today would print "Member since" as the day the name
@@ -471,10 +520,15 @@ export function openGoal(onEdit) {
   const goal0 = goalId();
   let goal = goal0;
   const wrap = el('div', 'ob-choices');
+  // "A pound a week" has no kilo equivalent worth writing, so metric gets the
+  // number instead. The rates behind the words are unchanged either way.
+  const gu = wu();
   const choices = [
-    ['cut',  'Cutting',     'Lose fat, keep muscle — about a pound a week down'],
+    ['cut',  'Cutting',     gu === 'kg' ? 'Lose fat, keep muscle — about ' + labelRate(1, gu) + ' a week down'
+                                        : 'Lose fat, keep muscle — about a pound a week down'],
     ['hold', 'Maintaining', 'Hold your weight and eat at maintenance'],
-    ['gain', 'Bulking',     'Build muscle — about half a pound a week up']
+    ['gain', 'Bulking',     gu === 'kg' ? 'Build muscle — about ' + labelRate(0.5, gu) + ' a week up'
+                                        : 'Build muscle — about half a pound a week up']
   ];
   const note = noteEl('');
   // The word can be right while the number is wrong: setup writes calories

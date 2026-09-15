@@ -127,7 +127,14 @@ const dir = mkdtempSync(join(tmpdir(), 'rack-guard-'));
 writeFileSync(join(dir, 'fb-stub.mjs'), STUB);
 writeFileSync(
   join(dir, 'store.mjs'),
-  readFileSync(STORE, 'utf8').replace(/(\bfrom\s+)(['"])[^'"]+\2/g, "$1'./fb-stub.mjs'")
+  // Everything store.js imports is stubbed EXCEPT units.js, which is pure, has
+  // no imports of its own and is what the units accessor is actually built on.
+  // The marker is unquoted so the blanket rewrite below steps over it.
+  readFileSync(STORE, 'utf8')
+    .replace("from './units.js'", 'from UNITS_REAL')
+    .replace(/(\bfrom\s+)(['"])[^'"]+\2/g, "$1'./fb-stub.mjs'")
+    .replace('from UNITS_REAL',
+             'from ' + JSON.stringify(pathToFileURL(join(HERE, '..', 'units.js')).href))
 );
 const store = await import(pathToFileURL(join(dir, 'store.mjs')).href);
 
