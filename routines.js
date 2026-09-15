@@ -8,11 +8,22 @@
 // `tw` / `tr` and show up as placeholders in the session — visible as a plan,
 // never pre-filled as a lie about what you lifted.
 //
+// Lifting blocks are the same annotation here as in a session, drawn by the
+// same pure functions out of blocks.js — so a block built on the workout screen
+// and saved as a routine opens as a block, and one built here starts as one.
+// The block ORDER is transient: the editor holds it in memory while the sheet
+// is open and strips it on save, because the annotations already carry the
+// fact and a stored `blocks` array would be a second source of truth for it.
+//
 // Imports picker.js, never workout.js. workout.js passes its startWorkout in
 // as a callback, so the dependency only ever points one way.
 
 import { read, write, watch, wu } from './store.js';
 import { GROUPS, GROUP_ORDER } from './exercises.js';
+import {
+  blockOrder, sessionBlocks, normalizeBlocks, addBlock, addToBlock,
+  duplicateBlock, deleteBlock, sessionLayout
+} from './blocks.js';
 import { openPicker } from './picker.js';
 import { bump } from './usage.js';
 import { el, sheet, toast, noteEl, confirmSheet, swipeToDelete, fmtDate, setNum, LIMITS } from './ui.js';
@@ -47,6 +58,28 @@ function groupsOf(r) {
 
 function setCount(r) {
   return (r.exercises || []).reduce((s, ex) => s + (ex.sets || []).length, 0);
+}
+
+// One shape for a new exercise, so one added inside a block is the same object
+// as one added outside it and the annotation is the only difference. The same
+// idea as workout.js's newExercise, with a routine's sets: targets, never
+// values.
+function newExercise(x) {
+  return {
+    exId: x.id, name: x.name, group: x.group, equipment: x.equipment,
+    sets: [{ tw: '', tr: '', type: 'N' }]
+  };
+}
+
+// The save step, and the single source of truth in one function. Renumber the
+// annotations 1..k in the order they are read on screen, then throw the
+// transient order away: what is stored is the per-exercise `block` and nothing
+// else. Returns a new object rather than editing the draft, so there is no
+// window in which the thing about to be written still carries the array.
+function forStorage(draft) {
+  const laid = normalizeBlocks(draft.exercises, sessionBlocks(draft));
+  const { blocks, ...rest } = draft;
+  return { ...rest, exercises: laid.exercises };
 }
 
 function blankRoutine() {
@@ -119,7 +152,8 @@ function openRoutine(id, onStart) {
   if (r.note) sh.appendChild(noteEl(r.note));
 
   const box = el('div', 'rt-preview');
-  (r.exercises || []).forEach(ex => {
+  const exes = r.exercises || [];
+  const pvRow = ex => {
     const line = el('div', 'rt-pv-row');
     const tag = el('i', 'ex-tag');
     tag.style.background = (GROUPS[ex.group] || {}).color || 'var(--dim)';
@@ -130,7 +164,17 @@ function openRoutine(id, onStart) {
       ? sets.map(s => (s.tw ? s.tw + '×' : '') + (s.tr || '–')).join('  ')
       : 'no sets';
     line.appendChild(el('span', 'rt-pv-sets num', txt));
-    box.appendChild(line);
+    return line;
+  };
+  // Display only — the same grouping the editor and the workout screen read
+  // off the same annotations, with no buttons, because there is nothing to do
+  // to a block from here. A block-less routine lists exactly as it always has.
+  sessionLayout(exes, blockOrder(exes)).forEach(row => {
+    if (row.kind === 'ex') { box.appendChild(pvRow(exes[row.index])); return; }
+    const grp = el('div', 'rt-pv-block');
+    grp.appendChild(el('div', 'wk-block-title', 'Block ' + row.block));
+    row.items.forEach(i => grp.appendChild(pvRow(exes[i])));
+    box.appendChild(grp);
   });
   sh.appendChild(box);
 
@@ -206,20 +250,100 @@ function openEditor(draft, isNew, onStart) {
   const body = el('div', 'rt-edit');
   sh.appendChild(body);
 
+  // The transient order, derived from the annotations the routine already
+  // carries. A routine with none yields [], and everything below then draws
+  // exactly what it drew before blocks existed.
+  draft.blocks = blockOrder(draft.exercises);
+
+  // The impure step, the routine editor's commitBlocks: takes what the pure
+  // functions returned and puts it on the draft.
+  const commit = next => {
+    draft.exercises = next.exercises;
+    draft.blocks = next.blocks;
+    paint();
+  };
+
   const paint = () => {
     body.innerHTML = '';
-    draft.exercises.forEach((ex, xi) => body.appendChild(exBlock(ex, xi)));
 
-    const add = el('button', 'btn btn-ghost btn-block', '+  Add exercise');
+    // Renumbered on the way in as well as on every change, because the
+    // per-exercise ⋯ menu can empty a block out and knows nothing about blocks.
+    // normalizeBlocks is a fixed point, so on every other paint this is a
+    // no-op. Same line the workout screen opens its render with.
+    const laid = normalizeBlocks(draft.exercises, sessionBlocks(draft));
+    draft.exercises = laid.exercises;
+    draft.blocks = laid.blocks;
+
+    sessionLayout(draft.exercises, draft.blocks).forEach(row => {
+      if (row.kind === 'ex') { body.appendChild(exBlock(draft.exercises[row.index], row.index)); return; }
+      body.appendChild(blockCard(row));
+    });
+
+    // Half width each, as on the workout screen. An exercise added here is
+    // ungrouped; a block is a box to put the repeated ones in.
+    const addRow = el('div', 'add-row');
+    const add = el('button', 'btn btn-ghost', '+  Add exercise');
     add.onclick = () => openPicker(chosen => {
-      chosen.forEach(x => draft.exercises.push({
-        exId: x.id, name: x.name, group: x.group, equipment: x.equipment,
-        sets: [{ tw: '', tr: '', type: 'N' }]
-      }));
+      chosen.forEach(x => draft.exercises.push(newExercise(x)));
       paint();
     });
-    body.appendChild(add);
+    const addBlk = el('button', 'btn btn-ghost', '+  Add Lifting Block');
+    addBlk.onclick = () => commit(addBlock(draft));
+    addRow.append(add, addBlk);
+    body.appendChild(addRow);
   };
+
+  // The container, drawn the way the workout screen draws it — the same
+  // classes, so it reads as the same thing — MINUS the check box, which ticks
+  // sets off as you do them and has nothing to tick in a plan.
+  function blockCard(row) {
+    const n = row.block;
+    const card = el('div', 'wk-block');
+
+    const hd = el('div', 'wk-block-hd');
+    hd.appendChild(el('div', 'wk-block-title', 'Block ' + n));
+
+    const acts = el('div', 'wk-block-acts');
+
+    const dup = el('button', 'btn btn-ghost wk-block-btn', 'Duplicate');
+    // Nothing to repeat until the block holds an exercise, and a button that
+    // quietly does nothing is worse than one that says it is not ready yet.
+    dup.disabled = !row.items.length;
+    // No copySet: a routine's sets are targets, and a repeat of a block plans
+    // the same work, so they come across exactly as they are.
+    dup.onclick = () => commit(duplicateBlock(draft, n));
+    acts.appendChild(dup);
+
+    const del = el('button', 'wk-block-x', '✕');
+    del.setAttribute('aria-label', 'Delete Block ' + n);
+    del.onclick = () => {
+      // A routine holds no logged sets, so the bar for stopping is lower than
+      // the workout screen's: exercises are worth a question, an empty block
+      // goes without a word.
+      if (!row.items.length) { commit(deleteBlock(draft, n)); return; }
+      confirmSheet({
+        title: 'Delete Block ' + n + '?',
+        body: 'Its exercises and their targets come out of this routine.',
+        confirmLabel: 'Delete block', danger: true,
+        onConfirm: () => commit(deleteBlock(draft, n))
+      });
+    };
+    acts.appendChild(del);
+    hd.appendChild(acts);
+    card.appendChild(hd);
+
+    const inner = el('div', 'wk-block-body');
+    row.items.forEach(i => inner.appendChild(exBlock(draft.exercises[i], i)));
+    if (!row.items.length) inner.appendChild(noteEl('Nothing in this block yet — add the exercises you will repeat.'));
+
+    const add = el('button', 'btn btn-ghost btn-block wk-block-add', '+  Add exercise');
+    add.onclick = () => openPicker(chosen =>
+      commit(addToBlock(draft, n, chosen.map(newExercise))));
+    inner.appendChild(add);
+
+    card.appendChild(inner);
+    return card;
+  }
 
   function exBlock(ex, xi) {
     const block = el('div', 'ex-block');
@@ -309,7 +433,9 @@ function openEditor(draft, isNew, onStart) {
     if (!draft.exercises.length) { toast('Add at least one exercise'); return; }
     draft.name = name;
     draft.note = noteIn.value.trim();
-    routines[draft.id] = draft;
+    // Annotations renumbered 1..k in display order, transient order dropped:
+    // what is stored carries `block` on the exercises and no `blocks` array.
+    routines[draft.id] = forStorage(draft);
     await persist();
     close();
     toast('Saved ' + name);

@@ -1129,6 +1129,17 @@ body.peeking .view.active { padding-bottom: 58px; }
 .rt-go { color: var(--dim); font-size: 20px; }
 
 .rt-preview { margin-top: 10px; }
+/* A block in the read-only preview. The editor reuses .wk-block itself, but the
+   preview has no cards to put in a container — just rows — so it borrows the
+   look at a smaller scale. */
+.rt-pv-block {
+  border: 1px solid var(--knurl);
+  border-radius: var(--r);
+  background: rgba(240,190,30,.03);
+  padding: 7px 10px 3px;
+  margin: 6px 0;
+}
+.rt-pv-block .wk-block-title { margin-bottom: 3px; }
 .rt-pv-row {
   display: flex; align-items: center; gap: 9px;
   padding: 9px 0; border-top: 1px solid var(--collar);

@@ -107,6 +107,7 @@ node in the database. See *Access* below for what replaced them, and why.
 | `analytics.js` | Training aggregates, personal-record detection, SVG chart builders |
 | `stats.js` | The statistics page |
 | `workout.js` | Train tab — calendar, live session, editing, post-workout recap |
+| `blocks.js` | Lifting blocks — the pure model, shared by the workout screen and the routine editor. Imports nothing, reads nothing |
 | `picker.js` | Exercise library (static + custom) and the two picking sheets |
 | `routines.js` | Pre-planned routines — list, editor, start, save-a-session-as |
 | `food.js` | Fuel tab |
@@ -142,7 +143,9 @@ app.js → you.js       → settings.js → food.js  water.js  steps.js  workout
                       → onboarding.js
       → workout.js    → stats.js ──→ analytics.js ─────────→ ui.js
                       → picker.js ──────────────────────────→ ui.js
+                      → blocks.js
                       → routines.js → picker.js
+                                    → blocks.js
       → food.js       → water.js ───────────────────────────→ ui.js
                       → recall.js ──────────────────────────→ store.js
                       → ai.js → ai-config.js
@@ -159,6 +162,13 @@ app.js → you.js       → settings.js → food.js  water.js  steps.js  workout
 `picker.js` exists so `routines.js` and `workout.js` can share the exercise
 picker without importing each other. `workout.js` hands its `startWorkout` to
 `routines.js` as a callback; routines never imports back.
+
+`blocks.js` exists for the same reason and one more: a lifting block is drawn on
+the workout screen and in the routine editor, and the two would otherwise each
+carry their own idea of what a block is. It holds only the pure model — take a
+`{ exercises, blocks }` pair, return the next one — and it never reads a set's
+`w`, `r` or `done`, because a routine's sets are `tw`/`tr` instead. The native
+port copies it across verbatim.
 
 `usage.js` is imported by eleven modules — the eight that count something, plus
 `you.js` and `onboarding.js` for its home-screen detection and `admin.js` for

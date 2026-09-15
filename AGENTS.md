@@ -437,6 +437,12 @@ not `w` / `r`: starting a routine puts them in as placeholder text, never as
 pre-filled values, so a number you forgot to change cannot end up in the log as
 a number you lifted.
 
+A lifting block is stored here exactly as it is in a workout record: `block: 1`
+on the exercise objects, and nothing else. A routine **never** carries a
+`blocks` array — the routine editor holds the block order in memory while the
+sheet is open and strips it on save, because the annotations already say
+everything the array would, and two records of one fact is one too many.
+
 ## The exercise library — three nodes
 
 `exercises/custom` → `[ { id, name, group, equipment }, … ]`

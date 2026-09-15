@@ -18,14 +18,20 @@
 // added, and about an un-annotated session going through every one of these
 // functions unchanged.
 //
-// Nothing here holds a copy of the code under test. The block helpers,
-// collectDone and editWorkout are read out of the REAL workout.js by source
-// text and driven exactly as the screen drives them — the same rule
-// merge-invariant.mjs follows, because a verifier carrying its own copy of the
-// thing it verifies proves only that the copy agrees with itself. analytics.js
-// is imported whole (with store.js stubbed, since it pulls the Firebase SDK off
-// gstatic and cannot load under Node) so the last section counts a duplicated
-// block with the app's own exerciseIndex rather than an idea of it.
+// Nothing here holds a copy of the code under test. The pure block model is
+// IMPORTED from the real blocks.js — the same module workout.js and the routine
+// editor both import — and the session-only half (the check box, collectDone,
+// editWorkout, dupSet) is read out of the REAL workout.js by source text and
+// driven exactly as the screen drives them. Same rule merge-invariant.mjs
+// follows, because a verifier carrying its own copy of the thing it verifies
+// proves only that the copy agrees with itself. analytics.js is imported whole
+// (with store.js stubbed, since it pulls the Firebase SDK off gstatic and
+// cannot load under Node) so the counting section runs a duplicated block
+// through the app's own exerciseIndex rather than an idea of it.
+//
+// That split is also the proof of the extraction: the model moved to blocks.js
+// without the screen changing, and every check below that passed before it
+// passes after it, driving the moved code at its new address.
 
 import { mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -57,7 +63,7 @@ writeFileSync(
 );
 const A = await import(pathToFileURL(join(dir, 'analytics.mjs')).href);
 
-/* ---------- the block model, lifted out of workout.js ----------
+/* ---------- the session-only half, lifted out of workout.js ----------
    The naive brace scan is sound only because none of these bodies contains a
    brace inside a string, a regex or a comment. If one ever does, the slice it
    writes stops parsing and the import throws — the loud failure rather than the
@@ -76,25 +82,29 @@ function fnSource(name) {
   throw new Error('unbalanced braces reading ' + name + ' out of workout.js');
 }
 
-const LIFTED = [
+const LIFTED = ['blockHasLogged', 'newExercise', 'dupSet', 'collectDone', 'editWorkout'];
+
+// The pure model, by name, as blocks.js exports it. Listed rather than splatted
+// so a function quietly disappearing from the module is an import error here.
+const SHARED = [
   'blockOrder', 'sessionBlocks', 'normalizeBlocks', 'blockEnd',
-  'addBlock', 'addToBlock', 'duplicateBlock', 'deleteBlock',
-  'blockHasLogged', 'sessionLayout', 'newExercise',
-  'collectDone', 'editWorkout'
+  'addBlock', 'addToBlock', 'duplicateBlock', 'deleteBlock', 'sessionLayout'
 ];
 
 /* collectDone and editWorkout read and write the module's `session`, and
    editWorkout ends by repainting the screen. Both get exactly what workout.js
-   gives them — a module-scoped `session` and a render() — so the bodies run as
+   gives them — a module-scoped `session`, a render(), and the real blocks.js in
+   scope under the same names workout.js imports it under — so the bodies run as
    written rather than as adapted. */
 writeFileSync(
   join(dir, 'blocks.mjs'),
+  'import { ' + SHARED.join(', ') + ' } from ' + real('blocks.js') + ';\n' +
   'let session = null;\n' +
   'function render() {}\n' +
   LIFTED.map(fnSource).join('\n') + '\n' +
   'export function setSession(s) { session = s; }\n' +
   'export function getSession() { return session; }\n' +
-  'export { ' + LIFTED.join(', ') + ' };\n'
+  'export { ' + SHARED.concat(LIFTED).join(', ') + ' };\n'
 );
 const B = await import(pathToFileURL(join(dir, 'blocks.mjs')).href);
 
@@ -210,7 +220,10 @@ const SET_KEYS = ['w', 'r', 'type', 'done'];
   check('duplicate: and dead while it is empty — that is the same test',
         B.sessionLayout([], [1])[0].items.length === 0);
 
-  const next = B.duplicateBlock(s, 1, false);
+  // The done seeding is the caller's now — blocks.js copies a set opaquely, and
+  // workout.js hands it dupSet(editing). Driven through the real dupSet so the
+  // two halves are tested joined, exactly as the screen joins them.
+  const next = B.duplicateBlock(s, 1, { copySet: B.dupSet(false) });
   check('duplicate: the copy lands immediately after the block it came from',
         next.exercises.map(e => e.exId + ':' + (e.block || '-')).join(' ') ===
         'curl:1 dip:1 curl:2 dip:2 bench:-',
@@ -228,11 +241,18 @@ const SET_KEYS = ['w', 'r', 'type', 'done'];
         next.exercises[4].exId === 'bench' && next.exercises[4].block === undefined);
   check('duplicate: the copy is a copy, not a shared reference',
         next.exercises[2].sets[0] !== s.exercises[0].sets[0]);
+  // The shared function must not know what a session's set looks like, or the
+  // routine editor — whose sets are tw/tr/type — gets w/r/done grafted on.
+  const opaque = B.duplicateBlock(s, 1);
+  check('duplicate: with no copySet the sets come across exactly as they were',
+        JSON.stringify(opaque.exercises[2].sets) === JSON.stringify(s.exercises[0].sets) &&
+        opaque.exercises[2].sets[0] !== s.exercises[0].sets[0],
+        JSON.stringify(opaque.exercises[2].sets));
 
   // Editing a past session is the one case where the copy is born done:
   // collectDone keeps only sets marked done, so an unticked copy made on the
   // edit screen would silently vanish on save — the same rule as + Set.
-  const edited = B.duplicateBlock(s, 1, true);
+  const edited = B.duplicateBlock(s, 1, { copySet: B.dupSet(true) });
   check('duplicate: while editing a past session the copy is born done',
         edited.exercises[2].sets.every(x => x.done === true));
 
@@ -243,7 +263,7 @@ const SET_KEYS = ['w', 'r', 'type', 'done'];
     ex('c', [set(30, 10)], { block: 3 })
   ]);
   three.blocks = [1, 2, 3];
-  const mid = B.duplicateBlock(three, 2, false);
+  const mid = B.duplicateBlock(three, 2, { copySet: B.dupSet(false) });
   check('duplicate: the middle block renumbers the ones after it',
         mid.exercises.map(e => e.exId + ':' + e.block).join(' ') === 'a:1 b:2 b:3 c:4',
         mid.exercises.map(e => e.exId + ':' + e.block).join(' '));
@@ -464,8 +484,12 @@ const SET_KEYS = ['w', 'r', 'type', 'done'];
   check('sites: the block has its own Add exercise, going through addToBlock',
         WSRC.includes('commitBlocks(addToBlock(session, n, chosen.map(x => newExercise(x, editing))))'));
   check('sites: duplicate and delete go through the pure functions',
-        WSRC.includes('commitBlocks(duplicateBlock(session, n, editing))') &&
+        WSRC.includes('commitBlocks(duplicateBlock(session, n, { copySet: dupSet(editing) }))') &&
         WSRC.includes('commitBlocks(deleteBlock(session, n))'));
+  check('sites: the pure model is imported, not redeclared, in workout.js',
+        WSRC.includes("from './blocks.js'") &&
+        SHARED.every(n => !new RegExp('\\nfunction ' + n + '\\(').test(WSRC)),
+        SHARED.filter(n => new RegExp('\\nfunction ' + n + '\\(').test(WSRC)).join(', '));
   check('sites: deleting a block with logged sets goes through confirmSheet',
         /blockHasLogged\(session\.exercises, n\)[\s\S]{0,400}confirmSheet\(\{/.test(WSRC));
   check('sites: the duplicate button is disabled until the block holds something',
@@ -493,6 +517,8 @@ const SET_KEYS = ['w', 'r', 'type', 'done'];
   check('guards: nothing about blocks reaches the record but the annotation',
         !/session\.blocks[^\n]*write\(/.test(WSRC));
 }
+
+let R;   // routines.js's own maps, lifted in section 9 and reused in section 10
 
 /* ---------- 9. the round trip through a routine ----------
    A routine is the one place a block leaves the session and comes back. Both
@@ -539,6 +565,14 @@ const SET_KEYS = ['w', 'r', 'type', 'done'];
     'routines.js no longer declares function toSession — this verifier drives ' +
     'the real source and has nothing to test');
 
+  // The editor's save step. It is the whole of the single-source-of-truth
+  // guarantee — normalize the annotations, drop the transient order — so it is
+  // driven here rather than described.
+  const forStorageAt = RSRC.indexOf('\nfunction forStorage(');
+  if (forStorageAt === -1) throw new Error(
+    'routines.js no longer declares function forStorage — the editor\'s save ' +
+    'step moved and this verifier cannot find it');
+
   const mapAt = RSRC.indexOf('r.exercises = (record.exercises || []).map(');
   if (mapAt === -1) throw new Error(
     'routines.js no longer builds r.exercises from record.exercises — the ' +
@@ -546,12 +580,14 @@ const SET_KEYS = ['w', 'r', 'type', 'done'];
 
   writeFileSync(
     join(dir, 'routines-maps.mjs'),
+    'import { ' + SHARED.join(', ') + ' } from ' + real('blocks.js') + ';\n' +
     scanBody(RSRC, toSessionAt + 1) + '\n' +
+    scanBody(RSRC, forStorageAt + 1) + '\n' +
     'export function routineFromRecord(record) { return ' +
     scanExpr(RSRC, mapAt + 'r.exercises = '.length) + '; }\n' +
-    'export { toSession };\n'
+    'export { toSession, forStorage };\n'
   );
-  const R = await import(pathToFileURL(join(dir, 'routines-maps.mjs')).href);
+  R = await import(pathToFileURL(join(dir, 'routines-maps.mjs')).href);
 
   // A finished block workout, straight out of collectDone: two exercises in
   // block 1, one ungrouped beside them.
@@ -622,8 +658,154 @@ const SET_KEYS = ['w', 'r', 'type', 'done'];
   const CARRY = '...(ex.block ? { block: ex.block } : null)';
   check('routine: both maps in routines.js use the record path\'s own idiom',
         (RSRC.split(CARRY).length - 1) === 2, (RSRC.split(CARRY).length - 1) + ' occurrences');
-  check('routine: routines.js stores no blocks array anywhere',
-        !/blocks\s*[:=]/.test(RSRC));
+}
+
+/* ---------- 10. open -> edit -> save, in the routine editor ----------
+   The editor holds a block order in memory, which is the one thing a routine is
+   not allowed to store. These checks run the real forStorage — the function the
+   Save button writes through — over a draft that has been edited every way the
+   editor can edit one, and ask for the same two things each time: the
+   annotations survive, and no `blocks` array reaches the stored object. */
+
+{
+  const RSRC = readFileSync(join(HERE, '..', 'routines.js'), 'utf8');
+  const dir2 = mkdtempSync(join(tmpdir(), 'rack-routines-'));
+  const scanBody = (src, at) => {
+    let depth = 0;
+    for (let j = src.indexOf('{', at); j < src.length; j++) {
+      if (src[j] === '{') depth++;
+      else if (src[j] === '}' && --depth === 0) return src.slice(at, j + 1);
+    }
+    throw new Error('unbalanced braces reading routines.js at ' + at);
+  };
+  const lift = name => {
+    const at = RSRC.indexOf('\nfunction ' + name + '(');
+    if (at === -1) throw new Error(
+      'routines.js no longer declares function ' + name + ' — this verifier ' +
+      'drives the real source and has nothing to test');
+    return scanBody(RSRC, at + 1);
+  };
+  writeFileSync(
+    join(dir2, 'editor.mjs'),
+    'import { ' + SHARED.join(', ') + ' } from ' + real('blocks.js') + ';\n' +
+    lift('forStorage') + '\n' + lift('newExercise') + '\n' +
+    'export { forStorage, newExercise };\n'
+  );
+  const E = await import(pathToFileURL(join(dir2, 'editor.mjs')).href);
+
+  const tset = (tw, tr, type = 'N') => ({ tw, tr, type });
+  const rex = (exId, sets, extra = {}) => ({
+    exId, name: exId, group: 'chest', equipment: 'barbell', sets, ...extra
+  });
+  // As it comes off the wire: annotations, and no blocks array. This is the
+  // exact shape v35 leaves behind after "save a block workout as a routine".
+  const stored = {
+    id: 'r1', name: 'Push A', note: '', created: 1, lastUsed: 0, uses: 0,
+    exercises: [
+      rex('bench', [tset('225', '5'), tset('225', '5')], { block: 1 }),
+      rex('row',   [tset('135', '8')],                   { block: 1 }),
+      rex('curl',  [tset('40', '12')])
+    ]
+  };
+
+  // openEditor's first move, on a copy — the sheet edits a clone.
+  const draft = JSON.parse(JSON.stringify(stored));
+  draft.blocks = B.blockOrder(draft.exercises);
+  check('editor: opening a stored routine rebuilds the block from the annotation',
+        JSON.stringify(draft.blocks) === '[1]', JSON.stringify(draft.blocks));
+  check('editor: and lays it out as one block and one ungrouped exercise',
+        kinds(B.sessionLayout(draft.exercises, draft.blocks)) === 'block1,ex',
+        kinds(B.sessionLayout(draft.exercises, draft.blocks)));
+  check('editor: a routine with no annotations opens flat, exactly as before',
+        JSON.stringify(B.blockOrder([rex('bench', [tset('225', '5')])])) === '[]');
+
+  // Save it straight back: a no-op edit must rewrite nothing.
+  const saved = E.forStorage(draft);
+  check('editor: saving carries every annotation back unchanged',
+        JSON.stringify(saved.exercises.map(e => e.block || 0)) === '[1,1,0]',
+        JSON.stringify(saved.exercises.map(e => e.block)));
+  check('editor: the stored routine has NO blocks array',
+        !('blocks' in saved), JSON.stringify(Object.keys(saved)));
+  check('editor: nor does any exercise in it',
+        saved.exercises.every(e => !('blocks' in e)));
+  check('editor: a no-op open-edit-save rewrites nothing at all',
+        JSON.stringify(saved) === JSON.stringify(stored),
+        JSON.stringify(saved));
+  check('editor: the draft it was built from is not mutated into carrying one',
+        Array.isArray(draft.blocks) && saved !== draft);
+  check('editor: the targets are still targets, not values',
+        saved.exercises[0].sets.every(s => s.tw !== undefined && s.w === undefined));
+
+  // + Add Lifting Block, then + Add exercise inside it.
+  let next = B.addBlock(draft);
+  check('editor: Add Lifting Block makes an empty Block 2',
+        JSON.stringify(next.blocks) === '[1,2]' && next.exercises.length === 3,
+        JSON.stringify(next.blocks));
+  const withEmpty = E.forStorage({ ...draft, ...next });
+  check('editor: an empty block leaves no trace in the stored routine',
+        !('blocks' in withEmpty) &&
+        JSON.stringify(B.blockOrder(withEmpty.exercises)) === '[1]',
+        JSON.stringify(withEmpty.exercises.map(e => e.block)));
+
+  next = B.addToBlock({ ...draft, ...next }, 2,
+    [E.newExercise({ id: 'ohp', name: 'OHP', group: 'shoulders', equipment: 'barbell' })]);
+  check('editor: an exercise added into a block carries block: 2',
+        next.exercises[3].exId === 'ohp' && next.exercises[3].block === 2,
+        JSON.stringify(next.exercises[3]));
+  check('editor: a new exercise is one empty target set, never a value',
+        JSON.stringify(next.exercises[3].sets) === '[{"tw":"","tr":"","type":"N"}]',
+        JSON.stringify(next.exercises[3].sets));
+
+  // Duplicate, with no copySet — the routine call.
+  const dup = B.duplicateBlock({ ...draft, ...next }, 1);
+  check('editor: duplicating a block copies its exercises into Block 2',
+        dup.exercises.map(e => e.exId + ':' + (e.block || '-')).join(' ') ===
+        'bench:1 row:1 bench:2 row:2 curl:- ohp:3',
+        dup.exercises.map(e => e.exId + ':' + (e.block || '-')).join(' '));
+  check('editor: the copied sets are the SAME targets, untouched',
+        JSON.stringify(dup.exercises[2].sets) === JSON.stringify(stored.exercises[0].sets),
+        JSON.stringify(dup.exercises[2].sets));
+  check('editor: and no session field is grafted onto them',
+        dup.exercises[2].sets.every(s =>
+          !('w' in s) && !('r' in s) && !('done' in s)),
+        JSON.stringify(dup.exercises[2].sets[0]));
+  const dupSaved = E.forStorage({ ...draft, ...dup });
+  check('editor: saving the duplicate stores 1 1 2 2 - 3 and no blocks array',
+        !('blocks' in dupSaved) &&
+        dupSaved.exercises.map(e => e.block || 0).join(',') === '1,1,2,2,0,3',
+        JSON.stringify(dupSaved.exercises.map(e => e.block)));
+
+  // Delete, and the renumbering that has to follow it into storage.
+  const del = B.deleteBlock({ ...draft, ...dup }, 1);
+  const delSaved = E.forStorage({ ...draft, ...del });
+  check('editor: deleting Block 1 takes its exercises with it',
+        delSaved.exercises.map(e => e.exId).join(' ') === 'bench row curl ohp',
+        delSaved.exercises.map(e => e.exId).join(' '));
+  check('editor: what is left is renumbered 1..k, so the label is the number',
+        delSaved.exercises.map(e => e.block || 0).join(',') === '1,1,0,2',
+        JSON.stringify(delSaved.exercises.map(e => e.block)));
+  check('editor: still no blocks array after a delete',
+        !('blocks' in delSaved));
+
+  // And the whole point: what came out of the editor starts as what went in.
+  const back = R.toSession(dupSaved);
+  check('editor: a routine saved from the editor starts with its blocks intact',
+        JSON.stringify(B.sessionBlocks({ exercises: back.exercises })) === '[1,2,3]',
+        JSON.stringify(B.sessionBlocks({ exercises: back.exercises })));
+  check('editor: and the workout screen lays it out as three blocks and a row',
+        kinds(B.sessionLayout(back.exercises,
+          B.sessionBlocks({ exercises: back.exercises }))) === 'block1,block2,ex,block3',
+        kinds(B.sessionLayout(back.exercises, B.sessionBlocks({ exercises: back.exercises }))));
+
+  // Pinned as text: the Save button has to go through forStorage, or the
+  // guarantee above is a guarantee about a function nothing calls.
+  check('editor: the Save button writes through forStorage',
+        RSRC.includes('routines[draft.id] = forStorage(draft);'),
+        'routines.js no longer saves through forStorage');
+  check('editor: the transient order is derived on open, not stored',
+        RSRC.includes('draft.blocks = blockOrder(draft.exercises);'));
+  check('editor: nothing in routines.js writes a blocks key onto a routine',
+        !/\bblocks:/.test(RSRC), 'a blocks: key appears in routines.js');
 }
 
 /* ---------- report ---------- */
