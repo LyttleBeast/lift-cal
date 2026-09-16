@@ -40,6 +40,7 @@ history, and that is no longer true. The handoff below is still how you end.
 | `store.js` | Firebase read/write, auth, sign-up, password reset |
 | `access.js` `onboarding.js` | Invite codes, approval, the waiting screen, first run |
 | `you.js` `insights.js` `settings.js` `admin.js` `usage.js` | The You tab, what Rack makes of the data (pure, no reads), the settings hub, the owner panel, usage counters |
+| `accounts.js` | Account types — the pure tier table and the single entitlement choke point. Fails open; see AGENTS.md |
 | `food.js` `recall.js` `importer.js` `ai.js` `ai-config.js` | Fuel |
 | `workout.js` `routines.js` `blocks.js` `exercises.js` `picker.js` | Train (`blocks.js` is the pure lifting-block model, shared by the session screen and the routine editor) |
 | `weight.js` `weightmodel.js` `tdee.js` | Weight, trend, maintenance |
@@ -49,6 +50,7 @@ history, and that is no longer true. The handoff below is still how you end.
 | `sw.js` `manifest.json` `.nojekyll` | PWA and Pages plumbing |
 | `worker/` | The Cloudflare Worker — its own project, see above |
 | `database.rules.json` | A **copy** of the published Firebase rules |
+| `database.rules.OPTIONAL-LOCK.json` | The same rules plus a real write-deny for `type: 'locked'`. An **alternative** to paste, not an addition |
 
 ## Two rules that break the app silently
 

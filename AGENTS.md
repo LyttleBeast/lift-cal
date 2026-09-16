@@ -59,7 +59,8 @@ to save.**
 ## `access/*` — who is allowed in
 
 ```
-access/approved/{uid}   { at, via: "invite"|"owner", code?, name?, email? }
+access/approved/{uid}   { at, via: "invite"|"owner", code?, name?, email?,
+                          type?, trialEndsAt?, customCaps?, subStatus? }
 access/invites/{CODE}   { at, note?, revoked?, usedBy?, usedAt? }
 access/requests/{uid}   { at, name, email, note? }
 ```
@@ -90,17 +91,102 @@ pattern. Codes are ten characters from a 31-letter alphabet with no `0 O 1 I L`.
 `access/requests/{uid}` is written by the account itself and read only by the
 owner. Approving deletes the request and writes the approval in one update.
 
-Removing somebody deletes `access/approved/{uid}` **and nothing else**. Their
+Removing somebody deletes `access/approved/{uid}` and resets their AI
+permissions — `aiAllow/{uid}` goes back to `on: false`, unblocked, with no
+per-day or monthly override. **It touches nothing under `users/{uid}`.** Their
 data stays exactly where it is; adding them back restores all of it.
+
+The allowance reset is there for one shape: `locked` derives `aiAllow` 0 / 0 /
+$0 with `blocked` set, and neither door back in can clear it — those keys are
+owner-only, and `revoke()` is the last moment the owner is present. Without it a
+re-added account would open perfectly well and have an estimator that refused
+every call, silently.
+
+### The account TYPE, and the four fields that carry it
+
+```
+type         'basic' | 'pro' | 'trial' | 'custom' | 'locked'      owner-only
+trialEndsAt  ms epoch, meaningful for type 'trial'                owner-only
+customCaps   { photoPerDay?, textPerDay?, monthlyUsd?, features? } owner-only
+subStatus    'none' | 'active' | 'past_due' | 'canceled'           owner-only
+```
+
+All four are **optional and additive**. An account with no `type` is a `basic`
+account, and `basic` is the Worker's own defaults — so every record written
+before this existed behaves exactly as it did. That is not a convention, it is
+the contract `accounts.js` is written to keep and `tools-check/accounts.mjs`
+exists to prove.
+
+`accounts.js` is the only file that interprets any of them. It is pure, it
+cannot throw, and it fails OPEN: an absent type, an unknown type, a malformed
+`customCaps`, a trial with no end date and a record that failed to read all
+resolve to `basic`. The two roads to a locked account are an explicit stored
+`'locked'` and a trial with a real `trialEndsAt` that has really passed.
+
+**How a type reaches the Worker.** It does not. The Worker has no idea any of
+this exists — it reads `aiAllow/{uid}` over plain HTTPS and enforces what it
+finds. So `derivedAllowance()` turns a type into exactly that node's shape and
+the admin panel writes both halves in ONE atomic multi-path update:
+
+```js
+update(ref(db), {
+  ['access/approved/' + uid + '/type']:   'pro',
+  ['access/approved/' + uid + '/…']:      …,
+  ['aiAllow/' + uid + '/photoPerDay']:    10,
+  ['aiAllow/' + uid + '/textPerDay']:     20,
+  ['aiAllow/' + uid + '/monthlyUsd']:     5,
+  ['aiAllow/' + uid + '/blocked']:        false
+});
+```
+
+Atomic because half of it landing means an account labelled Pro spending at
+Basic's limits, or labelled Basic still spending at Pro's.
+
+**Owner-only is enforced in `.validate`, not in a child `.write`,** and the
+difference matters. A `.write` grant on `access/approved/$uid` cascades to the
+whole subtree, and that parent already grants a self-write to an account
+claiming an invite code — so a child `.write` could not take it back, and a
+crafted claim could have carried `type: 'pro'` along with it. `.validate` runs
+on every write whoever authorised it, so the owner check lives there.
+
+**The optional lock.** `database.rules.OPTIONAL-LOCK.json` is the same rule set
+with one addition: `users/{uid}` **writes** are refused while that account is
+locked — and "locked" there means what it means in `accounts.js`, both roads to
+it: an explicit `type` of `'locked'`, **and** a trial whose `trialEndsAt` has
+passed, which the rules can express because they have `now`. Enforcing only the
+first would have left the rule agreeing with half of what the app shows.
+
+It is an ALTERNATIVE to paste, not an addition — only one rule set is ever live.
+Reads are deliberately left alone, so a paused account can still see its own
+data. It is fail-safe by construction: the owner's clause short-circuits first,
+an absent type is `null` and `null !== 'locked'`, and a trial whose end date is
+not a readable number is allowed rather than refused.
+
+**Nothing in the app can make an owner.** The owner is `OWNER_UID` in
+`firebase-config.js` and the same uid written into the rules; the rules consult
+no database field to decide it. `type` cannot be `'owner'` — not in
+`SETTABLE_TYPES`, not through `typePatch()`, and not accepted by the rules'
+enum. Creating a new owner is an edit to `firebase-config.js`, a re-publish of
+the rules and a deploy: three deliberate acts with a console open. Do not add a
+path that shortens that. `admin.js` carries a disabled scaffold of what a real
+elevation flow would have to be (password reauth, an email approval step
+through a Worker endpoint that does not exist, a typed confirmation and a
+delayed second one) — it is documentation, it returns a refusal, and enabling it
+without the matching rules change would be theatre.
+
+`subStatus` is a **placeholder**. No payment code exists in Rack, nothing reads
+the field, and it is display-only. The seams for where a subscription will
+eventually feed `capabilitiesFor()` are marked at the foot of `accounts.js`.
 
 ## `aiAllow/{uid}` — the AI estimator switch
 
 ```
 aiAllow/{uid}  { on: bool, blocked?: bool,
-                 photoPerDay?: number, textPerDay?: number }
+                 photoPerDay?: number, textPerDay?: number,
+                 monthlyUsd?: number }
 ```
 
-Two booleans and two small integers, and nothing else. This one node is readable
+Two booleans and three small numbers, and nothing else. This one node is readable
 **by key** without authentication, because the Cloudflare Worker has no Firebase
 credentials and should not be given any — it does a plain GET on
 `aiAllow/{uid}.json` and allows the call when `on === true && blocked !== true`.
@@ -110,6 +196,16 @@ An approved account may set its own `on`; only the owner can set `blocked`, and
 blocked wins. That split is what lets somebody who claimed an invite code get
 the estimator immediately, while leaving the owner a switch they cannot flip
 back.
+
+**`blocked` is two switches sharing one key,** and the difference matters when
+you touch either. One is the tier's — `locked` derives `blocked: true`. The
+other is the owner's own *Turn their estimator off*, aimed at somebody burning
+credit. A type change may SET the flag, and may clear the one the tier itself
+set (leaving `locked`), and must do **nothing else** to it: writing the derived
+value unconditionally would mean promoting a blocked account to Pro silently
+handed the estimator back. For the same reason the admin panel's "out of step"
+check only ever flags the missing-block direction — an account the owner blocked
+by hand on a tier that allows the estimator is the switch working, not a fault.
 
 `photoPerDay` and `textPerDay` are that account's daily allowance, and they are
 owner-writable only. The reason the per-day limits were kept out of here still
@@ -121,6 +217,15 @@ uses it (`HARD_MAX` in `worker/src/index.js`), and treats a value it cannot read
 as a number as no override at all, falling back to its configured default rather
 than to zero. Absent means "use the Worker's default", which is 3 and 3. Zero is
 a real value and it means none of that kind at all.
+
+Since the account types arrived, these four numbers are usually **derived**
+rather than typed: setting a type writes them from the tier table in
+`accounts.js`, in the same atomic update as the type. Typing them by hand is
+still there and still works — it is the only way to nudge an account that has no
+type, and a `custom` account's numbers are exactly this editor saved to
+`customCaps` instead. A later type change overwrites a manual override, and the
+admin panel flags an account whose type and `aiAllow` disagree, because that is
+what an unpublished rule set looks like from the outside.
 
 The count is not what protects the money; the monthly dollar cap in the Worker
 is, and it is per account — the running spend lives in KV under `q:{uid}`, so

@@ -73,6 +73,23 @@ is why the verification below checks the database and not the screen.
 You cannot lock yourself out: your uid is exempt from the approval check inside
 the rules text itself. If you ever break the file, re-paste it from the repo.
 
+### There are two rules files, and only one is ever live
+
+`database.rules.json` is the one to paste. `database.rules.OPTIONAL-LOCK.json`
+is the **same file plus one thing**: it refuses `users/{uid}` *writes* while
+that account's stored `type` is `'locked'`, which turns the app's access-paused
+screen from a courtesy into a wall the database enforces. They are alternatives,
+not halves — paste one or the other, never both, and whichever you paste
+replaces everything.
+
+Paste `database.rules.json` unless you have decided you want that. It is purely
+additive: it names the four new account-type fields so the owner can write them,
+and it locks nobody. The lock variant is fail-safe too — an absent type is
+allowed, and your own uid short-circuits before the check — but it is the one
+change here that can stop somebody writing their own data, so it is a decision
+and not a default. `tools-check/accounts.mjs` proves the two files differ in
+nothing else.
+
 ---
 
 ## 3. Deploy the Worker

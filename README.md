@@ -39,10 +39,11 @@ access/approved/$uid the allowlist. Owner writes it; a valid invite code lets
                      an account write its own, once, atomically with the claim
 access/invites/$code owner-only, except the used-stamp the claimer sets
 access/requests/$uid an account files its own; only the owner reads the queue
-aiAllow/$uid         two booleans and two optional daily limits. Publicly
+aiAllow/$uid         two booleans and three optional limits. Publicly
                      readable BY KEY so the Worker can check it without
-                     credentials; `blocked`, `photoPerDay` and `textPerDay`
-                     are owner-only
+                     credentials; `blocked`, `photoPerDay`, `textPerDay` and
+                     `monthlyUsd` are owner-only, and are what an account's
+                     TYPE derives into (see accounts.js)
 usage/$uid           counters, and nothing that isn't a counter. An account
                      writes its own day keys; the owner reads every account's
                      and can write nobody's but his own
@@ -94,7 +95,8 @@ node in the database. See *Access* below for what replaced them, and why.
 | `you.js` | You tab — the screen the app opens on. Read-only; every number is re-derived |
 | `insights.js` | What Rack makes of the data — wins, slips, insights, the weekly review, the goal pace. Pure functions over what `you.js` loaded |
 | `settings.js` | The settings hub behind the You gear, and the profile editor |
-| `admin.js` | Owner-only panel — feature usage, AI allowances, People & access |
+| `admin.js` | Owner-only panel — feature usage, the Accounts page, People & access |
+| `accounts.js` | Account types and what each one may do. Pure, and the single entitlement choke point — every limit and feature check goes through `capabilitiesFor()` |
 | `usage.js` | Counters-only telemetry: the `usage/{uid}` ledger, and platform detection |
 | `store.js` | Data layer — Firebase + per-account localStorage mirror + offline queue |
 | `firebase-config.js` | Public project keys and the owner UID |
@@ -245,8 +247,9 @@ approving it lets them in — the waiting screen unlocks itself within a second,
 no reload.
 
 Both write `access/approved/{uid}`, which is the only node the rules check.
-Removing somebody deletes that node: they lose access immediately and their own
-log is left untouched, so adding them back restores everything.
+Removing somebody deletes that node and resets their AI permissions: they lose
+access immediately, and their own log is left untouched, so adding them back
+restores everything.
 
 Creating a Firebase Auth account is deliberately *not* the gate. It cannot be —
 the API key is in this repo, and anyone can call Google's sign-up endpoint by
