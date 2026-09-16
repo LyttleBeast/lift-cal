@@ -582,7 +582,8 @@ function overTime() {
    filter it by type, open one account and everything about that account is on
    the page in front of you.
 
-   It draws only what matches, and never more than SHOW_MAX of those. */
+   It draws only what matches, and never more than SHOW_MAX of those — and
+   until the owner asks for somebody it draws nothing at all. */
 function accountsSection() {
   const s = section('Accounts');
 
@@ -661,11 +662,25 @@ function paintAccounts() {
   acctBox.innerHTML = '';
   if (acctNote) acctNote.textContent = '';
 
-  const rows = accountRows();
-  if (!rows.length) { acctBox.appendChild(noteEl('No accounts yet.')); return; }
+  // Cheap enough to ask before the search-only gate below, and the honest
+  // answer when there is genuinely nobody: inviting a search that cannot match
+  // is worse than saying the tree is empty.
+  if (!accountUids().length) { acctBox.appendChild(noteEl('No accounts yet.')); return; }
 
   const q = acctQuery.trim().toLowerCase();
-  const hits = rows
+
+  // An empty box with no type chosen is not a request to see everybody — it is
+  // the panel sitting idle, and the first twenty-five accounts dropped into it
+  // read as a list of who is here. So nothing is drawn, and nothing is even
+  // built: accountRows() below walks every account there is, which is the work
+  // this screen must not do on open as the count grows.
+  if (!q && acctFilter === 'all') {
+    if (acctNote) acctNote.textContent =
+      'Search a name or email, or tap a type to list those accounts.';
+    return;
+  }
+
+  const hits = accountRows()
     .filter(r => acctFilter === 'all' || r.type === acctFilter)
     .filter(r => matchesQuery(r, q))
     .sort((a, b) => b.total - a.total || b.last - a.last);
@@ -988,44 +1003,12 @@ function peopleSection() {
     });
   }
 
-  /* ---- who is in ---- */
-  s.appendChild(el('div', 'eyebrow people-gap', 'Has access'));
-  const people = Object.entries(approved).sort((a, b) => (a[1].at || 0) - (b[1].at || 0));
-  if (!people.length) s.appendChild(noteEl('Nobody yet.'));
-
-  people.forEach(([u, rec]) => {
-    const row = el('div', 'person');
-    const main = el('div', 'person-main');
-    main.appendChild(el('div', 'person-name', nameOf(u)));
-    main.appendChild(el('div', 'person-sub',
-      (rec.email ? rec.email + ' · ' : '') +
-      (rec.via === 'invite' ? 'used a code' : 'approved by you')));
-    row.appendChild(main);
-
-    const acts = el('div', 'person-acts');
-    // The owner is the one account revoke() refuses outright (access.js:203).
-    // Not offering the button is the same answer without the error.
-    if (u !== uid()) {
-      const ai = el('button', 'btn btn-ghost btn-sm', 'AI…');
-      ai.onclick = () => openAllowance(u);
-      acts.appendChild(ai);
-
-      const rev = el('button', 'btn btn-danger btn-sm', 'Remove');
-      rev.onclick = () => confirmSheet({
-        title: 'Remove ' + (rec.name || 'this person') + '?',
-        body: 'They lose access immediately. Their own log is not deleted — if you add them back it is all still there.',
-        confirmLabel: 'Remove', danger: true,
-        onConfirm: async () => {
-          try { await revoke(u); toast('Removed'); }
-          catch { toast('Couldn’t remove that account'); }
-          reload();
-        }
-      });
-      acts.appendChild(rev);
-    }
-    row.appendChild(acts);
-    s.appendChild(row);
-  });
+  /* ---- who is in ----
+     Deliberately not a list any more. Everybody with access is in the Accounts
+     section above, where the owner can search for one person instead of
+     scrolling past everybody else, and that account's page already carries the
+     two buttons this list used to hold — AI allowance and Remove. A second
+     roster here was the one that eventually disagreed with the first. */
 
   /* ---- invite codes ---- */
   s.appendChild(el('div', 'eyebrow people-gap', 'Invite codes'));

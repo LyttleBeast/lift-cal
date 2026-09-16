@@ -261,10 +261,11 @@ rules on every single read and write.
 
 `aiAllow/{uid}` decides who may spend the Anthropic balance. An approved account
 switches its own `on` flag; only the owner can set `blocked`, and blocked wins —
-that is the **AI…** button next to each person. The default is **3 photo and 3
-describe estimates per person per day**, counted separately because a photo
-costs about ten times what the same meal costs described. That default lives in
-the Worker's settings, where no client can reach it.
+that is **Turn their estimator off**, on that account's page under You → Admin →
+Accounts. The default is **3 photo and 3 describe estimates per person per
+day**, counted separately because a photo costs about ten times what the same
+meal costs described. That default lives in the Worker's settings, where no
+client can reach it.
 
 One account at a time can be given more, from **You → Admin → AI allowance**,
 which writes `photoPerDay` / `textPerDay` into that account's `aiAllow` node.
