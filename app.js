@@ -1,6 +1,7 @@
 import { login, signup, logout, resetPassword, watchAuth, flushQueue, syncPip,
          LS, uid, isOwner, watchShared, initUnits } from './store.js';
-import { accessState, renderGate, claimInvite, ensureAiRecord, normalizeCode, APPROVED } from './access.js';
+import { accessState, renderGate, renderPaused, isAccessPaused, initCapabilities,
+         mountTrialBanner, claimInvite, ensureAiRecord, normalizeCode, APPROVED } from './access.js';
 import { onboardingState, runSetup, runTour } from './onboarding.js';
 import { initWorkout, render as renderWorkout, hasActiveSession } from './workout.js';
 import { initFood, render as renderFood } from './food.js';
@@ -143,7 +144,26 @@ watchAuth(async user => {
       renderGate(user, () => { gateOpen = false; boot(user); });
       return;
     }
-    await boot(user);
+
+    /* The tier gate, and the second of the two things this file does before any
+       module loads. It reads ONLY the record accessState already fetched — no
+       extra round trip, nothing new that can fail — and accounts.js answers
+       "paused" for exactly two stored states and for nothing else. The owner is
+       never paused, an absent type is never paused, a record that failed to read
+       is never paused, and a throw is never paused. Everything about this gate
+       is built so that the way it breaks is by letting somebody in.
+
+       It is evaluated at boot and not again. A type change while the app is
+       open does not tear the screen away mid-set; it takes effect the next time
+       they open it, which for a PWA is usually within the hour. */
+    initCapabilities(user.uid, acc.record);
+    if (isAccessPaused(user.uid, acc.record)) {
+      gateOpen = true;
+      renderPaused(user, acc.record);
+      return;
+    }
+
+    await boot(user, acc.record);
   } else {
     // A real sign-out, not the initial null before auth resolves. Every module
     // holds the last account's data in module-level state — dayLog, entries,
@@ -160,9 +180,13 @@ watchAuth(async user => {
   }
 });
 
-async function boot(user) {
+async function boot(user, accessRecord) {
   if (booted) return;
   booted = true;
+
+  // A countdown, in the corner, once. Unawaited and wrapped by the callee:
+  // nothing about a banner is allowed to stand between somebody and their app.
+  mountTrialBanner(user.uid, accessRecord);
 
   syncPip();
   ensureAiRecord(user.uid);

@@ -36,6 +36,7 @@
 
 import { logout, readShared, writeShared, removeShared, updateShared, watchShared } from './store.js';
 import { OWNER_UID } from './firebase-config.js';
+import { capabilitiesFor, effectiveType, trialDaysLeft, isOwnerUid } from './accounts.js';
 import { el, noteEl, fmtDateFull } from './ui.js';
 
 export const APPROVED = 'approved';
@@ -202,7 +203,25 @@ export async function revoke(targetUid) {
   if (targetUid === OWNER_UID) throw new Error('refusing to revoke the owner');
   await updateShared({
     [P_APPROVED + targetUid]: null,
-    [P_AI + targetUid + '/on']: false
+    [P_AI + targetUid + '/on']: false,
+    /* The type went with the approval record; its derived limits are in a
+       different tree and would not have. That leaves one bad shape behind:
+       LOCKED derives aiAllow 0 / 0 / $0 with blocked set, and a locked account
+       that is then removed keeps all of it. Whichever door they come back
+       through later — approved again, or a fresh invite code they claim
+       themselves — they would land on an account that opens perfectly well and
+       whose estimator refuses every call, with nothing on any screen saying
+       why. Neither door can clear these keys: they are owner-only, and this is
+       the last moment the owner is here. So clear them now, and let the next
+       grant start from the Worker's defaults like any new account.
+
+       This is the permissions, not their data. The training log, the food log
+       and every weigh-in stay exactly where they are — that promise is about
+       users/{uid} and it is unchanged. */
+    [P_AI + targetUid + '/blocked']: false,
+    [P_AI + targetUid + '/photoPerDay']: null,
+    [P_AI + targetUid + '/textPerDay']: null,
+    [P_AI + targetUid + '/monthlyUsd']: null
   });
 }
 
@@ -225,6 +244,126 @@ export function deleteInvite(code) { return removeShared(P_INVITES + code); }
 export function listRequests() { return readShared('access/requests', null); }
 export function listApproved() { return readShared('access/approved', null); }
 export function listInvites()  { return readShared('access/invites', null); }
+
+/* ================= what THIS account may do =================
+
+   accounts.js is pure and answers about any account. This is the live wrapper
+   over it for the one account that is signed in: worked out once at boot from
+   the record accessState() has already read, and held for the app to ask.
+
+   It is the only thing the rest of the app talks to about entitlements, which
+   is the point — capabilitiesFor() stays the single choke point and this is the
+   only cached copy of its answer.
+
+   Before boot sets it, and after any failure, capabilities() answers with the
+   basic set: full ordinary access, the Worker's own limits. Nothing in this
+   file can answer "no" by accident. */
+
+let CAPS = null;
+
+export function initCapabilities(u, record) {
+  try { CAPS = capabilitiesFor(u || '', record, Date.now()); }
+  catch { CAPS = null; }
+  return capabilities();
+}
+
+export function capabilities() {
+  // capabilitiesFor('', null) is the basic set by construction — see the
+  // fail-open promise at the top of accounts.js.
+  return CAPS || capabilitiesFor('', null, Date.now());
+}
+
+// The estimator's gate on the client. The Worker is still the one that counts;
+// this is so the app does not offer a button that is going to come back refused.
+export function canUseAi() { return capabilities().aiAccess !== false; }
+
+/* Whether to show the app at all. Deliberately narrow: the owner is never
+   paused, an absent or unreadable record is never paused, and any throw at all
+   is never paused. The only two roads here are an explicit stored 'locked' and
+   a trial with a real end date that has really passed. */
+export function isAccessPaused(u, record) {
+  try {
+    if (isOwnerUid(u)) return false;
+    return capabilitiesFor(u, record, Date.now()).appAccess === false;
+  } catch {
+    return false;
+  }
+}
+
+/* The paused screen. Same host and the same furniture as the waiting screen —
+   it is the same situation from the person's side: signed in, and not through
+   the door. It watches the record it is standing on, so the moment the owner
+   changes the type the app lets itself back in without anybody being told to
+   reload. */
+export function renderPaused(user, record) {
+  const host = document.getElementById('gate');
+  host.innerHTML = '';
+  host.classList.remove('hidden');
+
+  const expired = effectiveType(user.uid, record, Date.now()) === 'locked' &&
+                  record && typeof record.trialEndsAt === 'number' && record.type === 'trial';
+
+  const stop = watchShared(P_APPROVED + user.uid, v => {
+    // Only ever opens the door, never closes it: a read that came back null is
+    // a revocation, and app.js's own watcher already handles that.
+    if (v && !isAccessPaused(user.uid, v)) location.reload();
+  });
+
+  const box = el('div', 'auth-box gate-box');
+
+  const mark = el('div', 'auth-mark');
+  ['#d6252b', '#2e7fd9', '#f0be1e', '#2aa85c', '#e8e5de', '#a8aeb8'].forEach((c, i) => {
+    const b = el('i');
+    b.style.background = c;
+    b.style.animationDelay = (i * 60) + 'ms';
+    mark.appendChild(b);
+  });
+  box.appendChild(mark);
+
+  const wrap = el('div', 'gate-body');
+  wrap.appendChild(el('h1', 'gate-title', expired ? 'Your trial has ended' : 'Access paused'));
+  wrap.appendChild(noteEl(
+    expired
+      ? 'The trial on this account finished ' + fmtDateFull(dayKeyOf(record.trialEndsAt)) + '. Everything you logged is still here and none of it has been deleted — ask Micah to carry the account on and it all comes straight back.'
+      : 'Micah has paused this account. Nothing you logged has been deleted and nothing has been changed — ask him to switch it back on and it is all still here.'));
+
+  const pill = el('div', 'gate-pending');
+  pill.appendChild(el('span', 'dot'));
+  pill.appendChild(el('span', null, 'This screen unlocks itself the moment he does'));
+  wrap.appendChild(pill);
+
+  const again = el('button', 'btn btn-ghost btn-block', 'Check again');
+  again.onclick = () => location.reload();
+  wrap.appendChild(again);
+
+  const who = el('div', 'gate-who');
+  who.appendChild(el('span', null, 'Signed in as ' + (user.email || '')));
+  const out = el('button', 'linkish', 'Sign out');
+  out.onclick = () => { stop && stop(); logout(); };
+  who.appendChild(out);
+  wrap.appendChild(who);
+
+  box.appendChild(wrap);
+  host.appendChild(box);
+}
+
+/* "6 days left in trial", in the corner, once. Small on purpose: it is a fact
+   somebody wants available, not a thing to be sold to every time they open the
+   app. Tapping it puts it away until the next launch. Nothing is drawn at all
+   when there is no countdown to give — a trial with no end date does not
+   expire, and a banner counting down from nothing would be a lie. */
+export function mountTrialBanner(u, record) {
+  try {
+    if (effectiveType(u, record, Date.now()) !== 'trial') return;
+    const left = trialDaysLeft(record, Date.now());
+    if (left === null) return;
+    document.querySelector('.trial-bar')?.remove();
+    const bar = el('button', 'trial-bar',
+      left === 0 ? 'Trial ends today' : left + ' day' + (left === 1 ? '' : 's') + ' left in trial');
+    bar.onclick = () => bar.remove();
+    document.body.appendChild(bar);
+  } catch {}
+}
 
 /* ================= the waiting screen ================= */
 

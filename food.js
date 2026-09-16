@@ -21,6 +21,7 @@ import { $, el, svgEl, sheet, toast, noteEl, confirmSheet, copyText, readClipboa
          segmented, r1, trimNum, LIMITS, clamp, within } from './ui.js';
 import { shrinkImage, estimatePhoto, estimateText, quota,
          proxyUrl, setProxyUrl, hasProxy } from './ai.js';
+import { canUseAi } from './access.js';
 import { initRecall, lookup as recallLookup, remember as recallRemember,
          rememberEntry, kindForSrc, recallList, recallCount,
          forget as recallForget, forgetAll as recallForgetAll } from './recall.js';
@@ -1034,24 +1035,40 @@ function openAdd(mealId) {
   sh.appendChild(el('div', 'eyebrow', isToday() ? 'Add to' : 'Add to ' + fmtViewDate()));
   sh.appendChild(mealChips(meal, v => { meal = v; }));
 
+  // The estimator's client-side gate. The Worker is still what actually decides
+  // — this only stops the app offering two buttons that are going to come back
+  // refused, which is a worse answer than not offering them. It routes through
+  // capabilitiesFor() like every other entitlement question, and its default
+  // when nothing is known is ON.
+  const aiOn = canUseAi();
+
   const grid = el('div', 'add-grid');
-  const tile = (cls, ic, title, desc, tag, fn) => {
+  const tile = (cls, ic, title, desc, tag, fn, off) => {
     const b = el('button', 'add-tile' + (cls ? ' ' + cls : ''));
     const box = el('div', 'ic');
     box.appendChild(icon(ic));
     b.append(box, el('div', 't', title), el('div', 'd', desc));
     if (tag) b.appendChild(el('div', 'tag', tag));
-    b.onclick = () => { close(); fn(meal); };
+    if (off) b.disabled = true;
+    else b.onclick = () => { close(); fn(meal); };
     grid.appendChild(b);
   };
 
-  tile('hero', 'camera',  'Photo',    'Snap the plate. Claude reads the macros off it.', 'ai', openPhotoFlow);
-  tile('lit',  'pen',     'Describe', 'Just say what you ate. Cheapest way in.',         'ai', openDescribeFlow);
+  tile('hero', 'camera',  'Photo',    aiOn ? 'Snap the plate. Claude reads the macros off it.' : 'Switched off for this account.', 'ai', openPhotoFlow,    !aiOn);
+  tile('lit',  'pen',     'Describe', aiOn ? 'Just say what you ate. Cheapest way in.'         : 'Switched off for this account.', 'ai', openDescribeFlow, !aiOn);
   tile(null,   'barcode', 'Barcode',  'Scan a package label.',                           null, m => openScanner(code => lookupBarcode(code, m)));
   tile(null,   'keypad',  'Manual',   'You already know the numbers.',                   null, m => openManual(m));
   sh.appendChild(grid);
 
-  if (!hasProxy()) {
+  // Two different sentences for two different problems: nothing here to set up
+  // versus somebody else's decision. Offering the setup screen for the second
+  // one would send a person round a settings page that cannot fix it.
+  if (!aiOn) {
+    const off = el('div', 'ai-warn');
+    off.append(icon('spark', '1.6'), el('span', null,
+      'Photo and Describe are off for this account. Everything else works — scan, search and type all still add food.'));
+    sh.appendChild(off);
+  } else if (!hasProxy()) {
     const warn = el('button', 'ai-warn');
     warn.append(icon('spark', '1.6'), el('span', null, 'Photo and Describe need the estimator connected — set it up'));
     warn.onclick = () => { close(); openAiSettings(); };

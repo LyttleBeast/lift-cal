@@ -25,6 +25,7 @@ import { openStepSettings, stepGoal, openAutoDetails } from './steps.js';
 import { openImport } from './importer.js';
 import { openExerciseManager } from './picker.js';
 import { hasProxy } from './ai.js';
+import { canUseAi } from './access.js';
 import { hasActiveSession } from './workout.js';
 import { openInstallGuide } from './onboarding.js';
 import { hIn as inchesFrom, fmtH, unitH, limH, labelRate } from './units.js';
@@ -98,7 +99,13 @@ function stepPill() {
 // address to send to; whether that Worker will actually spend anything is
 // aiAllow/{uid} and the rate limits, which only the Worker can answer. Saying
 // "On" to somebody the owner has blocked would be a lie the app can't back up.
+//
+// The one case it CAN now speak to is the account's own type: an account whose
+// tier has no estimator is not going to get one from this screen, and sending
+// somebody to check a Worker URL over a decision the owner made is worse than
+// saying nothing. Everything else still reads Connected / Not set up.
 function aiPill() {
+  if (!canUseAi()) return 'Off for this account';
   return hasProxy() ? 'Connected' : 'Not set up';
 }
 
