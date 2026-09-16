@@ -6,31 +6,31 @@
       "$uid": {
         ".read": "auth != null && auth.uid === $uid && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved').child(auth.uid).exists())",
         "food": {
-          ".write": "auth != null && auth.uid === $uid && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved').child(auth.uid).exists())"
+          ".write": "auth != null && auth.uid === $uid && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || (root.child('access/approved').child(auth.uid).exists() && root.child('access/approved').child(auth.uid).child('type').val() !== 'locked' && (root.child('access/approved').child(auth.uid).child('type').val() !== 'trial' || !root.child('access/approved').child(auth.uid).child('trialEndsAt').isNumber() || root.child('access/approved').child(auth.uid).child('trialEndsAt').val() > now)))"
         },
         "weight": {
-          ".write": "auth != null && auth.uid === $uid && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved').child(auth.uid).exists())"
+          ".write": "auth != null && auth.uid === $uid && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || (root.child('access/approved').child(auth.uid).exists() && root.child('access/approved').child(auth.uid).child('type').val() !== 'locked' && (root.child('access/approved').child(auth.uid).child('type').val() !== 'trial' || !root.child('access/approved').child(auth.uid).child('trialEndsAt').isNumber() || root.child('access/approved').child(auth.uid).child('trialEndsAt').val() > now)))"
         },
         "workouts": {
-          ".write": "auth != null && auth.uid === $uid && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved').child(auth.uid).exists())"
+          ".write": "auth != null && auth.uid === $uid && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || (root.child('access/approved').child(auth.uid).exists() && root.child('access/approved').child(auth.uid).child('type').val() !== 'locked' && (root.child('access/approved').child(auth.uid).child('type').val() !== 'trial' || !root.child('access/approved').child(auth.uid).child('trialEndsAt').isNumber() || root.child('access/approved').child(auth.uid).child('trialEndsAt').val() > now)))"
         },
         "history": {
-          ".write": "auth != null && auth.uid === $uid && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved').child(auth.uid).exists())"
+          ".write": "auth != null && auth.uid === $uid && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || (root.child('access/approved').child(auth.uid).exists() && root.child('access/approved').child(auth.uid).child('type').val() !== 'locked' && (root.child('access/approved').child(auth.uid).child('type').val() !== 'trial' || !root.child('access/approved').child(auth.uid).child('trialEndsAt').isNumber() || root.child('access/approved').child(auth.uid).child('trialEndsAt').val() > now)))"
         },
         "water": {
-          ".write": "auth != null && auth.uid === $uid && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved').child(auth.uid).exists())"
+          ".write": "auth != null && auth.uid === $uid && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || (root.child('access/approved').child(auth.uid).exists() && root.child('access/approved').child(auth.uid).child('type').val() !== 'locked' && (root.child('access/approved').child(auth.uid).child('type').val() !== 'trial' || !root.child('access/approved').child(auth.uid).child('trialEndsAt').isNumber() || root.child('access/approved').child(auth.uid).child('trialEndsAt').val() > now)))"
         },
         "steps": {
-          ".write": "auth != null && auth.uid === $uid && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved').child(auth.uid).exists())"
+          ".write": "auth != null && auth.uid === $uid && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || (root.child('access/approved').child(auth.uid).exists() && root.child('access/approved').child(auth.uid).child('type').val() !== 'locked' && (root.child('access/approved').child(auth.uid).child('type').val() !== 'trial' || !root.child('access/approved').child(auth.uid).child('trialEndsAt').isNumber() || root.child('access/approved').child(auth.uid).child('trialEndsAt').val() > now)))"
         },
         "routines": {
-          ".write": "auth != null && auth.uid === $uid && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved').child(auth.uid).exists())"
+          ".write": "auth != null && auth.uid === $uid && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || (root.child('access/approved').child(auth.uid).exists() && root.child('access/approved').child(auth.uid).child('type').val() !== 'locked' && (root.child('access/approved').child(auth.uid).child('type').val() !== 'trial' || !root.child('access/approved').child(auth.uid).child('trialEndsAt').isNumber() || root.child('access/approved').child(auth.uid).child('trialEndsAt').val() > now)))"
         },
         "exercises": {
-          ".write": "auth != null && auth.uid === $uid && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved').child(auth.uid).exists())"
+          ".write": "auth != null && auth.uid === $uid && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || (root.child('access/approved').child(auth.uid).exists() && root.child('access/approved').child(auth.uid).child('type').val() !== 'locked' && (root.child('access/approved').child(auth.uid).child('type').val() !== 'trial' || !root.child('access/approved').child(auth.uid).child('trialEndsAt').isNumber() || root.child('access/approved').child(auth.uid).child('trialEndsAt').val() > now)))"
         },
         "settings": {
-          ".write": "auth != null && auth.uid === $uid && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved').child(auth.uid).exists())",
+          ".write": "auth != null && auth.uid === $uid && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || (root.child('access/approved').child(auth.uid).exists() && root.child('access/approved').child(auth.uid).child('type').val() !== 'locked' && (root.child('access/approved').child(auth.uid).child('type').val() !== 'trial' || !root.child('access/approved').child(auth.uid).child('trialEndsAt').isNumber() || root.child('access/approved').child(auth.uid).child('trialEndsAt').val() > now)))",
           "units": {
             "weight": {
               ".validate": "newData.val() === 'lb' || newData.val() === 'kg'"
@@ -44,7 +44,7 @@
           }
         },
         "profile": {
-          ".write": "auth != null && auth.uid === $uid && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved').child(auth.uid).exists())",
+          ".write": "auth != null && auth.uid === $uid && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || (root.child('access/approved').child(auth.uid).exists() && root.child('access/approved').child(auth.uid).child('type').val() !== 'locked' && (root.child('access/approved').child(auth.uid).child('type').val() !== 'trial' || !root.child('access/approved').child(auth.uid).child('trialEndsAt').isNumber() || root.child('access/approved').child(auth.uid).child('trialEndsAt').val() > now)))",
           "name": {
             ".validate": "newData.isString() && newData.val().length <= 60"
           },
@@ -71,7 +71,7 @@
           }
         },
         "onboarding": {
-          ".write": "auth != null && auth.uid === $uid && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved').child(auth.uid).exists())",
+          ".write": "auth != null && auth.uid === $uid && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || (root.child('access/approved').child(auth.uid).exists() && root.child('access/approved').child(auth.uid).child('type').val() !== 'locked' && (root.child('access/approved').child(auth.uid).child('type').val() !== 'trial' || !root.child('access/approved').child(auth.uid).child('trialEndsAt').isNumber() || root.child('access/approved').child(auth.uid).child('trialEndsAt').val() > now)))",
           "done": {
             ".validate": "newData.isBoolean()"
           },

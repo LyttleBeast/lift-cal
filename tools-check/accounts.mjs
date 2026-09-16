@@ -24,6 +24,7 @@
 // literal IS the contract: basic must equal the Worker's own defaults, and no
 // derived number may exceed the ceilings in database.rules.json.
 
+import { readFileSync } from 'node:fs';
 import { OWNER_UID } from '../firebase-config.js';
 import {
   TIERS, SETTABLE_TYPES, SUB_STATUSES, FEATURES, RULE_MAX, TRIAL_DAYS,
@@ -318,8 +319,23 @@ const TODAY = { at: 1740000000000, via: 'invite', code: 'ABCDE-FGHJK',
   }
 
   check('the ceilings mirrored here are the ones in database.rules.json',
-        RULE_MAX.photoPerDay === 12 && RULE_MAX.textPerDay === 30 && RULE_MAX.monthlyUsd === 10,
+        RULE_MAX.photoPerDay === 12 && RULE_MAX.textPerDay === 30 &&
+        RULE_MAX.monthlyUsd === 10 && RULE_MAX.trialEndsAt === 4102444800000,
         JSON.stringify(RULE_MAX));
+
+  // trialEndsAt travels in the SAME atomic update as the type, so a date the
+  // rules refuse does not fail one field — it fails the whole change, and the
+  // owner is told the rules are unpublished when they are not. A date picker
+  // takes four digits for the year and a slip is one keystroke.
+  check('an absurd trial date is clamped to the rules ceiling, not sent as-is',
+        typePatch('trial', { nowMs: NOW, trialEndsAt: 253402214400000 }).trialEndsAt === RULE_MAX.trialEndsAt,
+        String(typePatch('trial', { nowMs: NOW, trialEndsAt: 253402214400000 }).trialEndsAt));
+  check('a negative trial date is clamped to zero, not sent as-is',
+        typePatch('trial', { nowMs: NOW, trialEndsAt: -5 }).trialEndsAt === 0);
+  check('a fractional trial date comes out whole',
+        Number.isInteger(typePatch('trial', { nowMs: NOW, trialEndsAt: NOW + 0.7 }).trialEndsAt));
+  check('an ordinary trial date is left exactly alone',
+        typePatch('trial', { nowMs: NOW, trialEndsAt: NOW + 3 * DAY }).trialEndsAt === NOW + 3 * DAY);
 
   check('an over-typed custom cap comes out clamped, not refused',
         derivedAllowance(SOMEBODY,
@@ -449,6 +465,253 @@ const GARBAGE = [
         SETTABLE_TYPES.filter(t => TIERS[t].appAccess === false).join(',') === 'locked');
   check('locked is the only settable type without AI access',
         SETTABLE_TYPES.filter(t => TIERS[t].aiAccess === false).join(',') === 'locked');
+}
+
+/* ---------- 14. the app and the rules agree ----------
+   CLAUDE.md's silent failure, pinned: a write to a node the published rules do
+   not name fails with NO error on screen — the data simply never arrives. Every
+   field this module invents is new to access/approved, whose rules end in a
+   catch-all that refuses anything unnamed. So the fields, the enums and the
+   ceilings are checked against the real rules file here, and a field added to
+   the app without a rule fails loudly in this verifier instead of quietly on
+   somebody's phone.
+
+   The rules file publishes nothing on its own — Micah pastes it into the
+   Firebase console. This only proves the file says what the app needs it to. */
+
+const RULES  = JSON.parse(readFileSync(new URL('../database.rules.json', import.meta.url), 'utf8'));
+const LOCKED = JSON.parse(readFileSync(new URL('../database.rules.OPTIONAL-LOCK.json', import.meta.url), 'utf8'));
+
+{
+  const appr = RULES.rules.access.approved.$uid;
+  const ai   = RULES.rules.aiAllow.$uid;
+
+  // Every key typePatch can write has to be a key the rules name.
+  const written = Object.keys(typePatch('custom', { nowMs: NOW, customCaps: { photoPerDay: 1 } }));
+  for (const k of written) {
+    check('access/approved names the field ' + k, !!appr[k],
+          'the rules would refuse it in silence');
+  }
+  check('access/approved still refuses anything it does not name',
+        appr.$other && appr.$other['.validate'] === false);
+
+  // Every key derivedAllowance can write has to be a key the aiAllow rules name.
+  const derived = derivedAllowance(SOMEBODY, { ...TODAY, type: 'pro' }, NOW);
+  for (const k of Object.keys(derived)) {
+    check('aiAllow names the field ' + k, !!ai[k],
+          'the rules would refuse it in silence');
+  }
+  check('aiAllow still refuses anything it does not name',
+        ai.$other && ai.$other['.validate'] === false);
+
+  // Owner-only, and enforced in .validate rather than in a child .write: a
+  // .write grant on the PARENT cascades to the whole subtree, and the parent
+  // here already grants a self-write to an account claiming an invite code. A
+  // child .write could not take that back. .validate can, and does.
+  for (const k of ['type', 'trialEndsAt', 'customCaps', 'subStatus']) {
+    const v = String(appr[k]['.validate'] || '');
+    check(k + ' is owner-only, checked in .validate',
+          v.includes("auth.uid === '" + OWNER_UID + "'"), v.slice(0, 60));
+    check(k + ' does not try to restrict with a child .write, which cannot work',
+          !('.write' in appr[k]));
+  }
+
+  // The enums the rules accept are exactly the types and statuses this module
+  // can produce — no more (a type nobody defined) and no fewer (a type the app
+  // offers and the database refuses).
+  const typeEnum = String(appr.type['.validate']).match(/'[a-z_]+'/g)
+    .map(x => x.slice(1, -1)).filter(x => x !== OWNER_UID);
+  check('the rules accept exactly the settable types',
+        typeEnum.slice().sort().join(',') === SETTABLE_TYPES.slice().sort().join(','),
+        typeEnum.join(','));
+  check('the rules do not accept a stored type of owner', !typeEnum.includes('owner'));
+
+  const subEnum = String(appr.subStatus['.validate']).match(/'[a-z_]+'/g)
+    .map(x => x.slice(1, -1)).filter(x => x !== OWNER_UID);
+  check('the rules accept exactly the placeholder subscription statuses',
+        subEnum.slice().sort().join(',') === SUB_STATUSES.slice().sort().join(','),
+        subEnum.join(','));
+
+  // The ceilings RULE_MAX mirrors are the ceilings the rules actually hold, in
+  // both places they appear: aiAllow, and customCaps.
+  const ceiling = expr => Number(String(expr).match(/<=\s*([0-9.]+)\s*$/)[1]);
+  check('aiAllow photoPerDay ceiling matches RULE_MAX',
+        ceiling(ai.photoPerDay['.validate']) === RULE_MAX.photoPerDay);
+  check('aiAllow textPerDay ceiling matches RULE_MAX',
+        ceiling(ai.textPerDay['.validate']) === RULE_MAX.textPerDay);
+  check('aiAllow monthlyUsd ceiling matches RULE_MAX',
+        ceiling(ai.monthlyUsd['.validate']) === RULE_MAX.monthlyUsd);
+  const cc = appr.customCaps;
+  check('customCaps photoPerDay ceiling matches RULE_MAX',
+        ceiling(cc.photoPerDay['.validate']) === RULE_MAX.photoPerDay);
+  check('customCaps textPerDay ceiling matches RULE_MAX',
+        ceiling(cc.textPerDay['.validate']) === RULE_MAX.textPerDay);
+  check('customCaps monthlyUsd ceiling matches RULE_MAX',
+        ceiling(cc.monthlyUsd['.validate']) === RULE_MAX.monthlyUsd);
+  check('customCaps refuses a key nobody named',
+        cc.$other && cc.$other['.validate'] === false);
+  check('customCaps features refuses a feature nobody named',
+        cc.features.$other && cc.features.$other['.validate'] === false);
+  for (const f of FEATURES) {
+    check('customCaps features names ' + f, !!cc.features[f]);
+  }
+
+  // The uid in the rules is the uid in firebase-config.js. If those two ever
+  // part company the owner is locked out of his own database, which is the one
+  // failure this whole project is built to make impossible.
+  check('the rules name the same owner as firebase-config.js',
+        JSON.stringify(RULES).includes(OWNER_UID));
+}
+
+/* ---------- 15. the optional lock is optional, and fail-safe ----------
+   database.rules.OPTIONAL-LOCK.json is an ALTERNATIVE to paste, not an addition
+   — only one rule set is ever live. It must differ from the published file in
+   exactly one way: users/{uid} writes are refused while that account is locked.
+
+   "Locked" has to mean there what it means in accounts.js, or the two
+   definitions drift and the rule enforces half of what the app shows: an
+   explicit type of 'locked', AND a trial whose end date has passed. The rules
+   language has `now`, which is what makes the second one expressible at all. */
+
+{
+  const a = RULES.rules.users.$uid;
+  const b = LOCKED.rules.users.$uid;
+  const CLAUSE = "child('type').val() !== 'locked'";
+  const TRIAL  = "child('trialEndsAt').val() > now";
+
+  const branches = Object.keys(b).filter(k => b[k] && typeof b[k] === 'object' && b[k]['.write']);
+  check('the lock variant guards every users/{uid} write branch',
+        branches.length > 0 && branches.every(pth => String(b[pth]['.write']).includes(CLAUSE)),
+        branches.filter(pth => !String(b[pth]['.write']).includes(CLAUSE)).join(','));
+
+  check('the lock also covers an expired trial, which accounts.js calls locked',
+        branches.every(pth => String(b[pth]['.write']).includes(TRIAL)),
+        branches.filter(pth => !String(b[pth]['.write']).includes(TRIAL)).join(','));
+
+  check('the published file carries no lock at all — publishing it locks nobody',
+        !JSON.stringify(RULES).includes(CLAUSE));
+
+  check('the lock variant still lets the owner through first',
+        branches.every(pth => String(b[pth]['.write']).includes("auth.uid === '" + OWNER_UID + "' ||")));
+
+  // Absent type is `null`, and null !== 'locked', so the clause passes. A trial
+  // with no readable end date is allowed by an isNumber() test rather than
+  // refused by a comparison against undefined. Both are the fail-safe.
+  check('the lock tests the type for a value, never for its absence',
+        branches.every(pth => !String(b[pth]['.write']).includes("child('type').exists()")));
+  check('a trial with an unreadable end date is allowed, not locked',
+        branches.every(pth => String(b[pth]['.write']).includes("!root.child('access/approved').child(auth.uid).child('trialEndsAt').isNumber()")));
+
+  check('reads are deliberately left alone, so a paused account can still see its own data',
+        a['.read'] === b['.read']);
+
+  // Nothing else may differ. Walked leaf by leaf rather than diffed as text,
+  // so the answer names the path that moved.
+  const drift = [];
+  (function walk(x, y, path) {
+    if (x === y) return;
+    if (x === null || y === null || typeof x !== 'object' || typeof y !== 'object') {
+      drift.push(path); return;
+    }
+    for (const k of new Set([...Object.keys(x), ...Object.keys(y)])) {
+      walk(x[k], y[k], path + '/' + k);
+    }
+  })(RULES, LOCKED, '');
+
+  const expected = /^\/rules\/users\/\$uid\/[a-z]+\/\.write$/;
+  check('the two rule sets differ in nothing but users/{uid} write branches',
+        drift.length > 0 && drift.every(pth => expected.test(pth)),
+        drift.filter(pth => !expected.test(pth)).join(' '));
+
+  // And each of those differs by ADDING to the same base expression, never by
+  // rewriting it: the published rule must still be a literal prefix of the
+  // locked one up to the point the extra conditions begin.
+  check('every differing branch still contains the published rule it grew from',
+        drift.every(pth => {
+          const at = o => pth.split('/').filter(Boolean).reduce((n, k) => n[k], o);
+          const base = String(at(RULES));
+          const grown = String(at(LOCKED));
+          const head = base.slice(0, base.indexOf('(auth.uid ==='));
+          return grown.startsWith(head) &&
+                 grown.includes("root.child('access/approved').child(auth.uid).exists()") &&
+                 grown.length > base.length;
+        }));
+}
+
+/* ---------- 16. the invariants the callers lean on ----------
+   accounts.js is pure and provable; admin.js, access.js and app.js are DOM code
+   that cannot be imported here. What CAN be pinned is the property each of them
+   depends on, and the shape of the call — so that a change to the table below
+   fails here rather than quietly changing what a screen does.
+
+   This is the same trick tools-check/units.mjs plays on call sites: read the
+   source as text and assert the shape. It catches a whole class of edit that no
+   amount of testing the pure module would. */
+
+const SRC = f => readFileSync(new URL('../' + f, import.meta.url), 'utf8');
+
+{
+  /* WHY admin.js must not write `blocked` unconditionally. aiAllow/{uid}/blocked
+     is two switches sharing one key — the tier's, and the owner's own "Turn
+     their estimator off". Every tier but locked derives blocked:false, so a
+     type change that wrote it every time would silently hand the estimator back
+     to somebody the owner had switched off on purpose. */
+  for (const t of SETTABLE_TYPES) {
+    const d = derivedAllowance(SOMEBODY, { ...TODAY, type: t, trialEndsAt: NOW + DAY }, NOW);
+    check('derivedAllowance says blocked for ' + t + ' only when the tier means it',
+          d.blocked === (t === 'locked'), String(d.blocked));
+  }
+
+  const admin = SRC('admin.js');
+  check('admin.js does not write aiAllow blocked unconditionally',
+        !/paths\[P_AI \+ u \+ '\/blocked'\] = d\.blocked/.test(admin),
+        'an unconditional write would clear a manual block on every type change');
+  check('admin.js only ever SETS blocked from a tier, or clears one it set',
+        /if \(d\.blocked\) paths\[P_AI \+ u \+ '\/blocked'\] = true;/.test(admin));
+
+  /* WHY admin.js must consult the clock before preserving a trial date. The
+     stored type and the effective type disagree for exactly one account: an
+     expired trial, stored 'trial', effectively 'locked'. Re-applying 'trial'
+     there must start a NEW trial, not write yesterday back and report success. */
+  const expired = { ...TODAY, type: 'trial', trialEndsAt: NOW - DAY };
+  check('an expired trial is the one record whose stored and effective types differ',
+        expired.type === 'trial' && effectiveType(SOMEBODY, expired, NOW) === 'locked');
+  check('admin.js passes the clock to keepFromRecord',
+        /function keepFromRecord\(rec, type, now\)/.test(admin) &&
+        /keepFromRecord\(rec, type, now\)/.test(admin));
+  check('admin.js refuses to preserve a trial date that has already passed',
+        /rec\.trialEndsAt > now/.test(admin));
+
+  /* The owner guarantee, as a property of the SOURCE and not only of the table:
+     no call in admin.js can hand applyType the string 'owner', and the control
+     is built by iterating SETTABLE_TYPES rather than by listing labels. */
+  check('no call site in admin.js passes owner to applyType',
+        !/applyType\([^)]*['"]owner['"]/.test(admin));
+  check('the type control is built from SETTABLE_TYPES, which has no owner in it',
+        /SETTABLE_TYPES\.forEach/.test(admin));
+
+  /* The app gate runs BEFORE boot and on the record already in hand. Its order
+     is the whole of its safety: a gate evaluated after the modules load is a
+     gate that has already let the app start. */
+  const app = SRC('app.js');
+  const iGate = app.indexOf('isAccessPaused(user.uid, acc.record)');
+  const iBoot = app.indexOf('await boot(user, acc.record)');
+  check('app.js asks isAccessPaused with the record accessState already read', iGate > 0);
+  check('app.js asks before it boots, not after', iGate > 0 && iBoot > iGate);
+
+  /* Whatever else access.js gates on, it must never gate the owner. */
+  const access = SRC('access.js');
+  check('access.js short-circuits the owner out of the pause check',
+        /if \(isOwnerUid\(u\)\) return false;/.test(access));
+  check('access.js answers the basic capability set when nothing is known',
+        /return CAPS \|\| capabilitiesFor\('', null, Date\.now\(\)\);/.test(access));
+
+  /* Removing somebody clears the limits a lock derived, because neither door
+     back in can: aiAllow's numeric keys and `blocked` are owner-only, and
+     revoke() is the last moment the owner is present. */
+  check('revoke clears the derived allowance as well as the approval',
+        /P_AI \+ targetUid \+ '\/blocked'\]: false/.test(access) &&
+        /P_AI \+ targetUid \+ '\/photoPerDay'\]: null/.test(access));
 }
 
 /* ---------- report ---------- */

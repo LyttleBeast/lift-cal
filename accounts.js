@@ -122,7 +122,15 @@ export const TRIAL_DAYS = 14;
    number this file cannot honour comes out clamped rather than refused: a write
    the rules reject fails silently, and a silently unchanged limit is the worst
    possible outcome for a screen whose whole job is to say what the limit is. */
-export const RULE_MAX = Object.freeze({ photoPerDay: 12, textPerDay: 30, monthlyUsd: 10 });
+export const RULE_MAX = Object.freeze({
+  photoPerDay: 12, textPerDay: 30, monthlyUsd: 10,
+  // 2100-01-01Z, the same ceiling database.rules.json puts on every timestamp.
+  // It is in here for the same reason the other three are: a date nobody could
+  // have meant must come out clamped, not refused. trialEndsAt travels in an
+  // ATOMIC update beside the type, so one bad date does not fail one field —
+  // it fails the whole change, and the owner is told the rules are unpublished.
+  trialEndsAt: 4102444800000
+});
 
 const DAY_MS = 864e5;
 
@@ -231,7 +239,7 @@ export function typePatch(type, opts) {
   const t = SETTABLE_TYPES.includes(type) ? type : 'basic';
   return {
     type: t,
-    trialEndsAt: t === 'trial' ? Math.round(num(o.trialEndsAt) ?? trialEndFromNow(o.nowMs, TRIAL_DAYS)) : null,
+    trialEndsAt: t === 'trial' ? stamp(num(o.trialEndsAt) ?? trialEndFromNow(o.nowMs, TRIAL_DAYS)) : null,
     customCaps:  t === 'custom' ? normalizeCustomCaps(o.customCaps) : null,
     subStatus:   SUB_STATUSES.includes(o.subStatus) ? o.subStatus : 'none'
   };
@@ -332,6 +340,14 @@ function whole(v, max) {
   const n = num(v);
   if (n === null) return null;
   return Math.max(0, Math.min(max, Math.floor(n)));
+}
+
+// A timestamp the rules will accept: whole milliseconds, never negative, never
+// past the year 2100. See the note on RULE_MAX.trialEndsAt.
+function stamp(v) {
+  const n = num(v);
+  if (n === null) return 0;
+  return Math.round(Math.max(0, Math.min(RULE_MAX.trialEndsAt, n)));
 }
 
 // Money, to the cent, inside the rules' ceiling, or null for "no override".
