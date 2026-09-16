@@ -613,6 +613,22 @@ body.peeking .view.active { padding-bottom: 58px; }
 .sync-pip i { width: 6px; height: 6px; border-radius: 50%; background: var(--good); display: block; }
 .sync-pip.off i { background: var(--warn); }
 
+/* ============ TRIAL COUNTDOWN ============
+   The sync pip's opposite corner and the sync pip's manners: a fact available
+   at a glance, never a thing to be got past. One tap puts it away until the
+   next launch, and it is not drawn at all for a trial with no end date — a
+   countdown from nothing would be the one number on screen nobody could act on. */
+.trial-bar {
+  position: fixed; top: calc(8px + var(--safe-top)); left: 10px;
+  z-index: 80;
+  padding: 3px 9px; border-radius: 999px;
+  background: rgba(240,190,30,.10);
+  border: 1px solid rgba(240,190,30,.34);
+  color: var(--warn);
+  font-size: 9px; letter-spacing: .1em; text-transform: uppercase;
+  font-variation-settings: 'wdth' 88, 'wght' 700;
+}
+
 /* ============ DESKTOP ============ */
 @media (min-width: 900px) {
   #app { max-width: 720px; }
@@ -1356,6 +1372,12 @@ body.peeking .view.active { padding-bottom: 58px; }
 }
 .adm-flag.on  { border-color: rgba(42,168,92,.45);  color: var(--good); }
 .adm-flag.off { border-color: rgba(214,37,43,.45);  color: var(--bad); }
+/* Account types get the same three colours the rest of the panel uses — green
+   is fine, yellow is running out, red is stopped — plus blue for a paid tier,
+   which is neither. Basic keeps the neutral outline: it is the ordinary case
+   and it should not draw the eye. */
+.adm-flag.lit  { border-color: rgba(46,127,217,.45); color: var(--p-blue); }
+.adm-flag.warn { border-color: rgba(240,190,30,.45); color: var(--warn); }
 
 /* ---------- add to home screen ----------
    Numbered steps in the same shape as the Steps setup walkthrough, on a card
@@ -1475,6 +1497,10 @@ body.peeking .view.active { padding-bottom: 58px; }
   transition: transform var(--fast) var(--ease), border-color var(--fast) var(--ease);
 }
 .add-tile:active { transform: scale(.97); border-color: var(--knurl); }
+/* A tile for something this account is not allowed. Dimmed rather than removed:
+   the menu keeps its shape, and the line under the title says why. */
+.add-tile:disabled { opacity: .42; }
+.add-tile:disabled:active { transform: none; border-color: var(--collar); }
 .add-tile .ic {
   width: 36px; height: 36px; border-radius: 10px;
   display: grid; place-items: center;
