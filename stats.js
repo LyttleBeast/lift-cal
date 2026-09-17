@@ -13,7 +13,7 @@ import { todayKey, wu } from './store.js';
 import {
   $, el, sheet, noteEl, fmtDate, fmtDateFull, parseKey, segmented
 } from './ui.js';
-import { wOut, volOut, fmtW, fmtSetW, fmtVol, unitW } from './units.js';
+import { wOut, volOut, fmtW, fmtSetLoad, fmtVol, unitW } from './units.js';
 
 let open      = false;
 let backFn    = null;
@@ -189,7 +189,7 @@ function renderOverview() {
   /* ---- leaderboards ---- */
   wrap.appendChild(rankCard('Strongest lifts', topBy(index, 'bestE1rm', 5), e => ({
     primary: Math.round(wOut(e.bestE1rm, u)) + ' ' + W,
-    secondary: e.bestE1rmSet ? fmtSetW(e.bestE1rmSet.w, u) + ' × ' + e.bestE1rmSet.r + ' · ' + fmtDate(e.bestE1rmDate) : ''
+    secondary: e.bestE1rmSet ? fmtSetLoad(e.bestE1rmSet.w, u) + ' × ' + e.bestE1rmSet.r + ' · ' + fmtDate(e.bestE1rmDate) : ''
   }), 'All-time estimated 1RM.'));
 
   wrap.appendChild(rankCard('Most trained', topBy(idxRange, 'sessions', 5), e => ({
@@ -440,7 +440,7 @@ function renderDetail(exId) {
   const pb = card('Personal bests');
   [
     ['Estimated 1RM', Math.round(wOut(e.bestE1rm, u)) + ' ' + W,
-      e.bestE1rmSet ? fmtSetW(e.bestE1rmSet.w, u) + ' × ' + e.bestE1rmSet.r + ' on ' + fmtDateFull(e.bestE1rmDate) : ''],
+      e.bestE1rmSet ? fmtSetLoad(e.bestE1rmSet.w, u) + ' × ' + e.bestE1rmSet.r + ' on ' + fmtDateFull(e.bestE1rmDate) : ''],
     ['Heaviest weight', fmtW(e.bestWeight, u) + ' ' + W, fmtDateFull(e.bestWeightDate)],
     ['Best session volume', fmtVol(e.bestVolume, u) + ' ' + W, fmtDateFull(e.bestVolumeDate)]
   ].forEach(([label, value, sub]) => {

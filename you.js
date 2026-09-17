@@ -75,7 +75,7 @@ import { isStandalone } from './usage.js';
 import { openInstallGuide } from './onboarding.js';
 import { openSettings, openGoal, openDailyTargets, pickProfilePhoto } from './settings.js';
 import { openAdmin, isAdminOpen } from './admin.js';
-import { wOut, fmtW, fmtSetW, labelW, unitW, fmtRate, labelRate, fmtVol,
+import { wOut, fmtW, fmtSetLoad, labelW, unitW, fmtRate, labelRate, fmtVol,
          kcalPerUnit } from './units.js';
 
 const DAY = 864e5;
@@ -1208,7 +1208,7 @@ function trainingCard() {
       const body = el('div', 'pb-body');
       body.appendChild(el('div', 'pb-lbl', e.name));
       body.appendChild(el('div', 'pb-sub', e.bestE1rmSet
-        ? fmtSetW(e.bestE1rmSet.w, wu()) + ' × ' + e.bestE1rmSet.r + '  ·  ' + (e.bestE1rmDate ? fmtDate(e.bestE1rmDate) : '')
+        ? fmtSetLoad(e.bestE1rmSet.w, wu()) + ' × ' + e.bestE1rmSet.r + '  ·  ' + (e.bestE1rmDate ? fmtDate(e.bestE1rmDate) : '')
         : e.sessions + ' sessions'));
       const track = el('div', 'pb-track');
       const fill = el('div', 'pb-fill');

@@ -11,7 +11,7 @@
 import { read, todayKey } from './store.js';
 import { GROUPS, GROUP_ORDER } from './exercises.js';
 import { svgEl, el, compact, r1 } from './ui.js';
-import { fmtSetW, labelVol } from './units.js';
+import { fmtSetLoad, labelVol } from './units.js';
 
 /* ================================================================
    1.  LOADING
@@ -331,7 +331,7 @@ export function prTimeline(sessions) {
 // through. Both PR producers above hand back `set`, so there is one place that
 // decides what a record's set reads like and it is this one.
 export function prDetail(p, u) {
-  return p && p.set ? fmtSetW(p.set.w, u) + ' x ' + p.set.r : ((p && p.detail) || '');
+  return p && p.set ? fmtSetLoad(p.set.w, u) + ' x ' + p.set.r : ((p && p.detail) || '');
 }
 
 /* ================================================================

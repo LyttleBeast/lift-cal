@@ -20,7 +20,7 @@ import { openStats, isStatsOpen, renderStats, refresh as refreshStats } from './
 import { initPicker, allExercises, openPicker, openExerciseManager } from './picker.js';
 import { initRoutines, openRoutines, saveSessionAsRoutine } from './routines.js';
 import { bump } from './usage.js';
-import { wOut, wIn, fmtSetW, fmtVol, volOut, unitW, limW } from './units.js';
+import { wOut, wIn, fmtSetW, fmtSetLoad, fmtVol, volOut, unitW, limW } from './units.js';
 
 // Volume is a sum of stored pounds, so it converts like a weight. Round to a
 // whole number BEFORE the abbreviation, never after: "41.3k" is a string and
@@ -551,7 +551,7 @@ function openDay(mk, dd) {
       const body = el('div', 'day-ex-body');
       body.appendChild(el('div', 'day-ex-name', ex.name));
       const sets = (ex.sets || []).filter(s => s.done !== false)
-        .map(s => `${fmtSetW(s.w || 0, wu())}×${s.r || 0}${s.type !== 'N' ? s.type : ''}`).join('   ');
+        .map(s => `${fmtSetLoad(s.w || 0, wu())}×${s.r || 0}${s.type !== 'N' ? s.type : ''}`).join('   ');
       body.appendChild(el('div', 'day-ex-sets num', sets));
       r.append(tag, body);
       c.appendChild(r);
@@ -1035,7 +1035,7 @@ function renderExercise(ex, exIdx) {
   // previous performance — the single most useful thing on the screen
   const prev = (history[ex.exId] || []).find(h => !session._edit || h.date !== session._edit.dateKey);
   if (prev) {
-    const txt = prev.sets.map(s => `${fmtSetW(s.w, wu())}×${s.r}`).join('  ');
+    const txt = prev.sets.map(s => `${fmtSetLoad(s.w, wu())}×${s.r}`).join('  ');
     block.appendChild(el('div', 'ex-prev', `Last · ${fmtDate(prev.date)}   ${txt}`));
   } else {
     block.appendChild(el('div', 'ex-prev', 'No previous record'));
@@ -1102,6 +1102,11 @@ function renderSet(ex, exIdx, s, i) {
   // shows the weight converted and setW() converts it back before the clamp,
   // which means a kilos account is bounded at 2,267.96 kg rather than at 5,000
   // of something.
+  //
+  // fmtSetW here, NOT fmtSetLoad. This is an <input type=number>, and the
+  // number 0 is what a re-opened bodyweight set is: "BW" in the box is a value
+  // the browser drops, so Save reads back '' and the set stops being recorded.
+  // The screens that only READ a set print BW instead — see units.js.
   const u = wu();
   const w = el('input'); w.type = 'number'; w.inputMode = 'decimal';
   const lim = limW(LIMITS.setW, u);
@@ -1599,7 +1604,7 @@ function renderSummary() {
       body.appendChild(el('div', 'pb-lbl', f.name));
       body.appendChild(el('div', 'pb-sub', 'baseline set — beat it next time'));
       r.appendChild(body);
-      r.appendChild(el('div', 'pb-val num', f.set ? fmtSetW(f.set.w, u) + ' × ' + f.set.r : ''));
+      r.appendChild(el('div', 'pb-val num', f.set ? fmtSetLoad(f.set.w, u) + ' × ' + f.set.r : ''));
       card.appendChild(r);
     });
     wrap.appendChild(card);
@@ -1638,7 +1643,7 @@ function renderSummary() {
     const body = el('div', 'day-ex-body');
     body.appendChild(el('div', 'day-ex-name', ex.name));
     body.appendChild(el('div', 'day-ex-sets num',
-      ex.sets.map(s => `${fmtSetW(s.w, u)}×${s.r}${s.type !== 'N' ? s.type : ''}`).join('   ')));
+      ex.sets.map(s => `${fmtSetLoad(s.w, u)}×${s.r}${s.type !== 'N' ? s.type : ''}`).join('   ')));
     r.append(tag, body);
     recap.appendChild(r);
   });

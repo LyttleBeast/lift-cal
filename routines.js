@@ -166,6 +166,8 @@ function openRoutine(id, onStart) {
     line.appendChild(tag);
     line.appendChild(el('span', 'rt-pv-name', ex.name));
     const sets = ex.sets || [];
+    // fmtSetW, not fmtSetLoad: a routine's target is a plan, not a record, and
+    // a blank one already prints as nothing at all rather than as a zero.
     const txt = sets.length
       ? sets.map(s => (s.tw ? fmtSetW(s.tw, u) + '×' : '') + (s.tr || '–')).join('  ')
       : 'no sets';

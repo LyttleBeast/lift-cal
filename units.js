@@ -88,6 +88,32 @@ export function fmtSetW(w, u) {
   return isKg(u) ? trim1(wOut(w, u)) : String(w);
 }
 
+// What a recorded set READS like, which is not the same job as what goes back
+// in the box. v40 made a ticked set with reps and a blank weight store
+// `w: '0'`, and a recap that says `Pull-Up  0×2` is a wrong number in words:
+// nobody lifted zero pounds, they lifted themselves. So a load that parses to
+// exactly zero prints BW, and every other load prints what it always did.
+//
+// THIS IS DISPLAY ONLY, and that split is load-bearing rather than tidy. The
+// weight box on a re-opened session is an <input type=number>: hand it "BW"
+// and the browser drops the value, setW() reads back '' on Save, and the set
+// stops being recorded as zero — which is the exact defect v40 closed. Input
+// prefills and placeholders keep fmtSetW. tools-check/units.mjs scans for it.
+//
+// Built ON fmtSetW rather than beside it, so the two cannot drift: anything
+// that is not a zero is fmtSetW's answer character for character, in both
+// units, including the blank that tells an unfilled set from a logged one.
+//
+// A typed 0 on a barbell lift prints BW as well. That is right — an unloaded
+// set is an unloaded set — and this module has no way to tell a pull-up from a
+// bench press and should not grow one. Print no unit word after it either:
+// "BW lb" is nonsense.
+export function fmtSetLoad(w, u) {
+  const s = fmtSetW(w, u);
+  if (s === '') return '';
+  return Number(w) === 0 ? 'BW' : s;
+}
+
 /* ---------- volume and e1RM totals ----------
    Sums of weights, so they convert like weights and not like counts. The
    abbreviation comes last: convert, then compact. Compacting first and

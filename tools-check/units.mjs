@@ -23,6 +23,9 @@
 //                        486 and all three look like a weight. Source scan
 //   G  the sentences     insights.js is pure, so its ENTIRE output is diffed
 //                        against the same file at 166455c under imperial
+//   I  BW                a recorded set with no load reads BW on the screens
+//                        that only READ it, and never in a box that is read
+//                        back and saved. Table, and a source scan of the split
 //
 // Nothing here holds a copy of the code under test. units.js and ui.js are
 // imported for real; setW() is read out of the real workout.js by source text
@@ -317,7 +320,7 @@ section('F. no double conversion — source scan of every call site');
   // unitH, kcalPerUnit, normUnits and the lim* family take a unit or a limit,
   // not a value, so they are not in the set and cannot be the inner call.
   const CONV = ['wOut', 'wIn', 'volOut', 'rateOut', 'rateIn', 'perOut', 'perIn',
-                'hOut', 'hIn', 'fmtW', 'fmtSetW', 'fmtVol', 'fmtRate', 'fmtPer',
+                'hOut', 'hIn', 'fmtW', 'fmtSetW', 'fmtSetLoad', 'fmtVol', 'fmtRate', 'fmtPer',
                 'fmtH', 'labelW', 'labelVol', 'labelRate', 'boxW', 'boxRate', 'boxPer'];
   const NAME = new RegExp('(?<![A-Za-z0-9_$.])(' + CONV.join('|') + ')\\s*\\(', 'g');
 
@@ -566,6 +569,79 @@ section('H. sites — the unit reaches the screen, and reaches it once');
   check('no app file hard-codes a pound word into a rendered string', strays.length === 0, strays.join(' | '));
   check('plate math is still pounds and says so on kilos',
         S('workout.js').includes("u === 'lb' ? 'Per side' : 'Per side · lb plates'"));
+}
+
+/* ================= I. BW, AND ONLY WHERE IT IS SAFE ================= */
+section('I. a recorded set with no load reads BW — on a screen, never in a box');
+{
+  // fmtSetLoad is fmtSetW plus exactly one case, so this is two questions:
+  // did the one case fire, and did nothing else move.
+  const BLANKS = ['', null, undefined];
+  check('a blank stays blank in both units — an unfilled set is not a BW set',
+        BLANKS.every(v => U.fmtSetLoad(v, 'lb') === '' && U.fmtSetLoad(v, 'kg') === ''),
+        JSON.stringify(BLANKS.map(v => U.fmtSetLoad(v, 'kg'))));
+
+  const ZEROS = ['0', 0, '0.0', '00', '0.00', '-0'];
+  check('every way a zero can arrive reads BW, in both units',
+        ZEROS.every(v => U.fmtSetLoad(v, 'lb') === 'BW' && U.fmtSetLoad(v, 'kg') === 'BW'),
+        JSON.stringify(ZEROS.map(v => U.fmtSetLoad(v, 'lb'))));
+  check("v40 stores the STRING '0', which is the case this whole function exists for",
+        U.fmtSetLoad('0', 'lb') === 'BW' && U.fmtSetLoad('0', 'kg') === 'BW');
+
+  const LOADS = ['1', '2.5', '45', '135', '225', '227.5', '227.55', 45, 0.5, 5000];
+  check('every other load is fmtSetW character for character, on lb and on kg',
+        LOADS.every(v => U.fmtSetLoad(v, 'lb') === U.fmtSetW(v, 'lb') &&
+                         U.fmtSetLoad(v, 'kg') === U.fmtSetW(v, 'kg')),
+        JSON.stringify(LOADS.filter(v => U.fmtSetLoad(v, 'kg') !== U.fmtSetW(v, 'kg'))));
+  check('BW is decided on the stored POUNDS, not on the formatted string — a real ' +
+        '0.1 lb load that rounds to "0" on kilos is still not bodyweight',
+        U.fmtSetW('0.1', 'kg') === '0' && U.fmtSetLoad('0.1', 'kg') === '0',
+        U.fmtSetLoad('0.1', 'kg'));
+  check('rubbish is not laundered into BW — it comes out of fmtSetW unchanged',
+        U.fmtSetLoad(NaN, 'lb') === U.fmtSetW(NaN, 'lb') &&
+        U.fmtSetLoad('abc', 'lb') === U.fmtSetW('abc', 'lb'),
+        U.fmtSetLoad('abc', 'lb'));
+  check('no unit word is baked in — "BW lb" is nonsense and cannot be built here',
+        !/lb|kg/.test(U.fmtSetLoad('0', 'lb') + U.fmtSetLoad('0', 'kg')));
+
+  // THE SPLIT, scanned rather than trusted. An <input type=number> handed "BW"
+  // drops its value, setW() reads back '' on Save and the set stops being
+  // recorded as a zero — the exact defect v40 closed. So nothing that writes
+  // into a box may call fmtSetLoad.
+  const APPJS = readdirSync(ROOT).filter(f => f.endsWith('.js') && f !== 'units.js');
+  const intoBox = [];
+  APPJS.forEach(f => {
+    src(f).split('\n').forEach((line, i) => {
+      if (/fmtSetLoad\s*\(/.test(line) && /\.(value|placeholder|defaultValue)\s*=[^=]/.test(line))
+        intoBox.push(f + ':' + (i + 1) + ' ' + line.trim().slice(0, 80));
+    });
+  });
+  check('no input value, placeholder or defaultValue is built with fmtSetLoad',
+        intoBox.length === 0, intoBox.join(' | '));
+
+  // And the other direction: every call site is classified, so adding one
+  // without deciding which of the two it is trips this rather than shipping.
+  const calls = (f, name) => (src(f).match(new RegExp(name + '\\s*\\(', 'g')) || []).length;
+  const DISPLAY = { 'workout.js': 4, 'stats.js': 2, 'you.js': 1, 'analytics.js': 1 };
+  const BOXES   = { 'workout.js': 2, 'routines.js': 3 };
+  const wrong = [];
+  APPJS.forEach(f => {
+    const d = calls(f, 'fmtSetLoad'), b = calls(f, 'fmtSetW');
+    if (d !== (DISPLAY[f] || 0)) wrong.push(f + ' has ' + d + ' fmtSetLoad calls, expected ' + (DISPLAY[f] || 0));
+    if (b !== (BOXES[f] || 0))   wrong.push(f + ' has ' + b + ' fmtSetW calls, expected ' + (BOXES[f] || 0));
+  });
+  check('8 display sites on fmtSetLoad, 5 box sites on fmtSetW, and nothing unclassified',
+        wrong.length === 0, wrong.join(' | ') +
+        ' — a new call site is not a bug, but it has to be added here as display or as box');
+
+  // The five that stay: two are the session weight box and its routine-target
+  // placeholder, and three are the routine editor, where `tw` is a plan rather
+  // than a record and a blank one already prints as nothing at all.
+  check('the weight box on a re-opened session still prefills with fmtSetW',
+        src('workout.js').includes('w.value = fmtSetW(s.w, u);'));
+  check('the routine editor still writes fmtSetW into its box, both ways',
+        src('routines.js').includes("w.value = s.tw != null ? fmtSetW(s.tw, u) : '';") &&
+        src('routines.js').includes('e.target.value = fmtSetW(s.tw, u);'));
 }
 
 /* ---------- report ---------- */
