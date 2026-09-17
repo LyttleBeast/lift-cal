@@ -72,9 +72,25 @@ function venueText(v) {
   return s ? s.replace(/\S+/g, w => w[0].toUpperCase() + w.slice(1)) : '';
 }
 
+// The Worker's `from` is the page a human can open to check the number, so for
+// a generic it is a full URL ("https://fdc.nal.usda.gov/food-details/172688/
+// nutrients"). That is the right thing to STORE and the wrong thing to print on
+// a one-line row: name the publisher instead. A known host gets its name, any
+// other URL prints as its bare host, and text that is not a URL is passed
+// through exactly as the Worker sent it. Parsed as TEXT, never through `new
+// URL` — nothing in this file may throw.
+const PUBLISHERS = { 'fdc.nal.usda.gov': 'USDA' };
+function sourceText(v) {
+  const s = String(v == null ? '' : v).trim();
+  const m = /^https?:\/\/([^\/?#\s]+)/i.exec(s);
+  if (!m) return s;
+  const host = m[1].toLowerCase().replace(/^www\./, '');
+  return PUBLISHERS[host] || host;
+}
+
 function foodRow(s, res) {
   const venue = venueText(s.venue || (res && res.venue));
-  const who = venue || String(s.from == null ? '' : s.from).trim();
+  const who = venue || sourceText(s.from);
   const when = asOfText(s.asOf);
   const parts = [];
   if (who) parts.push(who);

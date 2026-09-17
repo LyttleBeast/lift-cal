@@ -360,6 +360,21 @@ section('C. each row says where its own number came from');
         rows('usda')[0].label === 'USDA · published Apr 2024', rows('usda')[0].label);
   check('and its origin is published nutrition, not a menu',
         rows('usda')[0].origin === 'usda');
+  // THE REAL SHAPE. rack-worker/seed/usda-ingredients.json stores `from` as the
+  // page a human can open — "https://fdc.nal.usda.gov/food-details/172688/
+  // nutrients" — and lookup.js:625 withSrc() copies it onto the row verbatim. A
+  // row must name the publisher, never print the URL.
+  {
+    const real = O.estimateOrigin({ source: 'parsed', items: [{ name: 'Banana', cal: 105,
+      src: { kind: 'curated', from: 'https://fdc.nal.usda.gov/food-details/173944/nutrients', asOf: '2026-04-23' } }] }).rows[0];
+    check('a generic whose `from` is the FDC page URL reads "USDA · published Apr 2026"',
+          real.label === 'USDA · published Apr 2026', real.label);
+    check('and no row label ever contains a URL', !/https?:|\/\//.test(real.label), real.label);
+    const other = O.estimateOrigin({ source: 'curated', items: [{ name: 'x',
+      src: { kind: 'curated', from: 'https://www.example-dairy.com/nutrition?id=4', asOf: '2026-01' } }] }).rows[0];
+    check('an unknown publisher prints as its bare host, not its URL',
+          other.label === 'example-dairy.com · published Jan 2026', other.label);
+  }
   check('a stale row says so on the row',
         rows('stale')[0].label === 'Chipotle · published Jan 2023 · may be out of date',
         rows('stale')[0].label);
