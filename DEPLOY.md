@@ -1,17 +1,20 @@
 # Shipping Rack
 
-Three things can be deployed, and they are separate. Most changes need only the
-first.
+Two things can be deployed from this repo, and they are separate. Most changes
+need only the first.
 
 | What you changed | What to deploy |
 |---|---|
 | Any `.js`, `.css`, `.html` in the repo root | **The app** — commit and push |
 | `database.rules.json` | **The app** *and* **the rules** (paste into Firebase) |
-| Anything under `worker/` | **The Worker** — `npx wrangler deploy` |
 
-Merging to GitHub does nothing for the rules or the Worker. They live in Firebase
-and Cloudflare, and each has to be pushed there by hand. This is the single most
-common way a change appears to have shipped and hasn't.
+Merging to GitHub does nothing for the rules. They live in Firebase and have to
+be pasted there by hand. This is the single most common way a change appears to
+have shipped and hasn't.
+
+**The Worker is not deployed from here.** It is its own private repo,
+`~/dev/rack-worker`, and nothing in this tree can ship it. Section 3 below is
+what to do when it needs changing.
 
 ---
 
@@ -94,10 +97,14 @@ nothing else.
 
 ## 3. Deploy the Worker
 
-Only when something under `worker/` changed.
+Not from this repo. The Worker is `~/dev/rack-worker`, its own private repo, and
+it is edited and deployed there. This repo carried a `worker/` copy until v40;
+it had gone stale — it predated the food estimator — and a `wrangler deploy` run
+from inside it would have shipped the old Worker over the live one. It is gone
+for that reason and should not come back.
 
-```powershell
-cd C:\Users\micah\dev\lift-cal\worker
+```bash
+cd ~/dev/rack-worker
 npx wrangler whoami          # expired login fails the next step confusingly
 npx wrangler deploy
 ```
@@ -182,8 +189,9 @@ none of yours, and no Admin row at all.
 **Every cap is per account.** The counters live in Cloudflare KV keyed `q:{uid}`.
 Raising one person's cap gives nobody else a cent.
 
-**There is also a group ceiling.** `GLOBAL_MONTHLY_USD_CAP` in
-`worker/wrangler.toml`, currently **$10**, counted in KV under `spend:global`.
+**There is also a group ceiling.** `GLOBAL_MONTHLY_USD_CAP` in the Worker's
+`wrangler.toml` (`~/dev/rack-worker`), currently **$10**, counted in KV under
+`spend:global`.
 Cross it and the estimator refuses *everybody* with a message saying so, until
 the 1st. It exists because per-account caps bound each person and say nothing
 about their sum — seven people at $2 each is $14 in a bad month. Changing it is

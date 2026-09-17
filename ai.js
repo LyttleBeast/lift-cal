@@ -1,7 +1,8 @@
 // AI food estimator — the client half.
 //
 // The app holds no API key. It sends the photo (or the sentence) to the Worker
-// in worker/src/index.js along with the Firebase ID token it already has from
+// in the Worker's src/index.js (~/dev/rack-worker, not this repo) along with
+// the Firebase ID token it already has from
 // signing in, and the Worker decides whether to spend anything. Everything here
 // is about making that round trip cheap and the failures readable.
 //

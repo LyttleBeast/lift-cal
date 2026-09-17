@@ -3,7 +3,7 @@
 // This is a URL, not a credential. It is safe in a public repo: the Worker at
 // the other end verifies your Firebase sign-in before it will spend anything,
 // so knowing the address gets a stranger a 401 and nothing else. The Anthropic
-// key never leaves Cloudflare — see worker/src/index.js.
+// key never leaves Cloudflare — see src/index.js in ~/dev/rack-worker.
 //
 // Paste the URL `npx wrangler deploy` prints, with no trailing slash:
 //   https://rack-ai.<your-subdomain>.workers.dev

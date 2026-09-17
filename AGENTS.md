@@ -213,7 +213,8 @@ stands — a client that can rewrite its own limit does not have one — so what
 makes it safe is that the number is bounded twice and neither bound is in the
 database's gift. The rules refuse anything above **12 photo or 30 describe**;
 the Worker clamps whatever it reads to the same two ceilings again before it
-uses it (`HARD_MAX` in `worker/src/index.js`), and treats a value it cannot read
+uses it (`HARD_MAX` in the Worker's `src/index.js`, `~/dev/rack-worker`), and
+treats a value it cannot read
 as a number as no override at all, falling back to its configured default rather
 than to zero. Absent means "use the Worker's default", which is 3 and 3. Zero is
 a real value and it means none of that kind at all.
@@ -230,7 +231,8 @@ what an unpublished rule set looks like from the outside.
 The count is not what protects the money; the monthly dollar cap in the Worker
 is, and it is per account — the running spend lives in KV under `q:{uid}`, so
 each person has their own. Raising an allowance without raising
-`MONTHLY_USD_CAP` in `worker/wrangler.toml` only changes which refusal they get.
+`MONTHLY_USD_CAP` in the Worker's `wrangler.toml` only changes which refusal
+they get. The Worker is not in this repo — it is `~/dev/rack-worker`.
 
 ## `usage/{uid}` — counters, and nothing that is not a counter
 

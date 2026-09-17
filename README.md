@@ -114,8 +114,7 @@ node in the database. See *Access* below for what replaced them, and why.
 | `routines.js` | Pre-planned routines — list, editor, start, save-a-session-as |
 | `food.js` | Fuel tab |
 | `ai.js` | AI estimator client — photo shrinking, the two estimate calls, error shapes |
-| `ai-config.js` | The Worker URL. A public address, not a credential |
-| `worker/` | Cloudflare Worker that holds the Anthropic key. **Read `worker/README.md` to set it up** |
+| `ai-config.js` | The Worker URL. A public address, not a credential. The Worker itself is **not in this repo** — it is `~/dev/rack-worker`, its own private repo |
 | `water.js` | Water card, log sheet, goal and sizes |
 | `weight.js` | Weight tab — log, trend chart, time-of-day curve, maintenance |
 | `steps.js` | Steps tab — ring, trend, streaks, heat map, and the setup walkthrough |
@@ -279,7 +278,8 @@ The count is not what protects the money. The monthly dollar cap in the Worker
 is, and it is **per account**, not shared: the running spend lives in KV under
 `q:{uid}`, so everybody gets their own dollar. At the 12-photo ceiling a $1 cap
 is gone inside a fortnight, so raising somebody's allowance without raising
-`MONTHLY_USD_CAP` in `worker/wrangler.toml` only changes which refusal they get.
+`MONTHLY_USD_CAP` in the Worker's `wrangler.toml` only changes which refusal
+they get.
 
 ## Food import by paste
 
@@ -451,12 +451,13 @@ the button.
 
 **The API key is not in the app**, and cannot be. GitHub Pages serves every file
 in this repo to every visitor; there is no private half of a static site. The
-key lives in a Cloudflare Worker (`worker/`) which verifies the caller's
-Firebase ID token, checks it against a uid allowlist, applies per-minute and
-per-day rate limits — the per-day ones raisable per account, and ceilinged in
-code — and enforces a hard per-account monthly dollar cap before it will call
-Anthropic at all. Setup: **`worker/README.md`**. The Worker URL in
-`ai-config.js` is an address, not a secret — a stranger who finds it gets a 401.
+key lives in a Cloudflare Worker — its own private repo, `~/dev/rack-worker`,
+never deployed from here — which verifies the caller's Firebase ID token, checks
+it against a uid allowlist, applies per-minute and per-day rate limits — the
+per-day ones raisable per account, and ceilinged in code — and enforces a hard
+per-account monthly dollar cap before it will call Anthropic at all. Setup lives
+with the Worker. The Worker URL in `ai-config.js` is an address, not a secret —
+a stranger who finds it gets a 401.
 
 Photos are shrunk to a 1024 px long edge on the phone before upload. That is not
 politeness about bandwidth: Claude charges by the 28×28 patch, so a full iPhone

@@ -1,5 +1,6 @@
-# Secrets. The real one of these must never reach a public repo —
-# dev.vars.example is the template, .dev.vars is the loaded gun.
+# Secrets. Nothing in this repo needs a key — the Worker and its .dev.vars live
+# in ~/dev/rack-worker — but GitHub Pages serves every file here to every
+# visitor, so the belt stays on.
 .dev.vars
 .env
 

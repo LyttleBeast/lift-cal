@@ -35,7 +35,7 @@
 // enforces whatever it finds there. So derivedAllowance() turns a type into
 // exactly the aiAllow shape the Worker already understands, and the admin panel
 // writes it in the same atomic update as the type. That is what lets a whole
-// tier system ship without touching worker/ at all.
+// tier system ship without touching the Worker at all.
 
 import { OWNER_UID } from './firebase-config.js';
 

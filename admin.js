@@ -1462,7 +1462,7 @@ function openAllowance(u) {
   sh.appendChild(noteEl(
     'The cap is this account\u2019s alone \u2014 raising it gives nobody else a cent. It is also the limit that actually protects the money: a photo costs about $0.006, so ordinary use at 3 a day is roughly $0.55 a month, and somebody at the 12-photo ceiling would run about $2.20. Set the count and the cap together, or they hit whichever wall comes first.'));
   sh.appendChild(noteEl(
-    'Everyone combined is capped too, and that number lives in GLOBAL_MONTHLY_USD_CAP in worker/wrangler.toml \u2014 no per-person cap can spend past it.'));
+    'Everyone combined is capped too, and that number lives in GLOBAL_MONTHLY_USD_CAP in the Worker\u2019s wrangler.toml \u2014 no per-person cap can spend past it.'));
 
   const save = el('button', 'btn btn-primary btn-block', isCustom ? 'Save these limits' : 'Save allowance');
   save.style.marginTop = '14px';

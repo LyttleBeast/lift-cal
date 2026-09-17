@@ -14,17 +14,18 @@ so read it when the change actually touches data — not for a CSS fix.
 
 ## Read this before you edit anything
 
-**The Worker is not the app.** `worker/` is a separate Cloudflare Worker
-project. `worker/src/index.js` is what holds the Anthropic key logic; it runs
-on Cloudflare, not in the browser, and nothing in the app imports it. The app's
-entry point is `app.js`, which is what `index.html` loads. Merging to `main`
-does not deploy the Worker — that is `npx wrangler deploy`, run from inside
-`worker/`.
+**The Worker is not in this repo.** The Cloudflare Worker that holds the
+Anthropic key is its own private repo, `~/dev/rack-worker`, and it is built and
+deployed from there. Nothing in this tree deploys it, and nothing in the app
+imports it — the app's entry point is `app.js`, which is what `index.html`
+loads. If a change is needed on the Worker side, it is made in `~/dev/rack-worker`
+and deployed with `npx wrangler deploy` from inside that repo.
 
-*History, so older docs make sense:* until September 2026 the Worker's files sat
-loose at the repo root as `index.js`, `wrangler.toml` and `package.json`, and
-were copied by hand into a separate wrangler project on Micah's machine.
-`worker/` is now the only copy.
+*History, so older docs make sense:* the Worker's files sat loose at this repo's
+root until September 2026, then moved to a `worker/` subdirectory here. That
+copy went stale — it predates the food estimator — and was removed in v40,
+because a stale copy of a deployable is a rollback footgun: a `wrangler deploy`
+run from the wrong directory ships it. Git history still has it.
 
 **`DEPLOY.md` is the current checklist — read it before shipping anything.** It
 covers the three separate deploy targets (app, Firebase rules, Worker), the
@@ -48,7 +49,6 @@ history, and that is no longer true. The handoff below is still how you end.
 | `stats.js` `analytics.js` `ui.js` | Shared stats, charts, UI helpers |
 | `rack.css` `auth.css` | Styles — the only two, both loaded by `index.html` |
 | `sw.js` `manifest.json` `.nojekyll` | PWA and Pages plumbing |
-| `worker/` | The Cloudflare Worker — its own project, see above |
 | `database.rules.json` | A **copy** of the published Firebase rules |
 | `database.rules.OPTIONAL-LOCK.json` | The same rules plus a real write-deny for `type: 'locked'`. An **alternative** to paste, not an addition |
 
@@ -61,7 +61,7 @@ increment it — in the same change as any edit to `*.js`, `*.css`, `index.html`
 or `404.html`. The service worker caches under that name, so a change shipped
 without a bump reaches nobody's phone and looks, from the outside, exactly like
 a change that didn't work. State the new version in your summary. Changes
-confined to `worker/` or to documentation do not need a bump.
+confined to documentation do not need a bump.
 
 `usage.js` holds the same string in its own `VERSION` constant, because it
 reports which build an account is running and a service worker is not a module
@@ -79,19 +79,19 @@ raise it in the handoff, because editing that file does not publish it.
 |---|---|
 | `*.js` `*.css` `index.html` `404.html` `sw.js` | You. Merging to `main` deploys it. |
 | `database.rules.json` | You edit the file; **Micah pastes it into the Firebase console.** Nothing is live until he does. |
-| `worker/**` | You edit; **Micah runs `npx wrangler deploy` from inside `worker/`.** Merging alone changes nothing. |
+| The Worker | Not here. It lives in `~/dev/rack-worker` and is deployed from there. |
 | Firebase or Cloudflare dashboards, API keys, KV namespaces | Micah only. You have no access and should not attempt it. |
 | `README.md` `AGENTS.md` `ROADMAP.md` | You, whenever a change makes them wrong. Keep them true. |
 
-Never commit a key. `worker/.dev.vars.example` is the template; a real
-`.dev.vars` must never appear in a diff. The Anthropic key lives only in
-Cloudflare's encrypted secret store, and the app on the phone has no key at all.
+Never commit a key. There is no key in this repo and no file that should ever
+hold one — the Anthropic key lives only in Cloudflare's encrypted secret store,
+reachable from `~/dev/rack-worker`, and the app on the phone has no key at all.
 
 ## House style
 
-- Vanilla ES modules, no dependencies. The only `package.json` is
-  `worker/package.json`, and it exists for `wrangler` alone. Do not add npm
-  packages to the app — there is no bundler, so they cannot be loaded.
+- Vanilla ES modules, no dependencies. There is no `package.json` in this repo
+  at all. Do not add npm packages to the app — there is no bundler, so they
+  cannot be loaded.
 - Match the surrounding file. These files are long and hand-written; a reformat
   buries the actual change.
 - Small diffs. Change what was asked and what it breaks, nothing else.
@@ -106,10 +106,14 @@ Cloudflare's encrypted secret store, and the app on the phone has no key at all.
 
 ## Verifying
 
-There is no test suite and no linter. Before you finish:
+There is no test suite and no linter, but there are verifiers. Everything under
+`tools-check/` drives the real modules against a stubbed Firebase — no copy of
+any rule lives in them, which is the only way they stay true when a file
+changes. All of them must exit 0 before you finish.
 
 ```bash
-for f in *.js worker/src/*.js; do node --check --input-type=module < "$f" || echo "FAIL $f"; done
+for f in *.js; do node --check --input-type=module < "$f" || echo "FAIL $f"; done
+for f in tools-check/*.mjs; do node "$f" >/dev/null 2>&1; echo "$? $f"; done
 ```
 
 Plain `node --check file.js` silently passes broken ES modules, so use the form

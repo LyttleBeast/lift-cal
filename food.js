@@ -1797,9 +1797,10 @@ function openIngredient(ing, onDone, onRemove) {
    copying JSON out of a chat, and pasting it into this one. Picture goes in
    here, macros come back, you check them, you log.
 
-   The app holds no API key. It sends the picture to the Worker in worker/,
+   The app holds no API key. It sends the picture to the Worker,
    which holds the key and decides whether this sign-in is allowed to spend
-   anything. worker/src/index.js is where the security actually lives. */
+   anything. The Worker (~/dev/rack-worker, not this repo) is where the
+   security actually lives. */
 
 /* A file input, not getUserMedia. On iOS this opens the real camera app with
    the real capture UI and hands back a proper still; a hand-rolled viewfinder
