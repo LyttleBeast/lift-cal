@@ -153,6 +153,12 @@ function openRoutine(id, onStart) {
 
   const box = el('div', 'rt-preview');
   const exes = r.exercises || [];
+  // `tw` is stored pounds, the way every weight in this app is. Read once per
+  // paint and converted in the expression that builds the string — the rule in
+  // AGENTS.md, and the rule the routine editor two hundred lines down already
+  // follows. This preview printed the raw number, so a metric account read its
+  // own routine in pounds with a kilo label nowhere on the screen.
+  const u = wu();
   const pvRow = ex => {
     const line = el('div', 'rt-pv-row');
     const tag = el('i', 'ex-tag');
@@ -161,7 +167,7 @@ function openRoutine(id, onStart) {
     line.appendChild(el('span', 'rt-pv-name', ex.name));
     const sets = ex.sets || [];
     const txt = sets.length
-      ? sets.map(s => (s.tw ? s.tw + '×' : '') + (s.tr || '–')).join('  ')
+      ? sets.map(s => (s.tw ? fmtSetW(s.tw, u) + '×' : '') + (s.tr || '–')).join('  ')
       : 'no sets';
     line.appendChild(el('span', 'rt-pv-sets num', txt));
     return line;
