@@ -82,8 +82,13 @@ export async function render() {
     const lb = wIn(parseFloat(inp.value), u);
     if (!within(lb, LIMITS.lb)) { toast('Enter a weight between ' + lim[0] + ' and ' + lim[1] + ' ' + unitW(u)); return; }
     const id = 'wt' + Date.now().toString(36);
-    entries[id] = { lb: r1(lb), t: Date.now() };
-    await write('weight/entries', entries);
+    // Built and written before `entries` is changed, so a refusal leaves the
+    // screen showing what the database actually holds rather than a weigh-in
+    // that exists only here. write() has already said why on screen.
+    const next = { ...entries, [id]: { lb: r1(lb), t: Date.now() } };
+    try { await write('weight/entries', next); }
+    catch { toast('Not saved \u2014 that weigh-in was refused.'); return; }
+    entries = next;
     bump('weighIn');
     await refit();
     inp.value = '';
@@ -437,8 +442,11 @@ function renderRecent(u) {
         confirmLabel: 'Delete',
         danger: true,
         onConfirm: async () => {
-          delete entries[e.id];
-          await write('weight/entries', entries);
+          const next = { ...entries };
+          delete next[e.id];
+          try { await write('weight/entries', next); }
+          catch { toast('Not deleted \u2014 that write was refused.'); return; }
+          entries = next;
           render();
         }
       });

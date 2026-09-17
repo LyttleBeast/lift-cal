@@ -282,8 +282,14 @@ async function rebuildHistoryFromLog() {
   const sessions = await allSessions(true);
   let h = {};
   sessions.forEach(s => { h = foldSessionIntoHistory(h, s._date, s.exercises); });
-  history = trimHistory(h);
-  await write('history', history);
+  // Assigned after the write resolves, the same order runFinish uses. This one
+  // is rebuilt from the log every time, so a stale `history` costs a wrong
+  // "Last ·" line until the next edit rather than a wrong record — but module
+  // state that claims a save the database refused is the thing being fixed,
+  // and there is no version of it that is fine here and not there.
+  const next = trimHistory(h);
+  await write('history', next);
+  history = next;
 }
 
 /* ================= RENDER ROOT ================= */
@@ -1365,7 +1371,24 @@ async function runFinish() {
     milestones = sessionMilestones(record, priorSessions, wu());
   } catch {}
 
-  await write(`workouts/${mk}/${dd}/${session.id}`, record);
+  /* The one write on this path that is not derived from something else. If the
+     database REFUSES it, write() has already put the red bar up and kept the
+     payload in the refused list — what this owes is to not pretend. Nothing
+     below has run yet: activeSession is still on the device, history is
+     unfolded, the month cache is untouched and no recap exists. So the session
+     is exactly as it was, `finishing` is released by finishWorkout's finally,
+     and Finish can simply be tapped again — a second tap does the whole thing
+     once, not twice.
+
+     A write that could not be SENT does not come through here at all: it is
+     queued and write() resolves, which is the offline case and has always
+     worked. */
+  try {
+    await write(`workouts/${mk}/${dd}/${session.id}`, record);
+  } catch {
+    toast('Not saved \u2014 your workout is still here. Nothing was lost.');
+    return;
+  }
   bump('workoutFinish');
 
   // The log is now the record of this session, so the localStorage copy is the
@@ -1380,8 +1403,18 @@ async function runFinish() {
   // rebuildHistoryFromLog uses — the two used to disagree about a session that
   // holds one exId more than once, so an edit could change what "last time" said
   // without changing a single set.
-  history = trimHistory(foldSessionIntoHistory(history, dateK, done));
-  await write('history', history);
+  //
+  // Assigned AFTER the write resolves, which is what write()'s docstring has
+  // asked for since v32: the fold is not idempotent, so module state holding a
+  // folded index over a write that was refused is a double-fold waiting for the
+  // next finish on the same day. And a refusal here must not fail the finish —
+  // this index is derived, the session itself is already saved, and the next
+  // edit or delete rebuilds the whole thing from the log.
+  const nextHistory = trimHistory(foldSessionIntoHistory(history, dateK, done));
+  try {
+    await write('history', nextHistory);
+    history = nextHistory;
+  } catch { /* write() said so on screen; the log is still the truth */ }
 
   // Hydrate before touching the cache. A workout is filed under the day it
   // STARTED, so `mk` is not always the month on screen — a session begun on the
@@ -1458,10 +1491,21 @@ async function saveEdit() {
   monthCache[mk][dd] = monthCache[mk][dd] || {};
   monthCache[mk][dd][record.id] = record;
 
-  await saveMonth(oldMk);
-  if (mk !== oldMk) await saveMonth(mk);
+  /* saveMonth already threw for a month this device never read, so this path
+     has coped with a rejection since v32 — but it did it by leaving the
+     rejection to escape a click handler. Now that the database can refuse a
+     write too, it is caught where the session is still on screen: `session`
+     stays set, so the edit is still open and still holds everything typed, and
+     the red bar says which write it was. */
+  try {
+    await saveMonth(oldMk);
+    if (mk !== oldMk) await saveMonth(mk);
+    await rebuildHistoryFromLog();
+  } catch {
+    toast('Not saved \u2014 the edit is still open.');
+    return;
+  }
 
-  await rebuildHistoryFromLog();
   session = null;
   toast('Workout updated');
   render();

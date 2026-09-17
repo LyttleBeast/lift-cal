@@ -417,11 +417,17 @@ writeFileSync(
 const W = await import(pathToFileURL(join(dir, 'workout-history.mjs')).href);
 
 /* The call sites, pinned as text. Extracting the helpers proves they agree with
-   each other; these two lines are what proves workout.js actually uses them. */
+   each other; these two lines are what proves workout.js actually uses them.
 
-const FINISH_SITE  = 'history = trimHistory(foldSessionIntoHistory(history, dateK, done));';
+   Both sites now compute the new index into a local and assign `history` only
+   after the write resolves, so that module state cannot claim a save the
+   database refused — which is why the pinned text names a local rather than
+   `history`. What is being pinned is unchanged: that the fold and the trim on
+   each path are the shared ones. */
+
+const FINISH_SITE  = 'const nextHistory = trimHistory(foldSessionIntoHistory(history, dateK, done));';
 const REBUILD_FOLD = 'h = foldSessionIntoHistory(h, s._date, s.exercises);';
-const REBUILD_TRIM = 'history = trimHistory(h);';
+const REBUILD_TRIM = 'const next = trimHistory(h);';
 
 check('sites: finishWorkout folds through the shared pass',
       WSRC.includes(FINISH_SITE));

@@ -17,7 +17,7 @@
 
 import { el, sheet, toast, noteEl, confirmSheet, segmented, LIMITS, clamp } from './ui.js';
 import { LS, uid, readExact, currentEmail, write, purgeDevice, logout,
-         wu, hu, setUnits } from './store.js';
+         wu, hu, setUnits, refusedSaves, retryRefused, discardRefused } from './store.js';
 import { openTargets, openAiSettings, openRecallList, openImportPaste,
          foodTargets, latestLb, goalId, previewGoal, setGoal, goalFits } from './food.js';
 import { openWaterSettings, waterSettings, fmtWater } from './water.js';
@@ -218,6 +218,19 @@ export function openSettings(onEdit) {
     else toast('Reload the app and try again');
   });
 
+  /* Only when there is something to say. A row that reads "0 saves were
+     refused" is a row that teaches everybody to ignore it, and on a healthy
+     account this list is empty for the life of the install. It is here rather
+     than on a tab because it is a repair, not a feature — the morning after a
+     rules publish goes wrong is the day it exists for. */
+  const refused = refusedSaves();
+  if (refused.length) {
+    navRow(appList,
+      refused.length + ' save' + (refused.length === 1 ? ' was' : 's were') + ' refused',
+      null,
+      () => { close(); openRefused(onEdit); });
+  }
+
   const out = el('button', 'btn btn-danger btn-block', 'Sign out');
   out.style.marginTop = '16px';
   out.onclick = () => {
@@ -259,6 +272,91 @@ export function openSettings(onEdit) {
     });
   };
   app.appendChild(wipe);
+
+  const done = el('button', 'btn btn-ghost btn-block', 'Close');
+  done.style.marginTop = '18px';
+  done.onclick = close;
+  sh.appendChild(done);
+}
+
+/* ================= REFUSED SAVES =================
+   What the database rejected, kept rather than replayed. The queue retries on
+   every reconnect because a queued write failed to SEND; one of these failed to
+   be ACCEPTED, and retrying it on a timer is how a bad validation rule turns
+   into an infinite loop nobody can see. So it sits here until a person decides.
+
+   Small and plain on purpose. Two buttons and a path: this screen is read once,
+   by somebody who has just been told a save did not land, and the useful things
+   it can say are which one and when. */
+function openRefused(onEdit) {
+  const { sh, close } = sheet();
+  sh.appendChild(el('div', 'eyebrow', 'App'));
+  sh.appendChild(el('h2', null, 'Refused saves'));
+  sh.appendChild(noteEl(
+    'The database rejected these, so they were not saved and not queued \u2014 ' +
+    'retrying on its own would never have worked. Nothing here has been lost: ' +
+    'try one again once the problem is fixed, or discard it.'));
+
+  const list = el('div');
+  list.style.marginTop = '14px';
+  sh.appendChild(list);
+
+  paint();
+
+  function paint() {
+    list.innerHTML = '';
+    const items = refusedSaves();
+    if (!items.length) {
+      list.appendChild(noteEl('Nothing refused. This is the normal state.'));
+      return;
+    }
+    items.forEach(it => {
+      const box = el('div', 'field');
+      box.appendChild(el('label', null, it.short));
+      const when = new Date(it.at);
+      box.appendChild(noteEl(
+        when.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' \u00b7 ' +
+        when.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) +
+        (it.merge ? ' \u00b7 partial update' : '') +
+        (it.detail ? '\n' + it.detail : '')));
+
+      // .qty-row reserves 54px and zero padding for a single-glyph button;
+      // these two carry words, so both are put back inline rather than adding a
+      // rule for one sheet.
+      const row = el('div', 'qty-row');
+      const wide = b => { b.style.flex = '1'; b.style.padding = '12px 18px'; return b; };
+      const again = wide(el('button', 'btn btn-ghost', 'Try again'));
+      const drop  = wide(el('button', 'btn btn-ghost', 'Discard'));
+
+      again.onclick = async () => {
+        again.disabled = drop.disabled = true;
+        const r = await retryRefused(it.key);
+        if (r === 'saved') {
+          toast('Saved.');
+          if (onEdit) onEdit();
+        } else if (r === 'refused') {
+          toast('Refused again \u2014 the rule has not changed. Kept.');
+        } else if (r === 'offline') {
+          toast('No connection \u2014 try again when you are back online.');
+        }
+        // Repaint either way: 'saved' and 'gone' remove the row, and the other
+        // two put the buttons back by rebuilding them.
+        paint();
+      };
+
+      drop.onclick = () => confirmSheet({
+        title: 'Discard this save?',
+        body: 'What you typed goes with it. Nothing else changes.',
+        confirmLabel: 'Discard',
+        danger: true,
+        onConfirm: () => { discardRefused(it.key); paint(); }
+      });
+
+      row.append(again, drop);
+      box.appendChild(row);
+      list.appendChild(box);
+    });
+  }
 
   const done = el('button', 'btn btn-ghost btn-block', 'Close');
   done.style.marginTop = '18px';

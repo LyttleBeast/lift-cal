@@ -69,7 +69,10 @@ export async function initFood() {
   await initRecall();
   await loadMaintInputs();
   await applyAuto();
-  await seedItems();
+  // Six reference values on one account. A refusal here must not be the reason
+  // Fuel never finishes booting — loadDay, the hash handler and the first
+  // render are all below it.
+  try { await seedItems(); } catch {}
   await loadDay();
 
   window.addEventListener('hashchange', handleHash);
@@ -77,8 +80,17 @@ export async function initFood() {
   render();
 }
 
+/* The last version of the day the database ACCEPTED. `dayLog` is the screen's
+   copy and every logging path changes it before the write goes out, so without
+   this a refusal leaves an entry sitting on screen that exists nowhere else —
+   which is the whole thing this ship is about. Deep-copied because entries are
+   edited in place (a meal reassigned, a portion rescaled). */
+let savedDay = {};
+const cloneDay = d => JSON.parse(JSON.stringify(d || {}));
+
 async function loadDay() {
   dayLog = (await read('food/log/' + dk(viewDate), null)) || {};
+  savedDay = cloneDay(dayLog);
   await loadWaterDay(dk(viewDate));
   watchDay();
 }
@@ -96,9 +108,13 @@ function watchDay() {
     const next = val || {};
     if (JSON.stringify(next) === JSON.stringify(dayLog)) return;
     dayLog = next;
+    savedDay = cloneDay(next);
     render();
     const t = totals();
-    write('food/daySummaries/' + key, { cal: t.cal, p: Math.round(t.p), c: Math.round(t.c), f: Math.round(t.f) });
+    // Derived from the log and recomputed on every change, so a refusal here
+    // costs a stale rollup until the next edit. write() has already said so;
+    // what this owes is not to become an unhandled rejection from a listener.
+    quiet(write('food/daySummaries/' + key, { cal: t.cal, p: Math.round(t.p), c: Math.round(t.c), f: Math.round(t.f) }));
   });
 }
 
@@ -161,9 +177,13 @@ async function applyAuto() {
   const plan = autoPlan(targets, mi ? mi.cal : 0, trendWeight(), Date.now());
   if (!plan) return false;
 
-  targets = { ...targets, cal: plan.cal, p: plan.p, f: plan.f,
-              auto: { ...targets.auto, lastAdj: plan.lastAdj } };
-  await write('food/targets', targets);
+  // Assigned after the write resolves, not before. lastAdj is the weekly gate:
+  // module state holding a stamp the database refused would close the gate for
+  // a week on an adjustment that never happened.
+  const next = { ...targets, cal: plan.cal, p: plan.p, f: plan.f,
+                 auto: { ...targets.auto, lastAdj: plan.lastAdj } };
+  try { await write('food/targets', next); } catch { return false; }
+  targets = next;
   render();
   toast('Targets moved with your trend \u2014 ' + plan.cal.toLocaleString() + ' kcal, ' + plan.p + 'g protein');
   return true;
@@ -266,13 +286,44 @@ function defaultMeal() {
   return 'snack';
 }
 
-/* ================= PERSIST ================= */
+/* ================= PERSIST =================
+
+   Every logging path on this tab ends here, and most of them call it without
+   awaiting it — a portion rescaled, a meal changed, an entry deleted. So this
+   is the one place a refusal can be handled for all of them, and it owes two
+   things.
+
+   It must not REJECT: an unhandled rejection out of a click handler is a line
+   in a console nobody opens.
+
+   And it must not leave `dayLog` holding something the database refused. The
+   entry is already on screen by the time this runs, so the day goes back to the
+   last version that was accepted and the screen is repainted — the red bar
+   write() put up says why, and the payload is in the refused list either way.
+   A write that was merely QUEUED is not a refusal: write() resolves, and the
+   entry is right where the person left it. */
 async function saveDay() {
   const key = dk(viewDate);
-  await write('food/log/' + key, dayLog);
+  const attempt = cloneDay(dayLog);
+  try {
+    await write('food/log/' + key, dayLog);
+  } catch {
+    dayLog = cloneDay(savedDay);
+    render();
+    toast('Not saved \u2014 that day is back to what the database has.');
+    return;
+  }
+  savedDay = attempt;
   const t = totals();
-  await write('food/daySummaries/' + key, { cal: t.cal, p: Math.round(t.p), c: Math.round(t.c), f: Math.round(t.f) });
+  quiet(write('food/daySummaries/' + key, { cal: t.cal, p: Math.round(t.p), c: Math.round(t.c), f: Math.round(t.f) }));
 }
+
+/* write() rejects when the database refuses, having already put the red bar up
+   and kept the payload. A fire-and-forget write is one whose value is derived
+   or incidental — a rollup recomputed from the log, a uses counter on a library
+   item — so all it owes is not to become an unhandled rejection. Anything that
+   is somebody's only copy of something is awaited instead. */
+function quiet(p) { if (p && p.catch) p.catch(() => {}); return p; }
 
 function totals() {
   const t = { cal: 0, p: 0, c: 0, f: 0, micro: {}, microCount: {}, n: 0 };
@@ -339,7 +390,7 @@ function touchItem(id) {
   if (!items[id]) return;
   items[id].uses = (items[id].uses || 0) + 1;
   items[id].last = Date.now();
-  write('food/items', items);
+  quiet(write('food/items', items));
 }
 
 /* ---------- portion maths on an already-logged entry ----------
@@ -437,7 +488,7 @@ function saveEntryAsItem(e) {
       { cal: base.cal, p: base.p, c: base.c, f: base.f }, base.micro || null),
     uses: 1, last: Date.now()
   };
-  write('food/items', items);
+  quiet(write('food/items', items));
 
   e.itemId = id; e.amt = mult; e.unit = 'serv';
   e.qty = qtyLabel(items[id], mult, 'serv');
@@ -2250,7 +2301,7 @@ function openProposedEdit(e, onDone) {
       const id = 'u' + Date.now().toString(36);
       items[id] = { id, ...mkItem(e.name, '', 'serv', { label: e.qty || 'serving' },
         { cal: e.cal, p: e.p, c: e.c, f: e.f }, e.micro || null), uses: 1, last: Date.now() };
-      write('food/items', items);
+      quiet(write('food/items', items));
       toast('Kept in your foods');
     }
     close();
@@ -2488,7 +2539,7 @@ function openManual(mealId, prefill, onPick) {
       const id = 'u' + Date.now().toString(36);
       items[id] = { id, ...mkItem(nm, '', 'serv', { label: qty.input.value.trim() || 'serving' },
         { cal: entry.cal, p: entry.p, c: entry.c, f: entry.f }, entry.micro || null), uses: 1, last: Date.now() };
-      write('food/items', items);
+      quiet(write('food/items', items));
       entry.itemId = id; entry.amt = 1; entry.unit = 'serv';
     }
     close();

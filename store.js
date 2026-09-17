@@ -159,6 +159,149 @@ export function purgeDevice(forUid) {
   return doomed.length;
 }
 
+/* ---------- a refusal is not a dropped connection ----------
+
+   The queue exists for one thing: a write that did not land because the phone
+   could not reach the database. Retrying that is exactly right, and it is what
+   flushQueue() has always done.
+
+   Server-side .validate rules change what a refusal means. It stops being "not
+   now" and becomes THIS PAYLOAD IS MALFORMED, which no amount of retrying
+   fixes. Queued anyway, such a write:
+
+     - retries forever, on every reconnect, for the life of the install;
+     - leaves the mirror holding a value the database rejected, so the app shows
+       it as saved and a later read makes it vanish with nothing on screen ever
+       having said why;
+     - and is completely silent, which is the one thing a validation rule must
+       not be. A rule that is too strict has to be findable.
+
+   Today that is nearly unreachable — the published rules check who is writing
+   and little else. The day the stricter rules are published it is routine,
+   which is why those rules are waiting on this.
+
+   RTDB spells it `error.code === 'PERMISSION_DENIED'` and starts the message
+   with the same token. A FAILED .validate ARRIVES AS THAT SAME CODE — there is
+   no separate "invalid data" status on the wire — which is what lets one test
+   cover both. Both fields are checked because the SDK builds the error two
+   different ways depending on which path reported it.
+
+   Ported from the native tree (src/data/store.js, 14 Sep) so the two clients
+   cannot drift on what counts as a refusal. */
+function isRefusal(e) {
+  const s = String((e && (e.code || e.message)) || '');
+  return s.toUpperCase().indexOf('PERMISSION_DENIED') !== -1;
+}
+
+function refused(path, e) {
+  const detail = String((e && e.message) || '').slice(0, 160);
+  const why =
+    'REFUSED BY THE DATABASE — ' + path + '\n' +
+    'The security rules rejected this write, so it was not saved and not ' +
+    'queued: retrying cannot fix it. If this is ordinary data, a validation ' +
+    'rule is too strict and that is the bug.' + (detail ? '\n' + detail : '');
+  return reportBlock(why);
+}
+
+/* ---------- the dead-letter list ----------
+
+   A refused write is neither queued nor thrown away. Queuing it is the bug
+   above; throwing it away means losing something somebody typed on the word of
+   a rule that may itself be what is wrong. So it is kept here, and it is never
+   replayed automatically — that is the whole difference between this list and
+   the queue. It leaves only by being retried or discarded from Settings, which
+   is the recovery path for the morning after a rules publish goes wrong.
+
+   Bounded, because a permanently refused write must not be able to fill the
+   device. What goes when it is full is not simply the oldest: a workouts/
+   payload is the only thing in here that cannot be reconstructed from anything
+   else on the phone, because runFinish deletes the live session the moment the
+   record write resolves. So the oldest ORDINARY item goes first, and a session
+   is only ever dropped to make room for another session. When the list is
+   nothing but sessions and something else is refused, the new item is the one
+   that does not fit — the red bar still fires, so the refusal is not silent
+   even though the payload is not kept.
+
+   The path stored is the full `users/{uid}/…`, the same as the queue's, so the
+   same prefix check keeps one account from seeing or retrying another's. The
+   localStorage key is already namespaced by uid; this is the second lock on
+   the same door, and the first one has been picked before. */
+const REFUSED_MAX = 50;
+
+function refusedItems() { return LS.get('refused', []); }
+function isSessionPath(p) { return /\/workouts\//.test(String(p || '')); }
+function refusedKey(x) { return (x && x.at) + '|' + (x && x.path); }
+
+function pushRefused(path, value, merge, detail) {
+  const list = refusedItems();
+  list.push({ path, value, merge: !!merge, at: Date.now(),
+              detail: String(detail || '').slice(0, 160) });
+  while (list.length > REFUSED_MAX) {
+    let at = list.findIndex(x => !isSessionPath(x && x.path));
+    if (at === -1) at = 0;                 // all sessions: the oldest has to go
+    list.splice(at, 1);
+  }
+  LS.set('refused', list);
+}
+
+/* What Settings shows. Filtered the way flushQueue filters the queue, so an
+   item left by another account — a bug, or a shared device — is invisible and
+   unretryable rather than merely unlikely to be reached. `key` is a handle for
+   the two buttons; the stored shape is untouched. */
+export function refusedSaves() {
+  if (!UID) return [];
+  const mine = 'users/' + UID + '/';
+  return refusedItems()
+    .filter(x => x && typeof x.path === 'string' && x.path.startsWith(mine))
+    .map(x => ({ ...x, key: refusedKey(x), short: x.path.slice(mine.length) }));
+}
+
+export function discardRefused(key) {
+  const list = refusedItems();
+  const at = list.findIndex(x => refusedKey(x) === key);
+  if (at === -1) return false;
+  list.splice(at, 1);
+  LS.set('refused', list);
+  return true;
+}
+
+/* 'saved' | 'refused' | 'offline' | 'gone'. A refusal LEAVES the item where it
+   is — the rule may still be the thing that is wrong, and the point of keeping
+   the payload is that it is still there when the rule is fixed. A network
+   failure is not a second refusal and must not be reported as one. */
+export async function retryRefused(key) {
+  if (!UID) return 'gone';
+  const mine = 'users/' + UID + '/';
+  const list = refusedItems();
+  const at = list.findIndex(x => refusedKey(x) === key);
+  if (at === -1) return 'gone';
+  const item = list[at];
+  if (!item.path || !item.path.startsWith(mine)) {
+    list.splice(at, 1); LS.set('refused', list);
+    return 'gone';
+  }
+  if (!online.value) return 'offline';
+  try {
+    if (item.merge) await update(ref(db, item.path), item.value);
+    else            await set(ref(db, item.path), item.value);
+  } catch (e) {
+    return isRefusal(e) ? 'refused' : 'offline';
+  }
+  // A PUT is the whole node, so the mirror can be put back with confidence. A
+  // merge is not, and the next read is what settles that one.
+  if (!item.merge) {
+    const short = item.path.slice(mine.length);
+    LS.set('mirror:' + short, item.value);
+    clearPartial(short);
+  }
+  // Re-read rather than reusing `list`: a retry awaits the network, and
+  // anything could have been added or discarded while it did.
+  const after = refusedItems();
+  const j = after.findIndex(x => refusedKey(x) === key);
+  if (j !== -1) { after.splice(j, 1); LS.set('refused', after); }
+  return 'saved';
+}
+
 /* ---------- write queue (survives offline) ---------- */
 function queue() { return LS.get('queue', []); }
 // A queued item is a PUT unless it is marked as a merge, which is what the
@@ -185,7 +328,24 @@ export async function flushQueue() {
       if (item.merge) await update(ref(db, item.path), item.value);
       else            await set(ref(db, item.path), item.value);
     }
-    catch { remaining.push(item); }
+    catch (e) {
+      /* Dead-lettered, not kept. This one was queued while offline, so nothing
+         has ever told anybody it failed — and keeping it means replaying a
+         write the rules will refuse identically on every reconnect for the life
+         of the install. The mirror goes with it: there is no prior value to put
+         back here the way write() has one, and a mirror the database has
+         rejected must not go on being served as though it were the node. A read
+         while online replaces it with the truth. */
+      if (isRefusal(e)) {
+        const short = item.path.slice(mine.length);
+        LS.del('mirror:' + short);
+        clearPartial(short);
+        pushRefused(item.path, item.value, item.merge, (e && e.message) || '');
+        refused(short, e);
+        continue;
+      }
+      remaining.push(item);
+    }
   }
   LS.set('queue', remaining);
 }
@@ -458,8 +618,10 @@ function userPath(p) { return `users/${UID}/${p}`; }
  *                          { removes: N }   at most N children may vanish
  *                          { derived: true} this node is rebuilt from another,
  *                                           so a shrink carries no information
- * @throws if the write is refused, so that a caller cannot carry on as though
- *         it saved. Assign module state AFTER this resolves, not before.
+ * @throws if the write is refused — by the guard above, or by the database
+ *         itself — so that a caller cannot carry on as though it saved. Assign
+ *         module state AFTER this resolves, not before. A write that could not
+ *         be SENT is not a refusal: it is queued and this resolves.
  */
 export async function write(path, value, intent) {
   // Mirroring before the sign-in check would write the value into the `anon`
@@ -469,7 +631,16 @@ export async function write(path, value, intent) {
   // the write happened.
   const plan = await writePlan(path, value, intent);
   if (plan.why) throw new Error(reportBlock(plan.why));
-  LS.set('mirror:' + path, value);
+  /* Captured BEFORE the mirror is overwritten, so a refusal from the database
+     can put it back. The `undefined` sentinel is the one LS.get turns on: it
+     means "no mirror at all", which is a different thing from a mirrored null.
+     The partial mark is part of what the mirror MEANS, so it is captured and
+     restored with it — rolling the value back and leaving the mark would tell
+     the next write that a node this device has read properly is unread. */
+  const mk = 'mirror:' + path;
+  const priorMirror = LS.get(mk, undefined);
+  const wasPartial = isPartial(path);
+  LS.set(mk, value);
   // A mirror this write put there over a node nobody here has read is still not
   // a picture of the server, and saying so is what keeps the next write from
   // treating it as one.
@@ -478,12 +649,30 @@ export async function write(path, value, intent) {
   if (plan.merge) {
     if (!online.value) { pushQueue(full, plan.merge, true); return; }
     try { await update(ref(db, full), plan.merge); }
-    catch { pushQueue(full, plan.merge, true); }
+    catch (e) {
+      if (isRefusal(e)) throw new Error(rollBack(path, priorMirror, wasPartial, full, plan.merge, true, e));
+      pushQueue(full, plan.merge, true);
+    }
     return;
   }
   if (!online.value) { pushQueue(full, value); return; }
   try { await set(ref(db, full), value); }
-  catch { pushQueue(full, value); }
+  catch (e) {
+    if (isRefusal(e)) throw new Error(rollBack(path, priorMirror, wasPartial, full, value, false, e));
+    pushQueue(full, value);
+  }
+}
+
+/* The four things a refusal owes: put the mirror back, keep the payload, say so
+   on screen, and hand the caller a message to throw. In one place because doing
+   three of the four is worse than doing none — a rolled-back mirror with no red
+   bar is a value that silently disappears. */
+function rollBack(path, priorMirror, wasPartial, full, value, merge, e) {
+  const mk = 'mirror:' + path;
+  if (priorMirror === undefined) LS.del(mk); else LS.set(mk, priorMirror);
+  if (wasPartial) markPartial(path); else clearPartial(path);
+  pushRefused(full, value, merge, (e && e.message) || '');
+  return refused(path, e);
 }
 
 export async function read(path, fallback = null) {
