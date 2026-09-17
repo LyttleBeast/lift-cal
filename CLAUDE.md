@@ -46,7 +46,7 @@ history, and that is no longer true. The handoff below is still how you end.
 | `weight.js` `weightmodel.js` `tdee.js` | Weight, trend, maintenance |
 | `water.js` `steps.js` | Water and Steps |
 | `stats.js` `analytics.js` `ui.js` | Shared stats, charts, UI helpers |
-| `rack.css` `auth.css` | Styles (`app.css` is dead — the abandoned "IRONLOG" design) |
+| `rack.css` `auth.css` | Styles — the only two, both loaded by `index.html` |
 | `sw.js` `manifest.json` `.nojekyll` | PWA and Pages plumbing |
 | `worker/` | The Cloudflare Worker — its own project, see above |
 | `database.rules.json` | A **copy** of the published Firebase rules |

@@ -324,7 +324,7 @@ section('F. no double conversion — source scan of every call site');
   // units.js is the one file where a converter legitimately calls another —
   // fmtW is trim1(wOut(...)) by definition — so it is the definition, not a
   // call site, and it is excluded.
-  const FILES = readdirSync(ROOT).filter(f => f.endsWith('.js') && f !== 'units.js' && f !== 'app.css');
+  const FILES = readdirSync(ROOT).filter(f => f.endsWith('.js') && f !== 'units.js');
   let sites = 0;
   const offenders = [];
   FILES.forEach(f => {

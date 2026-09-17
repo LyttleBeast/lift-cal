@@ -128,7 +128,6 @@ node in the database. See *Access* below for what replaced them, and why.
 | `sw.js` | Service worker, network-first, cache `rack-v13` |
 | `AGENTS.md` | The database schema, node by node |
 | `rack.mjs` | **Dead file** — CLI for the removed agent account, kept as a record |
-| `app.css` | **Dead file** — the abandoned "IRONLOG" design, not referenced anywhere |
 
 Import direction is strictly one-way, no cycles:
 
