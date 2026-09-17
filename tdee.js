@@ -130,6 +130,49 @@ function legacyMaintenance(weightEntries, daySummaries) {
   return out;
 }
 
+/* ---------- which maintenance number is in force ----------
+
+   Three screens quote a maintenance number and all three used to hand-copy the
+   precedence, which is how Fuel, You and Weight end up disagreeing about the
+   single number the whole app is built on. This is that precedence, once.
+
+   The change it carries is that a number SETUP guessed and a number the person
+   TYPED stop meaning the same thing. Both live in food/targets.maint; what
+   tells them apart is the optional `maintSrc`:
+
+     'pinned'  a number the person chose. It always wins, forever.
+     'setup'   the Mifflin-St Jeor guess onboarding wrote so day one was not a
+               blank. It is a placeholder, and it steps aside the moment the
+               model can answer from the person's own data.
+     absent    every account that predates this key. Treated as PINNED, so no
+               existing account's number moves on its own — the app cannot tell
+               a stored guess from a stored choice, and guessing wrong would
+               move a number somebody is eating to. They are asked instead.
+
+   A setup number EXPIRES rather than being rewritten: nothing is deleted from
+   the database when the estimate arrives, the read side simply stops preferring
+   it. So if the model later loses its estimate — a fortnight without logging —
+   the setup number is what shows again, which is better than showing nothing.
+
+   `est` is maintenance()'s return, or null. A tdee of 0 is not a maintenance
+   number and never was: both readers this replaces tested it for truthiness,
+   and `> 0` is what keeps that true. Pure — no I/O, no clock, no imports. */
+export function effectiveMaint(targets, est) {
+  const t = targets || {};
+  const maint = Number(t.maint);
+  const stored = Number.isFinite(maint) && maint > 0;
+
+  if (stored && t.maintSrc !== 'setup') {
+    return { cal: Math.round(maint), source: 'pinned', auto: false };
+  }
+  const tdee = est ? Number(est.tdee) : NaN;
+  if (Number.isFinite(tdee) && tdee > 0) {
+    return { cal: Math.round(tdee), source: 'measured', auto: true };
+  }
+  if (stored) return { cal: Math.round(maint), source: 'setup', auto: false };
+  return null;
+}
+
 /* ---------- calorie zones ----------
    One maintenance number turns into three bands: under it you're cutting,
    within a collar of it you're holding, over it you're gaining.

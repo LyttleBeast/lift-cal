@@ -574,9 +574,17 @@ export function runSetup(user) {
           }
 
           if (!(priorTargets && Number(priorTargets.cal) > 0)) {
+            // maintSrc is what makes the promise on the numbers screen true.
+            // This number is Mifflin-St Jeor off four answers, not a
+            // measurement, and saying so in the record is what lets the read
+            // side step it aside the moment there is a real one
+            // (tdee.js effectiveMaint). Without the key it would be
+            // indistinguishable from a number somebody typed, which is exactly
+            // the position the eight accounts that predate it are in.
             await write('food/targets', {
               cal: a.cal, p: a.p, f: a.f,
               maint: a.maint || null,
+              maintSrc: a.maint > 0 ? 'setup' : null,
               auto: { on: false, rateWk: (GOALS.find(g => g[0] === a.goal) || GOALS[1])[2],
                       pPerLb: 1, fPerLb: 0.35, floor: 0, lastAdj: 0 }
             });

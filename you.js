@@ -37,10 +37,11 @@
 // The two numbers that must not be re-derived independently, because they are
 // printed elsewhere too:
 //
-//   Maintenance follows Fuel's precedence exactly (food.js:565) — a pinned
-//   targets.maint wins, otherwise the estimate. And refreshModel() is awaited
-//   before it is read, or You would quote the legacy estimate while Weight
-//   quotes the normalised one and the two would visibly disagree.
+//   Maintenance is not decided here at all any more: effectiveMaint() in
+//   tdee.js decides it once and Fuel, You and Weight all ask it. And
+//   refreshModel() is awaited before it is read, or You would quote the legacy
+//   estimate while Weight quotes the normalised one and the two would visibly
+//   disagree.
 //
 //   The thesis card's arithmetic is derived from its own total rather than
 //   computed twice. Both maintenance paths round the RESULT to ten but not the
@@ -68,7 +69,7 @@ import { assess, keysBack as keysBackI, streakOf, fmtRange } from './insights.js
 import { allSessions, exerciseIndex, filterByRange, groupSplit, topBy, weeklyVolume,
          lineChart, barChart, ring, sparkline, heatStrip, emptyChart, legend,
          groupColor } from './analytics.js';
-import { weightStats, maintenance, trendRate, refreshModel, trendWeight, adjustedDays } from './tdee.js';
+import { weightStats, maintenance, effectiveMaint, trendRate, refreshModel, trendWeight, adjustedDays } from './tdee.js';
 import { fmtWater } from './water.js';
 import { isStandalone } from './usage.js';
 import { openInstallGuide } from './onboarding.js';
@@ -663,14 +664,18 @@ function sinceLine() {
 }
 
 /* ================= MAINTENANCE ================= */
-/* Fuel's precedence, verbatim (food.js:565): a number you pinned always wins,
-   otherwise the measured estimate, otherwise we genuinely don't know and say
-   so. Two screens quoting different maintenance numbers is the single most
-   confusing thing this app could do, so there is one rule and both follow it. */
+/* One rule, in one file: effectiveMaint() in tdee.js. Two screens quoting
+   different maintenance numbers is the single most confusing thing this app
+   could do, and the way that used to happen was three copies of this
+   precedence drifting apart.
+
+   `pinned` is kept because the cards below read it, and it still means what it
+   always did: this number was not measured. `source` is the finer answer — a
+   setup guess is not a number anybody chose, and the cards that explain
+   themselves need to say which of the two they are looking at. */
 function maintInfo(est) {
-  if (targets && targets.maint > 0) return { cal: Math.round(targets.maint), pinned: true };
-  if (est && est.tdee && Number.isFinite(est.tdee)) return { cal: est.tdee, pinned: false };
-  return null;
+  const e = effectiveMaint(targets, est);
+  return e ? { cal: e.cal, pinned: e.source !== 'measured', source: e.source } : null;
 }
 
 /* ================= WEEK vs WEEK ================= */
@@ -847,7 +852,11 @@ function fuelCard(maint) {
           (targets.auto && targets.auto.on ? 'The targets follow your weight: protein and fat are grams per ' + (wu() === 'kg' ? 'kilo' : 'pound') + ' of trend weight and calories are maintenance shifted by your goal rate, re-checked at most once a week.'
                                           : 'They were set by hand, or by setup from your height, weight, age and goal, and stay where they are until you change them under ⚙ Daily targets.')
         : 'No targets are set yet. Setup writes a starting set; the gear at the top of this screen is where they live.',
-      maint ? 'Maintenance — what holds your weight steady — is ' + fmtInt(maint.cal) + ' kcal' + (maint.pinned ? ', a fixed number rather than a measured one.' : ', measured from what you ate against what the scale did.') + ' Your target sits ' + fmtInt(Math.abs(targets.cal - maint.cal)) + ' ' + (targets.cal < maint.cal ? 'under' : 'over') + ' it.' : 'Maintenance is not known yet, so the chart shows only the target.',
+      maint ? 'Maintenance \u2014 what holds your weight steady \u2014 is ' + fmtInt(maint.cal) + ' kcal' +
+        (maint.source === 'measured' ? ', measured from what you ate against what the scale did.'
+         : maint.source === 'setup'  ? ', which setup estimated from your height, weight, age and activity \u2014 a starting guess, not a measurement.'
+         :                             ', a fixed number rather than a measured one.') +
+        ' Your target sits ' + fmtInt(Math.abs(targets.cal - maint.cal)) + ' ' + (targets.cal < maint.cal ? 'under' : 'over') + ' it.' : 'Maintenance is not known yet, so the chart shows only the target.',
       'The bars are each day’s calories split into what they were made of; the rows are the week’s average against each target, today left out because it isn’t over. Protein reads green from 95% of target; carbs and fat within 10% either side.'
     ]
   });
@@ -1416,8 +1425,10 @@ function trajectoryCard(found, est, maint) {
   const why = { title: 'Where this is heading', body: [] };
   if (maint) {
     const avg = est && Number.isFinite(est.avgIntake) ? Math.round(est.avgIntake) : null;
-    if (maint.pinned) {
-      why.body.push('Maintenance is fixed at ' + fmtInt(maint.cal) + ' kcal — either setup worked it out from your height, weight, age and activity, or you typed it. Rack uses it everywhere instead of its own estimate until it is cleared under ⚙ Daily targets, and after a couple of weeks of weigh-ins the measured number is the better one.');
+    if (maint.source === 'setup') {
+      why.body.push('Maintenance is still the ' + fmtInt(maint.cal) + ' kcal setup worked out from your height, weight, age and activity. That is a formula, not a measurement \u2014 it steps aside on its own the moment there are enough weigh-ins and logged days for Rack to measure your own number.');
+    } else if (maint.pinned) {
+      why.body.push('Maintenance is fixed at ' + fmtInt(maint.cal) + ' kcal \u2014 either setup worked it out from your height, weight, age and activity, or you typed it. Rack uses it everywhere instead of its own estimate until it is cleared under \u2699 Daily targets, and after a couple of weeks of weigh-ins the measured number is the better one.');
     } else if (avg != null) {
       const shift = Math.abs(maint.cal - avg);
       const rate  = est && Number.isFinite(est.rateWk) ? est.rateWk : null;

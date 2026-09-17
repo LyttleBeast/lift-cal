@@ -13,7 +13,7 @@
 // specific job's pizza dough, not a food database.
 
 import { read, write, watch, LS, todayKey, uid, wu } from './store.js';
-import { maintenance, calorieZones, zoneOf, refreshModel,
+import { maintenance, effectiveMaint, calorieZones, zoneOf, refreshModel,
          autoTargets, trendWeight, MIN_CARB_G } from './tdee.js';
 import { initWater, loadWaterDay, renderWater, openWaterSettings } from './water.js';
 import { OWNER_UID } from './firebase-config.js';
@@ -126,32 +126,46 @@ async function loadMaintInputs() {
    write only if the move is worth making. Rate-limited two ways: no more than
    once a week, and no more than AUTO_MAX_STEP kcal at a time — one bad
    fortnight of data should never yank the target somewhere silly.
-   Returns true if it wrote (and re-rendered). */
-async function applyAuto() {
-  const a = targets.auto;
-  if (!a || !a.on) return false;
 
-  const mi = maintInfo();
-  const lb = trendWeight();
-  if (!mi || !(lb > 0)) return false;
+   The decision is out here on its own, with the clock passed in and nothing
+   read or written, because of what a setup maintenance number does when it
+   expires: the number the targets are computed from can jump by a few hundred
+   kcal the moment the model has an estimate, and the one thing that must not
+   happen is the calorie target jumping with it on the next render. The weekly
+   gate is what stops that, and a gate is only as good as the proof that it is
+   still in the path — tools-check/maintenance.mjs drives this one.
 
-  const next = autoTargets(a, mi.cal, lb);
-  if (!next) return false;
+   Returns the new numbers, or null for "leave the targets alone". */
+export function autoPlan(targets, maintCal, lb, now) {
+  const a = targets && targets.auto;
+  if (!a || !a.on) return null;
+  if (!(maintCal > 0) || !(lb > 0)) return null;
+
+  const next = autoTargets(a, maintCal, lb);
+  if (!next) return null;
 
   const moved = Math.abs(next.cal - targets.cal) >= 25 ||
                 Math.abs(next.p - targets.p) >= 4 ||
                 Math.abs(next.f - targets.f) >= 3;
-  if (!moved) return false;
-  if (a.lastAdj && Date.now() - a.lastAdj < AUTO_EVERY_DAYS * 864e5) return false;
+  if (!moved) return null;
+  if (a.lastAdj && now - a.lastAdj < AUTO_EVERY_DAYS * 864e5) return null;
 
   const step = Math.max(-AUTO_MAX_STEP, Math.min(AUTO_MAX_STEP, next.cal - targets.cal));
-  const cal  = Math.max(next.floor, targets.cal + step);
+  return { cal: Math.max(next.floor, targets.cal + step),
+           p: next.p, f: next.f, lastAdj: now };
+}
 
-  targets = { ...targets, cal, p: next.p, f: next.f,
-              auto: { ...a, lastAdj: Date.now() } };
+/* Returns true if it wrote (and re-rendered). */
+async function applyAuto() {
+  const mi = maintInfo();
+  const plan = autoPlan(targets, mi ? mi.cal : 0, trendWeight(), Date.now());
+  if (!plan) return false;
+
+  targets = { ...targets, cal: plan.cal, p: plan.p, f: plan.f,
+              auto: { ...targets.auto, lastAdj: plan.lastAdj } };
   await write('food/targets', targets);
   render();
-  toast('Targets moved with your trend \u2014 ' + cal.toLocaleString() + ' kcal, ' + next.p + 'g protein');
+  toast('Targets moved with your trend \u2014 ' + plan.cal.toLocaleString() + ' kcal, ' + plan.p + 'g protein');
   return true;
 }
 
@@ -564,13 +578,59 @@ function zoneColor(zone) {
 }
 
 /* ---------- maintenance ----------
-   A number you typed always wins; otherwise the estimate off the weight
-   trend. Null means we genuinely don't know yet and shouldn't pretend. */
+   The precedence itself is effectiveMaint() in tdee.js, shared with You and
+   Weight so the three screens can never quote different numbers. This is the
+   adapter: `auto` is the word the calorie bar has always used for "estimated",
+   and every call site downstream still reads it.
+
+   maintenance() is now computed on every call rather than only when nothing is
+   stored, because which number wins is no longer a question this function is
+   allowed to answer on its own. It is cheap — the model's answer is a filter
+   over three weeks of day keys, and the legacy fallback is only reached by
+   accounts too new to have many weigh-ins to walk. */
 function maintInfo() {
-  if (targets.maint > 0) return { cal: Math.round(targets.maint), auto: false };
-  const m = maintenance(weighIns, summaries);
-  if (m.tdee) return { cal: m.tdee, auto: true };
-  return null;
+  const e = effectiveMaint(targets, maintenance(weighIns, summaries));
+  return e ? { cal: e.cal, auto: e.auto, source: e.source } : null;
+}
+
+/* What Save does to the two stored maintenance keys, from what is in the box
+   and what was in it when the sheet opened. Pure, and out here because getting
+   it wrong is silent and expensive: this sheet used to PREFILL the box with
+   targets.maint, so a person who opened Daily targets to change their protein
+   and tapped Save re-wrote the setup guess — which, now that the two mean
+   different things, would turn a guess into a number the app treats as chosen
+   and follows forever.
+
+   So the box is only ever prefilled with a number somebody chose. A setup
+   number is a placeholder instead, and an untouched box writes neither key.
+
+     untouched   -> both keys exactly as they were
+     a number    -> { maint: n, maintSrc: 'pinned' }  they chose it
+     emptied     -> { maint: null, maintSrc: null }   follow the estimate
+
+   Junk in the box clears, which is what the old parseInt did; the caller still
+   range-checks the number before it writes. */
+export function maintPatch(box, initial, prior) {
+  const p = prior || {};
+  const had = Number(p.maint) > 0 ? Math.round(Number(p.maint)) : null;
+  const src = p.maintSrc === 'setup' || p.maintSrc === 'pinned' ? p.maintSrc : null;
+
+  const now = String(box == null ? '' : box).trim();
+  const was = String(initial == null ? '' : initial).trim();
+  if (now === was) return { maint: had, maintSrc: src, changed: false };
+
+  const n = parseInt(now, 10);
+  if (!(n > 0)) return { maint: null, maintSrc: null, changed: true };
+  return { maint: n, maintSrc: 'pinned', changed: true };
+}
+
+/* The provenance word printed beside a maintenance number. A guess must never
+   read as a measurement, so a number setup worked out from a formula says so
+   in the same breath as the number itself. A number the person typed carries
+   no word at all \u2014 they know where it came from. */
+function maintTag(mi) {
+  return !mi ? '' : mi.source === 'measured' ? ' est.'
+                  : mi.source === 'setup'    ? ' from setup' : '';
 }
 
 /* ---------- the calorie bar ----------
@@ -682,7 +742,7 @@ function renderCalMeter(cal) {
     dot.style.background = fill.style.background;
     line.append(dot, el('span', null, msg));
     line.appendChild(el('span', 'cal-maint num',
-      'maint ' + z.maint.toLocaleString() + (mi.auto ? ' est.' : '')));
+      'maint ' + z.maint.toLocaleString() + maintTag(mi)));
     wrap.appendChild(line);
 
     // The one case the two numbers genuinely disagree: a target that sits
@@ -696,7 +756,8 @@ function renderCalMeter(cal) {
       // the goal word stayed right. The word being right is exactly why the
       // goal sheet had nothing to change — so the fix is offered here, where
       // the problem is visible, as one button that moves the number.
-      wrap.appendChild(noteEl('Your target is ' + (g < 0 ? 'at or above' : 'at or below') + ' your ' + (mi.auto ? 'measured ' : '') +
+      wrap.appendChild(noteEl('Your target is ' + (g < 0 ? 'at or above' : 'at or below') + ' your ' +
+        (mi.source === 'measured' ? 'measured ' : mi.source === 'setup' ? 'starting ' : '') +
         'maintenance, so eating to it holds rather than ' + (g < 0 ? 'cuts' : 'bulks') + '.'));
       const p = previewGoal(g < 0 ? 'cut' : 'gain');
       if (p.changed && p.cal > 0) {
@@ -2691,7 +2752,7 @@ function openFuelSettings() {
   const mNow = maintInfo();
   summary.textContent = targets.cal.toLocaleString() + ' kcal  ·  P ' + targets.p +
     '  ·  C ' + carbsTarget() + '  ·  F ' + targets.f +
-    (mNow ? '   ·   maint ' + mNow.cal.toLocaleString() + (mNow.auto ? ' est.' : '') : '');
+    (mNow ? '   ·   maint ' + mNow.cal.toLocaleString() + maintTag(mNow) : '');
   sh.appendChild(summary);
 
   const tBtn = el('button', 'btn btn-ghost btn-block', 'Daily targets');
@@ -2937,7 +2998,8 @@ export function openTargets(onSaved) {
     preview.appendChild(row);
 
     preview.appendChild(noteEl(
-      'From maintenance ' + mi.cal.toLocaleString() + (mi.auto ? ' (estimated)' : ' (pinned)') +
+      'From maintenance ' + mi.cal.toLocaleString() +
+      (mi.source === 'measured' ? ' (estimated)' : mi.source === 'setup' ? ' (from setup)' : ' (pinned)') +
       ' at a trend weight of ' + labelW(n.lb, u) + '.'));
 
     if (n.floored) {
@@ -2957,23 +3019,45 @@ export function openTargets(onSaved) {
   autoPane.style.display   = mode === 'auto'   ? '' : 'none';
   paintAuto();
 
-  /* ---------- maintenance (shared) ---------- */
+  /* ---------- maintenance (shared) ----------
+     The box holds a number somebody CHOSE and nothing else. A setup guess goes
+     in the placeholder instead, so that saving this sheet without touching it
+     cannot promote a guess into a pin \u2014 see maintPatch(). */
   const est = maintenance(weighIns, summaries);
+  const eff = effectiveMaint(targets, est);
   const tm = el('div', 'field');
   tm.style.marginTop = '14px';
   tm.appendChild(el('label', null, 'Maintenance kcal'));
   const mi = el('input');
   mi.type = 'number'; mi.inputMode = 'numeric';
-  mi.value = targets.maint > 0 ? targets.maint : '';
-  mi.placeholder = est.tdee ? String(est.tdee) + ' (estimated)' : 'leave blank to estimate';
+  const maintWas = (targets.maint > 0 && targets.maintSrc !== 'setup')
+    ? String(Math.round(targets.maint)) : '';
+  mi.value = maintWas;
+  mi.placeholder =
+      !eff || eff.source === 'pinned' ? 'leave blank to estimate'
+    : eff.source === 'measured'       ? eff.cal.toLocaleString() + ' (estimated)'
+    :                                   eff.cal.toLocaleString() + ' from setup';
   tm.appendChild(mi);
   sh.appendChild(tm);
   mi.oninput = paintAuto;
-  sh.appendChild(noteEl(est.tdee
-    ? 'Your weight trend puts maintenance around ' + est.tdee.toLocaleString() +
-      ' kcal' + (est.se ? ' \u00b1 ' + Math.round(1.96 * est.se / 5) * 5 : '') +
-      '. Leave this blank to keep following that estimate, or type your own number to pin the cut / maintain / gain marks.'
-    : 'The estimate needs ' + est.need.join(' and ') + '. Type a number here to draw the zones in the meantime.'));
+  // Which number is in force, and why \u2014 the sheet is where somebody comes to
+  // change it, so it is the one place that has to be unambiguous about it.
+  sh.appendChild(noteEl(
+    !eff
+    ? 'Nothing to draw the zones from yet. The estimate needs ' + est.need.join(' and ') +
+      '. Type a number here to draw them in the meantime.'
+    : eff.source === 'pinned'
+    ? 'Rack is using the ' + eff.cal.toLocaleString() + ' kcal in this box, because you chose it. Clear the box to follow ' +
+      (est.tdee ? 'the measured estimate instead, currently ' + est.tdee.toLocaleString() + ' kcal' +
+                  (est.se ? ' \u00b1 ' + Math.round(1.96 * est.se / 5) * 5 : '') + '.'
+                : 'Rack\u2019s own estimate once it has one \u2014 it needs ' + est.need.join(' and ') + '.')
+    : eff.source === 'measured'
+    ? 'Rack is measuring your maintenance at ' + eff.cal.toLocaleString() + ' kcal' +
+      (est.se ? ' \u00b1 ' + Math.round(1.96 * est.se / 5) * 5 : '') +
+      ' from your weigh-ins against what you ate. Leave this blank to keep following it, or type your own number to pin the cut / maintain / gain marks.'
+    : 'Rack is using the ' + eff.cal.toLocaleString() + ' kcal setup worked out from your height, weight, age and activity. ' +
+      'That is a formula, not a measurement, and it steps aside on its own once Rack can measure your own \u2014 which needs ' +
+      est.need.join(' and ') + '. Type a number here to use your own instead.'));
 
   /* ---------- goal weight (shared) ----------
      Read by nothing on this tab. It is the finish line for the goal card on
@@ -2996,7 +3080,9 @@ export function openTargets(onSaved) {
   const save = el('button', 'btn btn-primary btn-block', 'Save');
   save.style.marginTop = '14px';
   save.onclick = async () => {
-    const maint = parseInt(mi.value) > 0 ? parseInt(mi.value) : null;
+    const mp = maintPatch(mi.value, maintWas, targets);
+    const maint = mp.maint;
+    const maintSrc = mp.maintSrc;
     if (maint != null && !within(maint, LIMITS.cal)) {
       toast('Maintenance should be between ' + LIMITS.cal[0].toLocaleString() + ' and ' + LIMITS.cal[1].toLocaleString() + ' kcal');
       return;
@@ -3010,7 +3096,7 @@ export function openTargets(onSaved) {
 
     if (mode === 'auto') {
       const a = readAuto();
-      targets = { ...targets, maint, goalLb, auto: a };
+      targets = { ...targets, maint, maintSrc, goalLb, auto: a };
       // Apply straight away rather than waiting out the weekly gate — he just
       // asked for these numbers.
       const m2 = maintInfo();
@@ -3042,7 +3128,7 @@ export function openTargets(onSaved) {
     targets = {
       ...targets,
       cal: tCal, p: tP, f: tF,
-      maint, goalLb,
+      maint, maintSrc, goalLb,
       auto: { ...auto, on: false }
     };
     await write('food/targets', targets);
@@ -3253,9 +3339,12 @@ function openBarGuide(t) {
       :                            'it is in the yellow, so hitting it every day holds your weight.'));
     row('status', 'The line under the bar',
       'The word for the band you are in, and how far you sit from maintenance right now. ' +
-      '“maint ' + n(z.maint) + (mi.auto
+      '“maint ' + n(z.maint) + (
+        mi.source === 'measured'
         ? ' est.” means Rack measured that number from your weigh-ins against what you ate — it moves as it learns.'
-        : '” is a number that was typed in or set at setup; clear it under ⚙ Daily targets and Rack measures its own.'));
+        : mi.source === 'setup'
+        ? ' from setup” means it is the estimate setup worked out from your height, weight, age and activity — a formula, not a measurement. Rack replaces it with its own measured number as soon as it has one.'
+        : '” is a number you typed; Rack uses it instead of its own estimate until you clear it under ⚙ Daily targets.'));
   } else {
     row('head', 'The bar',
       'The white head is where you are now and moves right as you eat; the dashed mark is your target. ' +

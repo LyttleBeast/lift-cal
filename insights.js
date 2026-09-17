@@ -97,7 +97,7 @@ export function windowStats(ctx, keys, { dropToday = false } = {}) {
 }
 
 /* ================= THE FINDINGS =================
-   ctx: { targets, maint: {cal, pinned}|null, dir: -1|0|1|null, summaries,
+   ctx: { targets, maint: {cal, pinned, source}|null, dir: -1|0|1|null, summaries,
           wmap: {dateKey: lb}, entries, rate: {rateWk, model}|null, tw: lb|null,
           sessions: []|null, stepDays, stepGoal, waterDays: {dateKey: ml}|null,
           waterGoal, est: maintenance()|null, days: weightStats().days,
