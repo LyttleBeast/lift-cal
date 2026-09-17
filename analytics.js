@@ -289,6 +289,55 @@ export function sessionMilestones(record, prior, u) {
   return out;
 }
 
+// Reps in a session — working sets only, the same filter volume uses. One
+// definition, because the recap's "N reps" heading and the comparison card
+// under it have to be the same number.
+export function sessionReps(s) {
+  return ((s && s.exercises) || []).reduce((a, ex) =>
+    a + (ex.sets || []).filter(isWorking).reduce((b, x) => b + (parseInt(x.r) || 0), 0), 0);
+}
+
+// What the recap says about this session against the last four weeks, and
+// WHETHER it says anything at all.
+//
+// Volume is weight × reps, so a session with no weight on the bar has no
+// volume to compare. The card used to divide anyway: after a set of pull-ups
+// it read "AGAINST YOUR LAST 4 WEEKS · -100% · 0 lb today against a 10.9k lb
+// average across 19 sessions". Every number in that sentence is arithmetically
+// right and the sentence is false — a percentage against a quantity you never
+// attempted is a division, not a comparison, and -100% in the failure colour
+// says you went backwards on a day you trained.
+//
+// So: volume against volume, and only when there is volume on BOTH sides. When
+// this session has none, reps against reps instead — the same 28 days, the same
+// sessions, a quantity that exists and that a bodyweight set really does move.
+// When neither side has anything, the card does not appear, which is what it
+// has always done with fewer than two prior sessions. There is deliberately no
+// percentage on the reps branch: the number it would colour red is the one this
+// function exists to stop claiming.
+//
+// `now` is an argument rather than a Date.now() inside, so this is pure and the
+// native port copies it instead of re-deriving it.
+export function sessionComparison(record, prior, now) {
+  const recent = (prior || []).filter(s => s && s.startedAt > now - 28 * 864e5);
+  if (recent.length < 2) return null;
+  const n = recent.length;
+
+  const vol = (record && record.volume) || 0;
+  const avgVol = recent.reduce((a, s) => a + (s.volume || 0), 0) / n;
+  // avgVol > 0 as well as vol > 0: four weeks of bodyweight work behind a
+  // barbell day would otherwise divide by zero and print "+0%".
+  if (vol > 0 && avgVol > 0) {
+    return { kind: 'volume', n, volume: vol, avg: avgVol,
+             pct: Math.round((vol - avgVol) / avgVol * 100) };
+  }
+
+  const reps = sessionReps(record);
+  const avgReps = recent.reduce((a, s) => a + sessionReps(s), 0) / n;
+  if (reps > 0 && avgReps > 0) return { kind: 'reps', n, reps, avg: avgReps };
+  return null;
+}
+
 // Every PR ever hit, newest first. Walks the log forward keeping running bests.
 export function prTimeline(sessions) {
   const best = {};   // exId -> { e1rm, weight }

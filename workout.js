@@ -10,7 +10,8 @@ import {
   fmtDate, fmtDateFull, fmtDuration, parseKey, clamp, setNum, LIMITS
 } from './ui.js';
 import {
-  allSessions, invalidate, detectPRs, sessionMilestones, isWorking, groupColor,
+  allSessions, invalidate, detectPRs, sessionMilestones, sessionComparison,
+  sessionReps, isWorking, groupColor,
   mergeSessionExercises, prDetail
 } from './analytics.js';
 // One-way dependency: this file imports stats.js, stats.js never imports back.
@@ -1529,8 +1530,7 @@ function renderSummary() {
   wrap.appendChild(hero);
 
   const workingSets = record.exercises.reduce((a, ex) => a + ex.sets.filter(isWorking).length, 0);
-  const totalReps = record.exercises.reduce((a, ex) =>
-    a + ex.sets.filter(isWorking).reduce((b, s) => b + (parseInt(s.r) || 0), 0), 0);
+  const totalReps = sessionReps(record);
 
   const row = el('div', 'stat-row');
   const u = wu();
@@ -1610,23 +1610,30 @@ function renderSummary() {
     wrap.appendChild(card);
   }
 
-  /* ---- comparison ---- */
-  const recent = prior.filter(s => s.startedAt > Date.now() - 28 * 864e5);
-  if (recent.length >= 2) {
-    const avg = recent.reduce((a, s) => a + (s.volume || 0), 0) / recent.length;
-    const diff = record.volume - avg;
-    const pct = avg ? Math.round(diff / avg * 100) : 0;
+  /* ---- comparison ----
+     Which of the two comparisons this session gets — and whether it gets one —
+     is sessionComparison's decision, not this screen's. See analytics.js: a
+     bodyweight session has no volume, and dividing by the average anyway is how
+     a set of pull-ups came to read -100% in the failure colour. */
+  const cmp = sessionComparison(record, prior, Date.now());
+  if (cmp) {
     const card = el('div', 'card');
     const hd = el('div', 'card-hd');
     hd.appendChild(el('div', 'eyebrow', 'Against your last 4 weeks'));
     card.appendChild(hd);
-    const big = el('div', 'load-num num', (pct >= 0 ? '+' : '') + pct + '%');
+    const big = el('div', 'load-num num',
+      cmp.kind === 'volume' ? (cmp.pct >= 0 ? '+' : '') + cmp.pct + '%' : String(cmp.reps));
     big.style.fontSize = '34px';
-    big.style.color = pct >= 0 ? 'var(--good)' : 'var(--steel)';
+    // The reps branch is uncoloured on purpose. Green-or-steel is a verdict,
+    // and the verdict this card used to pass on a bodyweight session is the
+    // thing that was wrong with it.
+    if (cmp.kind === 'volume') big.style.color = cmp.pct >= 0 ? 'var(--good)' : 'var(--steel)';
     card.appendChild(big);
-    card.appendChild(noteEl(
-      fmtVol(record.volume, u) + ' ' + unitW(u) + ' today against a ' + fmtVol(Math.round(avg), u) +
-      ' ' + unitW(u) + ' average across ' + recent.length + ' sessions.'));
+    card.appendChild(noteEl(cmp.kind === 'volume'
+      ? fmtVol(cmp.volume, u) + ' ' + unitW(u) + ' today against a ' + fmtVol(Math.round(cmp.avg), u) +
+        ' ' + unitW(u) + ' average across ' + cmp.n + ' sessions.'
+      : cmp.reps + ' reps today against a ' + Math.round(cmp.avg) + '-rep average across ' +
+        cmp.n + ' sessions.'));
     wrap.appendChild(card);
   }
 

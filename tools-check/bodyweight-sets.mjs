@@ -99,7 +99,8 @@ for (const [file, text] of sources) {
 const load = f => import(pathToFileURL(join(dir, f)).href);
 const { collectFrom, computeVolume, foldSessionIntoHistory } = await load('workout.mjs');
 const { e1rm, detectPRs, sessionMilestones, prTimeline, exerciseIndex,
-        isWorking } = await load('analytics.mjs');
+        isWorking, sessionComparison, sessionReps } = await load('analytics.mjs');
+const { fmtSetLoad } = await load('units.mjs');
 
 /* ---------- harness ---------- */
 
@@ -319,6 +320,66 @@ bwRecord.volume = computeVolume(bwRecord.exercises);
   check('a blank-weight warm-up is still recorded', rec[0].sets.length === 2, shape(rec));
   check('and is still excluded from the history row',
     foldSessionIntoHistory({}, DATE, rec)['pull-up'][0].sets.length === 1);
+}
+
+{
+  // WHAT THE SCREEN SAYS ABOUT IT. Both of these are consumers of a w:'0' set
+  // in the same sense as the ones above — they take it without throwing — and
+  // both of them used to take it and then say something false.
+
+  // The clock is derived from the fixture, never from the machine: `now` is an
+  // argument to sessionComparison precisely so this runs the same at 2 AM in
+  // any timezone.
+  const NOW = bwRecord.startedAt + 3600e3;
+  const weighted = (i, volume) => ({
+    id: 'p' + i, _date: '2026-09-0' + i, startedAt: bwRecord.startedAt - i * 864e5,
+    volume, durationSec: 3600,
+    exercises: [ex('row', 'Row', [{ w: '100', r: '10', type: 'N', done: true },
+                                  { w: '100', r: '10', type: 'N', done: true }])]
+  });
+  const prior = [1, 2, 3].map(i => weighted(i, 10900));
+
+  check('a bodyweight session is not compared by volume — no -100%',
+    sessionComparison(bwRecord, prior, NOW).kind === 'reps',
+    shape(sessionComparison(bwRecord, prior, NOW)));
+  check('and the card it does get carries no percentage at all',
+    !('pct' in sessionComparison(bwRecord, prior, NOW)),
+    shape(sessionComparison(bwRecord, prior, NOW)));
+  const c = sessionComparison(bwRecord, prior, NOW);
+  check('it compares reps to reps — 30 today against a 20-rep average over 3 sessions',
+    c.reps === 30 && c.avg === 20 && c.n === 3, shape(c));
+  check('the reps it counts are sessionReps, the same number the recap heading prints',
+    c.reps === sessionReps(bwRecord), c.reps + ' / ' + sessionReps(bwRecord));
+
+  // The ordinary path is untouched, which is most of the value of a pure
+  // function: a loaded session still gets the percentage it always got.
+  const loadedRec = { ...bwRecord, volume: 12000,
+    exercises: [ex('row', 'Row', [{ w: '120', r: '10', type: 'N', done: true },
+                                  { w: '120', r: '10', type: 'N', done: true }])] };
+  const lc = sessionComparison(loadedRec, prior, NOW);
+  check('a loaded session is still compared by volume',
+    lc.kind === 'volume' && lc.volume === 12000 && lc.n === 3, shape(lc));
+  check('and its percentage is the same arithmetic as before — 12000 vs 10900 is +10%',
+    lc.pct === Math.round((12000 - 10900) / 10900 * 100), String(lc.pct));
+
+  // The edges.
+  check('fewer than two sessions in the window: no card, exactly as before',
+    sessionComparison(bwRecord, prior.slice(0, 1), NOW) === null);
+  check('sessions older than 28 days are not in the window',
+    sessionComparison(bwRecord, prior.map(p => ({ ...p, startedAt: p.startedAt - 40 * 864e5 })), NOW) === null);
+  check('a loaded session behind four weeks of bodyweight work divides by nothing',
+    sessionComparison(loadedRec, [1, 2].map(i => ({ ...weighted(i, 0) })), NOW).kind === 'reps',
+    shape(sessionComparison(loadedRec, [1, 2].map(i => ({ ...weighted(i, 0) })), NOW)));
+  check('a session with neither volume nor reps says nothing',
+    sessionComparison({ ...bwRecord, volume: 0, exercises: [] },
+                      [1, 2].map(i => weighted(i, 0)), NOW) === null);
+
+  // And the printing rule from the same ship, against the same record.
+  check("the recorded w:'0' prints as BW, not as 0",
+    bwRecord.exercises[0].sets.every(s => fmtSetLoad(s.w, 'lb') === 'BW'),
+    shape(bwRecord.exercises[0].sets.map(s => fmtSetLoad(s.w, 'lb'))));
+  check('and on kilos too — BW is not a unit and does not convert',
+    bwRecord.exercises[0].sets.every(s => fmtSetLoad(s.w, 'kg') === 'BW'));
 }
 
 /* ---------- report ---------- */
