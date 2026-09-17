@@ -14,7 +14,7 @@ invite code, or by asking the owner and being approved. See *Access* below.
 - **Weight** — body-weight log: 7-day moving average chart, weekly rate, a learned time-of-day curve, and a maintenance (TDEE) estimate built on normalised weigh-ins with a stated confidence interval.
 - **Pounds or kilos**, app-wide — body weight, set weights, volume, records, trend rates, goal weight, height and per-bodyweight macro targets, all of it. Picked at setup, changeable any time under ⚙ Units. Nothing in the database changes: pounds and inches are the stored unit and the setting converts at the edges.
 - **Water** — daily intake against a goal, in the Fuel tab: a filling bottle, one-tap common sizes, any unit you like, stored in millilitres.
-- **Steps** — its own tab: goal ring, 7-day / 30-day / 12-month trend, streaks, a 13-week heat map, day-of-week breakdown, and either manual entry or an automation pushing them from your phone.
+- **Steps** — its own tab: goal ring, 7-day / 30-day / 12-month trend, streaks, a 13-week heat map, day-of-week breakdown, and a typed daily total.
 
 ---
 
@@ -354,7 +354,7 @@ the app. The card at the bottom of the Weight tab is gone.
 | **You** | Your details — name, sex, height, birth year — **Units** (Imperial / Metric), and which tab the app opens on |
 | **Fuel** | Daily targets · Water goal and sizes · AI estimator · Food memory · Paste food JSON |
 | **Train** | Default rest · Exercise library · Import workout history |
-| **Steps** | Step goal · Step automation: the exact settings |
+| **Steps** | Step goal |
 | **App** | Add to Home Screen · Replay the walkthrough · Sign out · Sign out and erase this device's copy |
 
 Almost none of it is implemented there. The hub is a table of contents that
@@ -517,22 +517,21 @@ never leave the phone.
 
 ## Steps details
 
-- **Manual is the floor, automatic is an upgrade.** Both write the same
-  `steps/{date}` node, so there is nothing to migrate when someone sets up an
-  automation later, and nothing breaks when it misses a day.
 - Tap **Set total** for the whole day's number, or `+500 / +1k / +2.5k` to nudge
   it. Any of the last 14 days is tappable to correct, swipe-left to clear.
-- **Steps → ⚙ → Log steps automatically** is a walkthrough built into the app, with
-  an iPhone / Android switch, so a new tester can set themselves up without being
-  talked through it. It ends on a card showing the two exact requests. The settings
-  hub reaches the walkthrough through *Step goal*, and opens that last card on its
-  own as *Step automation: the exact settings*.
-- The automation signs in **as that person**, and the sign-in response carries
-  their own `localId`, so the same recipe works for every account unmodified —
-  nobody types an account id and no shared credential exists anywhere.
-- Neither platform lets any app read health data while the phone is locked. The
-  count lands on the next unlock. That is Apple and Google's rule, not a
-  limitation of this approach — a paid app hits exactly the same wall.
+- **The step-automation walkthrough is gone** (v40). It talked somebody through
+  putting their Rack email and password into a third-party automation app, and
+  printed the Firebase sign-in endpoint beside a Copy button. A password typed
+  into MacroDroid is a password in MacroDroid, and no wording around it makes
+  that something this app should be teaching.
+- Days already pushed in that way still render, and still read *from your
+  phone*: `steps/{date}` is unchanged, `src` is still `manual` / `shortcut` /
+  `hae` / `agent`, and every reader of it stayed. Anyone who has an automation
+  set up keeps it working. The REST door is Firebase's and is still open — the
+  app just no longer hands out the instructions.
+- Neither platform lets any app read health data while the phone is locked, so
+  a pushed count lands on the next unlock. That is Apple and Google's rule, not
+  a limitation of any particular approach.
 - The ring is an arc, Fuel is a bar, Water is a filling vessel. Three different
   shapes on purpose: you should know which screen you're on at a glance.
 

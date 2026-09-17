@@ -21,7 +21,7 @@ import { LS, uid, readExact, currentEmail, write, purgeDevice, logout,
 import { openTargets, openAiSettings, openRecallList, openImportPaste,
          foodTargets, latestLb, goalId, previewGoal, setGoal, goalFits } from './food.js';
 import { openWaterSettings, waterSettings, fmtWater } from './water.js';
-import { openStepSettings, stepGoal, openAutoDetails } from './steps.js';
+import { openStepSettings, stepGoal } from './steps.js';
 import { openImport } from './importer.js';
 import { openExerciseManager } from './picker.js';
 import { hasProxy } from './ai.js';
@@ -204,9 +204,6 @@ export function openSettings(onEdit) {
   /* ---- steps ---- */
   const steps = rowList(section(sh, 'Steps'));
   navRow(steps, 'Step goal', stepPill(), () => { close(); openStepSettings(onEdit); });
-  // Named for what it opens, not for the feature: this is the API appendix, and
-  // the walkthrough that explains it lives one tap inside Step goal.
-  navRow(steps, 'Step automation: the exact settings', null, () => { close(); openAutoDetails(); });
 
   /* ---- app ---- */
   const app = section(sh, 'App');

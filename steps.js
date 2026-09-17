@@ -7,15 +7,21 @@
 // nothing here needs to know more than one person exists.
 //
 // `src` says where a day came from — `manual` when typed in, `shortcut` /
-// `hae` / `agent` when something pushed it. A pushed number always wins over
-// nothing, but a number typed by hand is never silently overwritten: the
-// automation writes the whole day node, so the last writer wins, and the card
-// says which it was.
+// `hae` / `agent` when something pushed it. Every one of those is still read:
+// days already logged from a phone automation render as "from your phone", and
+// nothing about this node changed.
+//
+// What is gone is the WALKTHROUGH that told people how to set one up. It walked
+// somebody through putting their Rack email and password into a third-party
+// automation app, and printed the sign-in endpoint next to a Copy button. A
+// password typed into MacroDroid is a password in MacroDroid, and no wording
+// around it makes that a thing this app should be teaching. The REST door is
+// still open to anyone who wants it — it is Firebase's, not ours — but the app
+// no longer hands out the instructions.
 //
 // Imports store.js, ui.js and analytics.js. Nothing imports back.
 
 import { read, write, watch, todayKey } from './store.js';
-import { firebaseConfig } from './firebase-config.js';
 // Only long-standing exports are imported from analytics.js. A brand-new
 // module must never depend on a brand-new export in an OLD shared file: if a
 // browser is holding even one stale file, the import fails and this whole tab
@@ -24,7 +30,7 @@ import { firebaseConfig } from './firebase-config.js';
 import { barChart, emptyChart } from './analytics.js';
 import { bump } from './usage.js';
 import { $, el, svgEl, sheet, toast, noteEl, confirmSheet, swipeToDelete,
-         segmented, compact, copyText, parseKey, fmtDate, fmtDateFull, LIMITS, within } from './ui.js';
+         compact, parseKey, fmtDate, fmtDateFull, LIMITS, within } from './ui.js';
 
 const DAY = 864e5;
 const DEFAULTS = { goal: 10000 };
@@ -540,11 +546,6 @@ export function openStepSettings(onSaved) {
   });
   sh.appendChild(quick);
 
-  const auto = el('button', 'btn btn-ghost btn-block', 'Log steps automatically');
-  auto.style.marginTop = '14px';
-  auto.onclick = () => { close(); openAutoGuide(); };
-  sh.appendChild(auto);
-
   const save = el('button', 'btn btn-primary btn-block', 'Save');
   save.style.marginTop = '10px';
   save.onclick = async () => {
@@ -568,127 +569,3 @@ export function openStepSettings(onSaved) {
   sh.appendChild(cancel);
 }
 
-/* ---------- the automatic-logging walkthrough ----------
-   Written to be readable by someone who has never opened Shortcuts. Both
-   platforms, because not everybody testing this is on an iPhone. */
-function openAutoGuide() {
-  const { sh, close } = sheet();
-  sh.appendChild(el('div', 'eyebrow', 'Steps'));
-  sh.appendChild(el('h2', null, 'Log them automatically'));
-  sh.appendChild(noteEl(
-    'Your phone already counts your steps. It cannot hand them to a web page ' +
-    'on its own, so a small automation on the phone pushes the number here ' +
-    'once a day. You set it up once and then forget about it.'));
-
-  let os = /android/i.test(navigator.userAgent) ? 'android' : 'ios';
-  const body = el('div');
-
-  const paint = () => {
-    body.innerHTML = '';
-    const steps = os === 'ios' ? [
-      ['Open the Shortcuts app', 'It comes with every iPhone. If it was deleted, get it free from the App Store.'],
-      ['New shortcut → add "Find Health Samples"', 'Set Type to Step Count, filter to Today, and turn on the option to add all the numbers together.'],
-      ['Add "Get Contents of URL" — sign in', 'This trades your Rack email and password for a one-hour pass. The exact address and settings are on the card below.'],
-      ['Add a second "Get Contents of URL" — send', 'This is the one that writes your steps. It uses the pass from the step before.'],
-      ['Automation tab → new → Time of Day', 'Pick something like 10pm, choose Run Immediately, and point it at the shortcut.']
-    ] : [
-      ['Install a task app', 'Android has no built-in Shortcuts. MacroDroid is free; Tasker is paid and more capable. Either can read Health Connect and send a web request.'],
-      ['Give it Health Connect access', 'Settings → Health Connect → permissions. Your step data lives there, whether it comes from the phone or a watch.'],
-      ['Read today’s step total', 'Both apps have a Health Connect action for daily steps.'],
-      ['Add two HTTP requests', 'One to sign in, one to send — same two addresses as the card below.'],
-      ['Trigger it on a daily timer', 'Around 10pm works. Your phone has to be unlocked for it to read health data.']
-    ];
-    steps.forEach(([t, d], i) => {
-      const r = el('div', 'st-guide');
-      r.appendChild(el('span', 'st-guide-n num', String(i + 1)));
-      const c = el('div');
-      c.appendChild(el('div', 'st-guide-t', t));
-      c.appendChild(el('div', 'st-guide-d', d));
-      r.appendChild(c);
-      body.appendChild(r);
-    });
-  };
-
-  sh.appendChild(segmented([['ios', 'iPhone'], ['android', 'Android']], os, v => { os = v; paint(); }));
-  paint();
-  sh.appendChild(body);
-
-  sh.appendChild(noteEl(
-    'One thing no app can get around: Apple and Android both lock health data ' +
-    'away while the phone is locked. The automation runs the next time you ' +
-    'unlock, so steps land within minutes of you picking up your phone — not ' +
-    'the instant you take them.'));
-
-  const copy = el('button', 'btn btn-ghost btn-block', 'Show me the exact settings');
-  copy.style.marginTop = '12px';
-  copy.onclick = () => { close(); openAutoDetails(); };
-  sh.appendChild(copy);
-
-  const done = el('button', 'btn btn-ghost btn-block', 'Close');
-  done.style.marginTop = '8px';
-  done.onclick = close;
-  sh.appendChild(done);
-}
-
-export function openAutoDetails() {
-  const { sh, close } = sheet();
-  sh.appendChild(el('div', 'eyebrow', 'Steps'));
-  sh.appendChild(el('h2', null, 'The exact settings'));
-  sh.appendChild(noteEl(
-    'Two web requests. The first one signs you in and hands back a pass plus ' +
-    'your account id; the second uses both to write today’s steps. Nobody ' +
-    'needs to look up an id — the first request tells the second what it is.'));
-
-  const HOST = (firebaseConfig.databaseURL || '').replace(/\/$/, '');
-  const SIGNIN = 'https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=' +
-                 firebaseConfig.apiKey;
-  const WRITE  = HOST + '/users/[localId]/steps/[YYYY-MM-DD].json?auth=[idToken]';
-
-  const block = (title, lines, copyVal) => {
-    const c = el('div', 'card');
-    c.style.marginTop = '10px';
-    c.appendChild(el('div', 'eyebrow', title));
-    lines.forEach(([k, v]) => {
-      const r = el('div', 'st-kv');
-      r.appendChild(el('span', 'st-kv-k', k));
-      r.appendChild(el('span', 'st-kv-v num', v));
-      c.appendChild(r);
-    });
-    if (copyVal) {
-      const b = el('button', 'btn btn-ghost btn-block', 'Copy the address');
-      b.style.marginTop = '10px';
-      b.onclick = () => copyText(copyVal, 'Address copied');
-      c.appendChild(b);
-    }
-    sh.appendChild(c);
-  };
-
-  block('Request 1 — sign in', [
-    ['Method', 'POST'],
-    ['URL', SIGNIN],
-    ['Body', '{"email":"…","password":"…","returnSecureToken":true}'],
-    ['Hands back', 'idToken  ·  localId']
-  ], SIGNIN);
-
-  block('Request 2 — send the steps', [
-    ['Method', 'PUT'],
-    ['URL', WRITE],
-    ['Body', '{"steps":1234,"src":"shortcut"}'],
-    ['Date', 'YYYY-MM-DD, e.g. ' + todayKey()]
-  ], WRITE);
-
-  sh.appendChild(noteEl(
-    'Square brackets are placeholders. [localId] and [idToken] come straight ' +
-    'out of the first request — your automation app can pass them through, so ' +
-    'you never have to look up an account id or keep a token fresh.'));
-
-  sh.appendChild(noteEl(
-    'Use your own Rack email and password — the same ones you signed in with. ' +
-    'They only ever reach your own account. Don’t share a shortcut you’ve ' +
-    'already filled in: share the empty one and let each person type their own.'));
-
-  const done = el('button', 'btn btn-ghost btn-block', 'Close');
-  done.style.marginTop = '14px';
-  done.onclick = close;
-  sh.appendChild(done);
-}
