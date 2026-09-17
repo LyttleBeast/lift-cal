@@ -241,7 +241,7 @@ usage/{uid}/who/firstSeen              ms epoch, write-once
 usage/{uid}/who/lastSeen               ms epoch
 usage/{uid}/who/platform               ios|android|mac|windows|linux|other
 usage/{uid}/who/standalone             bool — installed to the home screen
-usage/{uid}/who/version                'rack-v13' — the sw.js cache name
+usage/{uid}/who/version                e.g. 'rack-v40' — the sw.js cache name
 usage/{uid}/days/{YYYY-MM-DD}/{event}  a whole number
 ```
 

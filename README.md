@@ -124,7 +124,7 @@ node in the database. See *Access* below for what replaced them, and why.
 | `importer.js` | One-time Liftoff history migration |
 | `rack.css` | The stylesheet |
 | `404.html` | Branded not-found page |
-| `sw.js` | Service worker, network-first, cache `rack-v13` |
+| `sw.js` | Service worker, network-first. The cache name is the build version — read it out of the file, never out of here |
 | `AGENTS.md` | The database schema, node by node |
 | `rack.mjs` | **Dead file** — CLI for the removed agent account, kept as a record |
 
@@ -618,7 +618,7 @@ for somebody who picks metric, and changing units afterwards never touches it.
 - Flat file layout — GitHub Pages serves it directly from the repo root.
 - Timers are timestamp-based, so iOS background throttling doesn't cause drift.
 - Writes queue in `localStorage` when offline and flush on reconnect.
-- Service worker is network-first with cache fallback (`rack-v13`). Bump the cache name in
+- Service worker is network-first with cache fallback. Bump the cache name in
   `sw.js` when you need to force-evict old assets. It bypasses `*.workers.dev` the same way
   it bypasses Firebase — an estimate must never come out of a cache. `usage.js` holds the
   same string a second time, because a service worker is not a module the app can import
