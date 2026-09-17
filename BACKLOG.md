@@ -5,16 +5,17 @@ a record of eight shipped features with a handful of live items buried in it.
 
 Two things this file is not. It is not a design document — where a shape was
 already decided, the decision stays where it was written and this only points at
-it. And it is not a port brief: `NEXT-NATIVE.md`, `NEXT-NATIVE-UNITS.md` and
-`NEXT-NATIVE-V40.md` are the instructions for copying work into
-`~/dev/rack-mobile`, and they stay. What is below is the list of things nobody
-has done yet.
+it. And it is not a port brief: `NEXT-NATIVE.md`, `NEXT-NATIVE-UNITS.md`,
+`NEXT-NATIVE-V40.md` and `NEXT-NATIVE-V41.md` are the instructions for copying
+work into `~/dev/rack-mobile`, and they stay. What is below is the list of
+things nobody has done yet.
 
 Read [AGENTS.md](AGENTS.md) for what exists and [CLAUDE.md](CLAUDE.md) for how
 to work on it.
 
-Native-tree claims below were checked against `~/dev/rack-mobile` at the fixed
-commit `85be276`. That tree moves on its own, so verify before acting on one.
+Native-tree claims below were checked against `~/dev/rack-mobile` at a fixed
+commit — `85be276` where the line says so, `695d996` for everything v41 checked.
+That tree moves on its own, so verify before acting on one.
 
 ---
 
@@ -50,33 +51,6 @@ can find on a rack. So a metric account's strip says **"Per side · lb plates"**
 The real answer is a second plate set plus a bar-weight setting, and it is a
 small ship of its own. Carried from ROADMAP §8; the same note is in
 `NEXT-NATIVE-UNITS.md` §9, which tells the native tree not to "finish" it either.
-
-### A stored bodyweight set reads "0", not "BW"
-
-v40 made a ticked set with reps record a blank weight as the string `'0'`
-(`workout.js collectFrom`). Every consumer takes it without throwing and without
-claiming anything false — `tools-check/bodyweight-sets.mjs` proves that — but
-nothing has been taught to *print* it yet. What a stored `w: '0'` looks like
-today, all via `fmtSetW`, which returns the string `'0'`:
-
-| Where | file:line | Prints |
-|---|---|---|
-| "Last ·" line on the session screen | `workout.js:1038` | `0×12` |
-| Day view on the calendar | `workout.js:554` | `0×12` |
-| Post-workout recap | `workout.js:1641` | `0×12` |
-| "First time logged" card on the recap | `workout.js:1602` | `0 × 12` |
-| The weight box when a past session is re-opened to edit | `workout.js:1110` | `0` in the box, which is honest — that is what is stored |
-| Strongest-lifts leaderboard, Stats | `stats.js:192` | `0 × 12` (only if it ever tops an exercise, which needs every set of it to be bodyweight) |
-| One exercise's Personal bests, Stats | `stats.js:443` | `0 × 12` |
-| PR timeline detail | `analytics.js:334` `prDetail` | `0 x 12` |
-| Strongest lifts, You tab | `you.js:1211` | `0 × 12` |
-
-Making those read `BW × 12` is one change to `fmtSetW` and nothing else, and it
-should be written once and copied to both trees rather than done twice. Not done
-in v40 because it is a different ship from "the set is not dropped".
-
-Related and already true, not a bug: an e1RM needs a weight on the bar, so
-bodyweight work produces none, and `you.js:1203` says so on screen.
 
 ### Steps — questions never answered
 
@@ -129,11 +103,16 @@ twice. `AGENTS.md` (`steps/{date}`) says the same thing.
 
 ## The native port
 
-`~/dev/rack-mobile`. Three briefs, each still partly open at `85be276`:
+`~/dev/rack-mobile`. Four briefs, each still partly open:
 
-- **`NEXT-NATIVE-V40.md`** — this ship. Phase 1 (the maintenance model coming
-  out of hiding) and Phase 4a. Confirmed open: `src/pure/tdee.js` has no
-  `effectiveMaint`.
+- **`NEXT-NATIVE-V41.md`** — the newest, and all of it is open at `695d996`:
+  every one of v41's six phases was checked against that tree and none of them
+  has landed. It also carries a bug that is NATIVE's to fix rather than a port
+  job — `retryRefused` reports "Saved" for a retry that only went into the
+  offline queue.
+- **`NEXT-NATIVE-V40.md`** — Phase 1 (the maintenance model coming
+  out of hiding) and Phase 4a. Confirmed open at `85be276`: `src/pure/tdee.js`
+  has no `effectiveMaint`.
 - **`NEXT-NATIVE.md`** — the Train overhaul. §1 (the merge invariant) and §3
   (lifting blocks) are in: `src/pure/analytics.js` has `mergeSessionExercises`
   and `src/pure/blocks.js` exists. **§4, the Frequent chip, is not** —
@@ -145,14 +124,19 @@ twice. `AGENTS.md` (`steps/{date}`) says the same thing.
 
 Two notes that belong with the port rather than in it:
 
-- The native tree has **no `tools-check/` equivalent**. `NEXT-NATIVE-UNITS.md`
-  §11 asks for one — sections A–F of `tools-check/units.mjs` are pure and run
-  against the native copy with the imports repointed. The same is now true of
-  `maintenance.mjs`, `bodyweight-sets.mjs` and `refused-write.mjs`.
+- The native tree has its own verifiers (`tools/verify-*.mjs`, twenty-odd of
+  them) but no equivalent of the pure-function tables in this tree's.
+  `NEXT-NATIVE-UNITS.md` §11 asks for that — sections A–F of
+  `tools-check/units.mjs` are pure and run against the native copy with the
+  imports repointed. The same is true of `maintenance.mjs`,
+  `bodyweight-sets.mjs`, `refused-write.mjs`, and of both files v41 added:
+  `estimate-origin.mjs` and `weigh-time.mjs`.
 - The two dead-letter designs will differ. Web's `write()` **throws** on a
   refusal; native's `write()` at `85be276` reports and **returns**. Neither is
   wrong, but the port has to pick one on purpose. `NEXT-NATIVE-V40.md` has the
-  diff.
+  diff. v41 closed two rows of it in web's favour — eviction and the item id,
+  both adopted from native word for word — and left the third, `retryRefused`
+  on an offline retry, where native is the one that is wrong.
 
 ---
 
@@ -168,12 +152,47 @@ Carried from `NEXT-NATIVE.md` §7 so it survives that file. Do not "fix" these:
 - The Most-trained card and the Frequent chip are not the same number and never
   were. Most trained is range-scoped and skips an exercise logged with warm-ups
   only; the picker's list is all-time and counts it.
+- **Bodyweight work produces no estimated 1RM**, because an e1RM needs a weight
+  on the bar. `you.js:1203` says so on screen rather than ranking a zero. Since
+  v41 those sets print as `BW × 12` (`units.js fmtSetLoad`), and the recap
+  compares them by REPS rather than by volume (`analytics.js
+  sessionComparison`) — a bodyweight session has no volume, and "-100%" was the
+  old answer to that.
 - Three things are left in **pounds on purpose** and labelled as pounds on
   screen, because a wrong number is worse than no number: the plate strip above,
   the workout importer (`importer.js:18` — its file is already in Rack's storage
   format, so its weights *are* pounds), and the half-a-fluid-ounce-per-pound
   water rule (`onboarding.js:135`), which has no metric form. The bodyweight that
   last one is quoted against does convert.
+
+---
+
+## What v41 left open in its own work
+
+- **A residual answer's heading is guesswork about a reply shape nobody has
+  seen.** `estimate-origin.js` reads a per-item `src` object because that is
+  what the brief describes the Worker sending, and the shapes it was driven
+  against are the ones `rack-mobile/tools/verify-food-src.mjs` recorded off the
+  **deployed** bundle — where `venue` sits on the RESPONSE, not the item. Both
+  are handled and the module fails toward "estimate" when it recognises
+  nothing, so the worst case is modesty rather than a false claim. But the
+  mixed-answer wording has never been seen against a real residual reply.
+  Confirm it against `~/dev/rack-worker` before trusting the "Part menu, part
+  estimate" path.
+- **`asOf` is whatever the Worker writes.** `YYYY-MM` and `YYYY-MM-DD` become
+  "Sep 2026"; anything else is printed through unchanged. That is deliberate —
+  guessing at a date format is how a wrong date gets on screen — but it means a
+  Worker that starts sending epoch milliseconds would print a ten-digit number
+  on the row.
+- **Nothing tells you a weigh-in was backdated after the fact.** The recent list
+  shows the stored time, which is the honest thing, but a weigh-in typed in for
+  Tuesday looks exactly like one logged on Tuesday. Editing an existing
+  weigh-in's time is still not possible at all.
+- **The estimate sheet's provenance is not stored, by design.** Re-open a logged
+  entry and there is nothing to say Panda priced it; only the sheet knew. The
+  stored `src` string still says `food-db`, which is the coarse version of the
+  same fact. Making the finer answer durable is a schema change and a decision,
+  not a bug.
 
 ---
 
@@ -201,12 +220,6 @@ Carried from `NEXT-NATIVE.md` §7 so it survives that file. Do not "fix" these:
   `undefined`, a path too deep — is not that, so it still goes to the queue and
   replays on every reconnect. `settings.js:375` describes the NaN case and
   guards against it by range-checking before the write; nothing generic does.
-
-- **The dead-letter list drops the newest item when it is full of sessions.**
-  `store.js` never evicts a `workouts/` payload to make room for anything else,
-  which is right — a session has no second copy on the device — but the
-  consequence is that 50 refused sessions mean a refused food log is reported on
-  screen and not kept. Reachable only after a catastrophic rules publish.
 
 - **Daily targets' auto preview does not read the maintenance box.**
   `food.js` wires `mi.oninput = paintAuto`, but `paintAuto` reads `maintInfo()`,

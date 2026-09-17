@@ -451,6 +451,14 @@ breakfast. A weigh-in stamped with the wrong time is worse than a missing one.
 Two weigh-ins on the same day are what let the model learn personal coefficients
 at all — several readings a day is a feature, not noise.
 
+Which is why, since v41, `t` is not always the moment Log was tapped: the log
+sheet has an optional "Weighed earlier?" picker. Anything typed there is bounded
+by `weighTime(typed, now)` in `weightmodel.js` — no further ahead than two
+minutes of clock skew, no further back than 14 days, never below zero — and a
+time outside that is REFUSED rather than quietly moved, because a weigh-in
+silently filed at the wrong hour is the thing the control exists to prevent.
+Nothing typed still means `Date.now()` at save. The shape is unchanged.
+
 ## `workouts/{YYYY-MM}/{DD}/{sessionId}` → one finished session
 
 ```json
