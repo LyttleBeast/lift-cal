@@ -385,15 +385,20 @@ const volumeOf = sessions =>
 
 const WSRC = readFileSync(join(HERE, '..', 'workout.js'), 'utf8');
 
+// `export` is tolerated and then stripped: some of these are exported purely so
+// another verifier can import them, and that must not break this one. The slice
+// is re-declared here as a plain function either way.
 function fnSource(src, name) {
-  const at = src.indexOf('\nfunction ' + name + '(');
+  let at = src.indexOf('\nfunction ' + name + '(');
+  let skip = 1;
+  if (at === -1) { at = src.indexOf('\nexport function ' + name + '('); skip = '\nexport '.length; }
   if (at === -1) throw new Error(
     'workout.js no longer declares function ' + name + ' - this verifier drives ' +
     'the real source and has nothing to test');
   let depth = 0;
   for (let j = src.indexOf('{', at); j < src.length; j++) {
     if (src[j] === '{') depth++;
-    else if (src[j] === '}' && --depth === 0) return src.slice(at + 1, j + 1);
+    else if (src[j] === '}' && --depth === 0) return src.slice(at + skip, j + 1);
   }
   throw new Error('unbalanced braces reading ' + name + ' out of workout.js');
 }

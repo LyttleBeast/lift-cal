@@ -58,7 +58,11 @@ function liftFrom(src, where, name) {
   if (!m) throw new Error(`month-erasure: ${name}() is gone from ${where} — the fix or this check is stale`);
   const end = src.indexOf('\n}\n', m.index);
   if (end < 0) throw new Error(`month-erasure: could not find the end of ${name}()`);
-  return src.slice(m.index, end + 3);
+  // The regex already tolerates `export function`, but the SLICE would carry
+  // the keyword into new Function(), which cannot compile a declaration that
+  // exports. A function gaining an export for a verifier to import must not
+  // break the verifiers that lift it by text.
+  return src.slice(m.index, end + 3).replace(/^export /, '');
 }
 const lift = name => liftFrom(SRC, 'workout.js', name);
 

@@ -69,20 +69,28 @@ const A = await import(pathToFileURL(join(dir, 'analytics.mjs')).href);
    writes stops parsing and the import throws — the loud failure rather than the
    quiet one. */
 
+// `export` is tolerated and then stripped: collectFrom is exported so that
+// tools-check/bodyweight-sets.mjs can import it, and that must not break the
+// verifier that lifts it by text.
 function fnSource(name) {
-  const at = WSRC.indexOf('\nfunction ' + name + '(');
+  let at = WSRC.indexOf('\nfunction ' + name + '(');
+  let skip = 1;
+  if (at === -1) { at = WSRC.indexOf('\nexport function ' + name + '('); skip = '\nexport '.length; }
   if (at === -1) throw new Error(
     'workout.js no longer declares function ' + name + ' — this verifier drives ' +
     'the real source and has nothing to test');
   let depth = 0;
   for (let j = WSRC.indexOf('{', at); j < WSRC.length; j++) {
     if (WSRC[j] === '{') depth++;
-    else if (WSRC[j] === '}' && --depth === 0) return WSRC.slice(at + 1, j + 1);
+    else if (WSRC[j] === '}' && --depth === 0) return WSRC.slice(at + skip, j + 1);
   }
   throw new Error('unbalanced braces reading ' + name + ' out of workout.js');
 }
 
-const LIFTED = ['blockHasLogged', 'newExercise', 'dupSet', 'collectDone', 'editWorkout'];
+// collectFrom is the rule; collectDone is the live session's one-line caller.
+// Both, or the caller lifts with nothing to call.
+const LIFTED = ['blockHasLogged', 'newExercise', 'dupSet',
+                'collectFrom', 'collectDone', 'editWorkout'];
 
 // The pure model, by name, as blocks.js exports it. Listed rather than splatted
 // so a function quietly disappearing from the module is an import error here.

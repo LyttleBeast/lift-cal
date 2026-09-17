@@ -642,6 +642,12 @@ export function runSetup(user) {
 
 /* ================= TOUR ================= */
 
+// The Train card's body is a PAIR with the coach-mark hint line in workout.js
+// ("Fill in the weight and reps, then tap the box on the right to log the
+// set"): two strings teaching one rule, and they move together in this tree and
+// in native. Both still say to fill in the weight, and both are still right —
+// that is the ordinary set. A blank weight is no longer dropped, though; it is
+// recorded as a bodyweight set (workout.js collectDone).
 const TOUR = [
   { view: 'you', title: 'You',
     body: 'Everything the app knows about you, in one place — how the week went, what your numbers are doing, and how they pull on each other. Nothing is edited here; it just shows you where you stand.',

@@ -240,7 +240,10 @@ function historyRows(v) {
 // A second session on the same day extends that day's entry instead of
 // replacing it, for the same reason a repeated block does — the work was
 // really done, so only the duplicate row disappears, never any sets.
-function foldSessionIntoHistory(h, dateK, exercises) {
+// Exported for the same reason computeVolume is: a bodyweight set has to reach
+// the "last time" index like any other, and that is a claim a verifier should
+// be able to make rather than a comment.
+export function foldSessionIntoHistory(h, dateK, exercises) {
   const out = { ...h };
   mergeSessionExercises(exercises).forEach(ex => {
     if (!ex.exId) return;
@@ -713,16 +716,19 @@ function persistSession() {
 
 // The block check box, in three pure pieces.
 //
-// It only ever touches sets that are ready to be logged — both weight and reps
-// in. collectDone drops a set with a blank in either box, so ticking one would
-// promise a set that never reaches the record, and the promise is the whole
-// value of a check box. The test is collectDone's own test, character for
-// character, so the two can never disagree about which sets those are.
+// It only ever touches sets that are ready to be logged — which means reps, and
+// reps alone. collectDone drops a set with a blank reps box, so ticking one
+// would promise a set that never reaches the record, and the promise is the
+// whole value of a check box. A blank WEIGHT is a bodyweight set and records
+// fine, so requiring one here would leave the block box refusing to tick a
+// perfectly good round of pull-ups. The test is collectDone's own test,
+// character for character, so the two can never disagree about which sets
+// those are.
 function blockFillableSets(exercises, n) {
   const out = [];
   (exercises || []).forEach((ex, i) => {
     if (!ex || ex.block !== n) return;
-    (ex.sets || []).forEach((s, j) => { if (s.w !== '' && s.r !== '') out.push([i, j]); });
+    (ex.sets || []).forEach((s, j) => { if (s.r !== '') out.push([i, j]); });
   });
   return out;
 }
@@ -947,7 +953,7 @@ function renderBlock(row, editing) {
   chk.setAttribute('aria-label', ticked
     ? 'Mark Block ' + n + ' incomplete'
     : 'Complete every filled-in set in Block ' + n);
-  chk.title = 'Tick every set in this block that has a weight and reps in it';
+  chk.title = 'Tick every set in this block that has reps in it';
   chk.onclick = () => {
     const next = !ticked;
     // Count the sets this actually logs, not the ones that were already ticked.
@@ -1039,6 +1045,12 @@ function renderExercise(ex, exIdx) {
   // pulsing box is for instead — the pulse draws the eye, the words say why.
   // Swiping to delete is the less urgent lesson and it comes back on the first
   // tick.
+  //
+  // The string stays as it is now that collectDone records a blank weight as
+  // '0'. It teaches the ordinary set, which is still both boxes, and it is a
+  // PAIR with the Train tour card in onboarding.js — the two say one rule and
+  // move together, in this tree and in native. Change one and you have to
+  // change three.
   if (ex.sets.length) block.appendChild(el('div', 'swipe-hint',
     exIdx === coachExIdx(session) && showCoach(session, coachNone, coachTapped)
       ? 'Fill in the weight and reps, then tap the box on the right to log the set'
@@ -1243,15 +1255,36 @@ function beep() {
   } catch {}
 }
 
-/* ---------- collect ---------- */
-// Keeps only sets that are marked done and carry both a weight and reps.
-function collectDone() {
-  const kept = session.exercises
+/* ---------- collect ----------
+
+   THE RULE, and it is word for word the same one the native app builds to:
+
+     A set is recorded when it is ticked and has reps. A blank weight on a
+     recorded set is stored as the string '0'. A blank reps box is still an
+     unfilled set and is dropped. The live session is not changed — the blank
+     stays blank on screen; the '0' exists only in the record this builds.
+
+   The weight box used to be required, which meant a pull-up, a dip, a plank,
+   a push-up — every set somebody does at bodyweight — was ticked, counted on
+   screen, and then silently absent from the saved session. A whole session of
+   them finished with "No completed sets".
+
+   `w` stays a STRING. Both clients read it as one, the published rules expect
+   one, and there are ~2,500 stored sets that are strings; '0' rather than 0 is
+   not a stylistic choice.
+
+   The rule is a pure function over the exercises so that the native port copies
+   it rather than restating it, and so that tools-check/bodyweight-sets.mjs
+   drives the real one. collectDone() is the live session's one-line caller, and
+   the edit path (saveEdit) goes through the same function, which is what makes
+   open -> save -> open on a past session a no-op. */
+export function collectFrom(exercises) {
+  const kept = (exercises || [])
     .map(ex => ({
       ...ex,
       // tw/tr are routine targets — live-session scaffolding, not part of the record.
-      sets: ex.sets.filter(s => s.done && s.w !== '' && s.r !== '')
-                   .map(({ tw, tr, ...keep }) => keep)
+      sets: ex.sets.filter(s => s.done && s.r !== '')
+                   .map(({ tw, tr, ...keep }) => ({ ...keep, w: keep.w === '' ? '0' : keep.w }))
     }))
     .filter(ex => ex.sets.length);
   // A block whose exercises all went unlogged never reaches the record, so the
@@ -1265,7 +1298,11 @@ function collectDone() {
   return normalizeBlocks(kept, blockOrder(kept)).exercises;
 }
 
-function computeVolume(done) {
+function collectDone() { return collectFrom(session.exercises); }
+
+// Exported for tools-check/bodyweight-sets.mjs, which has to prove that a set
+// stored as w:'0' cannot inflate a volume. Nothing in the app imports it.
+export function computeVolume(done) {
   return Math.round(done.reduce((s, ex) =>
     s + ex.sets.filter(isWorking).reduce((a, x) => a + (parseFloat(x.w) || 0) * (parseInt(x.r) || 0), 0), 0));
 }
