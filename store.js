@@ -225,20 +225,47 @@ function refused(path, e) {
    The path stored is the full `users/{uid}/…`, the same as the queue's, so the
    same prefix check keeps one account from seeing or retrying another's. The
    localStorage key is already namespaced by uid; this is the second lock on
-   the same door, and the first one has been picked before. */
+   the same door, and the first one has been picked before.
+
+   Each item carries an `id` — the time in base 36 and a counter that restarts
+   with the page. Two refusals of one path in one millisecond — a merge and a
+   set from the same handler is the ordinary way it happens — used to share a
+   handle, and then Discard removed the wrong row and Try again retried it. The
+   composite is still read, because items written before this exist on devices
+   and have to stay retryable. This is native's rule
+   (src/data/store.js `deadId`), adopted here.
+
+   Every eviction rule here is native's too, and was already what the paragraph
+   above claimed while the code did something else: `if (at === -1) at = 0`
+   dropped the oldest SESSION so that a water log could be kept, which is the
+   exact trade this list exists to forbid. */
 const REFUSED_MAX = 50;
 
 function refusedItems() { return LS.get('refused', []); }
-function isSessionPath(p) { return /\/workouts\//.test(String(p || '')); }
-function refusedKey(x) { return (x && x.at) + '|' + (x && x.path); }
+// `(\/|$)` and not `\/`, so that a write to the workouts container itself is
+// protected the same way a write to one month inside it is. Native's spelling.
+function isSessionPath(p) { return /\/workouts(\/|$)/.test(String(p || '')); }
+function refusedKey(x) { return (x && x.id) || ((x && x.at) + '|' + (x && x.path)); }
+
+let refusedSeq = 0;
+const refusedId = () => Date.now().toString(36) + '-' + (++refusedSeq).toString(36);
 
 function pushRefused(path, value, merge, detail) {
+  const item = { id: refusedId(), path, value, merge: !!merge, at: Date.now(),
+                 detail: String(detail || '').slice(0, 160) };
   const list = refusedItems();
-  list.push({ path, value, merge: !!merge, at: Date.now(),
-              detail: String(detail || '').slice(0, 160) });
+  list.push(item);
   while (list.length > REFUSED_MAX) {
     let at = list.findIndex(x => !isSessionPath(x && x.path));
-    if (at === -1) at = 0;                 // all sessions: the oldest has to go
+    if (at === -1) {
+      // Every item in a full list is a session. The INCOMING item is the one
+      // that does not fit — unless it is a session too, in which case oldest
+      // out applies among them: both directions lose a session, so the stated
+      // default wins. The red bar has already fired either way, so a dropped
+      // payload is not a silent one.
+      if (!isSessionPath(item.path)) { const me = list.lastIndexOf(item); list.splice(me, 1); break; }
+      at = 0;
+    }
     list.splice(at, 1);
   }
   LS.set('refused', list);
@@ -247,7 +274,8 @@ function pushRefused(path, value, merge, detail) {
 /* What Settings shows. Filtered the way flushQueue filters the queue, so an
    item left by another account — a bug, or a shared device — is invisible and
    unretryable rather than merely unlikely to be reached. `key` is a handle for
-   the two buttons; the stored shape is untouched. */
+   the two buttons: the item's own id now, and for anything written before this
+   existed, the composite it has always been. */
 export function refusedSaves() {
   if (!UID) return [];
   const mine = 'users/' + UID + '/';

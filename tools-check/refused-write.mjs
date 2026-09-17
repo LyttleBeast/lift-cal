@@ -430,6 +430,110 @@ reset();
     JSON.stringify(dead().map(x => x.path.slice(U.length)).slice(0, 3)));
 }
 
+/* ---------- 7b. a full list of sessions drops the INCOMING ordinary item ----
+   v40's code said `if (at === -1) at = 0`, which dropped the oldest SESSION to
+   make room for a water log — the exact trade the paragraph above it forbids.
+   Native's branch, adopted word for word: when every item is a session and the
+   incoming one is not, the incoming one is what does not fit. The red bar has
+   already fired, so the payload is dropped but the refusal is not silent. */
+
+reset();
+{
+  fail = 'refuse';
+  for (let i = 0; i < 50; i++) {
+    await attempt(() => store.write('workouts/2026-09/16/w' + i, { id: 'w' + i }));
+  }
+  const before = dead().map(x => x.path);
+  const r = await attempt(() => store.write('water/log/2026-09-17', { wa: { ml: 250 } }));
+
+  check('a water log cannot evict a finished session', dead().length === 50 &&
+    JSON.stringify(dead().map(x => x.path)) === JSON.stringify(before),
+    JSON.stringify(dead().map(x => x.path.slice(U.length)).slice(0, 2)));
+  check('and the water log is not in the list either — it is the one that was dropped',
+    !dead().some(x => /water\//.test(x.path)));
+  check('the refusal still threw, so nothing upstream thinks it saved', r.threw);
+  check('and the red bar still said so', blocks.some(b => /REFUSED BY THE DATABASE/.test(b)));
+  check('every session that was there is still there, in the order it arrived',
+    dead().length === 50 && dead()[0].path.endsWith('w0') && dead()[49].path.endsWith('w49'));
+
+  // Among sessions, oldest out still applies — both directions lose one, so
+  // the stated default wins.
+  await attempt(() => store.write('workouts/2026-09/16/wLAST', { id: 'wLAST' }));
+  check('but a session still evicts the oldest session', dead().length === 50 &&
+    !dead().some(x => x.path.endsWith('w0')) && dead().some(x => /wLAST/.test(x.path)));
+}
+
+/* ---------- 7c. the workouts CONTAINER counts as a session too ---------- */
+
+reset();
+{
+  fail = 'refuse';
+  for (let i = 0; i < 49; i++) {
+    await attempt(() => store.write('workouts/2026-09/16/w' + i, { id: 'w' + i }));
+  }
+  // `/\/workouts(\/|$)/`, native's spelling: a write to the container itself is
+  // protected the same way a write to one month inside it is.
+  await attempt(() => store.write('workouts', { '2026-09': {} }, { erase: 99 }));
+  const had = dead().length;
+  await attempt(() => store.write('water/log/2026-09-17', { wa: { ml: 250 } }));
+  check('a write to workouts itself is a session for eviction purposes',
+    had === 50 && dead().length === 50 && !dead().some(x => /water\//.test(x.path)),
+    had + ' -> ' + dead().length);
+}
+
+/* ---------- 7d. two refusals of one path in one millisecond ----------
+   `at + '|' + path` is not unique, and a merge and a set from the same handler
+   is the ordinary way to produce two of them. With one handle between them,
+   Discard removed the wrong row and Try again retried it. */
+
+reset();
+{
+  fail = 'refuse';
+  const P = 'food/log/2026-09-17';
+  // The clock is frozen for the two writes, so `at` really does collide rather
+  // than usually colliding. That is the whole case.
+  const realNow = Date.now;
+  Date.now = () => 1789307130123;
+  await attempt(() => store.write(P, { a: 1 }));
+  await attempt(() => store.write(P, { b: 2 }));
+  Date.now = realNow;
+
+  const list = dead();
+  check('the two refusals really did land on the same millisecond and path',
+    list.length === 2 && list[0].at === list[1].at && list[0].path === list[1].path,
+    JSON.stringify(list.map(x => [x.at, x.path])));
+  check('which under v40’s handle would have been one row',
+    list[0].at + '|' + list[0].path === list[1].at + '|' + list[1].path);
+  check('both refusals are kept', list.length === 2, JSON.stringify(list.map(x => x.key)));
+  check('and they do not share a handle, even at the same millisecond and path',
+    list[0].key !== list[1].key, JSON.stringify(list.map(x => x.key)));
+  check('the handle is the item’s own id', list.every(x => x.key === x.id && /-/.test(x.id)),
+    JSON.stringify(list.map(x => x.id)));
+
+  const gone = list[0].key;
+  check('discarding one removes exactly one', store.discardRefused(gone) && dead().length === 1);
+  check('and it removes the RIGHT one', dead()[0].key === list[1].key);
+}
+
+/* ---------- 7e. an item written before ids existed stays retryable ---------- */
+
+reset();
+{
+  // Exactly v40's shape: no id at all.
+  const old = { path: U + 'food/targets', value: { cal: 2222 }, merge: false,
+                at: 1789307130123, detail: '' };
+  store.LS.set('refused', [old]);
+  const list = dead();
+  check('an old item is still listed', list.length === 1, JSON.stringify(list));
+  check('and its handle is still the composite it has always been',
+    list[0].key === old.at + '|' + old.path, list[0].key);
+
+  fail = null;
+  const r = await store.retryRefused(list[0].key);
+  check('and it can still be retried by that handle', r === 'saved', String(r));
+  check('after which it is gone from the list', dead().length === 0);
+}
+
 /* ---------- 8. retry and discard ---------- */
 
 reset();
