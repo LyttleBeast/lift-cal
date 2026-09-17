@@ -259,8 +259,13 @@ section('D. the empty string, through the real setW() out of workout.js');
   check('weigh-in: 100 kg and 220.5 lb both store { lb: 220.5 }',
         JSON.stringify(wMetric) === JSON.stringify(wImperial) && wMetric.lb === 220.5,
         JSON.stringify(wMetric));
-  check('weigh-in: the key is still `lb`, never `kg`',
-        Object.keys(wMetric)[0] === 'lb' && src('weight.js').includes('{ lb: r1(lb), t: Date.now() }'));
+  // v41 let the weigh-in's time be corrected, so `t` is no longer written as a
+  // bare Date.now(). The shape is the thing this check is about and the shape
+  // did not move: two keys, `lb` holding converted pounds and `t` a timestamp.
+  check('weigh-in: the key is still `lb`, never `kg`, and the shape is still { lb, t }',
+        Object.keys(wMetric)[0] === 'lb' && src('weight.js').includes('{ lb: r1(lb), t: w.t }'));
+  check('weigh-in: `t` is whatever weighTime allows, and nothing else reaches the write',
+        /const w = weighTime\(when \? Date\.parse\(when\.value\) : null, Date\.now\(\)\);/.test(src('weight.js')));
 
   // A ROUTINE TARGET. routines.js writes `tw`, same string-of-pounds shape.
   const RSRC = src('routines.js');

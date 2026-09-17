@@ -4,6 +4,12 @@
 import { read, readExact, write, watch, todayKey, wu } from './store.js';
 import { weightStats, dailyMeans as meansOf, movingAvg, maintenance, effectiveMaint,
          refreshModel, modelState, adjustedDays, peakOffset, trendRate } from './tdee.js';
+// Straight from weightmodel.js rather than through tdee.js's re-export, which
+// is where everything else weight-shaped comes from. tdee.js is pinned
+// byte-for-byte by the native port (tools/verify-tdee-verbatim.mjs); adding a
+// name to its re-export line would cost that tree a re-copy and a moved sha for
+// a line of plumbing. The rule belongs beside the model that reads `t` anyway.
+import { weighTime, WEIGH_SKEW_MS, WEIGH_BACK_MS } from './weightmodel.js';
 import { lineChart } from './analytics.js';
 import { goalDirection, rateVerdict } from './insights.js';
 import { bump } from './usage.js';
@@ -34,6 +40,20 @@ export async function initWeight() {
 async function refit() {
   try { await refreshModel(entries); } catch {}
 }
+
+/* ---------- local time, spelled out ----------
+   Both of these are LOCAL on purpose. toISOString() is UTC: it would open the
+   picker on yesterday evening west of Greenwich, and print a 7 AM weigh-in as
+   11 AM. The one the recent-weigh-ins list already uses is toLocaleTimeString,
+   and this matches it. */
+const localStamp = d => {
+  const p = n => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) +
+         'T' + p(d.getHours()) + ':' + p(d.getMinutes());
+};
+const fmtWhen = d =>
+  d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) +
+  ' ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 
 /* ================= MATH ================= */
 // The arithmetic lives in tdee.js so Fuel's calorie bar and this screen can
@@ -76,27 +96,74 @@ export async function render() {
   inp.placeholder = s.latest ? fmtW(s.latest.lb, u) : fmtW(208, u);
   const btn = el('button', 'btn btn-primary', 'Log');
   btn.style.flex = '0 0 auto';
+
+  /* ---- "Weighed earlier?" ----
+     Collapsed, and it stays collapsed until it is asked for. Stepping off the
+     scale and typing the number is what happens nearly every time; a date
+     picker standing in front of that would tax everybody to serve the
+     exception. Nothing exists until the button is tapped, so `when` being null
+     IS the untouched case — there is no default value anywhere to drift.
+
+     The trend model learns how weight moves through the day from `t`
+     (weightmodel.js), which is why an honest time is worth a control at all. */
+  let when = null;
+  const whenWrap = el('div');
+  const whenBtn = el('button', 'btn btn-ghost btn-block', 'Weighed earlier?');
+  whenBtn.style.marginTop = '8px';
+  whenBtn.onclick = () => {
+    whenBtn.remove();
+    const now = Date.now();
+    when = el('input');
+    when.type = 'datetime-local';
+    // Local time, built by hand. toISOString() is UTC and would open the picker
+    // on yesterday evening for anybody west of Greenwich.
+    when.value = localStamp(new Date(now));
+    when.min = localStamp(new Date(now - WEIGH_BACK_MS));
+    when.max = localStamp(new Date(now + WEIGH_SKEW_MS));
+    const f = el('div', 'field');
+    f.appendChild(el('label', null, 'Weighed at'));
+    f.appendChild(when);
+    whenWrap.appendChild(f);
+    when.focus();
+  };
+  whenWrap.appendChild(whenBtn);
+
   btn.onclick = async () => {
     // Convert, then clamp. Checking the typed number against a pound bound
     // would let a kilos account log 690 kg and refuse 20.
     const lb = wIn(parseFloat(inp.value), u);
     if (!within(lb, LIMITS.lb)) { toast('Enter a weight between ' + lim[0] + ' and ' + lim[1] + ' ' + unitW(u)); return; }
+    /* WHEN. Untouched, this is one Date.now() at save and the write is the
+       byte-for-byte same one it has always been. Typed, it is bounded — and
+       refused rather than quietly moved, because a weigh-in silently filed at
+       the wrong hour is the exact thing this control exists to stop.
+
+       A datetime-local box holds 'YYYY-MM-DDTHH:mm' with no offset, which is
+       specified to parse as LOCAL time. The string parse stays here: native's
+       picker hands back a Date, so only the bound is shared. */
+    const w = weighTime(when ? Date.parse(when.value) : null, Date.now());
+    if (w.reason === 'future') { toast('That time hasn\u2019t happened yet.'); return; }
+    if (w.reason === 'old') { toast('A weigh-in can be backdated 14 days, no further.'); return; }
     const id = 'wt' + Date.now().toString(36);
     // Built and written before `entries` is changed, so a refusal leaves the
     // screen showing what the database actually holds rather than a weigh-in
     // that exists only here. write() has already said why on screen.
-    const next = { ...entries, [id]: { lb: r1(lb), t: Date.now() } };
+    const next = { ...entries, [id]: { lb: r1(lb), t: w.t } };
     try { await write('weight/entries', next); }
     catch { toast('Not saved \u2014 that weigh-in was refused.'); return; }
     entries = next;
     bump('weighIn');
     await refit();
     inp.value = '';
-    toast('Logged ' + labelW(r1(lb), u));
+    // A backdated weigh-in says where it landed. One that landed now does not,
+    // because "now" is the only thing it could have meant.
+    toast('Logged ' + labelW(r1(lb), u) +
+      (w.reason === '' ? ' \u00b7 ' + fmtWhen(new Date(w.t)) : ''));
     render();
   };
   row.append(inp, btn);
   log.appendChild(row);
+  log.appendChild(whenWrap);
   log.appendChild(noteEl('Same scale, same time of day makes the trend honest. Morning after waking is the classic.'));
   wrap.appendChild(log);
 

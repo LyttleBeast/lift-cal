@@ -53,6 +53,48 @@ let fingerprint = '';  // cheap guard so repeat renders don't refit
 
 export function modelState() { return model; }
 
+/* ---------- when a weigh-in says it happened ----------
+   This module LEARNS HOW WEIGHT MOVES THROUGH THE DAY from `t` — that is the
+   whole of bK and bW above. A morning weight typed in at 9 PM tells the fit
+   that the body was two pounds lighter after dinner than it was, and the error
+   is then multiplied by roughly 500 on its way into the maintenance estimate.
+   So the log sheet lets the time be corrected, and this decides what a
+   corrected time may be. The rule lives beside the model that reads it.
+
+   `now` is an argument rather than a Date.now() in here: pure, so the native
+   port copies it instead of re-deriving it, and so a verifier can drive it at
+   any hour in any timezone rather than filing a fixture under "today".
+
+     nothing typed       now, and the caller writes exactly what it wrote
+                         before this existed — the same single Date.now()
+     in the future       refused, with two minutes of slack, because a phone
+                         clock and a laptop clock disagree by seconds and
+                         nobody means to weigh in tomorrow
+     over 14 days back   refused. The case is a typo'd year: 2006 for 2026
+                         would plant a weigh-in twenty years back, where no
+                         screen in this app would ever show it again
+     otherwise           the time, to the millisecond
+
+   REFUSED, NOT CLAMPED. Quietly moving a weigh-in to the nearest time it is
+   allowed to be is a wrong number with nothing on screen to catch it. The
+   sheet says so and the person fixes it. */
+export const WEIGH_SKEW_MS = 2 * 60000;
+export const WEIGH_BACK_MS = 14 * 864e5;
+
+export function weighTime(typed, now) {
+  // Number('') is 0, not NaN, so an empty box would otherwise read as 1970 and
+  // come back as a typo'd year. It is nothing typed.
+  if (typed === '' || typed == null) return { t: now, reason: 'none' };
+  const t = Number(typed);
+  if (!Number.isFinite(t)) return { t: now, reason: 'none' };
+  if (t > now + WEIGH_SKEW_MS) return { t: now, reason: 'future' };
+  // `t < 0` as well as the window, so that what comes out is inside the bound
+  // the PROPOSED rules put on this key (t >= 0) for ANY `now` rather than only
+  // for a clock set after 1984. A negative millisecond is not a weigh-in.
+  if (t < 0 || t < now - WEIGH_BACK_MS) return { t: now, reason: 'old' };
+  return { t: Math.round(t), reason: '' };
+}
+
 /* ================= DATA ================= */
 
 // Past days never change, so they cache forever. Today is always refetched.
