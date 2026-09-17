@@ -26,6 +26,7 @@ import { initRecall, lookup as recallLookup, remember as recallRemember,
          rememberEntry, kindForSrc, recallList, recallCount,
          forget as recallForget, forgetAll as recallForgetAll } from './recall.js';
 import { bump } from './usage.js';
+import { estimateOrigin, originHeading, EDITED } from './estimate-origin.js';
 import { wIn, fmtW, labelW, unitW, rateIn, boxRate, perIn, boxPer,
          kcalPerUnit, limW, limRate, limPer } from './units.js';
 
@@ -2048,7 +2049,32 @@ function openAiReview(res, ctx) {
   const src = (res.source === 'curated' || res.source === 'parsed')
     ? 'food-db'
     : (res.mode || ctx.mode) === 'photo' ? 'ai-photo' : 'ai-text';
-  const entries = normalizeImport({ items: res.items }).map(e => ({ ...e, src }));
+
+  /* ORIGIN, which is a different question from `src` and answered on a
+     different axis. `src` is one string stamped on every row and written to the
+     database; origin is per row and never leaves this sheet.
+
+     It is carried ALONGSIDE the entries rather than on them. An entry object is
+     spread straight into the day log by addEntries — `{ id, t, ...entry }` — so
+     a display key hung on it would be written, and this ship changes nothing
+     that is stored. A parallel array cannot leak: there is nothing to remember
+     to strip.
+
+     estimateOrigin's rows line up with res.items, and normalizeImport DROPS an
+     item with no name, so the two lists are not the same length. Each item is
+     normalised on its own — normalizeImport is a per-item map with no state
+     carried across the list — and that keeps the alignment exact without this
+     file restating the filter it uses. */
+  const prov = estimateOrigin(res);
+  // Array.isArray, not a truthiness test: normalizeImport already folded a
+  // non-array `items` to nothing, and flatMap would throw on it instead.
+  const items = Array.isArray(res.items) ? res.items : [];
+  const origins = [];
+  const entries = items.flatMap((x, i) => {
+    const one = normalizeImport({ items: [x] });
+    one.forEach(() => origins.push(prov.rows[i]));
+    return one;
+  }).map(e => ({ ...e, src }));
   if (!entries.length) { openAiError({ message: 'Nothing came back for that one.' }, ctx); return; }
 
   const { sh, close } = sheet();
@@ -2064,9 +2090,13 @@ function openAiReview(res, ctx) {
       cal: s.cal + (e.cal || 0), p: s.p + (e.p || 0), c: s.c + (e.c || 0), f: s.f + (e.f || 0)
     }), { cal: 0, p: 0, c: 0, f: 0 });
 
-    body.appendChild(el('div', 'eyebrow', 'Claude’s estimate'));
+    // Recomputed from the rows still on screen, so deleting the one estimated
+    // line off a mixed answer leaves a heading that is still true.
+    const head = originHeading(origins);
+    body.appendChild(el('div', 'eyebrow', head.heading));
     body.appendChild(el('h2', null, tot.cal.toLocaleString() + ' kcal  ·  ' +
       entries.length + ' item' + (entries.length > 1 ? 's' : '')));
+    if (head.sub) body.appendChild(el('div', 'fe-sub', head.sub));
     body.appendChild(el('div', 'entry-readout num',
       'P ' + trimNum(tot.p) + '   C ' + trimNum(tot.c) + '   F ' + trimNum(tot.f)));
 
@@ -2086,14 +2116,31 @@ function openAiReview(res, ctx) {
       b.appendChild(el('div', 'fe-name', e.name));
       b.appendChild(el('div', 'fe-sub num',
         (e.qty ? e.qty + '  ·  ' : '') + 'P ' + trimNum(e.p) + '  C ' + trimNum(e.c) + '  F ' + trimNum(e.f)));
-      b.onclick = () => openProposedEdit(e, paint);
+      // Where this row's number came from, in a few words. Its own line rather
+      // than the end of the one above, because that one is `num` — tabular
+      // figures, for the macros.
+      const o = origins[i];
+      if (o && o.label) b.appendChild(el('div', 'fe-sub', o.label));
+      b.onclick = () => {
+        // Correcting a row is the point of this screen — but the corrected
+        // number is not Panda's any more, and the line above it would go on
+        // saying it was. Compared rather than flagged, so closing the sheet
+        // without changing anything leaves the provenance where it was.
+        const was = [e.name, e.qty, e.cal, e.p, e.c, e.f].join('|');
+        openProposedEdit(e, () => {
+          if (origins[i] && was !== [e.name, e.qty, e.cal, e.p, e.c, e.f].join('|')) origins[i] = EDITED;
+          paint();
+        });
+      };
       row.appendChild(b);
       row.appendChild(el('div', 'fe-cal num', String(e.cal)));
 
       const x = el('button', 'ex-del pe-x', '✕');
       x.setAttribute('aria-label', 'Remove ' + e.name);
       x.onclick = () => {
+        // In lockstep, or row 3's provenance slides onto row 2's numbers.
         entries.splice(i, 1);
+        origins.splice(i, 1);
         if (!entries.length) { close(); toast('Nothing left to log'); return; }
         paint();
       };
