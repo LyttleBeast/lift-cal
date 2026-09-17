@@ -28,6 +28,7 @@ import { mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { execFileSync } from 'node:child_process';
 
 const HERE = fileURLToPath(new URL('.', import.meta.url));
 const SRC  = p => join(HERE, '..', p);
@@ -334,6 +335,117 @@ const GOAL = { on: true, rateWk: -1, pPerLb: 1, fPerLb: 0.35, floor: 0, lastAdj:
     was.cal === 2400 && now.cal === 2680);
   check('and the calorie target did not move with it',
     autoPlan(stored, now.cal, 190, NOW) === null);
+}
+
+/* ================= ONE GOAL DIRECTION, NOT TWO ================= */
+{
+  // food.js goalSign() and you.js goalDir() were the same decision written
+  // twice. They are one rule now, and the thing to prove is that neither screen
+  // changed its mind about a single account — so both OLD bodies are lifted out
+  // of 9c1f0af and run against both NEW adapters over a grid.
+  //
+  // Bodies, not whole functions: each of the four reads `targets` from its
+  // module scope, so the free variable becomes a parameter and nothing is
+  // rewritten.
+  const bodyOf = (text, head) => {
+    const at = text.indexOf(head);
+    if (at === -1) throw new Error('cannot find ' + head);
+    let depth = 0, open = text.indexOf('{', at), end = -1;
+    for (let j = open; j < text.length; j++) {
+      if (text[j] === '{') depth++;
+      else if (text[j] === '}' && --depth === 0) { end = j; break; }
+    }
+    return text.slice(open + 1, end);
+  };
+  const at40 = p => execFileSync('git', ['show', '9c1f0af:' + p],
+                                 { cwd: SRC('.'), encoding: 'utf8', maxBuffer: 1 << 26 });
+
+  // insights.js imports store.js, so the three pieces under test are lifted out
+  // of it rather than the whole module being dragged in. They use nothing but
+  // each other, which is the property that lets the native port copy them.
+  const INS = readFileSync(SRC('insights.js'), 'utf8');
+  const holdLine = /export const HOLD_RATE_LB = ([\d.]+);/.exec(INS);
+  if (!holdLine) throw new Error('insights.js no longer exports HOLD_RATE_LB');
+  const gdFile = join(dir, 'goaldir.mjs');
+  writeFileSync(gdFile,
+    'export function goalDirection(targets, maintCal) {' + bodyOf(INS, '\nexport function goalDirection(') + '}\n' +
+    'export const HOLD_RATE_LB = ' + holdLine[1] + ';\n' +
+    'export function rateVerdict(rateWk, dir) {' + bodyOf(INS, '\nexport function rateVerdict(') + '}\n');
+  const { goalDirection, rateVerdict, HOLD_RATE_LB } = await import(pathToFileURL(gdFile).href);
+
+  const oldSign = new Function('targets', 'maintCal', bodyOf(at40('food.js'), '\nfunction goalSign('));
+  const oldDir  = new Function('targets', 'maint', bodyOf(at40('you.js'), '\nfunction goalDir('));
+  const newSign = new Function('targets', 'maintCal', 'goalDirection',
+                               bodyOf(readFileSync(SRC('food.js'), 'utf8'), '\nfunction goalSign('));
+  const newDir  = new Function('targets', 'maint', 'goalDirection',
+                               bodyOf(readFileSync(SRC('you.js'), 'utf8'), '\nfunction goalDir('));
+
+  const RATES = [-5, -1, -0.5, 0, 0.5, 1, 5, NaN, null, undefined];
+  const CALS  = [0, 1400, 1800, 2399, 2400, 2401, 2500, 2600, 3000];
+  const MAINTS = [null, 500, 2400, 2500, 3000];
+  const grid = [];
+  RATES.forEach(rateWk => CALS.forEach(cal => MAINTS.forEach(mc => {
+    grid.push([{ cal, auto: { on: true, rateWk } }, mc]);
+    grid.push([{ cal }, mc]);                       // no auto block at all
+  })));
+  grid.push([{}, null], [{ auto: {} }, 2500], [{ cal: 2400, auto: null }, 2500]);
+
+  // Fuel's `targets` is an object from the first line of the module and is
+  // never null, which is why v40's goalSign could read targets.auto unguarded.
+  // You's IS null on a skipped-onboarding account, so only that grid carries it.
+  const signBad = grid.filter(([t, mc]) => oldSign(t, mc) !== newSign(t, mc, goalDirection));
+  check('Fuel: goalSign answers exactly what it answered at v40, on all ' + grid.length + ' cases',
+    signBad.length === 0, shape(signBad.slice(0, 2)));
+  check('and the rule is now safe on a null targets, which v40’s Fuel copy threw on',
+    goalDirection(null, 2500) === null &&
+    (() => { try { oldSign(null, 2500); return false; } catch { return true; } })());
+
+  // The You tab hands a maintInfo OBJECT around, so the grid is re-shaped the
+  // way that screen really calls it.
+  const asInfo = mc => (mc == null ? null : { cal: mc, pinned: false, source: 'pinned' });
+  const youGrid = grid.concat([[null, 2500], [undefined, 2500], [null, null]]);
+  const dirBad = youGrid.filter(([t, mc]) => oldDir(t, asInfo(mc)) !== newDir(t, asInfo(mc), goalDirection));
+  check('You: goalDir answers exactly what it answered at v40, on all ' + youGrid.length + ' cases',
+    dirBad.length === 0, shape(dirBad.slice(0, 2)));
+
+  check('the two screens now read one rule — neither restates it',
+    /const d = goalDirection\(targets, maintCal\);/.test(readFileSync(SRC('food.js'), 'utf8')) &&
+    /return goalDirection\(targets, maint && maint\.cal\);/.test(readFileSync(SRC('you.js'), 'utf8')));
+  check('and the hold band is one number, not two',
+    HOLD_RATE_LB === 0.5 &&
+    readFileSync(SRC('you.js'), 'utf8').includes('Math.abs(n - p) <= HOLD_RATE_LB'));
+
+  // null is not zero, and the Weight tab is the screen that needs the two apart.
+  check('a stated cut is -1, a stated gain is +1',
+    goalDirection({ cal: 2000, auto: { rateWk: -1 } }, 2500) === -1 &&
+    goalDirection({ cal: 3000, auto: { rateWk: 1 } }, 2500) === 1);
+  check('a target inside 100 kcal of maintenance is a HOLD, which is 0',
+    goalDirection({ cal: 2450 }, 2500) === 0 && goalDirection({ cal: 2550 }, 2500) === 0);
+  check('knowing nothing is null, not 0 — Fuel folds that to 0 itself',
+    goalDirection({ cal: 2450 }, null) === null && goalDirection({}, 2500) === null &&
+    goalDirection(null, 2500) === null);
+  check('a maintenance of 0 is not a maintenance',
+    goalDirection({ cal: 2450 }, 0) === null);
+
+  /* ---- the colour ---- */
+  check('a cut is green going down and amber going up — exactly v40’s colouring',
+    [-2, -0.4, 0].every(r => rateVerdict(r, -1) === 'good') &&
+    [0.1, 2].every(r => rateVerdict(r, -1) === 'warn'));
+  check('a GAIN is green going up — the bug: this was amber on every account gaining',
+    [2, 0.4, 0].every(r => rateVerdict(r, 1) === 'good') &&
+    [-0.1, -2].every(r => rateVerdict(r, 1) === 'warn'));
+  check('holding is green inside half a pound a week, amber outside it',
+    [0, 0.5, -0.5, 0.49].every(r => rateVerdict(r, 0) === 'good') &&
+    [0.51, -0.51, 3].every(r => rateVerdict(r, 0) === 'warn'));
+  check('an unknown goal gets no colour at all, whatever the rate',
+    [-2, 0, 2].every(r => rateVerdict(r, null) === null));
+  check('and no rate gets no colour, whatever the goal',
+    [null, undefined, NaN].every(r => [-1, 0, 1].every(d => rateVerdict(r, d) === null)));
+  check('the Weight tab paints from the verdict and nothing else',
+    /verdict === 'good' \? 'var\(--good\)' : verdict === 'warn' \? 'var\(--warn\)' : null/
+      .test(readFileSync(SRC('weight.js'), 'utf8')));
+  check('and the old down-is-good rule is gone from it',
+    !/rate <= 0 \? 'var\(--good\)'/.test(readFileSync(SRC('weight.js'), 'utf8')));
 }
 
 /* ---------- report ---------- */

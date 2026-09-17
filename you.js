@@ -65,7 +65,8 @@
 
 import { read, LS, todayKey, isOwner, wu } from './store.js';
 import { $, el, noteEl, parseKey, fmtDate, compact, fmtDuration, sheet } from './ui.js';
-import { assess, keysBack as keysBackI, streakOf, fmtRange } from './insights.js';
+import { assess, keysBack as keysBackI, streakOf, fmtRange,
+         goalDirection, HOLD_RATE_LB } from './insights.js';
 import { allSessions, exerciseIndex, filterByRange, groupSplit, topBy, weeklyVolume,
          lineChart, barChart, ring, sparkline, heatStrip, emptyChart, legend,
          groupColor } from './analytics.js';
@@ -699,20 +700,16 @@ function sessionsIn(keys) {
   return sessions.filter(s => s && set.has(s._date));
 }
 
-/* Which way is "better" for bodyweight. The goal the account stated at
-   onboarding is written into targets.auto.rateWk whether or not auto targets
-   are switched on, so that is the first answer; failing that, a calorie target
-   that sits well below maintenance is a cut and one well above it is a gain.
-   When neither is knowable the delta stays neutral rather than guessing. */
+/* Which way is "better" for bodyweight — the rule is insights.js
+   goalDirection, which food.js reads too. This is the adapter: everything on
+   this screen passes a maintInfo object around, and the rule takes the number.
+
+   maintInfo never returns a cal of nothing — effectiveMaint only answers with a
+   stored maintenance or a measured one, and both are range-checked at 500 kcal
+   (ui.js LIMITS.cal) — so `maint &&` and `maint.cal > 0` pick out the same
+   objects. */
 function goalDir(maint) {
-  const a = targets && targets.auto;
-  if (a && Number.isFinite(a.rateWk) && a.rateWk !== 0) return a.rateWk < 0 ? -1 : 1;
-  if (maint && targets && targets.cal > 0) {
-    if (targets.cal < maint.cal - 100) return -1;
-    if (targets.cal > maint.cal + 100) return 1;
-    return 0;
-  }
-  return null;
+  return goalDirection(targets, maint && maint.cal);
 }
 
 const higherBetter = (n, p) => n > p ? 'up' : n < p ? 'down' : 'flat';
@@ -787,7 +784,7 @@ function weekCard(maint) {
   };
   const towardGoal = (n, p) => {
     if (dir == null) return 'flat';
-    if (dir === 0) return Math.abs(n - p) <= 0.5 ? 'up' : 'flat';
+    if (dir === 0) return Math.abs(n - p) <= HOLD_RATE_LB ? 'up' : 'flat';
     return dir < 0 ? higherBetter(p, n) : higherBetter(n, p);
   };
 

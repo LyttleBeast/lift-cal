@@ -27,6 +27,7 @@ import { initRecall, lookup as recallLookup, remember as recallRemember,
          forget as recallForget, forgetAll as recallForgetAll } from './recall.js';
 import { bump } from './usage.js';
 import { estimateOrigin, originHeading, EDITED } from './estimate-origin.js';
+import { goalDirection } from './insights.js';
 import { wIn, fmtW, labelW, unitW, rateIn, boxRate, perIn, boxPer,
          kcalPerUnit, limW, limRate, limPer } from './units.js';
 
@@ -690,18 +691,18 @@ function maintTag(mi) {
    three bands: everything left of the first tick is a deficit, between the two
    is holding, past the second you're gaining. The dashed mark is the day's
    calorie target, wherever you've set it. */
-/* Which way the account said it was going: the sign of the onboarding rate
-   (food/targets.auto.rateWk, written whether or not auto targets are on),
-   failing that where the target sits against maintenance. The same rule the
-   You tab uses (you.js goalDir), so the two screens lean the same way. */
+/* Which way the account said it was going. The rule itself is
+   insights.js goalDirection — it used to be written out here AND in you.js,
+   with a comment in each pointing at the other saying the two screens had to
+   lean the same way.
+
+   The bar has three bands and no fourth, so it folds "nobody knows" into
+   "holding" the way it always has: an unknown goal draws the marks a hold
+   draws, which is the neutral picture. The Weight tab keeps the two apart
+   because it colours by direction and an unknown direction gets no colour. */
 function goalSign(maintCal) {
-  const a = targets.auto;
-  if (a && Number.isFinite(a.rateWk) && a.rateWk !== 0) return a.rateWk < 0 ? -1 : 1;
-  if (maintCal > 0 && targets.cal > 0) {
-    if (targets.cal < maintCal - 100) return -1;
-    if (targets.cal > maintCal + 100) return 1;
-  }
-  return 0;
+  const d = goalDirection(targets, maintCal);
+  return d == null ? 0 : d;
 }
 
 function renderCalMeter(cal) {

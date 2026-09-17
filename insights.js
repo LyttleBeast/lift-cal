@@ -50,6 +50,54 @@ function mean(xs) {
 const fmtInt = v => Math.round(v).toLocaleString();
 const pct = (a, b) => Math.round((a - b) / b * 100);
 
+/* ================= WHICH WAY IS FORWARD =================
+   One rule, because it was two. food.js `goalSign()` and you.js `goalDir()`
+   were the same decision written twice, each with a comment pointing at the
+   other saying the two screens must lean the same way — which is the shape of
+   a rule that is one edit away from disagreeing with itself.
+
+   The answer is the account's, not the app's: the goal stated at onboarding is
+   written to targets.auto.rateWk whether or not auto targets are switched on,
+   so that is the first answer. Failing that, a calorie target sitting well
+   below maintenance is a cut and one well above it is a gain. ±100 kcal is
+   neither — that is the width of a rounding.
+
+   null is NOT zero. Zero means "holding", which is a goal and has a right
+   answer; null means nobody knows, and a screen that colours a number by
+   direction has to be able to tell those apart. food.js's goalSign folded them
+   together and keeps folding them, in one line, at its own call site. */
+export function goalDirection(targets, maintCal) {
+  const t = targets || {};
+  const a = t.auto;
+  if (a && Number.isFinite(a.rateWk) && a.rateWk !== 0) return a.rateWk < 0 ? -1 : 1;
+  if (maintCal > 0 && t.cal > 0) {
+    if (t.cal < maintCal - 100) return -1;
+    if (t.cal > maintCal + 100) return 1;
+    return 0;
+  }
+  return null;
+}
+
+// What the You tab has always treated as holding: half a pound a week either
+// way, between one week's mean bodyweight and the last's. Exported so the
+// Weight tab's rate colour uses the same band rather than a second opinion
+// about the same question.
+export const HOLD_RATE_LB = 0.5;
+
+/* Is this week's rate of change going the way the goal points.
+   'good' | 'warn' | null, and null is the answer whenever the goal is unknown —
+   an uncoloured number says nothing, and saying nothing is the only honest
+   thing left when you do not know which way somebody meant to go.
+
+   A stated direction gets no tolerance band: on a cut, up is up. The band is
+   for "hold", where every rate is against the goal in one direction or the
+   other and only the size of it means anything. */
+export function rateVerdict(rateWk, dir) {
+  if (dir == null || rateWk == null || !Number.isFinite(rateWk)) return null;
+  if (dir === 0) return Math.abs(rateWk) <= HOLD_RATE_LB ? 'good' : 'warn';
+  return (dir < 0 ? rateWk <= 0 : rateWk >= 0) ? 'good' : 'warn';
+}
+
 /* ================= ONE WINDOW OF DAYS =================
    Every number the findings compare, over one run of date keys. Averages are
    over the days that have the thing — four logged days is a four-day

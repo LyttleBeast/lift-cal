@@ -5,6 +5,7 @@ import { read, readExact, write, watch, todayKey, wu } from './store.js';
 import { weightStats, dailyMeans as meansOf, movingAvg, maintenance, effectiveMaint,
          refreshModel, modelState, adjustedDays, peakOffset, trendRate } from './tdee.js';
 import { lineChart } from './analytics.js';
+import { goalDirection, rateVerdict } from './insights.js';
 import { bump } from './usage.js';
 import { $, el, toast, noteEl, confirmSheet, r1, parseKey, fmtDateFull, LIMITS, within } from './ui.js';
 import { wOut, wIn, fmtW, labelW, unitW, fmtRate, limW } from './units.js';
@@ -12,7 +13,6 @@ import { wOut, wIn, fmtW, labelW, unitW, fmtRate, limW } from './units.js';
 let entries = {};      // id -> { lb, t }
 let range   = 30;      // chart window, days
 let adjusted = true;   // chart shows normalised weigh-ins, not raw ones
-let summaries = {};    // dateKey -> {cal,...} for TDEE
 
 export async function initWeight() {
   entries = (await read('weight/entries', null)) || {};
@@ -100,6 +100,17 @@ export async function render() {
   log.appendChild(noteEl('Same scale, same time of day makes the trend honest. Morning after waking is the classic.'));
   wrap.appendChild(log);
 
+  /* ---- which way is forward ----
+     Read here rather than inside the maintenance card, because the rate colour
+     above it needs the same two answers and reading them twice is how two
+     numbers on one screen come to disagree. renderTDEE is handed what this
+     read, instead of reading it again. */
+  const summaries = (await read('food/daySummaries', null)) || {};
+  const maint = maintenance(entries, summaries);
+  const t = (await read('food/targets', null)) || {};
+  const eff = effectiveMaint(t, maint);
+  const dir = goalDirection(t, eff && eff.cal);
+
   // ---- headline stats ----
   if (s.latest) {
     const sr = el('div', 'stat-row');
@@ -115,10 +126,19 @@ export async function render() {
     sr.appendChild(cell(s.avg7 != null ? fmtW(s.avg7, u) : '–', '7-day avg'));
     const tr = trendRate(entries);
     const rate = tr.rateWk;
+    /* GREEN MEANS TOWARD YOUR GOAL. This was green at or below zero and amber
+       above it, which reads as "down is good" — true for a cut and wrong for
+       everybody else. Somebody eating to gain saw their own progress in the
+       warning colour.
+
+       Now it is coloured by AGREEMENT with the direction the account stated,
+       and when nobody knows which way that is the number is simply left alone.
+       An uncoloured number says nothing, which is the only honest thing left. */
+    const verdict = rateVerdict(rate, dir);
     sr.appendChild(cell(
       rate != null ? (rate > 0 ? '+' : '') + fmtRate(rate, u) : '–',
       unitW(u) + ' / week' + (tr.model ? ' ✓' : ''),
-      rate != null ? (rate <= 0 ? 'var(--good)' : 'var(--warn)') : null
+      verdict === 'good' ? 'var(--good)' : verdict === 'warn' ? 'var(--warn)' : null
     ));
     sr.style.marginBottom = '12px';
     wrap.appendChild(sr);
@@ -126,7 +146,7 @@ export async function render() {
 
   wrap.appendChild(renderChart(s, u));
   wrap.appendChild(renderTOD(u));
-  wrap.appendChild(await renderTDEE(s, u));
+  wrap.appendChild(await renderTDEE(s, u, t, maint));
   wrap.appendChild(renderRecent(u));
   // The settings card that used to end this screen is now the You tab's gear.
 
@@ -271,20 +291,17 @@ function renderTOD(u) {
 }
 
 /* ---------- TDEE ---------- */
-async function renderTDEE(s, u) {
+async function renderTDEE(s, u, t, m) {
   const card = el('div', 'card');
   const hd = el('div', 'card-hd');
   hd.appendChild(el('div', 'eyebrow', 'Maintenance estimate'));
   card.appendChild(hd);
 
-  summaries = (await read('food/daySummaries', null)) || {};
-  const m = maintenance(entries, summaries);
   // Which number the rest of the app is actually quoting, decided in one place
   // (tdee.js effectiveMaint) rather than guessed at here. This card used to say
   // "Fuel uses this" whenever nothing was pinned, and setup wrote a starting
   // number for everybody who did not skip it — so the sentence was false more
   // often than it was true. Now it reports what is in force and why.
-  const t = (await read('food/targets', null)) || {};
   const eff = effectiveMaint(t, m);
   const stored = Number(t.maint) > 0 ? Math.round(Number(t.maint)) : null;
 
