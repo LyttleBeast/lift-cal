@@ -34,7 +34,7 @@ the build prompt; nothing gets built from an unanswered question.
 
 ### Q1 — How far does the lb/kg setting reach?
 **Answer: OUT OF THIS SHIP.** It is much bigger than it looked — `lb` is an
-app-wide assumption, not a Train one. Logged as ROADMAP.md §8 ("Weight units —
+app-wide assumption, not a Train one. Logged at the time as ROADMAP.md §8 ("Weight units —
 lb or kg", large, *talked about*) with the file/line survey and the
 convert-at-the-edges decision recorded so it does not have to be rediscovered.
 It becomes its own update. Nothing about units is built today.

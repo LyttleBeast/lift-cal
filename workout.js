@@ -1156,7 +1156,7 @@ const PLATES = [
    35, 25, 10, 5, 2½ — and a gym stocked in kilos has a different set (25, 20,
    15, 10, 5, 2½, 1¼) on a 20 kg bar, not these six relabelled. Printing
    "2 × 20.4" would be a number nobody can find on a rack. Which plate set a
-   kilo gym should get is an open question in ROADMAP §8 and it is not answered
+   kilo gym should get is an open question in BACKLOG.md and it is not answered
    here, so this keeps working in pounds and says which unit it is in whenever
    that is not the unit everything else on screen is in. */
 function renderPlates(total, barWeight = 45, u = 'lb') {

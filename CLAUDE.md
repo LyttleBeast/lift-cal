@@ -81,7 +81,7 @@ raise it in the handoff, because editing that file does not publish it.
 | `database.rules.json` | You edit the file; **Micah pastes it into the Firebase console.** Nothing is live until he does. |
 | The Worker | Not here. It lives in `~/dev/rack-worker` and is deployed from there. |
 | Firebase or Cloudflare dashboards, API keys, KV namespaces | Micah only. You have no access and should not attempt it. |
-| `README.md` `AGENTS.md` `ROADMAP.md` | You, whenever a change makes them wrong. Keep them true. |
+| `README.md` `AGENTS.md` `BACKLOG.md` | You, whenever a change makes them wrong. Keep them true. |
 
 Never commit a key. There is no key in this repo and no file that should ever
 hold one — the Anthropic key lives only in Cloudflare's encrypted secret store,

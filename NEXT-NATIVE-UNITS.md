@@ -258,7 +258,7 @@ the right answer is:
   relabelled, and "2 × 20.4" is a number nobody can find on a rack. The strip
   says **"Per side · lb plates"** on a metric account and keeps working. The real
   answer is a second plate set plus a bar-weight setting, and it is logged as
-  still-open in ROADMAP §8.
+  still-open in BACKLOG.md.
 - **The workout importer** (`importer.js`). Its file is already in Rack's
   storage format, so its `w` values *are* pounds. Reading them in the display
   unit — which is what every box a person types into does — would multiply 219

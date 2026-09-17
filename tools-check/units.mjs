@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 //
-// Verifier for lb/kg and in/cm — ROADMAP.md §8.
+// Verifier for lb/kg and in/cm.
 //
 //   node tools-check/units.mjs
 //
@@ -545,7 +545,7 @@ section('H. sites — the unit reaches the screen, and reaches it once');
   // longer that contains the word is text somebody will read, and there are
   // exactly two of those left, both deliberate and both named here.
   const ALLOWED = new Set([
-    'Per side · lb plates',              // the plates really are pounds — ROADMAP §8
+    'Per side · lb plates',              // the plates really are pounds — BACKLOG.md
     'Imperial — lb and ft/in'            // the label of the imperial option itself
   ]);
   const stripComments = t => t
