@@ -13,6 +13,15 @@
 //      which must read as an estimate and NEVER as a menu. Claiming a source a
 //      number does not have is a wrong number in words.
 //
+//      THE FIXTURES ARE THE WHOLE VERIFIER, and the first set of them was
+//      wrong. They were built from a commission that said model rows carry no
+//      `src`; the Worker has always sent one on every row (`{ kind:'ai', model,
+//      searched }`, index.js:752 and :1434), so a module that read `src`'s mere
+//      presence as "published" passed 54 checks while heading a pure model
+//      answer "From published nutrition". Each reply below now matches a real
+//      code path in ~/dev/rack-worker, named in its comment. Sections B2 and B3
+//      are the ones that failed before the rule became kind-based.
+//
 //   2. WHAT IS WRITTEN DOES NOT MOVE. The stored `src` string is the shipped
 //      iOS rule verbatim and both clients read it back, so the entry this sheet
 //      logs has to be byte-identical to the one v40 logged for the same reply.
@@ -123,54 +132,87 @@ const item = (name, extra) => ({ name, qty: '1 serving', cal: 340, p: 17, c: 38,
 
 const REPLIES = {
   // What happened last night: the food layer priced it off Panda's published
-  // row, no model ran, $0.0000.
+  // row, no model ran, $0.0000. lookup.js withSrc() always stamps `stale`.
   panda: { mode: 'text', model: '', source: 'curated', confidence: 'high',
            usage: { usd: 0 },
            items: [item('Sesame Chicken',
-             { src: { kind: 'curated', venue: 'panda-express', asOf: '2026-09' } })] },
+             { src: { kind: 'curated', venue: 'panda-express',
+                      from: 'https://www.pandaexpress.com/nutrition',
+                      asOf: '2026-09', stale: false } })] },
 
-  // Published nutrition with no venue behind it — a packaged food, not a menu.
+  // Published nutrition with no venue behind it — a generic, not a menu.
   usda: { mode: 'text', model: '', source: 'curated',
           items: [item('Greek Yogurt, plain',
-            { src: { kind: 'curated', from: 'USDA', asOf: '2024-04-01' } })] },
+            { src: { kind: 'curated', from: 'USDA', asOf: '2024-04-01', stale: false } })] },
 
   // A row the food layer itself marked old.
   stale: { mode: 'text', model: '', source: 'curated',
            items: [item('Burrito Bowl',
              { src: { kind: 'curated', venue: 'chipotle', asOf: '2023-01', stale: true } })] },
 
-  // A residual answer: the food layer knew the burrito, the model priced the
-  // side it had never heard of.
-  mixed: { mode: 'text', model: 'claude-sonnet-5',
-           items: [item('Burrito Bowl', { src: { kind: 'curated', venue: 'chipotle', asOf: '2026-08' } }),
-                   item('A friend’s homemade salsa')] },
+  // A residual answer: the food layer knew the bowl, the model priced the side
+  // it had never heard of. The estimated row carries kind 'ai', and because the
+  // rows disagree sourceOf() calls the whole reply 'mixed'.
+  mixed: { mode: 'text', model: 'claude-sonnet-5', source: 'mixed',
+           items: [item('Burrito Bowl',
+                     { src: { kind: 'curated', venue: 'chipotle', asOf: '2026-08', stale: false } }),
+                   item('A friend’s homemade salsa',
+                     { src: { kind: 'ai', model: 'claude-sonnet-5', searched: false } })] },
 
-  // The model ran, now.
-  ai: { mode: 'text', model: 'claude-sonnet-5', confidence: 'medium',
-        usage: { usd: 0.0031 }, items: [item('Chicken and rice')] },
+  // The model ran, now. EVERY row carries a src — index.js:1434. This is the
+  // reply the presence test called "From published nutrition".
+  ai: { mode: 'text', model: 'claude-sonnet-5', source: 'ai', confidence: 'medium',
+        usage: { usd: 0.0031 },
+        items: [item('Chicken and rice',
+          { src: { kind: 'ai', model: 'claude-sonnet-5', searched: false } })] },
 
-  // The model ran earlier. Nothing was spent this time.
+  // The model ran earlier and the sentence cache answered. free.js:37 keeps a
+  // row's original src where it had one, so a remembered model answer still
+  // reads 'ai' on the row and 'cache' at the top of the reply.
   cache: { mode: 'text', model: 'claude-sonnet-5', source: 'cache',
-           usage: { usd: 0 }, items: [item('Chicken and rice')] },
+           usage: { usd: 0 },
+           items: [item('Chicken and rice',
+             { src: { kind: 'ai', model: 'claude-sonnet-5', searched: true } })] },
 
-  // No per-item src at all, and the venue at the top of the reply — the shape
-  // tools/verify-food-src.mjs records the deployed Worker sending.
+  // Remembered from before per-item provenance existed: no original src to
+  // keep, so free.js stamps kind 'cache' itself.
+  cacheOld: { mode: 'text', model: 'claude-sonnet-5', source: 'cache', usage: { usd: 0 },
+              items: [item('Chicken and rice', { src: { kind: 'cache' } })] },
+
+  // A remembered answer whose row came off a menu. Being remembered does not
+  // un-publish a number: the row is still Panda's, and nothing was spent either
+  // way, so the menu is what the sheet has to say.
+  cacheMenu: { mode: 'text', model: '', source: 'cache', usage: { usd: 0 },
+               items: [item('Sesame Chicken',
+                 { src: { kind: 'curated', venue: 'panda-express', asOf: '2026-09', stale: false } })] },
+
+  // No per-item src at all, and the venue at the top of the reply — a Worker
+  // from before per-item provenance, where the whole reply is all there is.
   parsedWhole: { mode: 'text', model: '', source: 'parsed', venue: 'chipotle',
                  items: [item('Burrito Bowl'), item('Chips')] },
 
   // An older Worker: no source, no per-item src, nothing about itself at all.
   older: { mode: 'text', model: 'claude-sonnet-5', items: [item('Chicken and rice')] },
 
-  // A source this client has never heard of. Same rule as the src expression:
-  // fall back to the model path.
+  // A top-level source this client has never heard of.
   unknown: { mode: 'text', model: 'claude-sonnet-5', source: 'pool', items: [item('Chicken and rice')] },
+
+  // A KIND this client has never heard of — a tier added to the Worker after
+  // this build shipped, dressed in every field a curated row has. It must read
+  // as an estimate: a provenance you cannot read is one you cannot repeat.
+  unknownKind: { mode: 'text', model: '', source: 'scanned',
+                 items: [item('Clif Bar',
+                   { src: { kind: 'scanned', venue: 'clif', from: 'openfoodfacts',
+                            asOf: '2026-05', stale: false } })] },
 
   // The alignment trap: a nameless item in the middle, which normalizeImport
   // drops and estimate-origin still counts.
-  gap: { mode: 'text', model: 'claude-sonnet-5',
-         items: [item('Burrito Bowl', { src: { kind: 'curated', venue: 'chipotle' } }),
-                 { qty: '1', cal: 90, p: 0, c: 20, f: 0 },
-                 item('A friend’s homemade salsa')] }
+  gap: { mode: 'text', model: 'claude-sonnet-5', source: 'mixed',
+         items: [item('Burrito Bowl', { src: { kind: 'curated', venue: 'chipotle', stale: false } }),
+                 { qty: '1', cal: 90, p: 0, c: 20, f: 0,
+                   src: { kind: 'ai', model: 'claude-sonnet-5', searched: false } },
+                 item('A friend’s homemade salsa',
+                   { src: { kind: 'ai', model: 'claude-sonnet-5', searched: false } })] }
 };
 
 /* ================= A. THE HEADINGS ================= */
@@ -191,7 +233,13 @@ section('A. the heading names the source, or names Claude, and never both wrongl
         O.estimateOrigin(REPLIES.cache).sub === 'answered earlier, nothing spent',
         O.estimateOrigin(REPLIES.cache).sub);
   check('nothing else carries that second line',
-        ['panda', 'usda', 'ai', 'mixed', 'older'].every(k => O.estimateOrigin(REPLIES[k]).sub === ''));
+        ['panda', 'usda', 'ai', 'mixed', 'older', 'unknownKind', 'cacheMenu']
+          .every(k => O.estimateOrigin(REPLIES[k]).sub === ''));
+  check('a remembered answer stamped kind cache reads the same as one that kept its ai row',
+        shape(O.estimateOrigin(REPLIES.cacheOld)) === shape(O.estimateOrigin(REPLIES.cache)),
+        shape(O.estimateOrigin(REPLIES.cacheOld)));
+  check('a remembered MENU row is still the menu — being remembered does not un-publish it',
+        h('cacheMenu') === 'From the Panda Express menu', h('cacheMenu'));
   check('a whole-reply venue with no per-item src still names the venue',
         h('parsedWhole') === 'From the Chipotle menu', h('parsedWhole'));
   check('a mixed answer with no venue anywhere says published, not menu',
@@ -225,6 +273,81 @@ section('B. an answer that says nothing about itself reads as an estimate');
         O.estimateOrigin({ items: [{ name: 'x', src: 'food-db' }] }).rows[0].origin === 'ai');
 }
 
+/* ================= B2. A `src` IS NOT A PUBLICATION =================
+   The defect this section exists for. Every row the Worker sends carries a
+   `src` — model rows included, index.js:752 and :1434 — so a module that tests
+   that object for PRESENCE calls the model's own guess published nutrition. It
+   did, until 17 Sep 2026: the commission it was built from said model rows were
+   src-less. Only kind 'curated' may claim a source. */
+section('B2. only kind curated may claim a published source');
+{
+  const rows = k => O.estimateOrigin(REPLIES[k]).rows;
+  const one = src => O.estimateOrigin({ items: [{ name: 'x', src }] }).rows[0];
+
+  check('a pure model answer is an estimate on every row, though every row has a src',
+        REPLIES.ai.items.every(i => i.src) && rows('ai').every(r => r.origin === 'ai'),
+        shape(rows('ai')));
+  check('and its heading never says menu or published',
+        !/menu|published/i.test(O.estimateOrigin(REPLIES.ai).heading),
+        O.estimateOrigin(REPLIES.ai).heading);
+  check('and no row of it claims a source in words',
+        rows('ai').every(r => r.label === 'estimate' && r.venue === ''), shape(rows('ai')));
+
+  check('a kind this build has never heard of is an estimate, not a claim',
+        rows('unknownKind').every(r => r.origin === 'ai' && r.label === 'estimate'),
+        shape(rows('unknownKind')));
+  check('even though that row carried a venue, a from and an asOf to claim',
+        REPLIES.unknownKind.items[0].src.venue && REPLIES.unknownKind.items[0].src.asOf &&
+        !/clif|openfoodfacts|2026/i.test(rows('unknownKind')[0].label),
+        shape(rows('unknownKind')[0]));
+  check('and its heading names Claude, not the tier it could not read',
+        O.estimateOrigin(REPLIES.unknownKind).heading === 'Claude’s estimate',
+        O.estimateOrigin(REPLIES.unknownKind).heading);
+
+  // The kind is matched exactly. A near miss is a kind this build does not
+  // know, and the whole point is that those do not get the benefit of a doubt.
+  const NOT_CURATED = ['ai', 'cache', 'scanned', 'pool', '', ' curated', 'curated ',
+                       'CURATED', 'Curated', 'food-db', 'parsed'];
+  check('every kind but curated reads as an estimate, matched exactly',
+        NOT_CURATED.every(k => one({ kind: k, venue: 'panda-express', asOf: '2026-09' }).origin !== 'menu'),
+        shape(NOT_CURATED.filter(k => one({ kind: k, venue: 'panda-express' }).origin === 'menu')));
+  check('a src with no kind at all claims nothing either',
+        one({ venue: 'panda-express', asOf: '2026-09' }).origin === 'ai' &&
+        one({ kind: null, from: 'USDA' }).origin === 'ai',
+        shape(one({ venue: 'panda-express' })));
+  check('and curated still does claim one, so this is a rule and not a mute button',
+        one({ kind: 'curated', venue: 'panda-express', asOf: '2026-09' }).origin === 'menu');
+}
+
+/* ================= B3. THE RESIDUAL ANSWER =================
+   source 'mixed' is the Worker's word for rows that disagree with each other,
+   so it is the one top-level source that can never speak for a row. Under the
+   presence test the estimated half of this answer read "published nutrition"
+   beneath a Panda heading — the lie the module was written to stop, printed by
+   the module itself. */
+section('B3. the estimated half of a residual answer does not inherit the menu');
+{
+  const m = O.estimateOrigin(REPLIES.mixed);
+  check('the reply says mixed and the rows are tagged one at a time',
+        REPLIES.mixed.source === 'mixed' &&
+        m.rows.length === 2 && m.rows[0].origin === 'menu' && m.rows[1].origin === 'ai',
+        shape(m.rows));
+  check('the estimated row names no venue, so it cannot pull one into the heading',
+        m.rows[1].venue === '' && !/chipotle|published/i.test(m.rows[1].label), shape(m.rows[1]));
+  check('the heading says both and neither alone',
+        m.heading === 'Part menu, part estimate', m.heading);
+
+  // The same shape with the venue at the TOP of the reply as well: foodRow
+  // falls back to res.venue, and a model row must not reach that fallback.
+  const withTop = { ...REPLIES.mixed, venue: 'chipotle' };
+  check('a top-level venue does not reach the estimated row either',
+        O.estimateOrigin(withTop).rows[1].label === 'estimate',
+        shape(O.estimateOrigin(withTop).rows));
+  check('and source mixed never turns a src-less row into a food row',
+        O.estimateOrigin({ source: 'mixed', venue: 'chipotle', items: [{ name: 'x' }] })
+          .rows[0].origin === 'ai');
+}
+
 /* ================= C. THE ROWS ================= */
 section('C. each row says where its own number came from');
 {
@@ -252,10 +375,10 @@ section('C. each row says where its own number came from');
         m[0].label === 'Chipotle · published Aug 2026' && m[1].label === 'estimate', shape(m.map(r => r.label)));
 
   check('a date the Worker wrote some other way is passed through, not guessed at',
-        O.estimateOrigin({ items: [{ name: 'x', src: { venue: 'joe', asOf: 'spring 2026' } }] })
+        O.estimateOrigin({ items: [{ name: 'x', src: { kind: 'curated', venue: 'joe', asOf: 'spring 2026' } }] })
           .rows[0].label === 'Joe · published spring 2026');
   check('a venue written out in full is not re-cased',
-        O.estimateOrigin({ items: [{ name: 'x', src: { venue: 'McDonald’s' } }] })
+        O.estimateOrigin({ items: [{ name: 'x', src: { kind: 'curated', venue: 'McDonald’s' } }] })
           .rows[0].label === 'McDonald’s');
   check('a food-layer row with nothing on it at all still says published nutrition',
         O.estimateOrigin({ items: [{ name: 'x', src: { kind: 'curated' } }] })
@@ -293,7 +416,8 @@ section('D. asOf is parsed as text — no Date, so no timezone');
   // `new Date('2026-09-01')` is UTC midnight and prints as 31 August west of
   // Greenwich. This is the bug a native verifier hit last night; the module
   // avoids it by never building a Date at all.
-  const lab = v => O.estimateOrigin({ items: [{ name: 'x', src: { from: 'X', asOf: v } }] }).rows[0].label;
+  const lab = v => O.estimateOrigin(
+    { items: [{ name: 'x', src: { kind: 'curated', from: 'X', asOf: v } }] }).rows[0].label;
   check('the first of a month does not slip back a month', lab('2026-09-01') === 'X · published Sep 2026', lab('2026-09-01'));
   check('the last of a month does not slip forward', lab('2026-12-31') === 'X · published Dec 2026', lab('2026-12-31'));
   check('a bare year-month works', lab('2026-01') === 'X · published Jan 2026', lab('2026-01'));

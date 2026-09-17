@@ -202,10 +202,35 @@ estimateOrigin(res) -> { heading, sub, rows: [{ origin, venue, label }] }
 
 ### The three rules underneath it
 
-**A per-item `src` object wins where it is there; `res.source` speaks for the
-whole reply where no row carries one.** The per-item object is the only signal
-that can describe a residual answer. `res.source` is the same signal
-`estimator.jsx` already trusts enough to write `'food-db'` into the database.
+**ONLY `src.kind === 'curated'` may claim a published source.** ⚠ This was
+wrong in the commission and wrong in this document until 17 Sep 2026, which is
+the one bug v41 shipped and had to fix before pushing. The brief said a model
+row carries no `src`. **It always has**, and so does every other row:
+
+| Worker | row `src` |
+|---|---|
+| `src/food/lookup.js:625` `withSrc`, and `src/food/barcode.js:259` | `{ kind:'curated', venue?, from?, asOf?, stale }` |
+| `src/index.js:752` (residual rows) and `:1434` (whole-order rows) | `{ kind:'ai', model, searched }` |
+| `src/food/free.js:37` | `{ kind:'cache' }` — **unless the cached row kept its original `src`**, so a remembered answer can read `curated` or `ai` on the row and `cache` at the top |
+
+So a module that tests the `src` object for PRESENCE calls the model's own guess
+published nutrition. Web's did: a pure model answer was headed "From published
+nutrition", and on a residual answer the estimated row read "published
+nutrition" — under a Panda heading, and inheriting `res.venue` outright where
+the reply carried one. The rule is kind-based and matched EXACTLY:
+
+- `'curated'` → a food row, the only kind that may name a source
+- `'ai'` → an estimate
+- `'cache'`, or `res.source === 'cache'` → an estimate, "answered earlier"
+- **anything else — an unknown kind, a `src` with no kind, no `src` at all —
+  is an estimate.** A provenance you cannot read is one you cannot repeat.
+
+**`res.source` speaks only for a reply where NO row carries a kind** — a Worker
+from before per-item provenance. Its values are `'curated' | 'parsed' | 'cache'
+| 'ai' | 'mixed' | absent`; `'mixed'` is `sourceOf`'s word for rows that
+disagree (`src/index.js:591`), so it is the one top-level source that can never
+speak for a row. `res.source` is the same signal `estimator.jsx` already trusts
+enough to write `'food-db'` into the database.
 
 **An answer that says nothing about itself reads as an ESTIMATE, never as a
 menu.** An older Worker sends no `source` and no per-item `src`. Claiming a
@@ -226,7 +251,7 @@ iOS rule verbatim and both clients read it back. It did not change, and the
 logged entry is byte-identical to v40's — proved in
 `tools-check/estimate-origin.mjs` §E by building the entry BOTH ways from real
 source text (v40's expression lifted out of `git show 9c1f0af:food.js`) across
-ten reply shapes.
+thirteen reply shapes.
 
 The mechanism matters for the port: **the origin is carried in a parallel array,
 never on the entry.** Web's `addEntries` spreads an entry straight into the day
@@ -253,10 +278,15 @@ saying it did — this ship's own defect, committed fresh. A corrected row becom
 `EDITED` ("edited by hand") and stops voting on the heading; correct them all
 and the heading is "Your numbers".
 
-**Not verified against a real residual reply.** The reply shapes this was driven
-against are the ones `tools/verify-food-src.mjs:83` recorded off the deployed
-bundle — where `venue` sits on the RESPONSE, not the item. Both are handled.
-Confirm the mixed path against `~/dev/rack-worker` before trusting it.
+**Now verified against the Worker's source, not against the brief.** Every
+fixture in `tools-check/estimate-origin.mjs` names the `~/dev/rack-worker` line
+that produces it, including the residual path (`src/index.js:752` for the
+estimated rows, `sourceOf` at `:591` for the `'mixed'` top level). The earlier
+note here said the mixed path was unconfirmed and that the module "fails toward
+estimate when it recognises nothing" — it did not: it recognised a `src` it
+should not have. A top-level `venue` also still sits on the RESPONSE, which is
+why a model row must never reach `foodRow`'s `res.venue` fallback. **Port the
+kind test, not the presence test.**
 
 ---
 

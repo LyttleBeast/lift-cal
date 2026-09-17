@@ -169,16 +169,19 @@ Carried from `NEXT-NATIVE.md` §7 so it survives that file. Do not "fix" these:
 
 ## What v41 left open in its own work
 
-- **A residual answer's heading is guesswork about a reply shape nobody has
-  seen.** `estimate-origin.js` reads a per-item `src` object because that is
-  what the brief describes the Worker sending, and the shapes it was driven
-  against are the ones `rack-mobile/tools/verify-food-src.mjs` recorded off the
-  **deployed** bundle — where `venue` sits on the RESPONSE, not the item. Both
-  are handled and the module fails toward "estimate" when it recognises
-  nothing, so the worst case is modesty rather than a false claim. But the
-  mixed-answer wording has never been seen against a real residual reply.
-  Confirm it against `~/dev/rack-worker` before trusting the "Part menu, part
-  estimate" path.
+- **The estimate sheet's provenance now keys on `src.kind`, checked against the
+  Worker's source.** The risk noted here on 17 Sep — that the residual heading
+  was guesswork, but "fails toward estimate when it recognises nothing", so the
+  worst case was modesty — was itself wrong, and was the one bug v41 shipped.
+  Model rows have never been `src`-less (`rack-worker/src/index.js:752`,
+  `:1434`), so testing the object for PRESENCE headed a pure model answer "From
+  published nutrition" and put "published nutrition" on the estimated half of a
+  Panda answer. Only `kind === 'curated'` may claim a source now; every other
+  kind, and every kind this build does not know, is an estimate. Each fixture in
+  `tools-check/estimate-origin.mjs` names the Worker line it came from. **What
+  is still open: a new tier added to the Worker reads as an estimate until this
+  client learns its kind** — the safe direction, but it does mean a genuinely
+  published number can under-claim until the two are shipped together.
 - **`asOf` is whatever the Worker writes.** `YYYY-MM` and `YYYY-MM-DD` become
   "Sep 2026"; anything else is printed through unchanged. That is deliberate —
   guessing at a date format is how a wrong date gets on screen — but it means a

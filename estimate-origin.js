@@ -15,14 +15,29 @@
 //
 // The signals, all of them already in the reply — no Worker change:
 //
-//   item.src   an object on a row the food layer priced, absent on a row the
-//              model priced: { kind, venue, from, asOf, stale }. The only
-//              signal that can describe a MIXED answer, so it wins where it is
-//              there.
-//   res.source 'curated' | 'parsed' | 'cache' | absent. Speaks for the whole
-//              reply when no row carries its own. It is the same signal food.js
-//              already trusts enough to write 'food-db' into the database.
-//   neither    the model ran.
+//   item.src.kind  EVERY row carries a `src`, model rows included. 'curated' is
+//                  a row priced off somebody's published page — the venue and
+//                  generic lookups and the barcode reader all send it, with
+//                  { venue?, from?, asOf?, stale }. 'ai' is a row the model
+//                  priced, with { model, searched }. 'cache' is a remembered
+//                  row stored before per-item provenance existed. Per row, so
+//                  it is the only signal that can describe a MIXED answer, and
+//                  it wins wherever it is there.
+//   res.source     'curated' | 'parsed' | 'cache' | 'ai' | 'mixed' | absent.
+//                  Speaks for the whole reply, and is the ONLY evidence on a
+//                  reply from a Worker old enough to send no per-item `src`.
+//                  It is the same signal food.js already trusts enough to write
+//                  'food-db' into the database.
+//
+// A ROW IS NOT PUBLISHED BECAUSE IT HAS A `src`. This module tested that object
+// for PRESENCE until 17 Sep 2026, on a brief that said model rows carry none.
+// They always have. So a pure model answer was headed "From published
+// nutrition", and on a residual answer the estimated row read "published
+// nutrition" under a Panda heading — the exact lie this module exists to stop,
+// committed by the module itself. Only kind 'curated' may claim a source. Every
+// other kind is an estimate, including a kind added to the Worker after this
+// build shipped: the only safe thing to say about a provenance you cannot read
+// is nothing.
 //
 // THE DIRECTION IT FAILS IN IS THE POINT. An older Worker sends no `source` and
 // no per-item `src`, and that reads as an estimate — never as a menu. Claiming
@@ -127,14 +142,26 @@ export function estimateOrigin(res) {
   const srcOf = x => (x && x.src && typeof x.src === 'object' ? x.src : null);
 
   const perItem = items.some(srcOf);
+  // 'mixed' is deliberately NOT on this list. It is the Worker's word for rows
+  // that disagree with each other, so it is the one top-level source that can
+  // never speak for a row: when it is there, every row carries its own kind.
   const wholeIsFood = r.source === 'curated' || r.source === 'parsed';
-  const model = r.source === 'cache' ? 'cache' : 'ai';
+  const cached = r.source === 'cache';
 
   const rows = items.map(x => {
     const s = srcOf(x);
-    if (s) return foodRow(s, r);
-    if (!perItem && wholeIsFood) return foodRow({}, r);
-    return modelRow(model);
+    const kind = s ? String(s.kind == null ? '' : s.kind) : '';
+    // The one kind that may claim a published source.
+    if (kind === 'curated') return foodRow(s, r);
+    // No row anywhere carries provenance and the reply as a whole says the food
+    // layer answered it: a Worker from before per-item `src`. The whole reply is
+    // the only evidence there is, and it is evidence.
+    if (!s && !perItem && wholeIsFood) return foodRow({}, r);
+    // Everything else: 'ai', 'cache', a kind this build does not know, a `src`
+    // with no kind at all, and a row with no `src` on a reply that does not
+    // claim the food layer. A cached answer says so however its rows are
+    // labelled — the model that produced it ran earlier, not now.
+    return modelRow(kind === 'cache' || cached ? 'cache' : 'ai');
   });
   return { ...originHeading(rows), rows };
 }
