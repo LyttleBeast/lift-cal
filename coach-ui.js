@@ -73,7 +73,10 @@ export function coachCard(opts = {}) {
 
   if (!coachReady()) {
     card.classList.add('loading');
-    card.appendChild(header(true));
+    // No lock while it is loading. Guessing one flashes the wrong tier at
+    // somebody for as long as the reads take, and the open padlock is exactly
+    // the reassuring half to get wrong.
+    card.appendChild(header(null));
     card.appendChild(el('div', 'coach-greet', 'Reading your log…'));
     card.appendChild(el('div', 'coach-line', ''));
     card.appendChild(el('div', 'coach-why', ''));
@@ -91,7 +94,7 @@ export function coachCard(opts = {}) {
     // sits at the top of the screen the app opens on and a throw here would
     // take the whole paint with it.
     card.classList.add('loading');
-    card.appendChild(header(true));
+    card.appendChild(header(null));
     card.appendChild(el('div', 'coach-greet', ''));
     card.appendChild(el('div', 'coach-line', 'Coach couldn’t read your log just now.'));
     card.appendChild(el('div', 'coach-why', 'Every tab below still works — the numbers live there.'));
@@ -116,7 +119,7 @@ export function coachCard(opts = {}) {
      the log yet. Only the You card can: on Train there is nowhere to point, and
      `go` is absent, which is what makes the tap fall back to the sheet. */
   const live = view.state === 'card_live_session' && typeof opts.go === 'function';
-  card.appendChild(goRow(live ? 'Back to your session' : leadText(c)));
+  card.appendChild(goRow(live ? 'Back to your session' : leadText(c, !!opts.tight)));
   card.onclick = live ? () => opts.go('workout') : () => openCoachSheet(opts);
   return card;
 }
@@ -130,23 +133,35 @@ function liveOf(opts) {
   try { return liveSessionOnDevice(); } catch { return false; }
 }
 
-/* What the bottom row offers. On a free account with findings behind the tier
-   it says how many rather than repeating a question — the lock in the corner
-   says there is something there, and this is the only place with room to say
-   how much. */
-function leadText(c) {
+/* What the bottom row offers.
+
+   The lead question is the You card's third slot and stays there: on Train the
+   card sits above Start workout and a prompt reading "How's my food?" beside
+   that button is an invitation to somewhere nobody is going. The tighter card
+   gets the bare row, which is all §8.1 asks of it.
+
+   The Pro count appears on BOTH, because that is tier information rather than a
+   question — the lock in the corner says there is something behind it and this
+   is the only place with room to say how much. */
+function leadText(c, tight) {
   if (!c.pro && c.lockedCount > 0) {
     return c.lockedCount === 1 ? '1 more with Pro' : c.lockedCount + ' more with Pro';
   }
-  return c.lead ? c.lead.label : 'What have you noticed?';
+  if (tight) return '';
+  // No topics means no data behind any of them — a brand-new account. The row
+  // stays a bare COACH ME rather than inviting a question Coach would have to
+  // answer with "nothing yet".
+  return c.lead ? c.lead.label : '';
 }
 
+// `pro` null means "not known yet" and draws no lock at all.
 function header(pro) {
   const h = el('div', 'coach-hd');
   const mark = el('span', 'coach-mark');
   mark.appendChild(bubbleIcon());
   h.appendChild(mark);
   h.appendChild(el('span', 'coach-ttl', 'COACH'));
+  if (pro === null) return h;
   const lock = el('span', 'coach-lock' + (pro ? ' open' : ''));
   lock.appendChild(lockIcon(pro));
   lock.setAttribute('aria-label', pro ? 'Included on your account' : 'Part of Pro');

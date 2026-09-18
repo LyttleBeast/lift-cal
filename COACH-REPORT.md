@@ -49,12 +49,14 @@ Each one is argued below and each one is in BACKLOG.md.
    button, and waiting for the box — building the seam now is what stops the
    first thing anybody types falling through to a training answer.
 
-6. **I could not run the app.** There is no browser in this environment. Every
-   claim below about behaviour comes from driving the real modules under Node
-   against fixtures, from 19 verifiers, and from reading the diff. The CSS in
-   particular has been reasoned about, arithmetic-checked against the 190 px
-   budget, and **not seen**. That is the largest single risk in this ship and it
-   is repeated in the handoff.
+6. **I could not run the app in a browser, and the CSS has not been seen.**
+   Everything else was executed: the engine under Node against fixtures, the
+   card and the sheet against a minimal DOM shim (they build, they answer, they
+   tap through, and nothing in them throws), and 19 verifiers. What is left
+   unverified is entirely visual — the 190 px budget under Archivo's real
+   metrics, `-webkit-line-clamp`, the half-width labels, the sheet height and
+   the switch. §6 is the full list. It is the largest single risk in this ship
+   and it is repeated in the handoff.
 
 ---
 
@@ -417,7 +419,18 @@ checks across six new verifiers, plus the 13 pre-existing ones. Every sentence
 the engine can produce is rendered twice, once imperial and once metric, and
 compared.
 
-**Not driven, because there is no browser here:**
+**Driven against a minimal DOM shim**, which is the first time `coach-ui.js`
+had ever been executed: the skeleton card, the loaded You card, the tight Train
+card, the live-session card and its tap into Train, the whole COACH ME sheet
+tapped through six bubbles deep, the seven Settings switches, a brand-new
+account, and a metric account checked for the word `lb`. Four things came out of
+it and all four are fixed — the skeleton was drawing an OPEN padlock before it
+knew the tier, the Train card was offering the You card's lead question ("How's
+my food?" beside Start workout), a brand-new account was being invited to ask a
+question Coach could only answer with "nothing yet", and the tight card needed
+its own bottom row.
+
+**Not driven, because there is no browser here — all of it visual:**
 
 - The card's 190 px budget. The arithmetic says 183 px of content at the stated
   font sizes and line heights, with `margin-top: auto` pinning the bottom row
