@@ -56,6 +56,11 @@ function lockIcon(pro) {
   return s;
 }
 
+/* The greeting this app open settled on. Module state on purpose — see the
+   comment at its one assignment in coachCard(); the alternative is a card that
+   rewrites its own top line as the later reads land. */
+let shownGreet = null;
+
 /* ================= THE CARD =================
 
    `opts.tight` is the Train form. `opts.live` is whether a workout is running
@@ -122,7 +127,7 @@ export function coachCard(opts = {}) {
      saying so rather than by going back to a spinner. */
   if (!coachReady() && view.state === 'card_state_clear') {
     view = { ...view, tone: 'neutral',
-             text: 'Your training is in. Still reading your food and weight.',
+             text: 'Your training is in. Food and weight have not landed yet.',
              reason: 'Coach would rather say nothing than read half a number.' };
   }
 
@@ -157,11 +162,6 @@ export function coachCard(opts = {}) {
   card.onclick = live ? () => opts.go('workout') : () => openCoachSheet(opts);
   return card;
 }
-
-/* The greeting this app open settled on. Module state on purpose — see the
-   comment at its one assignment; the alternative is a card that rewrites its
-   own top line as the reads land. */
-let shownGreet = null;
 
 /* The caller answers whether a workout is running, because coach-data.js must
    never import workout.js — that edge would close a ring between the tab and
@@ -300,7 +300,7 @@ export function openCoachSheet(opts = {}) {
       bubble('coach', a.text, a.reason);
     }
     // Never offer the same question twice in one sitting, and always leave a
-    // way back to the three topics.
+    // way back to this surface's own topics.
     const next = ((a && a.followups) || []).filter(f => !asked.has(f.id));
     showButtons(next.concat(topics.filter(t => !asked.has(t.id))));
     scroll();

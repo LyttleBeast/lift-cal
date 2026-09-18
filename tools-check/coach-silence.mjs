@@ -82,7 +82,7 @@ const sorted = ss => ss.slice().sort((a, b) => a.startedAt - b.startedAt);
 
 const NO_WEIGHT = { latestLb: null, latestAt: null, rateWk: null, rateDays: null, goalDir: null, goalRateWk: null };
 const shell = extra => ({
-  now: NOW, openMs: NOW, u: 'lb', log: 'readable',
+  now: NOW, opens: 0, recentGreets: [], u: 'lb', log: 'readable',
   sessions: [], lib: LIB, routines: [], live: { active: false }, tier: { pro: true },
   targets: null, targetsSet: false, summaries: {}, steps: { days: {} }, weight: { ...NO_WEIGHT },
   settings: { v: 1, mute: {}, answers: {}, asked: {}, lastGreet: '' },

@@ -521,8 +521,7 @@ inside it. A step term would count the same walking twice.
 { "v": 1,
   "mute":    { "fuel": true },
   "answers": { "q_goal_direction": "down" },
-  "asked":   { "q_goal_direction": 1789307130123 },
-  "lastGreet": "g_since_group" }
+  "asked":   { "q_goal_direction": 1789307130123 } }
 ```
 
 Everything Coach remembers, and it is deliberately almost nothing: the user's
@@ -530,10 +529,19 @@ data is the only state Coach has. `mute` holds the categories switched off under
 Settings → Coach, **absent means on**, so a fresh account has every switch on
 without a byte having been written. `answers` holds the replies to Coach's own
 questions — one exists, `q_goal_direction`, and it exists only because
-`weight_rate_vs_goal` is silent without a direction and the data genuinely
-cannot supply one. `asked` stamps when each was put, so nothing is asked twice.
-`lastGreet` is the rotating line Coach opened with last time, and it is there to
-stop the same one running twice.
+`weight_rate_vs_goal` and the stall readout are both silent or different without
+a direction and the data genuinely cannot supply one. `asked` stamps when each
+was put, so nothing is asked twice.
+
+**`lastGreet` was here in v42 and is not any more.** The rotating greeting and
+its open counter are DEVICE state, in `localStorage` under the account's own
+namespace (`rack:{uid}:coachOpens` and `rack:{uid}:coachGreets`), because the
+write happens as the app opens and the app is routinely closed a second or two
+later — which is exactly the pattern that needs the value and exactly the one an
+async database write does not survive. Getting it wrong costs a repeated
+greeting and nothing else, so it is not worth a round trip it cannot rely on.
+`normSettings()` drops a stored `lastGreet` from a v42 account on the way
+through; nothing has to be migrated.
 
 **Why it is here and not at `users/{uid}/coach`.** That path has no grant in the
 published rules, and a write to an ungranted section fails SILENTLY — no error,

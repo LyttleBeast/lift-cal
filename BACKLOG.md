@@ -177,6 +177,31 @@ Carried from `NEXT-NATIVE.md` §7 so it survives that file. Do not "fix" these:
 
 ---
 
+## What v43 left open in its own work
+
+v43 is the Coach fix run — the rotation, the boot path, the tier gate, the
+sheet's surface, the stall's voice and the short-finding gap. Two things it
+found and deliberately did not touch, plus one it could not check.
+
+- **`.btn` renders 41px tall against a 44px touch-target minimum.** Routines,
+  Exercises and Statistics on Train are therefore 3px under. It is real and it
+  is small, and `.btn` is used on every screen in the app — changing its padding
+  for this moves every button in Rack, which is a far bigger blast radius than
+  the defect. It wants a deliberate pass over the whole button scale, not a
+  patch from a Coach run.
+- **The sheet's `max-height: calc(92dvh - var(--safe-top))` has never been seen
+  against real phone browser chrome.** Nothing in this tree can check it: there
+  is no device and no layout engine in any verifier. It is not known to be
+  wrong; it is known to be unverified.
+- **The card's geometry is not fenced by anything.** `tools-check/` drives
+  `coach-ui.js` through a DOM shim now, so the tier gate and the surface-scoped
+  topics are checked — but the shim never loads `rack.css` and has no box model,
+  so the fixed 190px, the 164px tight form and the auto-margin centring are
+  verified by arithmetic and by eye only. A regression that made the card resize
+  would ship green.
+
+---
+
 ## What v42 left open in its own work
 
 Coach is deterministic, reads a great deal, and writes almost nothing, so most

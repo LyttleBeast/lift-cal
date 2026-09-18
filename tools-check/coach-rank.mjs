@@ -92,7 +92,7 @@ for (let w = 0; w < 12; w++) {
   training.push(sess(w * 7 + 6, [['squat', 3, 245]]));
 }
 const BASE = {
-  now: NOW, openMs: NOW, u: 'lb', log: 'readable',
+  now: NOW, opens: 0, recentGreets: [], u: 'lb', log: 'readable',
   sessions: training.slice().sort((a, b) => a.startedAt - b.startedAt),
   lib: LIB, routines: [], live: { active: false }, tier: { pro: true },
   targets: { cal: 2300, p: 210, f: 74, auto: { rateWk: -1 } }, targetsSet: true,

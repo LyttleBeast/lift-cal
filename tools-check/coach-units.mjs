@@ -137,7 +137,7 @@ const sess = (ago, rows) => ({
   }))
 });
 const base = extra => ({
-  now: NOW, openMs: NOW, u: 'lb', log: 'readable',
+  now: NOW, opens: 0, recentGreets: [], u: 'lb', log: 'readable',
   sessions: [], lib: LIB, routines: [], live: { active: false }, tier: { pro: true },
   targets: { cal: 2300, p: 210, f: 74, auto: { rateWk: -1 } }, targetsSet: true,
   summaries: {}, steps: { days: {} },
