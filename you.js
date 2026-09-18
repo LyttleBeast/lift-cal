@@ -77,7 +77,7 @@ import { openInstallGuide } from './onboarding.js';
 import { openSettings, openGoal, openDailyTargets, pickProfilePhoto } from './settings.js';
 import { openAdmin, isAdminOpen } from './admin.js';
 import { coachCard } from './coach-ui.js';
-import { initCoachData, noteCoachSessions, noteCoachData } from './coach-data.js';
+import { initCoachData, coachLogReady, noteCoachSessions, noteCoachData } from './coach-data.js';
 import { wOut, fmtW, fmtSetLoad, labelW, unitW, fmtRate, labelRate, fmtVol,
          kcalPerUnit } from './units.js';
 
@@ -145,6 +145,9 @@ export async function initYou(ctx = {}) {
      It is idempotent, it is not awaited, and it repaints itself when it lands,
      so it belongs in front of everything rather than behind it. */
   initCoachData().then(render).catch(() => render());
+  // And once more the moment the LOG is known, which is earlier than the rest
+  // of the snapshot and is everything the card needs to stop saying nothing.
+  coachLogReady().then(render).catch(() => {});
 
   const [p, t, ds, we, ss, sd, ws, ob] = await Promise.all([
     read('profile',           null),

@@ -152,7 +152,7 @@ export const CATEGORIES = Object.freeze([
   { id: 'safety',      label: 'Caution',             mutable: false, note: 'Anything that counsels rest or care.' },
   { id: 'volume',      label: 'Balance and volume',  mutable: true,  note: 'Sets for a group against your own normal.' },
   { id: 'recency',     label: 'Overdue and layoffs', mutable: true,  note: 'How long since a group, and since a session.' },
-  { id: 'progression', label: 'Stalls and records',  mutable: true,  note: 'Lifts that have stopped moving, and ones that just did.' },
+  { id: 'progression', label: 'Stalls and records',  mutable: true,  note: 'Where your best estimated maxes sit, and records as they land.' },
   { id: 'fuel',        label: 'Food',                mutable: true,  note: 'Calories and macros against your own targets.' },
   { id: 'weight',      label: 'Weight',              mutable: true,  note: 'Rate of change, and days since a weigh-in.' },
   { id: 'steps',       label: 'Steps',               mutable: true,  note: 'Today against your own trailing average.' },
@@ -559,7 +559,7 @@ export const FACTS = Object.freeze([
   {
     id: 'group.setsThisWeek', unit: 'count', requires: [],
     compute: d => d.setsThisWeek(),
-    because: () => 'working sets only — warm-ups are not counted',
+    because: () => 'working sets alone — warm-ups are not counted',
     age: () => 0
   },
   {
@@ -583,7 +583,7 @@ export const FACTS = Object.freeze([
       });
       return best;
     },
-    because: () => 'working sets only, counted over the four weeks before this one — ' +
+    because: () => 'counted from working sets alone, over the four weeks before this one — ' +
                    'your own normal rather than a bar Coach picked',
     age: () => 0
   },
@@ -978,7 +978,10 @@ export const QUESTIONS = Object.freeze([
       { value: 'hold', label: 'Holding' },
       { value: 'up',   label: 'Up' }
     ]),
-    changes: Object.freeze(['weight_rate_vs_goal']),
+    // Two rules now, not one: the stall readout reads differently through a
+    // deficit, and a question that unlocks something has to say everything it
+    // unlocks or the list stops being true.
+    changes: Object.freeze(['weight_rate_vs_goal', 'stalled_lift']),
     fact: 'weight.goalDir',
     // Only worth asking when the answer would really unlock something: there is
     // a rate to read and no direction to read it against.
@@ -1306,6 +1309,17 @@ export const INTENTS = Object.freeze([
 
 const INTENT_BY_ID = Object.freeze(Object.fromEntries(INTENTS.map(i => [i.id, i])));
 
+/* What Pro actually adds to Coach, derived from the table above rather than
+   written out beside it. The sheet names these to a basic account, and a list
+   typed by hand is a list that goes stale the first time an intent changes
+   tier — which is the kind of untrue sentence this whole ship exists to avoid.
+   Categories, in the order of the toggle table, with the same labels and notes
+   the Settings switches use. */
+export const PRO_ADDS = Object.freeze(
+  CATEGORIES
+    .filter(c => INTENTS.some(i => i.kind === 'finding' && i.tier === 'pro' && i.category === c.id))
+    .map(c => Object.freeze({ id: c.id, label: c.label, note: c.note })));
+
 /* ================================================================
    6.  THE RESPONSES
    ================================================================
@@ -1323,12 +1337,35 @@ const INTENT_BY_ID = Object.freeze(Object.fromEntries(INTENTS.map(i => [i.id, i]
 
    `reason` is optional. When it is absent the reason line is assembled from the
    `because` strings of the facts the intent quoted, which is what keeps those
-   strings load-bearing rather than documentation. */
+   strings load-bearing rather than documentation.
+
+   THE VOICE RULE, and it is a rule rather than a style note:
+
+       AN UNPROMPTED FINDING IS NEUTRAL OR ACTIONABLE, NEVER A JUDGEMENT.
+       COACH DESCRIBES THE NUMBERS, NEVER THE PERSON.
+
+   Anything that can reach the You card or the Train card arrives without being
+   asked for, on the screen the app opens to, and a sentence that is fair in
+   answer to a direct question is not automatically fair there. This ship
+   learned it the expensive way: "X hasn't moved: your best estimated max there
+   is still N" shipped on both cards and read as a verdict delivered to somebody
+   who had asked for nothing. A verdict also has a way of being the wrong
+   reading — a flat estimated max through a deficit is a lift held, not a lift
+   stalled — so the same words that judge are usually the words that guess.
+
+   Mechanically: no "hasn't", no "still", no "only", no "failed", no "stopped
+   moving", no "no progress", in any template a card can reach or in any
+   `because` string a card-reachable intent quotes. tools-check/coach-voice.mjs
+   renders every one and refuses them, with NO exemption list — a rule carrying
+   five exceptions is a rule nobody keeps true, so where one of those words was
+   doing honest temporal or scoping work the sentence was rewritten instead.
+   Sheet-only templates are not bound by it: somebody who tapped "Anything
+   stalled?" has asked a question and is owed its answer. */
 export const RESPONSES = Object.freeze({
 
   resp_log_unreadable: {
     text: () => 'Can’t read your training log right now.',
-    reason: () => 'Coach says nothing rather than guess from a read that failed. Everything else in the app still works.'
+    reason: () => 'Coach says nothing rather than guess from a read it could not finish. Every other tab draws from its own data.'
   },
   resp_first_run: {
     text: () => 'Nothing in your training log yet.',
@@ -1344,7 +1381,7 @@ export const RESPONSES = Object.freeze({
   },
   resp_state_clear: {
     text: () => 'Nothing stands out today.',
-    reason: () => 'Checked how long since each group, sets against your own weekly normal, lifts that have stopped moving, and records.'
+    reason: () => 'Checked how long since each group, sets against your own weekly normal, where your best estimated maxes sit, and records.'
   },
   resp_state_locked: {
     text: d => {
@@ -1721,11 +1758,29 @@ function rotate(counter, n) {
    One bubble per tab that has something to answer — Train, Fuel, Weight. Steps
    gets no bubble and still answers when it is reached as a follow-up off
    Weight, which is the shape the brief asks for and the reason the router is
-   keyed on ids rather than on a menu. */
+   keyed on ids rather than on a menu.
+
+   THE SET DEPENDS ON THE CARD THAT OPENED THE SHEET. Both cards used to offer
+   the same three, which on Train meant the first thing under somebody's thumb
+   on the way into a workout was "How's my food?". The sheet takes a surface
+   now and the engine answers with a set that fits it. */
 export const TOPICS = Object.freeze([
   { id: 'topic_train',  label: 'How’s my training?',  category: 'recency' },
   { id: 'topic_fuel',   label: 'How’s my food?',      category: 'fuel' },
   { id: 'topic_weight', label: 'Where’s my weight going?', category: 'weight' }
+]);
+
+/* Train's set, and every id in it is one the router already answers — these are
+   promotions, not new routes, so nothing here can offer a bubble with no rule
+   behind it. Training-first and in the order somebody standing in a gym would
+   want them: what to train, what has waited longest, how the week is going.
+
+   There is deliberately no "make me a workout". That is the builder, it is the
+   next ship, and a chip that says it and cannot do it is worse than no chip. */
+export const TRAIN_TOPICS = Object.freeze([
+  { id: 'ask_shape',   label: 'What should I train today?', category: 'recency' },
+  { id: 'ask_overdue', label: 'What’s waited longest?',     category: 'recency' },
+  { id: 'ask_volume',  label: 'How’s my week going?',       category: 'volume' }
 ]);
 
 // The router's whole map: a button id to the ordered intents it will try. The
@@ -1965,6 +2020,29 @@ function liveTopics(d) {
   return out;
 }
 
+/* The same question the follow-up filter asks, because it is the same
+   question: is there a rule behind this button that would actually fire. The
+   three tab-level topics are gated on whether the DOMAIN has any data — they
+   are broad and always have a fallback sentence — but a promoted ask_* id is
+   narrow, so it is offered only when its own route answers. */
+function answerable(d, routeId) {
+  const route = ROUTES[routeId] || [];
+  return route.some(intentId => {
+    const it = INTENT_BY_ID[intentId];
+    return it && gate(it, d) && fires(it, d);
+  });
+}
+
+/* The surface's own set. Train gets the training-first promotions and falls
+   back to the general three when none of them has an answer today — a sheet
+   with no way to ask anything is a worse answer than a broader question. */
+function topicsFor(d, surface) {
+  const general = TOPICS.filter(t => liveTopics(d).includes(t.id));
+  if (surface !== 'train') return general;
+  const mine = TRAIN_TOPICS.filter(t => answerable(d, t.id));
+  return mine.length ? mine : general;
+}
+
 function leadQuestion(d, finding) {
   const live = liveTopics(d);
   if (!live.length) return null;
@@ -2038,7 +2116,10 @@ export function coach(input) {
     u,
     you, train, greet, lead,
     pro, lockedCount,
-    topics: TOPICS.filter(t => liveTopics(d).includes(t.id)),
+    /* The sheet asks for the set belonging to the card that opened it. It is a
+       function rather than an array because the two surfaces draw the same
+       component and the card is the only thing that knows which one it is. */
+    topicsFor: surface => topicsFor(d, surface === 'train' ? 'train' : 'you'),
     question: question ? { id: question.id, text: question.text, options: question.options } : null,
     // The opening bubble: the same finding the You card is showing, so the
     // sheet does not contradict the card that opened it.
@@ -2100,13 +2181,8 @@ function nothingFor(id) {
 // Only offer a follow-up that has an answer behind it.
 function followupsFor(d, u, id) {
   const list = FOLLOWUPS[id] || [];
-  return list.filter(next => {
-    const route = ROUTES[next] || [];
-    return route.some(intentId => {
-      const it = INTENT_BY_ID[intentId];
-      return it && gate(it, d) && fires(it, d);
-    });
-  }).map(next => ({ id: next, label: ASK_LABELS[next] || next }));
+  return list.filter(next => answerable(d, next))
+             .map(next => ({ id: next, label: ASK_LABELS[next] || next }));
 }
 
 /* ---------- what settings/coach looks like ----------

@@ -119,15 +119,32 @@ export function coachLogKnown() { return logKnown; }
    later one gets the same promise back, so `initCoachData().then(render)` is
    the right thing for a tab to write whether or not it is the first tab up. */
 let inFlight = null;
+let logSettled = null;
+let markLogSettled = () => {};
 
 export function initCoachData() {
   if (!inFlight) {
     // Before the first await, so the counter is settled by the time the very
     // first paint asks for a snapshot.
     readRotation();
+    logSettled = new Promise(res => { markLogSettled = res; });
     inFlight = load();
   }
   return inFlight;
+}
+
+/* The earlier of the two repaints. A tab that only hangs render() off
+   initCoachData() never draws at the log phase at all, which makes
+   coachLogKnown() a flag nothing reads — You repaints four or five times on
+   its own as its loads land and would get there by luck, and Train renders
+   once and then only when somebody touches it. Both attach this as well.
+
+   In the ordinary online case the whole-tree read is the last of the seven to
+   come home and the two fire in the same tick; this is the tail case, where a
+   small node stalls behind it. */
+export function coachLogReady() {
+  initCoachData();
+  return logSettled;
 }
 
 /* SEVEN READS, ONE WAVE. This used to be four awaits in a row — the whole
@@ -189,6 +206,7 @@ async function load() {
 
   await Promise.all([pLog, pSettings]);
   logKnown = true;
+  markLogSettled();
 
   await Promise.all([pTargets, pRest]);
   ready = true;

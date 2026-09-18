@@ -328,8 +328,9 @@ section('F. the You card claims first, and the Train card takes what is left');
 /* ================= G. THE LEAD QUESTION ================= */
 section('G. the lead question only offers topics that have data behind them');
 {
+  const you = c => c.topicsFor('you');
   const full = on({});
-  check('a full account is offered one of the three topics', full.lead && full.topics.length === 3,
+  check('a full account is offered one of the three topics', full.lead && you(full).length === 3,
         full.lead && full.lead.id);
   check('and never the one the card is already showing',
         !full.lead || !(full.you.state === 'finding' && full.lead.category === full.you.category),
@@ -337,20 +338,58 @@ section('G. the lead question only offers topics that have data behind them');
 
   const noFood = on({ targetsSet: false, targets: null, summaries: {} });
   check('an account with no food logged is not invited to ask about food',
-        !noFood.topics.some(t => t.id === 'topic_fuel'), list(noFood.topics.map(t => t.id)));
+        !you(noFood).some(t => t.id === 'topic_fuel'), list(you(noFood).map(t => t.id)));
   const noWeight = on({
     weight: { latestLb: null, latestAt: null, rateWk: null, rateDays: null, goalDir: null, goalRateWk: null }
   });
   check('and one that has never weighed in is not invited to ask about weight',
-        !noWeight.topics.some(t => t.id === 'topic_weight'), list(noWeight.topics.map(t => t.id)));
+        !you(noWeight).some(t => t.id === 'topic_weight'), list(you(noWeight).map(t => t.id)));
   const nothing = on({
     log: 'empty', sessions: [], targetsSet: false, targets: null, summaries: {}, steps: { days: {} },
     weight: { latestLb: null, latestAt: null, rateWk: null, rateDays: null, goalDir: null, goalRateWk: null }
   });
   check('a brand-new account is offered nothing at all rather than three dead ends',
-        !nothing.topics.length && nothing.lead === null, list(nothing.topics.map(t => t.id)));
+        !you(nothing).length && nothing.lead === null, list(you(nothing).map(t => t.id)));
   check('steps is never a topic bubble, and is still reachable as a follow-up',
-        !full.topics.some(t => t.id === 'topic_steps') && C.ROUTE_IDS.includes('ask_steps'));
+        !you(full).some(t => t.id === 'topic_steps') && C.ROUTE_IDS.includes('ask_steps'));
+}
+
+/* ================= G2. THE SHEET KNOWS WHICH CARD OPENED IT =================
+   Both surfaces used to be offered the same three, so the first thing under
+   somebody's thumb on the way into a workout was "How's my food?". Train gets
+   a training-first set now, and every id in it is one the router already
+   answers — these are promotions, not new routes, so a bubble with no rule
+   behind it is not constructible. */
+section('G2. the topic set belongs to the surface that opened the sheet');
+{
+  const full = on({});
+  const youSet   = full.topicsFor('you').map(t => t.id);
+  const trainSet = full.topicsFor('train').map(t => t.id);
+
+  check('You still gets the general three', youSet.join(',') === 'topic_train,topic_fuel,topic_weight',
+        list(youSet));
+  check('Train gets a different set, and a training-first one',
+        trainSet.join(',') !== youSet.join(',') &&
+        trainSet.every(id => C.TRAIN_TOPICS.some(t => t.id === id)), list(trainSet));
+  check('and not one of Train’s bubbles is about food or weight',
+        !trainSet.some(id => /fuel|weight|cal|protein|macro|rate|weighin/.test(id)), list(trainSet));
+  check('every Train bubble is an id the router already answers',
+        C.TRAIN_TOPICS.every(t => C.ROUTE_IDS.includes(t.id)),
+        list(C.TRAIN_TOPICS.map(t => t.id)));
+  check('and every one offered has a rule that actually fires behind it',
+        trainSet.every(id => { const a = full.ask(id); return a && !/^Nothing to say/.test(a.text); }),
+        list(trainSet));
+  /* The builder is ship two. A chip that says "make me a workout" and cannot
+     is worse than no chip, so there must be no placeholder anywhere in here. */
+  check('and nothing offers a workout Coach cannot build yet',
+        !C.TRAIN_TOPICS.some(t => /workout|build|make|soon/i.test(t.id + ' ' + t.label)),
+        list(C.TRAIN_TOPICS.map(t => t.label)));
+
+  // A log too thin for any of the promotions falls back rather than showing an
+  // empty sheet — a broader question beats no way to ask anything.
+  const thin = on({ sessions: [], log: 'empty' });
+  check('a sheet with no training answer falls back to the general set rather than to nothing',
+        thin.topicsFor('train').length === thin.topicsFor('you').length);
 }
 
 /* ================= H. COACH'S OWN QUESTION ================= */

@@ -20,7 +20,7 @@
 // Imports coach.js, coach-data.js and ui.js. Nothing imports back.
 
 import { el, sheet, noteEl, segmented, toast } from './ui.js';
-import { coach, CATEGORIES, QUESTIONS } from './coach.js';
+import { coach, CATEGORIES, QUESTIONS, PRO_ADDS } from './coach.js';
 import { coachInput, coachReady, coachLogKnown, rememberGreeting, coachSettings, coachSettingsKnown,
          setCategoryMuted, answerQuestion, markAsked, liveSessionOnDevice } from './coach-data.js';
 
@@ -105,7 +105,7 @@ export function coachCard(opts = {}) {
     card.appendChild(header(null));
     card.appendChild(el('div', 'coach-greet', ''));
     card.appendChild(el('div', 'coach-line', 'Coach couldn’t read your log just now.'));
-    card.appendChild(el('div', 'coach-why', 'Every tab below still works — the numbers live there.'));
+    card.appendChild(el('div', 'coach-why', 'Every tab below draws from its own data.'));
     card.appendChild(goRow(null));
     card.disabled = true;
     return card;
@@ -126,13 +126,26 @@ export function coachCard(opts = {}) {
              reason: 'Coach would rather say nothing than read half a number.' };
   }
 
-  // Written once per app open, and only from the You card — the surface that is
-  // on screen first. Rotating on a Train paint as well would burn two lines per
-  // open and make the pool feel half the size it is.
-  if (!opts.tight && c.greet && c.greet.id) rememberGreeting(c.greet.id);
+  /* Pinned for the rest of the app open, and written down once.
+
+     The greeting is chosen from a pool whose membership depends on which reads
+     have landed — four of the lines gate on weigh-ins, food or steps, which
+     arrive after the log does — so the honest answer genuinely differs between
+     the log paint and the full one, and the counter lands on a different entry
+     because the pool is a different length. Left alone, the top line of the
+     card changes under the reader's thumb half a second after it appears, and
+     rememberGreeting() records the line that flashed rather than the one they
+     read, so the NEXT open avoids the wrong id.
+
+     So the first line chosen is the line, and it is the one written down. A
+     slightly narrower pool for one open is a much smaller cost than a card
+     that rewrites its own greeting while somebody is reading it. */
+  if (!opts.tight && c.greet && c.greet.id && !shownGreet) shownGreet = c.greet;
+  const greet = opts.tight ? null : (shownGreet || c.greet);
+  if (greet && greet.id) rememberGreeting(greet.id);
 
   card.appendChild(header(c.pro));
-  card.appendChild(el('div', 'coach-greet', opts.tight ? '' : (c.greet ? c.greet.text : '')));
+  card.appendChild(el('div', 'coach-greet', greet ? greet.text : ''));
   card.appendChild(el('div', 'coach-line' + (view.tone === 'caution' ? ' caution' : ''), view.text));
   card.appendChild(el('div', 'coach-why', view.reason || ''));
   /* "Points at Train" is the whole of what the live-session card has to say, so
@@ -144,6 +157,11 @@ export function coachCard(opts = {}) {
   card.onclick = live ? () => opts.go('workout') : () => openCoachSheet(opts);
   return card;
 }
+
+/* The greeting this app open settled on. Module state on purpose — see the
+   comment at its one assignment; the alternative is a card that rewrites its
+   own top line as the reads land. */
+let shownGreet = null;
 
 /* The caller answers whether a workout is running, because coach-data.js must
    never import workout.js — that edge would close a ring between the tab and
@@ -165,7 +183,11 @@ function liveOf(opts) {
    question — the lock in the corner says there is something behind it and this
    is the only place with room to say how much. */
 function leadText(c, tight) {
-  if (!c.pro && c.lockedCount > 0) {
+  /* The count waits for the whole snapshot. Three of the ten Pro findings read
+     food and weight, so at the log phase this is genuinely "at least N" — and a
+     number on a card that goes up a moment after somebody read it is the kind
+     of small wrongness that makes the rest of the card harder to believe. */
+  if (!c.pro && coachReady() && c.lockedCount > 0) {
     return c.lockedCount === 1 ? '1 more with Pro' : c.lockedCount + ' more with Pro';
   }
   if (tight) return '';
@@ -213,6 +235,14 @@ function goRow(lead) {
    every one of these buttons, so ship three's box is a matcher in front of it
    and nothing behind it moves. */
 export function openCoachSheet(opts = {}) {
+  /* WHICH CARD OPENED THIS. `opts` arrives straight off the card, so `tight` is
+     already the answer — the Train form is the tight one. Everything else in
+     here is the same sheet; only the set of things it offers to be asked
+     changes, and the engine decides that rather than this file. A caller with
+     no card behind it (Settings → Ask Coach something) gets the You set, which
+     is the general one. */
+  const surface = opts.tight ? 'train' : 'you';
+
   const { sh, close } = sheet();
   sh.classList.add('coach-sheet');
 
@@ -222,7 +252,7 @@ export function openCoachSheet(opts = {}) {
   } catch {
     sh.appendChild(el('div', 'eyebrow', 'Coach'));
     sh.appendChild(el('h2', null, 'Coach'));
-    sh.appendChild(noteEl('Coach couldn’t read your log just now. Every tab still works — the numbers live there.'));
+    sh.appendChild(noteEl('Coach couldn’t read your log just now. Every tab draws from its own data.'));
     return;
   }
 
@@ -233,6 +263,7 @@ export function openCoachSheet(opts = {}) {
   sh.appendChild(thread);
 
   const asked = new Set();
+  const topics = c.topicsFor(surface);
   let buttons = null;
 
   const scroll = () => { try { sh.scrollTop = sh.scrollHeight; } catch {} };
@@ -271,7 +302,7 @@ export function openCoachSheet(opts = {}) {
     // Never offer the same question twice in one sitting, and always leave a
     // way back to the three topics.
     const next = ((a && a.followups) || []).filter(f => !asked.has(f.id));
-    showButtons(next.concat(c.topics.filter(t => !asked.has(t.id))));
+    showButtons(next.concat(topics.filter(t => !asked.has(t.id))));
     scroll();
   }
 
@@ -310,7 +341,19 @@ export function openCoachSheet(opts = {}) {
     q.appendChild(row);
   }
 
-  showButtons(c.topics.slice());
+  /* THE TIER GATE, AND IT IS A REAL ONE NOW. The lock in the card's corner
+     rendered correctly from the first day and the sheet behind it ignored it
+     entirely — a basic account tapped the card and got every topic. What Pro
+     buys is the comparisons; what a basic account gets is the one finding above
+     and a straight account of what it is not seeing.
+
+     This is a DISPLAY gate. Everything it hides is already in the bundle and
+     anybody who opens the dev tools can read it. That is accepted: Coach costs
+     nothing per use — no model call, no network, no per-account cost — so the
+     worst case of somebody defeating it is a person seeing sentences that were
+     free to produce. It is not pretended otherwise anywhere in this file. */
+  if (c.pro) showButtons(topics.slice());
+  else thread.appendChild(proPanel());
 
   sh.appendChild(noteEl(
     'Coach reads your own log and nothing else — your sessions, your food, your ' +
@@ -322,6 +365,48 @@ export function openCoachSheet(opts = {}) {
   done.style.marginTop = '10px';
   done.onclick = close;
   sh.appendChild(done);
+}
+
+/* What Pro adds, said once and said straight.
+
+   The list comes out of the engine (PRO_ADDS, derived from the intent table's
+   own tiers) rather than being written here, because a hand-written list of
+   what somebody is not getting is a list that goes quietly untrue the first
+   time an intent changes tier — and an untrue sentence about what is behind a
+   lock is worse than no lock.
+
+   THERE IS NO BUY BUTTON, DELIBERATELY. Rack has no payment path: RevenueCat
+   and Apple IAP are phase three and are not built, and the app is invite-only,
+   so an Upgrade button would be a button that goes nowhere. One that does
+   nothing is worse than none — it turns a clear boundary into a broken
+   feature. The panel says what Pro is and that it is not on sale, and the seam
+   for the real flow is marked below: when there is something to sell, a button
+   goes where the comment is and nothing else in this file has to move. */
+function proPanel() {
+  const b = el('div', 'coach-bub pro');
+  b.appendChild(el('div', 'coach-bub-t', 'What else Coach reads on Pro'));
+  b.appendChild(el('div', 'coach-bub-r',
+    'The finding above is the free half. Pro is the comparisons — your log ' +
+    'against your own history rather than a readout of today.'));
+
+  const list = el('div', 'coach-adds');
+  PRO_ADDS.forEach(a => {
+    const row = el('div', 'coach-add');
+    row.appendChild(el('div', 'coach-add-t', a.label));
+    row.appendChild(el('div', 'coach-add-n', a.note));
+    list.appendChild(row);
+  });
+  b.appendChild(list);
+
+  b.appendChild(el('div', 'coach-bub-r',
+    'It is not on sale yet — Rack is invite-only and there is nothing to buy ' +
+    'from here. Ask Micah if you want it turned on.'));
+
+  /* ↓ THE SEAM. The purchase flow lands here and nowhere else: one button,
+       appended to `b`, wired to whatever phase three brings. Nothing above it
+       needs to change when it does. */
+
+  return b;
 }
 
 /* ================= THE SETTINGS SECTION =================

@@ -21,7 +21,7 @@ import { openStats, isStatsOpen, renderStats, refresh as refreshStats } from './
 import { initPicker, allExercises, openPicker, openExerciseManager } from './picker.js';
 import { initRoutines, openRoutines, saveSessionAsRoutine } from './routines.js';
 import { coachCard } from './coach-ui.js';
-import { initCoachData, refreshCoachSessions } from './coach-data.js';
+import { initCoachData, coachLogReady, refreshCoachSessions } from './coach-data.js';
 import { bump } from './usage.js';
 import { wOut, wIn, fmtSetW, fmtSetLoad, fmtVol, volOut, unitW, limW } from './units.js';
 
@@ -88,6 +88,10 @@ export async function initWorkout() {
   await loadMonth(monthKey(viewMonth));
   render();
   coachLoaded.then(render).catch(() => {});
+  // And once more the moment the LOG is known, which lands earlier than the
+  // rest of the snapshot. This screen renders once and then only on a tap, so
+  // without it the card's earlier readiness would never reach the paint.
+  coachLogReady().then(render).catch(() => {});
   // Only for a workout restored mid-flight, and deliberately not awaited. The
   // calendar has no set row to mark, and this question costs a whole-tree read
   // that nobody who is not actually training should pay for.

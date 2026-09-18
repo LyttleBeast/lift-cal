@@ -1961,7 +1961,16 @@ body.peeking .view.active { padding-bottom: 58px; }
 .coach-card.tight .coach-greet { display: none; }
 .coach-card.loading .coach-greet { color: var(--dim); }
 
-.coach-hd { display: flex; align-items: center; gap: 7px; }
+/* margin-bottom: auto is the whole of the short-finding fix. Flexbox splits
+   positive free space equally between every auto margin on the main axis, so
+   this one and .coach-go's put half the slack above the greeting and half above
+   the row — a one-line finding with a one-line reason sits centred in the box
+   instead of stranding 44 measured pixels of void over a pinned tap target,
+   which read as a render that had failed. When the card is full there are about
+   five pixels going spare, both margins resolve to almost nothing, and the tall
+   states lay out exactly as they did. The height never enters into it: the box
+   still cannot resize, which is the guarantee the card exists for. */
+.coach-hd { display: flex; align-items: center; gap: 7px; margin-bottom: auto; }
 .coach-mark { display: flex; color: var(--p-yellow); }
 .coach-mark svg { width: 15px; height: 15px; display: block; }
 .coach-ttl {
@@ -1996,7 +2005,10 @@ body.peeking .view.active { padding-bottom: 58px; }
   overflow: hidden;
 }
 /* margin-top: auto pins this to the floor of the box however little is above
-   it, so a one-line finding does not leave the tap target floating mid-card. */
+   it, so a one-line finding does not leave the tap target floating mid-card. It
+   is also one of the card's two auto margins: it and .coach-hd's split the
+   slack between them, which is what centres a short finding rather than
+   dropping all of the space into one lump above this row. */
 .coach-go {
   margin-top: auto; padding-top: 10px;
   display: flex; align-items: baseline; gap: 8px;
@@ -2039,6 +2051,21 @@ body.peeking .view.active { padding-bottom: 58px; }
 }
 .coach-bub-r { font-size: 12px; line-height: 1.45; color: var(--steel); margin-top: 6px; }
 .coach-bub .coach-chips { margin-top: 10px; }
+/* The Pro panel. It IS a bubble — same box, same voice — because what it says
+   belongs in the conversation rather than beside it; the tint is the one the
+   lock and the account pill already use. The rows inside are the only new
+   thing, and they are a list rather than a paragraph because the engine hands
+   them over as a list. */
+.coach-bub.pro {
+  background: rgba(240,190,30,.10);
+  border: 1px solid rgba(240,190,30,.24);
+}
+.coach-adds { display: flex; flex-direction: column; gap: 9px; margin: 11px 0; }
+.coach-add-t {
+  font-size: 12px; letter-spacing: .04em;
+  color: var(--chalk); font-variation-settings: 'wdth' 94, 'wght' 700;
+}
+.coach-add-n { font-size: 12px; line-height: 1.4; color: var(--steel); margin-top: 1px; }
 .coach-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .coach-chip {
   padding: 9px 13px; border-radius: 999px;
