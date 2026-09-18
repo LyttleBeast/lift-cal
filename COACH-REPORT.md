@@ -504,3 +504,340 @@ Every one of these is a thing the native port will meet.
 either into `false` and Coach starts telling people with two hundred sessions
 that their log is empty, or telling people with a year of targets that they have
 none. Everything else in this ship is arithmetic; those two are the judgement.
+
+---
+---
+
+# COACH — the fix run (rack-v43)
+
+A second, short run in `~/dev/ship-v42`, against `COACH-FIX-PROMPT.md`, with
+`COACH-PROMPT.md` still governing the house rules. Everything above this line is
+the ship-one report and is unchanged; this is appended to it rather than
+replacing it, because several things it says turned out to be wrong and the
+record of having believed them is the useful part.
+
+Coach had been live for nine accounts. **Every defect below was found on the
+real deployment**, most of them by driving the live site. None of it was
+speculative, and none of it was found by a verifier — which is the first thing
+worth writing down.
+
+---
+
+## 10. WHAT IS NOT DONE
+
+Everything in the fix brief's priority order got built: §1 and §3 first, then
+§5, then §2, §4 and §6. Nothing in scope was dropped. What is narrower than
+asked, or decided differently:
+
+1. **§2 did not get a "render what is available as soon as it is available"
+   staging that actually pays for itself.** It got built and it is correct, but
+   see §11.1 — in the ordinary case it buys nothing, and saying otherwise would
+   be exactly the kind of claimed win this report exists to refuse.
+2. **The card's geometry is still not fenced by anything that runs.** The new
+   DOM shim can drive `coach-ui.js`, but it never loads `rack.css` and has no
+   box model, so the fixed 190px, the 164px tight form and the centring are
+   verified by arithmetic and by eye. A regression that made the card resize
+   would ship green. In BACKLOG.md.
+3. **`resp_group_overused` still has "you" as its grammatical subject** —
+   *"You've trained chest on 7 days in the last two weeks."* Under the strictest
+   reading of "Coach describes the numbers, never the person" it is the closest
+   remaining sibling of the stall. I left it. It is a count of logged sets with
+   no verdict attached, second person is the voice of the whole app, and
+   rewriting every "you" in the response table would be a reformat rather than a
+   fix. Named here so the next run can disagree with a line rather than with a
+   silent decision.
+4. **`coachToggleRows` still waits for the whole snapshot** before drawing the
+   Settings → Coach switches, when its own node lands in the first wave. It is a
+   one-line change and I did not make it: that sheet is opened by a tap, long
+   after boot, so the wait is already over by the time anybody sees it.
+
+---
+
+## 11. WHERE THE FIX BRIEF WAS WRONG ABOUT THE CODE
+
+The brief was written from the live site and from a read of the source, and it
+was right about every defect. Four things in it were wrong about the mechanism.
+
+### 11.1 §2's diagnosis was half right, and the half that was wrong is the half that mattered
+
+> *"`coachReady()` currently gates on everything, including the whole-tree
+> `readExact` that `log.confidence` needs. Render what is available as soon as it
+> is available."*
+
+The first sentence is true. The second cannot help, and it is worth being
+precise about why: **the whole-tree read is the slowest of the seven and it is
+the one that gates every sentence Coach has.** Staging around it means waiting
+for it anyway. `logKnown` and `ready` flip in the same tick on any normal
+connection.
+
+The three seconds were two other things, and neither is in the brief:
+
+1. **Four awaited round trips in a row inside `load()`**, none of which needed an
+   answer from the one before it.
+2. **`initCoachData()` was called from `loadHeavy()`, at the *end* of
+   `initYou()`** — after that screen's own eight-node wave *and* after
+   `await refreshModel(entries)`. Coach's reads did not leave the device until
+   two awaited stages had already finished.
+
+The staged readiness got built anyway and is kept, because it is cheap, correct,
+and is the right shape for the tail case where a small node stalls behind the
+tree — and because native's store may well have the opposite cost profile. But
+it is a guard, not the fix.
+
+### 11.2 §4 said the surface "never travels into the sheet". It travels; it was never read
+
+`coachCard` passes its whole `opts` object into `openCoachSheet(opts)` and
+`opts.tight` was sitting in it the entire time. The wiring existed and nothing
+read it. Cheaper fix than the brief expected, and worth knowing because it means
+the same latent shape may exist elsewhere.
+
+### 11.3 §5's third part, taken literally, would have broken a shipped verifier
+
+> *"On a deficit it stays quiet, or says something different."*
+
+Taking the first option — gating `when` on `weight.goalDir` — breaks
+`tools-check/coach-silence.mjs`, whose rich fixture carries `goalDir: -1` and
+asserts that `stalled_lift` **does** fire once there is enough data. I took the
+second option, branching inside the template. It touches no verifier, and it is
+the better answer anyway: somebody who tapped "Anything stalled?" has asked a
+direct question and is owed an answer rather than a silence.
+
+### 11.4 The stall's reason line was a second accusation and the brief does not mention it
+
+`resp_stalled`'s composed reason came from `lift.stalled.because`, which read
+*"across the last 3 sessions of it, no working set has beaten that"*. Rewording
+only the headline would have left that sentence rendering directly underneath
+the new neutral one. It is a readout now.
+
+---
+
+## 12. THE SIX DEFECTS, AND WHAT EACH ONE ACTUALLY WAS
+
+### §1 The rotation was a hash of the wall clock
+
+`rotate(seed, n)` was `Math.abs(Math.floor(seed / 1000)) % n` on `openMs`. That
+is the second somebody happened to open the app, modulo the pool size. A hash
+repeats; a rotation does not. Three consecutive reloads on the live site gave an
+identical greeting *and* an identical lead question.
+
+It is a per-device open counter now, arriving on `d.input.opens` exactly as
+`now` does, so `coach.js` stays byte-copyable. `coach-pure.mjs` refuses the
+identifier `openMs` outright and refuses `seed / 1000`, so no caller can hand a
+clock back.
+
+**The pool collapse was the more interesting half.** `pickGreeting` narrowed
+with `const from = data.length ? data : pool;` — so an open where exactly one
+data-aware line passed its gate had a pool of one, and `n % 1` is always 0. That
+card said the same thing every open forever, and no amount of fixing the seed
+would have moved it. Data lines are ordered first and generics after, and the
+counter walks the whole ordered pool.
+
+**`lastGreet` moved to device storage and became three ids.** The argument in
+the brief is right and is worth restating because it generalises: the write
+happens as the app opens, and the app is very often closed a second or two
+later, so an async database write fired at that moment dies with the page —
+which is precisely the usage pattern the value exists to serve. It costs a
+repeated greeting when it is wrong, never a wrong number, which is what makes it
+allowed to be device-local at all.
+
+Three rather than one because the eligible pool changes size between opens as
+gates start and stop passing, and a counter modulo a pool that shrank can land
+back on the line before it. The counter is the rotation; the list is the guard
+the counter cannot be.
+
+### §2 The card was blank because its reads had not started
+
+Covered in §11.1. What shipped: all seven reads go out in one wave, and
+`initCoachData()` is called before the first await in both `initYou()` and
+`initWorkout()`.
+
+**Round-trip depth, which is the honest measurement** — wall-clock seconds in a
+Node harness would measure nothing real, since there is no network, no Firebase
+connection setup and no paint:
+
+```
+                                            before   after
+serial round trips inside load()               4        1
+elapsed, as a multiple of one read's latency   4.10x    1.05x
+awaited stages in front of load()              2        0
+serial round trips, app boot -> Coach ready    7        3
+```
+
+The first three rows are **measured**, by `tools-check/coach-boot.mjs` against a
+store stub with a fixed per-read latency, counting waves — a wave being a
+transition of in-flight reads from none to some. Wall-clock seconds in a Node
+harness would measure nothing real (no network, no Firebase connection setup, no
+paint), so depth is the honest instrument and it is machine-independent. The
+before figures come from running the same harness against a copy of v42's
+`load()`, which also served as the mutation proof; it fails nine checks and
+prints `4 waves: 1:workouts, 2:food/targets, 3:settings/coach, 4:...`.
+
+The last row is arithmetic over the boot path rather than a measurement. Its two
+leading round trips are `initUnits()` and `onboardingState()` in `app.js`, which
+Coach cannot and should not avoid. **What Coach controls went from 5 to 1.**
+
+The observed 1s and 2s live readings were taken on a phone against a real
+database and this report cannot reproduce them. Nothing here should be read as
+"the card now appears in 250ms" — it should be read as "Coach's boot cost four
+round trips and now costs one, and it starts two stages earlier than it did".
+
+### §3 The tier gate was cosmetic
+
+`openCoachSheet` never read `c.pro`. The lock rendered correctly and the sheet
+behind it ignored it, so a basic account tapped the card and got everything.
+
+A basic account now gets the one free finding — the opening bubble, which is
+already tier-filtered by `rank()` — and a panel in place of the topic chips.
+**The panel's list is derived from the intent table's own tiers** (`PRO_ADDS`)
+rather than written out beside it, because a hand-written list of what somebody
+is not getting is the kind of sentence that goes quietly untrue the first time
+an intent changes tier, and an untrue sentence about what is behind a lock is
+worse than no lock.
+
+**No purchase flow, and I want to be clear this was a decision and not an
+omission.** Rack has no payment path. An Upgrade button would go nowhere, and a
+button that does nothing turns a clear boundary into a broken feature. The panel
+says what Pro adds and that it is not on sale while the app is invite-only, and
+there is one marked seam where the real flow drops in.
+
+It remains a display gate, defeatable by reading the bundle. That is said
+plainly in the source rather than dressed up.
+
+### §4 The sheet did not know which card opened it
+
+Train gets `TRAIN_TOPICS`: what to train today, what has waited longest, how the
+week is going. Every id in it is one the router already answered — these are
+promotions, not new routes, so a bubble that cannot be answered is not
+constructible. Each is offered only when its own route actually fires, and the
+set falls back to the general three when none of them does, because a sheet with
+no way to ask anything is worse than a broader question.
+
+`coach().topics` became `coach().topicsFor(surface)`. No placeholder for the
+builder, and none for anything else.
+
+### §5 The stall read as an accusation
+
+Three things wrong and all three fixed: the surface (`['sheet']`), the sentence
+(a figure and when it was last matched), and the reading (it says something
+different when the account's own goal direction is down and the weight has
+actually been falling — a flat estimated max through a deficit is a lift held).
+
+**And it became a rule.** At the head of `RESPONSES`:
+
+> An unprompted finding is neutral or actionable, never a judgement.
+> Coach describes the numbers, never the person.
+
+`tools-check/coach-voice.mjs` enforces it over every template and every
+`because` string a card can reach, in source text and in rendered output.
+
+**The ban carries no exemption list, deliberately.** The sweep found five
+sentences using a banned word in honest temporal or scoping work — "Everything
+else in the app still works", "working sets only", and so on. Every one of them
+was rewritten rather than exempted. A rule with five exceptions is a rule nobody
+keeps true, and the rewrites cost nothing.
+
+Siblings the sweep caught, none of which the brief named:
+- `resp_state_clear`'s reason said *"lifts that have stopped moving"* — the same
+  construction, on the most-seen card state in the app.
+- `lift.stalled.because` — §11.4.
+- `group.underWeekly.because` and `group.setsThisWeek.because` both said
+  "working sets only".
+- `resp_log_unreadable`'s reason used "failed" and "still".
+- Two strings in `coach-ui.js` itself, which no template sweep would have seen.
+
+### §6 The short-finding gap
+
+`.coach-card` is a flex column and `.coach-go` carried `margin-top: auto`, which
+absorbs **all** the positive free space into one lump. With a one-line finding
+and a one-line reason that is 41px by arithmetic and 44px as measured — a void
+above a pinned tap target, which reads as a render that failed.
+
+The fix is one declaration: `margin-bottom: auto` on `.coach-hd`. Flexbox splits
+free space equally between every auto margin on the main axis, so two of them
+put half the slack above the greeting and half above the row. The card's height
+is not touched and cannot be: that guarantee is the whole point of the box.
+
+I built a wrapper `<div>` for this first and threw it away when the arithmetic
+showed a one-line CSS change did the same job. `justify-content: center` would
+have been a silent no-op — auto margins consume free space before
+`justify-content` is consulted.
+
+---
+
+## 13. WHAT THE AUDIT CAUGHT THAT I HAD GOT WRONG
+
+Three real bugs in my own first pass at §2, none of which any verifier would
+have caught:
+
+1. **Nothing repainted at the `logKnown` boundary.** Both tabs hung one repaint
+   off the full load, so the earlier readiness was a flag nothing read. There is
+   a promise for it now and both tabs attach to it.
+2. **The greeting could change under the reader's thumb.** Four greeting lines
+   gate on weigh-ins, food or steps, which arrive after the log, so the eligible
+   pool genuinely grows between the two paints and the counter lands elsewhere.
+   Worse: `rememberGreeting()` fires on the first paint, so it recorded the line
+   that flashed rather than the one the reader read — and the *next* open then
+   avoided the wrong id, which is precisely what §1 exists to fix. The first
+   line chosen is now pinned for the app open, in the view layer, which keeps
+   `coach.js` pure.
+3. **"N more with Pro" could go up while somebody was reading it.** Three of the
+   ten Pro findings read food and weight, so at the log phase the count is
+   genuinely "at least N". It waits for the full snapshot now.
+
+---
+
+## 14. THINGS THAT WERE FINE AND WERE LEFT ALONE
+
+Checked, confirmed, untouched, per §7 of the fix brief: the lead question never
+truncates, the card holds 190px with no overflow, the Train pair is correct, the
+switches persist and filter, and the locks render the right way round.
+
+---
+
+## 14b. THE FOUR NEW VERIFIERS, AND WHAT EACH ONE COST TO BUILD
+
+23 files under `tools-check/` now, all exiting 0.
+
+| | |
+|---|---|
+| `coach-rotation.mjs` | 57 checks. The brief's property on four pool sizes, and from a counter mid-life rather than only from zero. Drives `coach-data.js` across real module instances, which is what closing the app and opening it again actually is. |
+| `coach-voice.mjs` | 42 checks. Source text and rendered output, both units, plus the card copy written in `coach-ui.js` rather than in a template. |
+| `coach-surface.mjs` | 35 checks. The first thing in this repo that drives a view layer at all. |
+| `coach-boot.mjs` | 42 checks, including three that verify its own wave counter can count past one. |
+
+Two things about them worth keeping:
+
+**`coach-rotation.mjs`'s first draft passed vacuously and that is instructive.**
+It discovered each fixture's pool by asking the engine what it offered — which
+is circular, because a broken rotation shrinks the pool it is then asked to
+cover. Under the old clock arithmetic the "pool" became the four lines the
+broken rotation happened to visit, and a check that "4 opens give 4 distinct
+lines" went green. The pool is now the union of what the engine offered and a
+floor derived from the real `GREETINGS` table: a line with no gate cannot fail
+one, so it is eligible on any log. **A verifier that derives its expectation
+from the thing under test proves nothing**, and this is the second time this
+repo has hit that — the v42 report's trap 4 is the same shape.
+
+**`coach-surface.mjs` is the one that would have caught §3 and §4.** Nothing
+else could have: both bugs were a correct engine wired to a screen that did not
+ask it the question. Reverting the tier branch takes six of its checks red;
+making `topicsFor` ignore its argument takes the surface section red. It cannot
+see layout — `rack.css` is never loaded and there is no box model — so §6 is
+still verified by arithmetic and by eye, and that is in BACKLOG.md.
+
+---
+
+## 15. IF THE NEXT RUN READS ONE THING
+
+Not the rotation — that is fixed and fenced. Read §11.1.
+
+Every one of these six defects was live for nine accounts, and the verifier
+suite was green the entire time. Nineteen verifiers, none of which could see a
+greeting that repeated, a sheet that ignored a tier, or a card that sat on a
+skeleton — because all nineteen tested the engine, and every one of these bugs
+was in the wiring around it or in the time it took. The three new ones that
+matter (`coach-rotation`, `coach-voice`, `coach-surface`) exist because of that,
+and `coach-surface` is the important one: it is the first thing in this repo
+that drives a view layer at all.
+
+A pure engine is easy to fence and is not where the bugs were.

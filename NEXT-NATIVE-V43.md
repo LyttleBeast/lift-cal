@@ -34,11 +34,12 @@ coach-tags.js 846501595feb06fddc7d85fb19ed526bc6c6cc69cecc5b7e9494eb96bd8c8a06  
 ## 1. `coach.js` — still copy-verbatim, and re-pin it
 
 ```
-coach.js   COACH_JS_SHA
+coach.js   92ad1efee2c264bf23d7169571dce31cf28d2beaf84de61789cccc6d3f19ba27
 ```
 
-Still three imports, still no clock, no randomness, no DOM, no module state.
-`tools-check/coach-pure.mjs` is stricter than it was. What changed inside:
+2,223 lines, still all of them copying. Still three imports, still no clock, no
+randomness, no DOM, no module state — and `tools-check/coach-pure.mjs` is
+stricter than it was. What changed inside:
 
 ### 1.1 THE ROTATION IS A COUNTER NOW, AND THIS IS THE HEADLINE
 
@@ -364,7 +365,7 @@ for f in *.js; do node --check --input-type=module < "$f" || echo "FAIL $f"; don
 for f in tools-check/*.mjs; do node "$f" >/dev/null 2>&1; echo "$? $f"; done
 ```
 
-Both clean at rack-v43.
+Both clean at rack-v43: 23 verifiers, all exit 0.
 
 ---
 

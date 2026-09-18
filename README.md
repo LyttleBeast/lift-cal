@@ -9,7 +9,7 @@ steps, and no account can see or touch another's. New people get in with an
 invite code, or by asking the owner and being approved. See *Access* below.
 
 - **You** — the tab the app opens on. A read-only summary of the other four and of how their numbers pull on each other: this week against the last, intake against targets, the scale against maintenance, printed as arithmetic rather than asserted. Nothing on it writes anything. The gear in its header is where every setting in the app now lives.
-- **Coach** — a card at the top of You and above Start workout on Train that says one true thing about your own log and shows the arithmetic under it: which muscle group is furthest past its own usual gap, which of your recurring sessions has waited longest, which lift has stopped moving, how this week's sets compare with your own trailing normal. No AI, no network, no per-use cost — it is arithmetic over the log, and a rule whose data is thin stays silent. Tap it for **COACH ME**, a sheet you can ask about Train, Fuel or Weight. Part of Pro; the readouts are free.
+- **Coach** — a card at the top of You and above Start workout on Train that says one true thing about your own log and shows the arithmetic under it: which muscle group is furthest past its own usual gap, which of your recurring sessions has waited longest, how this week's sets compare with your own trailing normal. No AI, no network, no per-use cost — it is arithmetic over the log, and a rule whose data is thin stays silent. Tap it for **COACH ME** — from You a sheet you can ask about Train, Fuel or Weight, and from Train one that asks the training questions first. Part of Pro; the readouts are free.
 - **Train** — full workout tracker: saved routines, plate-colored calendar, session timer, W/F/D set tags, 231-exercise library, last-time numbers, rest timer, per-side plate math, e1RM, swipe-to-delete sets, editable history, a post-workout recap with personal records, and a full statistics page.
 - **Fuel** — nutrition: **photograph a plate and Claude reads the macros off it**, or just describe what you ate. Plus macro targets, saved-food library, barcode scanning via Open Food Facts, manual entry, saved meals, one-tap portion multiplying, micronutrient floors, paste import.
 - **Weight** — body-weight log: 7-day moving average chart, weekly rate, a learned time-of-day curve, and a maintenance (TDEE) estimate built on normalised weigh-ins with a stated confidence interval.
@@ -449,6 +449,19 @@ RESPONSES  templates, filled from resolved facts, split from the rules so one
 ROUTER     a button id in, an answer out
 ```
 
+### What it will not say unprompted
+
+**An unprompted finding is neutral or actionable, never a judgement. Coach
+describes the numbers, never the person.** A card arrives without being asked
+for, on the screen the app opens to, and a sentence that is fair in answer to a
+direct question is not automatically fair there — a reading about a lift that
+has not gone up belongs in the sheet when somebody taps *Anything stalled?*,
+not over the top of a training log at seven in the morning. A verdict is also
+usually a guess: a flat estimated max on an account running a deficit is a lift
+held, not a lift stalled, and the same words that judge are the words that get
+the reading wrong. `tools-check/coach-voice.mjs` enforces it mechanically over
+every sentence a card can reach.
+
 ### The house law
 
 **A wrong number is worse than no number.** A rule whose data is thin stays
@@ -515,6 +528,13 @@ under `users/{uid}`, which has no grant in the published rules and would fail
 silently. It needs no rules change: `settings` carries a section-level `.write`
 and the `$other` deny is nested inside `units`, not on `settings` itself. See
 AGENTS.md.
+
+The one thing that is **not** there is the rotating greeting: the counter behind
+it and the last few lines it used live on the device, because that value is
+written as the app opens and the app is routinely closed a second later — which
+is exactly when an async database write does not land. Getting it wrong costs a
+repeated greeting and never a wrong number, which is what makes the device an
+honest place to keep it.
 
 ---
 
