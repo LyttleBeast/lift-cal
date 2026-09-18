@@ -156,7 +156,13 @@ const STUBS = [
   'read', 'readExact', 'write', 'watch', 'invalidate', 'toast', 'todayKey', 'LS',
   'bump', 'isWorking', 'mergeSessionExercises', 'allSessions', 'detectPRs', 'sessionMilestones',
   'computeVolume', 'collectDone', 'confirmSheet', 'releaseWakeLock', 'clearRest',
-  'render', 'rebuildHistoryFromLog'
+  'render', 'rebuildHistoryFromLog',
+  // v42. saveMonth and finishWorkout tell Coach the training log moved, because
+  // Coach's snapshot is gathered once per app open and its card sits directly
+  // above the button that just changed it. Stubbed here for the same reason
+  // `invalidate` and `render` are: this file is about month erasure, and what a
+  // card does afterwards is somebody else's verifier.
+  'refreshCoachSessions'
 ];
 
 function build(body, store, held) {
@@ -180,7 +186,8 @@ function build(body, store, held) {
     releaseWakeLock: () => {},
     clearRest: () => {},
     render: () => {},
-    rebuildHistoryFromLog: async () => {}
+    rebuildHistoryFromLog: async () => {},
+    refreshCoachSessions: async () => true
   };
   const src = DECLS + body + `
 return {

@@ -286,6 +286,78 @@ async function patchNow(change) {
   return true;
 }
 
+/* ================= STAYING CURRENT =================
+   The snapshot is gathered once per app open, and the app can outlive a lot of
+   changes: a workout finished, a weigh-in logged, targets edited. A card that
+   said "16 days since chest" straight after somebody trained chest would be a
+   wrong number on the screen the app opens on, which is the one thing nothing
+   in Coach may be.
+
+   So these exist, and the shape of them is the point: the two cheap ones take
+   what a CALLER HAS ALREADY READ and cost nothing at all. you.js re-reads
+   weight, targets, summaries and steps whenever it comes back to the tab, and
+   asks analytics for the sessions again; handing those over is free, and it
+   means Coach's numbers are exactly as fresh as the ones drawn underneath it
+   rather than a second opinion about the same nodes. */
+
+/* Sessions, from a caller that has just had them out of analytics.
+   Accepted only when there is something in the list. allSessions() resolves []
+   on a FAILED read as well as on an empty log, and Coach has no way to tell
+   those apart through that path — which is the whole reason initCoachData()
+   reads the tree itself. A log emptied to zero inside one app open therefore
+   keeps its last snapshot until the next one; deleting every session you have
+   ever logged is rare, and showing one stale finding is a much smaller wrong
+   than showing card_first_run to somebody whose read just timed out. */
+export function noteCoachSessions(list) {
+  if (!Array.isArray(list) || !list.length) return false;
+  sessions = list;
+  logState = 'readable';
+  return true;
+}
+
+/* The four small nodes, from a caller that has just re-read them.
+   `targetsSet` moves only in the direction that can be stated honestly: a
+   non-null object out of read() can only have come from the server or from the
+   mirror, and both mean the node exists. A null is ambiguous — read() folds
+   "absent" into "unreachable" — so it leaves the flag exactly where
+   initCoachData()'s readExact put it. */
+export function noteCoachData(patch) {
+  const p = patch || {};
+  if (p.entries   && typeof p.entries === 'object')   entries   = p.entries;
+  if (p.summaries && typeof p.summaries === 'object') summaries = p.summaries;
+  if (p.stepDays  && typeof p.stepDays === 'object')  stepDays  = p.stepDays;
+  if (p.targets   && typeof p.targets === 'object') {
+    targets = p.targets;
+    if (Number.isFinite(p.targets.cal) && p.targets.cal > 0) targetsSet = true;
+  }
+}
+
+/* The one that does cost a read, for the one moment that is worth it: a session
+   has just been written, moved or deleted, and the Train card is sitting under
+   the button that did it.
+
+   A failure here KEEPS the last good snapshot rather than flipping to
+   'unknown'. That is the difference between init and refresh: at init a failed
+   read means Coach has never seen the log and must say so; here it has, this
+   session, successfully, and replacing a real finding with "can't read your
+   training log" on one flaky request would be the worse answer. */
+let refreshing = null;
+export function refreshCoachSessions() {
+  // Coalesced. Moving a session between months writes two whole months and
+  // would otherwise ask for the tree twice for one change.
+  if (!refreshing) refreshing = reread().finally(() => { refreshing = null; });
+  return refreshing;
+}
+
+async function reread() {
+  try {
+    const tree = await readExact('workouts');
+    sessions = flatten(tree);
+    logState = sessions.length ? 'readable' : 'empty';
+  } catch {}
+  return ready;
+}
+
 export function coachSettings() { return settings; }
 
 /* Whether the toggles on screen are the account's real stored state or this

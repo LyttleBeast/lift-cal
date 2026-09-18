@@ -515,6 +515,41 @@ inside it. A step term would count the same walking twice.
 
 ## `settings/steps` → `{ goal }`
 
+## `settings/coach` → Coach's own state
+
+```json
+{ "v": 1,
+  "mute":    { "fuel": true },
+  "answers": { "q_goal_direction": "down" },
+  "asked":   { "q_goal_direction": 1789307130123 },
+  "lastGreet": "g_since_group" }
+```
+
+Everything Coach remembers, and it is deliberately almost nothing: the user's
+data is the only state Coach has. `mute` holds the categories switched off under
+Settings → Coach, **absent means on**, so a fresh account has every switch on
+without a byte having been written. `answers` holds the replies to Coach's own
+questions — one exists, `q_goal_direction`, and it exists only because
+`weight_rate_vs_goal` is silent without a direction and the data genuinely
+cannot supply one. `asked` stamps when each was put, so nothing is asked twice.
+`lastGreet` is the rotating line Coach opened with last time, and it is there to
+stop the same one running twice.
+
+**Why it is here and not at `users/{uid}/coach`.** That path has no grant in the
+published rules, and a write to an ungranted section fails SILENTLY — no error,
+no red bar, the data simply never arrives. `settings` has a section-level
+`.write`, and the `$other: { ".validate": false }` deny is nested inside `units`
+rather than on `settings` itself, so any other child of `settings` lands. **This
+node needed no rules change and must not be given one that adds an `$other` deny
+to `settings`**, which would take it back out again.
+
+`coach.js` `normSettings()` is the only reader of the shape and it fails safe on
+every junk value: an unknown category, an answer that is not one of the
+question's own options, a mute on a category nobody may switch off, a
+half-written node from an offline queue. It is a small object written WHOLE —
+never a container, never `mergeUpdate()` (which swallows PERMISSION_DENIED),
+and module state is assigned only after `write()` resolves.
+
 ## `settings/units` → `{ weight: 'lb'|'kg', height: 'in'|'cm' }`
 
 Display and input only. **Pounds and inches are the single stored unit and
@@ -605,7 +640,11 @@ optional. Any food already in the log produces this exact shape — tap it →
    that builds the string or reads the box, never before and never twice.
    `tools-check/units.mjs` scans every call site for the double conversion.
 6. **New top-level section under `users/{uid}` → add it to the rules**, or it
-   will fail to save with no error the user can see. The same is true of a new
+   will fail to save with no error the user can see. A new child of an ALREADY
+   GRANTED section is a different question and usually needs nothing —
+   `settings/coach` is the worked example, and the thing to check is whether
+   the section carries an `$other` deny at its own level rather than nested
+   inside one of its children. The same is true of a new
    tree at the root — `usage` is the most recent one. And editing
    `database.rules.json` publishes nothing: it is a copy, and somebody has to
    paste it into the Firebase console before a single one of those writes

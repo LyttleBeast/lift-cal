@@ -66,6 +66,12 @@ const RATE_BAND_LB = 1.5;
 const OVERDUE_MARGIN_DAYS = 2;
 const OVERDUE_RATIO = 1.4;
 
+/* How long a question that was put and not answered stays put. Somebody who
+   opened the sheet, saw the question and closed it has not refused it — they
+   were looking for something else — so asking again later is right and asking
+   again tomorrow is nagging. A week. */
+const ASK_COOLDOWN_DAYS = 7;
+
 /* ================================================================
    0.  DATES
    ================================================================
@@ -909,11 +915,18 @@ export const FACTS = Object.freeze([
     because: () => 'the line Coach opened with last time'
   },
   {
+    /* A question already put and not yet answered. It expires: see
+       ASK_COOLDOWN_DAYS. Null is the common case and it is what lets a new
+       question be asked at all. */
     id: 'coach.openQuestion', unit: null, requires: [],
     compute: d => {
       const s = d.input.settings || {};
       const asked = s.asked || {}, answers = s.answers || {};
-      const live = QUESTIONS.filter(q => asked[q.id] && answers[q.id] == null);
+      const live = QUESTIONS.filter(q => {
+        const at = asked[q.id];
+        if (!Number.isFinite(at) || answers[q.id] != null) return false;
+        return daysBetween(at, d.now) < ASK_COOLDOWN_DAYS;
+      });
       return live.length ? live[0].id : null;
     },
     because: () => 'Coach already has a question waiting'

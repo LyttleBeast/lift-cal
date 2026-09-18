@@ -22,7 +22,7 @@
 import { el, sheet, noteEl, segmented, toast } from './ui.js';
 import { coach, CATEGORIES, QUESTIONS } from './coach.js';
 import { coachInput, coachReady, rememberGreeting, coachSettings, coachSettingsKnown,
-         setCategoryMuted, answerQuestion, liveSessionOnDevice } from './coach-data.js';
+         setCategoryMuted, answerQuestion, markAsked, liveSessionOnDevice } from './coach-data.js';
 
 /* The two marks. Inline rather than in a sprite because there are two of them
    and the app has no icon system — the gear on You is written out the same way. */
@@ -250,6 +250,12 @@ export function openCoachSheet(opts = {}) {
      what a registered rule does. Answering writes it and the sheet closes on
      the next open with the rule live. */
   if (c.question) {
+    /* Stamped as ASKED the moment it is on screen, not when it is answered.
+       Somebody who opened this sheet looking for something else and closed it
+       has not refused the question — so it goes quiet for a week and comes back
+       rather than appearing every single time the sheet opens, which is the
+       difference between being asked and being nagged. */
+    markAsked(c.question.id).catch(() => {});
     const q = bubble('coach ask', c.question.text,
       'Coach asks at most one thing, and only something that changes what it can tell you.');
     const row = el('div', 'coach-chips');

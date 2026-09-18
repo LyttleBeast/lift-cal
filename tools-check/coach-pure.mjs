@@ -263,6 +263,34 @@ section('E. what the native port copies, and what it rewrites');
         !/mergeUpdate/.test(D));
   check('and it writes settings/coach, never a new top-level node',
         /write\('settings\/coach'/.test(D) && !/write\('coach/.test(D));
+
+  /* The snapshot is gathered once per app open, so staying current is its own
+     problem. The two cheap hooks take what a caller has ALREADY read — zero
+     extra requests — and the expensive one exists for the single moment that
+     is worth paying for. */
+  check('the two zero-cost hooks exist, so a finished workout does not leave the card a session behind',
+        /export function noteCoachSessions/.test(D) && /export function noteCoachData/.test(D));
+  check('noteCoachSessions refuses an empty list — allSessions() answers [] on a FAILED read too, ' +
+        'and Coach must never learn "empty" from a path that cannot tell it from "unreachable"',
+        /if \(!Array\.isArray\(list\) \|\| !list\.length\) return false;/.test(D));
+  check('noteCoachData only ever moves targetsSet toward true, which is the only direction read() can state honestly',
+        /targetsSet = true;/.test(D) && !/targetsSet = false/.test(D.split('noteCoachData')[1] || ''));
+  check('a refresh that FAILS keeps the last good snapshot rather than flipping to unreadable',
+        /const tree = await readExact\('workouts'\);[\s\S]{0,200}\} catch \{\}/.test(D));
+  check('and the expensive refresh is coalesced, so moving a session between months reads the tree once',
+        /if \(!refreshing\) refreshing = reread\(\)/.test(D));
+
+  // The two tabs that draw the card are the ones that feed it.
+  const Y = src('you.js'), W = src('workout.js');
+  check('you.js hands Coach the sessions it just had out of analytics',
+        /noteCoachSessions\(next\)/.test(Y));
+  check('and the four small nodes it just re-read',
+        /noteCoachData\(\{ entries, targets, summaries, stepDays \}\)/.test(Y));
+  check('workout.js tells Coach when a session lands, is edited or is deleted',
+        (W.match(/refreshCoachSessions\(\)/g) || []).length >= 2);
+  check('and neither of them reads anything for Coach on a paint',
+        !/initCoachData\(\)/.test(Y.split('function build()')[1] || '') &&
+        !/coachInput\(/.test(Y) && !/coachInput\(/.test(W));
 }
 
 /* ---------- report ---------- */

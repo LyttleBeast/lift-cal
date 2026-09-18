@@ -21,7 +21,7 @@ import { openStats, isStatsOpen, renderStats, refresh as refreshStats } from './
 import { initPicker, allExercises, openPicker, openExerciseManager } from './picker.js';
 import { initRoutines, openRoutines, saveSessionAsRoutine } from './routines.js';
 import { coachCard } from './coach-ui.js';
-import { initCoachData } from './coach-data.js';
+import { initCoachData, refreshCoachSessions } from './coach-data.js';
 import { bump } from './usage.js';
 import { wOut, wIn, fmtSetW, fmtSetLoad, fmtVol, volOut, unitW, limW } from './units.js';
 
@@ -187,6 +187,10 @@ async function saveMonth(mk) {
   }
   await write(`workouts/${mk}`, monthCache[mk] || {});
   invalidate();
+  // A session was edited, moved or deleted, and Coach's card is on this screen
+  // quoting the log that just changed. Its snapshot is gathered once per app
+  // open, so without this it keeps the old answer until the app is reopened.
+  refreshCoachSessions().then(() => { if (!session && !summary) render(); }).catch(() => {});
 }
 
 function refuseUnread(mk) {
@@ -1465,6 +1469,11 @@ async function runFinish() {
   monthCache[mk][dd] = monthCache[mk][dd] || {};
   monthCache[mk][dd][session.id] = record;
   invalidate();
+  /* The one moment a whole-tree re-read is worth paying for: a session has just
+     landed, and the card sitting directly above Start workout is quoting the
+     log it landed in. Unawaited — the recap is what the person is looking at
+     and nothing about a card may stand between them and it. */
+  refreshCoachSessions().catch(() => {});
 
 
   summary = { record, prs, firsts, milestones, prior: priorSessions };

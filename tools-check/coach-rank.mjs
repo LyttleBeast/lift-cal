@@ -385,6 +385,32 @@ section('H. at most one question, and only one that changes a rule');
   check('a question already asked and not answered is not asked again',
         waiting.question === null);
 
+  /* And it does not go away for good either. Somebody who opened the sheet
+     looking for something else and closed it has not refused the question, so
+     it goes quiet and comes back — the difference between being asked and being
+     nagged is entirely in this gap. */
+  const cold = on({
+    targets: { cal: 2300, p: 210, f: 74 },
+    weight: { latestLb: 186.4, latestAt: NOW - DAY, rateWk: -0.8, rateDays: 21, goalDir: null, goalRateWk: null },
+    settings: { ...BASE.settings, asked: { q_goal_direction: NOW - 30 * DAY } }
+  });
+  check('but one asked long ago and still unanswered comes back',
+        cold.question && cold.question.id === 'q_goal_direction', cold.question && cold.question.id);
+  const answeredLongAgo = on({
+    targets: { cal: 2300, p: 210, f: 74 },
+    weight: { latestLb: 186.4, latestAt: NOW - DAY, rateWk: -0.8, rateDays: 21, goalDir: null, goalRateWk: null },
+    settings: { ...BASE.settings, asked: { q_goal_direction: NOW - 30 * DAY },
+                answers: { q_goal_direction: 'hold' } }
+  });
+  check('and one that WAS answered never comes back, however long ago',
+        answeredLongAgo.question === null);
+  check('a junk timestamp on `asked` is not treated as a live question',
+        on({
+          targets: { cal: 2300, p: 210, f: 74 },
+          weight: { latestLb: 186.4, latestAt: NOW - DAY, rateWk: -0.8, rateDays: 21, goalDir: null, goalRateWk: null },
+          settings: { ...BASE.settings, asked: { q_goal_direction: 'yesterday' } }
+        }).question !== null);
+
   const muted = on({
     targets: { cal: 2300, p: 210, f: 74 },
     weight: { latestLb: 186.4, latestAt: NOW - DAY, rateWk: -0.8, rateDays: 21, goalDir: null, goalRateWk: null },

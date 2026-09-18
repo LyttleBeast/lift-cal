@@ -77,7 +77,7 @@ import { openInstallGuide } from './onboarding.js';
 import { openSettings, openGoal, openDailyTargets, pickProfilePhoto } from './settings.js';
 import { openAdmin, isAdminOpen } from './admin.js';
 import { coachCard } from './coach-ui.js';
-import { initCoachData } from './coach-data.js';
+import { initCoachData, noteCoachSessions, noteCoachData } from './coach-data.js';
 import { wOut, fmtW, fmtSetLoad, labelW, unitW, fmtRate, labelRate, fmtVol,
          kcalPerUnit } from './units.js';
 
@@ -226,6 +226,11 @@ function refreshSessions() {
       if (fp === sessionsFp) return;
       sessionsFp = fp;
       sessions = next;
+      // Coach's snapshot is gathered once per app open and this app can outlive
+      // a finished workout. Handing over the list this screen just had out of
+      // analytics costs nothing and is what stops the card saying "16 days
+      // since chest" to somebody who trained chest an hour ago.
+      noteCoachSessions(next);
       render();
     })
     .catch(() => { refetching = false; });
@@ -278,6 +283,11 @@ function refreshLogged() {
       if (ss) stepSet  = ss;
       if (ws) waterSet = ws;
       try { await refreshModel(entries); } catch {}
+      // The same bargain as the sessions above: these four are the nodes Coach
+      // quotes and this screen has just re-read all of them, so Coach's numbers
+      // stay exactly as fresh as the ones drawn underneath it rather than being
+      // a second opinion about the same data.
+      noteCoachData({ entries, targets, summaries, stepDays });
       render();
     })
     .catch(() => { reloading = false; });

@@ -9,6 +9,7 @@ steps, and no account can see or touch another's. New people get in with an
 invite code, or by asking the owner and being approved. See *Access* below.
 
 - **You** — the tab the app opens on. A read-only summary of the other four and of how their numbers pull on each other: this week against the last, intake against targets, the scale against maintenance, printed as arithmetic rather than asserted. Nothing on it writes anything. The gear in its header is where every setting in the app now lives.
+- **Coach** — a card at the top of You and above Start workout on Train that says one true thing about your own log and shows the arithmetic under it: which muscle group is furthest past its own usual gap, which of your recurring sessions has waited longest, which lift has stopped moving, how this week's sets compare with your own trailing normal. No AI, no network, no per-use cost — it is arithmetic over the log, and a rule whose data is thin stays silent. Tap it for **COACH ME**, a sheet you can ask about Train, Fuel or Weight. Part of Pro; the readouts are free.
 - **Train** — full workout tracker: saved routines, plate-colored calendar, session timer, W/F/D set tags, 231-exercise library, last-time numbers, rest timer, per-side plate math, e1RM, swipe-to-delete sets, editable history, a post-workout recap with personal records, and a full statistics page.
 - **Fuel** — nutrition: **photograph a plate and Claude reads the macros off it**, or just describe what you ate. Plus macro targets, saved-food library, barcode scanning via Open Food Facts, manual entry, saved meals, one-tap portion multiplying, micronutrient floors, paste import.
 - **Weight** — body-weight log: 7-day moving average chart, weekly rate, a learned time-of-day curve, and a maintenance (TDEE) estimate built on normalised weigh-ins with a stated confidence interval.
@@ -94,6 +95,10 @@ node in the database. See *Access* below for what replaced them, and why.
 | `app.js` | Shell — sign-in/sign-up, access gate, boot order, tab router, service worker |
 | `you.js` | You tab — the screen the app opens on. Read-only; every number is re-derived |
 | `insights.js` | What Rack makes of the data — wins, slips, insights, the weekly review, the goal pace. Pure functions over what `you.js` loaded |
+| `coach.js` | **Coach's engine.** Facts, intents, responses, router — four tables and a sort. Pure: no clock, no DOM, no reads, no module state. Copied into the native tree verbatim |
+| `coach-tags.js` | Movement pattern, angle, load and side for every built-in exercise. A sidecar keyed on `exercises.js`'s ids, so a tagging mistake can never reach the picker. Pure; imports nothing |
+| `coach-data.js` | The impure half — the one file the native port rewrites. Reads once per app open and never on a paint |
+| `coach-ui.js` | Coach's card, the COACH ME sheet, and the Settings switches |
 | `settings.js` | The settings hub behind the You gear, and the profile editor |
 | `admin.js` | Owner-only panel — feature usage, the Accounts page, People & access |
 | `accounts.js` | Account types and what each one may do. Pure, and the single entitlement choke point — every limit and feature check goes through `capabilitiesFor()` |
@@ -131,7 +136,11 @@ node in the database. See *Access* below for what replaced them, and why.
 Import direction is strictly one-way, no cycles:
 
 ```
-app.js → you.js       → settings.js → food.js  water.js  steps.js  workout.js
+app.js → you.js       → coach-ui.js  → coach.js   → analytics.js ──→ ui.js
+                                    → coach-data.js → picker.js
+                                                    → tdee.js  insights.js
+                                                    → access.js → store.js
+                      → settings.js → food.js  water.js  steps.js  workout.js
                                     → picker.js  importer.js  ai.js
                                     → onboarding.js
                       → admin.js    → access.js ──────────────→ store.js
@@ -141,7 +150,8 @@ app.js → you.js       → settings.js → food.js  water.js  steps.js  workout
                       → tdee.js → weightmodel.js ───────────→ ui.js
                       → water.js
                       → onboarding.js
-      → workout.js    → stats.js ──→ analytics.js ─────────→ ui.js
+      → workout.js    → coach-ui.js (as above)
+                      → stats.js ──→ analytics.js ─────────→ ui.js
                       → picker.js ──────────────────────────→ ui.js
                       → blocks.js
                       → routines.js → picker.js
@@ -177,6 +187,20 @@ safe to import from anywhere: a module at the bottom of the graph can never
 close a loop, and `bump()` is one line at a call site that already has real work
 to do.
 
+`coach.js` is at the bottom of the graph with `units.js` and `blocks.js`: it
+imports `exercises.js`, `units.js` and the SESSION MATH from `analytics.js`
+(`e1rm`, `isWorking`, `mergeSessionExercises`, `exerciseIndex`) and nothing
+else — never `loadAll`/`allSessions`, which are that file's impure half. It
+holds no state and takes its clock as an argument, so two renders inside one
+app open cannot disagree about which greeting is showing.
+`tools-check/coach-pure.mjs` is the fence around all of that.
+
+`coach-data.js` is the only half that reads. It does the gathering once per app
+open and hands `coach.js` a plain object, which is what lets a card sit at the
+top of the busiest screen in the app without adding a single read per paint. It
+is also the one file the native port rewrites; `coach.js` is copied byte for
+byte.
+
 **`you.js` imports none of the four tab modules.** Every number on the opening
 screen is re-derived from `store.read()` — which answers out of the per-account
 localStorage mirror — and from the shared math in `tdee.js` and `analytics.js`.
@@ -188,6 +212,15 @@ initialised in. `initYou()` runs after all four and asks none of them anything.
 Where a number has to agree with a tab — maintenance, which Fuel also prints —
 both read the same precedence out of the same node rather than each deriving
 their own.
+
+Coach did not change that. Its card needs to know whether a workout is running,
+and `hasActiveSession()` is workout.js's module state — filled by
+`initWorkout()`, which app.js starts AFTER `initYou()`. So the You card asks the
+DEVICE instead (`activeSession` in localStorage, which is where a live session
+lives until it is saved), and the Train card passes workout.js's own answer in,
+because there that module is the authority. `coach-data.js` never imports
+`workout.js`, which is also what keeps the ring between a tab and the card it
+draws from ever closing.
 
 ---
 
@@ -354,6 +387,7 @@ the app. The card at the bottom of the Weight tab is gone.
 | **You** | Your details — name, sex, height, birth year — **Units** (Imperial / Metric), and which tab the app opens on |
 | **Fuel** | Daily targets · Water goal and sizes · AI estimator · Food memory · Paste food JSON |
 | **Train** | Default rest · Exercise library · Import workout history |
+| **Coach** | One switch per category of thing Coach may bring up, whatever it has been told, and a way into the COACH ME sheet |
 | **Steps** | Step goal |
 | **App** | Add to Home Screen · Replay the walkthrough · Sign out · Sign out and erase this device's copy |
 
@@ -391,6 +425,98 @@ And a permission refusal and an empty node arrive as the same `null`, so before
 drawing zeros the panel checks a read it is known to be allowed: if the access
 list came back and the usage tree did not, it says the rules have not been
 published yet rather than reporting that nobody uses the app.
+
+## Coach
+
+A card at the top of You, a tighter one above Start workout on Train, and a
+sheet behind both of them. Part of Pro — the readouts are free and the
+comparisons against your own history are what Pro adds; the lock in the card's
+corner says which.
+
+**There is no model behind it.** No network call, no API key, no per-use cost,
+nothing generated. Every sentence is arithmetic over this account's own log with
+the working attached underneath it, and every number in one is a number you
+could go and check on another tab. `coach.js` is four tables and a sort:
+
+```
+FACTS      named values, each carrying the short "because" it contributes to a
+           reason line, and how old the evidence behind it is
+INTENTS    the facts they need, a min-data gate, a condition, a band, a
+           severity, a category, and what they supersede
+RESPONSES  templates, filled from resolved facts, split from the rules so one
+           finding renders on a card, in a bubble, or later in a weekly review
+           without its condition being written twice
+ROUTER     a button id in, an answer out
+```
+
+### The house law
+
+**A wrong number is worse than no number.** A rule whose data is thin stays
+silent, a fact that cannot be computed honestly is absent rather than guessed,
+and *Nothing stands out today* is a thing Coach says out loud rather than a
+thing it fails to. `tools-check/coach-silence.mjs` drives every finding three
+times — on an empty account, on a thin one, and on one with enough behind it —
+because a rule that is silent on all three is broken rather than careful.
+
+Three related promises:
+
+- **Coach only ever compares you against a number you set, or against your own
+  trailing average.** Never a population norm, never a healthy range, never a
+  guideline. Where it quotes a comparison it names the denominator out loud:
+  *2 sessions in the last 7 days, against 3.5 a week across the four weeks
+  before.*
+- **A readout, not an instruction.** *Fat is 38% of your calories this week,
+  against the 30% your targets work out to* — never "eat less fat". It does not
+  do injuries or pain, and it says so if it is asked.
+- **Every sentence prints its weight through `units.js`**, and no sentence in it
+  names a rounding or a step size. "Round it up to the nearest 5" is a false
+  sentence on a metric account, and no conversion fixes that — only a different
+  phrasing does. `tools-check/coach-units.mjs` renders every sentence twice,
+  once imperial and once metric, and compares them.
+
+### What it can and cannot see
+
+The muscle-group vocabulary is `exercises.js`'s six — chest, back, legs,
+shoulders, arms, core — and that is a hard ceiling. There is no biceps/triceps
+split and no quads/hamstrings split, so *you're behind on chest* is computable
+and *you never train hamstrings* is not. `coach-tags.js` is the sidecar that
+will one day make movement pattern computable too; it is built and verified and
+nothing reads it yet.
+
+A **recurring session shape** is derived over the last 84 days: the set of
+primary groups in a session with two or more working sets, cardio excluded,
+clustered where two differ by at most one group, and called a shape at three
+sessions or more. It is named descriptively from the group labels — *your chest
+and shoulders day* — never in programme jargon Rack has no way to know applies.
+If one of your own saved routines covers exactly those groups, your name for it
+wins.
+
+Nothing derives from `session.groups` on the stored record: `workout.js` builds
+that array from sets filtered on `done`, not on `isWorking`, so it counts
+warm-ups. Every group Coach names is derived fresh from the sets.
+
+### Three states it will not be talked out of
+
+```
+the log could not be read  -> it says so, and nothing else answers at all
+the log is empty           -> it says what it needs, with no placeholder number
+a session is running       -> it points at Train and waits
+```
+
+The first of those is why `coach-data.js` reads `workouts` with `readExact()`
+rather than through `analytics.allSessions()`: that path resolves to `[]` when
+the read FAILS, so an unreadable log and a brand-new account come back as the
+same answer, and one of the two cards would be a lie.
+
+### Where its settings live
+
+`settings/coach`, a small object written whole — **not** a new top-level node
+under `users/{uid}`, which has no grant in the published rules and would fail
+silently. It needs no rules change: `settings` carries a section-level `.write`
+and the `$other` deny is nested inside `units`, not on `settings` itself. See
+AGENTS.md.
+
+---
 
 ## Train details
 

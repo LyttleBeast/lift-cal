@@ -6,8 +6,8 @@ a record of eight shipped features with a handful of live items buried in it.
 Two things this file is not. It is not a design document — where a shape was
 already decided, the decision stays where it was written and this only points at
 it. And it is not a port brief: `NEXT-NATIVE.md`, `NEXT-NATIVE-UNITS.md`,
-`NEXT-NATIVE-V40.md` and `NEXT-NATIVE-V41.md` are the instructions for copying
-work into `~/dev/rack-mobile`, and they stay. What is below is the list of
+`NEXT-NATIVE-V40.md`, `NEXT-NATIVE-V41.md` and `NEXT-NATIVE-V42.md` are the
+instructions for copying work into `~/dev/rack-mobile`, and they stay. What is below is the list of
 things nobody has done yet.
 
 Read [AGENTS.md](AGENTS.md) for what exists and [CLAUDE.md](CLAUDE.md) for how
@@ -31,6 +31,16 @@ That tree moves on its own, so verify before acting on one.
 - **The PROPOSED rules are still missing `settings/units`** —
   `NEXT-NATIVE-UNITS.md` §12, zero occurrences at `85be276`. The first units
   write after that publish fails silently without it.
+- **The PROPOSED rules need `settings/coach`.** v42 added it, and it needs
+  nothing from the PUBLISHED rules — `settings` carries a section-level
+  `.write` and the `$other: { ".validate": false }` deny is nested inside
+  `units` rather than on `settings` itself, so any other child of `settings`
+  lands. `database.rules.json` is unchanged and must stay that way. But
+  `web-patches/database.rules.PROPOSED.json` in the native tree is the one that
+  validates node by node, and if it grows an `$other` deny at the `settings`
+  level — or simply never learns about `coach` — the first Coach write after
+  that publish fails silently and every switch in Settings → Coach goes back to
+  its default on the next open. Shape is in AGENTS.md.
 - **The stricter `.validate` rules themselves.** They were the reason v40's
   Phase 3 existed: until a refused write said so on screen and kept its payload,
   publishing them turned a too-strict rule into silent data loss. That half is
@@ -164,6 +174,92 @@ Carried from `NEXT-NATIVE.md` §7 so it survives that file. Do not "fix" these:
   format, so its weights *are* pounds), and the half-a-fluid-ounce-per-pound
   water rule (`onboarding.js:135`), which has no metric form. The bodyweight that
   last one is quoted against does convert.
+
+---
+
+## What v42 left open in its own work
+
+Coach is deterministic, reads a great deal, and writes almost nothing, so most
+of what it turned up is in other files. None of it was touched — a run that
+wanders into a neighbouring bug has scope-crept — and all of it is here.
+
+### Found while building Coach, deliberately not fixed
+
+- **`insights.js` `rateVerdict()` has no magnitude guard.** It returns `'good'`
+  for ANY rate in the goal's direction, unbounded, and `LIMITS.rateWk` allows
+  ±5 a week — so an account shedding weight very fast gets a green number and an
+  approving sentence today. Coach does not reproduce it: its weight-rate finding
+  bands the magnitude and, past the band, reports the figure and declines to
+  call it anything. Changing `rateVerdict` itself is Micah's call and a separate
+  change, because the You tab's colours and the Weight tab's both hang off it.
+- **`insights.js:284` is a physiological generalisation, not a comparison to the
+  reader's own data** — *"past about 1.5 lb a week more of it is muscle"*. Coach
+  says nothing like it and nothing new extends the pattern. The shipped copy is
+  untouched.
+- **`insights.js:541-551`, the weekly-review takeaways, are openly prescriptive**
+  — *"Get protein to N g…"*, *"Bring the daily average back under N"*. Coach is a
+  readout and never phrases this way. Again: shipped copy untouched, pattern not
+  extended.
+- **`store.js` `read()` folds "absent" and "unreachable" into one fallback.**
+  Right for every screen that just wants a number; wrong for the one question
+  Coach has to answer before it says anything, which is why `coach-data.js` uses
+  `readExact()` for `workouts` and for `food/targets`. The cost is one extra
+  whole-tree GET at boot — see below.
+- **`store.js` `mergeUpdate()` swallows every error including
+  PERMISSION_DENIED.** Nothing in Coach goes through it, by rule and by
+  verifier.
+- **`analytics.js` `exerciseIndex()` gives an exercise logged with warm-ups only
+  an entry with `sessions: 0` and every best at 0.** Coach skips those rather
+  than reporting a lift whose record is zero pounds. Do not change
+  `analytics.js` for this — several screens depend on the current shape.
+- **`record.groups` counts warm-ups.** `workout.js` builds it from
+  `collectFrom` output filtered on `s.done && s.r !== ''`, not on `isWorking()`,
+  so a session of nothing but warm-up bench claims chest. Coach never reads it;
+  every group it names is derived fresh from the sets. The calendar plate colours
+  still read it, which is where a fix would have to start.
+- **A second session on the same day is invisible to the live-session facts.**
+  `activeSession` in localStorage holds one, and finishing one and starting
+  another inside a day is not something Coach can see the shape of. Ship three.
+- **The You tab issues around seven live GETs per render.** Coach adds none per
+  paint — `coach-data.js` gathers once per app open — but the underlying number
+  is unchanged and is the thing worth attacking before anything else is added to
+  that screen.
+- **Water is a whole domain Coach does not cover.** Its own node, its own unit,
+  its own card. Deliberate, and out of scope for all three Coach ships until
+  somebody asks.
+
+### v42's own loose ends
+
+- **`coach-data.js` reads `workouts` a second time at boot.** It has to:
+  `allSessions()` resolves `[]` on a FAILED read, so an unreadable log and a
+  brand-new account are the same answer through that path, and telling those two
+  apart is the whole of `log.confidence`. The honest fix is a way to hand
+  `analytics.js` a tree it has already been given — `loadAll()` would take one —
+  but that is an edit to the file every training screen depends on and was not
+  worth making blind. Until then, one extra whole-tree GET per app open.
+- **`coach-tags.js` is inert.** 231 exercises tagged on four closed dimensions,
+  fully verified, and nothing reads it. Ship two — the workout builder — is what
+  consumes it, and it was built now so that ship starts without a preparation
+  run.
+- **`log.confidence === 'empty'` does not cross-check the `history` index.** The
+  brief asked for `readExact` resolving null/`{}` **and** an empty history
+  index; only the first half is implemented, because the second costs a whole
+  extra node read and cannot change an outcome — with no sessions, every rule
+  downstream is gated silent either way, and the only difference is which of two
+  states gets named.
+- **Coach keeps no history of its own output.** Deliberate, and it means the
+  sheet cannot say "as I mentioned yesterday" and never will. The log is the
+  only state.
+- **No text input.** The router is keyed on ids and is exercised by every button
+  in the sheet, so ship three's box is a matcher in front of it. `ROUTE_IDS` is
+  exported for exactly that. The injury refusal (`coach_not_injuries`) is
+  registered and reachable by id today, unreachable by any button, and waiting
+  for the box.
+- **The You / Train dedupe is per `coach()` call, not per session.** Both cards
+  come out of one deterministic ranking, so the two tabs agree whichever order
+  they are opened in — but a finding the You card showed this morning can be the
+  Train card's this afternoon if the ranking moved. That is right; it is noted
+  because it looks like a bug the first time it happens.
 
 ---
 
