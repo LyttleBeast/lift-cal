@@ -615,6 +615,12 @@ export const FACTS = Object.freeze([
 
   /* ---------- lifts ---------- */
   {
+    /* A READOUT, NOT A VERDICT. What this fact holds is a figure and the day it
+       was last matched — never a characterisation of the person who lifted it.
+       `matchedDaysAgo` scans with `>=` on purpose: it wants the LAST session
+       that hit the figure, not the first one that set it, because "last
+       matched" is the honest thing to print and "set" would name a date the
+       lifter has equalled since. */
     id: 'lift.stalled', unit: 'lb', requires: [],
     compute: d => {
       const idx = d.index();
@@ -630,17 +636,20 @@ export const FACTS = Object.freeze([
         const bestRecent = Math.max(...recent.map(r => r.e1rm));
         const bestPrior  = Math.max(...prior.map(r => r.e1rm));
         if (bestRecent > bestPrior) return;
+        let matched = null;
+        e.entries.forEach(r => { if (r.e1rm >= bestPrior) matched = r; });
         const cand = {
           exId: id, name: e.name, group: e.group,
           best: bestPrior, sessions: recent.length,
           daysAgo: daysBetween(last.startedAt, d.now),
+          matchedDaysAgo: matched ? daysBetween(matched.startedAt, d.now) : null,
           bestDate: e.bestE1rmDate, entries: e.entries.length
         };
         if (!best || cand.entries > best.entries) best = cand;
       });
       return best;
     },
-    because: v => 'across the last ' + plural(v.sessions, 'session') + ' of it, no working set has beaten that',
+    because: v => 'the ' + plural(v.sessions, 'session') + ' of it since then are logged at or below that figure',
     age: v => v.daysAgo
   },
   {
@@ -907,12 +916,24 @@ export const FACTS = Object.freeze([
 
   /* ---------- coach's own state ---------- */
   {
-    id: 'coach.lastGreet', unit: null, requires: [],
+    /* The last few lines Coach opened with, newest first. It arrives on the
+       INPUT from device storage rather than out of settings/coach: the write
+       that records it happens as the app opens and the app is very often
+       closed a second or two later, which is precisely the pattern an async
+       database write does not survive. A per-device display nicety is worth
+       neither the round trip nor the unreliability. The engine stays pure and
+       does not care which side of that line the value came from.
+
+       Three rather than one, because the eligible pool changes size between
+       opens — a gate that passed yesterday may not today — and a counter
+       modulo a pool that shrank can land back on the line before it. */
+    id: 'coach.recentGreets', unit: null, requires: [],
     compute: d => {
-      const s = d.input.settings || {};
-      return typeof s.lastGreet === 'string' ? s.lastGreet : null;
+      const list = d.input.recentGreets;
+      if (!Array.isArray(list)) return [];
+      return list.filter(x => typeof x === 'string' && x).slice(0, 3);
     },
-    because: () => 'the line Coach opened with last time'
+    because: () => 'the lines Coach opened with last time'
   },
   {
     /* A question already put and not yet answered. It expires: see
@@ -1106,8 +1127,14 @@ export const INTENTS = Object.freeze([
 
   /* ---------- band 4: progression and volume ---------- */
   {
+    /* ANSWER-ONLY, AND THAT IS THE POINT OF IT. A reading about a lift that has
+       not gone up is a fair thing to hand somebody who asked "anything
+       stalled?" and the wrong thing to put on the screen the app opens to. It
+       shipped on both cards and read as a verdict delivered unprompted; the
+       sentence is a readout now (§RESPONSES) and the surface is the sheet.
+       The intent itself stays — the question it answers is a good one. */
     id: 'stalled_lift', kind: 'finding', priorityBand: 4, severity: 55,
-    category: 'progression', tier: 'pro', surfaces: ['you', 'train', 'sheet'],
+    category: 'progression', tier: 'pro', surfaces: ['sheet'],
     factsNeeded: ['lift.stalled'], supersedes: ['pr_proximity'],
     minData: d => d.f('session.windowCount') >= 4,
     when: d => d.f('lift.stalled') != null,
@@ -1242,7 +1269,7 @@ export const INTENTS = Object.freeze([
   {
     id: 'greet_select', kind: 'selector', priorityBand: 5, severity: 1,
     category: 'core', tier: 'free', surfaces: [],
-    factsNeeded: ['coach.lastGreet'], supersedes: [],
+    factsNeeded: ['coach.recentGreets'], supersedes: [],
     minData: () => true, when: () => false,
     response: 'resp_greet'
   },
@@ -1376,10 +1403,33 @@ export const RESPONSES = Object.freeze({
       return plural(v.days, 'day') + ' since your last working set for ' + groupLabel(v.group) + '.';
     }
   },
+  /* The sentence this ship rewrote. It shipped as "X hasn't moved: your best
+     estimated max there is still N" — which characterises the lifter rather
+     than the log, and did it unprompted on the screen the app opens to. Both
+     halves are fixed: the surface is the sheet (see stalled_lift) and the
+     sentence is a figure and a date.
+
+     The direction branch is the third half of the same defect. A flat
+     estimated max on an account whose stated goal is DOWN is not a stall, it
+     is a lift held through a deficit, and Coach reading it the other way is a
+     wrong number about the most sensitive thing it looks at. `weight.goalDir`
+     is the account's own stated direction and nothing else (§FACTS); when
+     there is no direction to read against, the plain figure stands on its own. */
   resp_stalled: {
     text: (d, u) => {
       const v = d.f('lift.stalled');
-      return v.name + ' hasn’t moved: your best estimated max there is still ' + labelW(v.best, u) + '.';
+      const when = v.matchedDaysAgo == null ? null
+        : v.matchedDaysAgo === 0 ? 'today'
+        : v.matchedDaysAgo === 1 ? 'yesterday'
+        : plural(v.matchedDaysAgo, 'day') + ' ago';
+      const head = 'Your best estimated max on ' + v.name + ' is ' + labelW(v.best, u) +
+                   (when ? ', last matched ' + when : '') + '.';
+      // The direction is the account's stated goal; the rate is what actually
+      // happened. Both, or neither — a goal nobody has moved toward is not a
+      // thing to mention, and a rate with no stated direction is not Coach's
+      // to characterise.
+      const down = d.f('weight.goalDir') === -1 && d.f('weight.rateWk') != null && d.f('weight.rateWk') < 0;
+      return down ? head + ' Your body weight has been coming down over that stretch.' : head;
     }
   },
   resp_recent_pr: {
@@ -1530,9 +1580,13 @@ export const RESPONSES = Object.freeze({
    finding's category is dropped too: a greeting that says the same thing as the
    line beneath it makes the card stutter.
 
-   Rotation is seeded on `openMs`, the moment the app opened, NOT on `now` —
-   the You tab repaints several times as its reads land, and a greeting keyed on
-   the clock would change under the reader's thumb. */
+   THE ROTATION IS A COUNTER, NOT A CLOCK. It used to be the wall clock modulo
+   the pool size, which is a hash of the moment somebody happened to open the
+   app rather than a rotation — three opens in a row could and did produce the
+   same line. `opens` is a per-device integer that goes up by one each time the
+   app opens, so consecutive opens land on consecutive entries and cannot
+   repeat. It is an input for the same reason `now` is: this file has no clock
+   and no storage of its own. */
 export const GREETINGS = Object.freeze([
   // generic
   { id: 'g_hello',   kind: 'generic', tone: 'warm',    topic: null, text: () => 'Good to see you.' },
@@ -1604,10 +1658,19 @@ export const GREETINGS = Object.freeze([
   }
 ]);
 
-/* The one place a greeting is chosen. Deterministic: same log, same open, same
-   line, on both of somebody's devices. */
+/* The one place a greeting is chosen. Deterministic: same log, same open
+   count, same line.
+
+   The order of what is left is load-bearing. Data-aware lines come first and
+   the generics after, and the counter rotates across the WHOLE ordered pool
+   rather than across the data lines alone — which is what the first version
+   did, and it collapsed the pool to a single item on any open where exactly
+   one data line passed its gate. `n % 1` is always 0, so that card said the
+   same thing every time. A data line is still usually what comes up, because
+   there are more of them and they sit at the front of the walk, but "usually"
+   is the promise and "always" was the bug. */
 function pickGreeting(d, finding) {
-  const last = d.f('coach.lastGreet');
+  const recent = d.f('coach.recentGreets') || [];
   const caution = finding && finding.tone === 'caution';
   const topic = finding ? finding.category : null;
 
@@ -1618,24 +1681,38 @@ function pickGreeting(d, finding) {
     try { return !!g.gate(d); } catch { return false; }
   });
 
-  const fresh = ok.filter(g => g.id !== last);
-  const pool  = fresh.length ? fresh : ok;
-  const data  = pool.filter(g => g.kind === 'data');
-  const from  = data.length ? data : pool;
-  if (!from.length) return { id: 'g_look', text: 'Here’s where you stand.' };
+  const ordered = ok.filter(g => g.kind === 'data').concat(ok.filter(g => g.kind !== 'data'));
+  if (!ordered.length) return { id: 'g_look', text: 'Here’s where you stand.' };
 
-  const g = from[rotate(d.input.openMs, from.length)];
+  /* The counter walks the pool; the recent list only ever pushes it forward.
+     Both are needed. The counter is what makes consecutive opens different;
+     the recent list is what covers the case the counter cannot, which is a
+     pool that changed size between two opens because a gate stopped passing.
+     A pool whose every entry is recent falls through to the counter's own
+     index rather than to nothing — three lines is a small pool and silence is
+     not an improvement on a repeat. */
+  const start = rotate(d.input.opens, ordered.length);
+  let i = start;
+  for (let step = 0; step < ordered.length; step++) {
+    const cand = ordered[(start + step) % ordered.length];
+    if (!recent.includes(cand.id)) { i = (start + step) % ordered.length; break; }
+  }
+
+  const g = ordered[i];
   let text = '';
   try { text = g.text(d); } catch { text = ''; }
   return { id: g.id, text: text || 'Here’s where you stand.' };
 }
 
-/* A small integer from the moment the app opened. Not Math.random(): this file
-   is pure, and two devices reading one account have to agree. */
-function rotate(seed, n) {
+/* The rotation, and the whole of it: a per-device open counter modulo the pool
+   size. Not Math.random() — this file is pure and the same input has to give
+   the same sentence twice. Not the clock either, which is what it used to be:
+   `Math.floor(Date.now() / 1000) % n` is a hash of the second somebody opened
+   the app, and a hash repeats freely. A counter cannot. */
+function rotate(counter, n) {
   if (!n) return 0;
-  const s = Number.isFinite(seed) ? Math.abs(Math.floor(seed / 1000)) : 0;
-  return s % n;
+  const c = Number.isFinite(counter) ? Math.floor(counter) : 0;
+  return ((c % n) + n) % n;
 }
 
 /* ================================================================
@@ -1896,7 +1973,7 @@ function leadQuestion(d, finding) {
   // Offer something the card is not already showing.
   const other = finding ? topics.filter(t => t.category !== finding.category) : topics;
   const pool = other.length ? other : topics;
-  return pool[rotate(d.input.openMs, pool.length)];
+  return pool[rotate(d.input.opens, pool.length)];
 }
 
 /* Coach's own question, if it may ask one at all. Three gates, and all three
@@ -2052,10 +2129,14 @@ export function normSettings(v) {
   const asked = {};
   const rawAsk = o.asked && typeof o.asked === 'object' ? o.asked : {};
   QUESTIONS.forEach(q => { if (Number.isFinite(rawAsk[q.id])) asked[q.id] = rawAsk[q.id]; });
+  /* No `lastGreet`. It used to live here and it was the wrong node for it: the
+     write fires as the app opens and the app is routinely closed a second or
+     two later, so the one usage pattern that needed the value remembered was
+     the one that lost it. It is device storage now — see coach-data.js — and a
+     stored key left over from v42 is simply dropped on the way through here. */
   return {
     v: COACH_SETTINGS_VERSION,
-    mute, answers, asked,
-    lastGreet: typeof o.lastGreet === 'string' ? o.lastGreet : ''
+    mute, answers, asked
   };
 }
 

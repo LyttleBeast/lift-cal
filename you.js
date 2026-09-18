@@ -137,6 +137,15 @@ export async function initYou(ctx = {}) {
   // than a separate thing to keep in sync.
   render();
 
+  /* Fired here rather than from loadHeavy() at the bottom of this function,
+     and that is the whole of what was wrong with Coach's boot time. It used to
+     start after this screen's eight-node wave AND after the weight model had
+     refitted, so the card's own reads did not leave the device until two
+     awaited stages had finished — and then took four more waves of their own.
+     It is idempotent, it is not awaited, and it repaints itself when it lands,
+     so it belongs in front of everything rather than behind it. */
+  initCoachData().then(render).catch(() => render());
+
   const [p, t, ds, we, ss, sd, ws, ob] = await Promise.all([
     read('profile',           null),
     read('food/targets',      null),
@@ -174,14 +183,12 @@ export async function initYou(ctx = {}) {
    workouts tree, and one node per day of water. Each re-renders when it lands,
    and each fails to an empty result rather than to a missing card. */
 function loadHeavy() {
-  /* Coach's own snapshot. One pass, off the critical path with the other two,
-     and it repaints when it lands rather than blocking the screen on it — the
-     card draws a skeleton until then and says so. Everything it needs is read
-     HERE and never on a paint: this screen already issues around seven live
-     GETs per render and a card that read anything would multiply that by every
-     unawaited load that repaints it. */
-  initCoachData().then(render).catch(() => render());
-
+  /* Coach's snapshot is NOT started here — initYou() fires it before its own
+     first await, which is a stage and a half earlier. What is true either way
+     is that everything Coach needs is read once and never on a paint: this
+     screen already issues around seven live GETs per render and a card that
+     read anything would multiply that by every unawaited load that repaints
+     it. */
   allSessions()
     .then(list => { sessions = list || []; sessionsFp = fpOf(sessions); render(); })
     .catch(() => { sessions = []; sessionsFp = fpOf(sessions); render(); });

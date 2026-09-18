@@ -21,7 +21,7 @@
 
 import { el, sheet, noteEl, segmented, toast } from './ui.js';
 import { coach, CATEGORIES, QUESTIONS } from './coach.js';
-import { coachInput, coachReady, rememberGreeting, coachSettings, coachSettingsKnown,
+import { coachInput, coachReady, coachLogKnown, rememberGreeting, coachSettings, coachSettingsKnown,
          setCategoryMuted, answerQuestion, markAsked, liveSessionOnDevice } from './coach-data.js';
 
 /* The two marks. Inline rather than in a sprite because there are two of them
@@ -71,7 +71,15 @@ export function coachCard(opts = {}) {
   const card = el('button', 'coach-card' + (opts.tight ? ' tight' : ''));
   card.setAttribute('aria-label', 'Coach');
 
-  if (!coachReady()) {
+  /* TWO READINESS LEVELS, NOT ONE. The card used to wait for every node Coach
+     reads, which meant the first thing on the screen the app opens to sat on a
+     skeleton until the slowest of seven reads came home. It waits on the log
+     now — the read that decides whether Coach may speak at all, and the one
+     every training finding hangs off — and takes food, weight and steps when
+     they arrive. Nothing is fabricated in between: the rules that need those
+     nodes have null facts and stay silent, which is the same silence they give
+     a log that is simply too thin. */
+  if (!coachLogKnown()) {
     card.classList.add('loading');
     // No lock while it is loading. Guessing one flashes the wrong tier at
     // somebody for as long as the reads take, and the open padlock is exactly
@@ -103,7 +111,20 @@ export function coachCard(opts = {}) {
     return card;
   }
 
-  const view = opts.tight ? c.train : c.you;
+  let view = opts.tight ? c.train : c.you;
+
+  /* The one substitution the half-loaded state needs. "Nothing notable" is a
+     claim about everything Coach checked, and on a card painted before the
+     food and weight nodes landed it would be a claim about checks that have
+     not run. Every other state is honest at this point — an unreadable log, a
+     new account, a live session, a thin log and a real finding all read only
+     the log — so this is the single case that has to wait, and it waits by
+     saying so rather than by going back to a spinner. */
+  if (!coachReady() && view.state === 'card_state_clear') {
+    view = { ...view, tone: 'neutral',
+             text: 'Your training is in. Still reading your food and weight.',
+             reason: 'Coach would rather say nothing than read half a number.' };
+  }
 
   // Written once per app open, and only from the You card — the surface that is
   // on screen first. Rotating on a Train paint as well would burn two lines per

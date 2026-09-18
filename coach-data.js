@@ -7,11 +7,14 @@
 // this file against its own store and copies coach.js byte for byte; that split
 // is the whole reason the two exist separately.
 //
-// TWO READS PER APP OPEN, AND NONE PER PAINT. The You tab already issues around
-// seven live GETs every time it renders, and Coach sits at the top of it — a
-// card that read anything on its own would multiply that by every repaint the
-// unawaited loads trigger. So everything lands once, in initCoachData(), and
-// coachInput() is synchronous from then on.
+// ONE WAVE PER APP OPEN, AND NOTHING PER PAINT. The You tab already issues
+// around seven live GETs every time it renders, and Coach sits at the top of it
+// — a card that read anything on its own would multiply that by every repaint
+// the unawaited loads trigger. So everything lands once, in initCoachData(),
+// and coachInput() is synchronous from then on. The seven reads that pass go
+// out together rather than one after the other: none of them needs an answer
+// from the one before it, and four stacked latencies under the first card on
+// the screen measured over three seconds of skeleton on the live site.
 //
 // WHY IT READS `workouts` ITSELF instead of calling analytics.allSessions().
 // allSessions() resolves to [] when the read FAILS — it falls back through
@@ -44,6 +47,7 @@ import { normSettings } from './coach.js';
    afterwards. `ready` is not the same as "there is data" — it is "the loads
    have finished", and every surface paints a skeleton until it flips. */
 let ready       = false;
+let logKnown    = false;       // the workouts read has settled; the rest may not have
 let logState    = 'unknown';   // 'readable' | 'empty' | 'unknown' — see coach.js §3.2
 let sessions    = [];
 let targetsSet  = null;        // true | false | null. null is a read that failed
@@ -55,13 +59,58 @@ let routines    = [];
 let settings    = normSettings(null);
 let settingsRead = false;      // false means the node has never been read cleanly
 
-/* The rotation seed. Captured ONCE, at init, and never re-read — the greeting
-   rotates on each app OPEN, and the You tab repaints four or five times as its
-   loads land. Seeding on the clock instead would change the line under the
-   reader's thumb between one paint and the next. */
-let openedAt = 0;
+/* ================= THE ROTATION, AND WHY IT IS ON THE DEVICE =================
+   The greeting rotates once per app OPEN, and both halves of that live in
+   localStorage rather than in settings/coach.
+
+   `opens` is a counter. It replaces a seed taken off the wall clock, which was
+   not a rotation at all — `Date.now()/1000 % n` is a hash of the second
+   somebody happened to open the app, and a hash repeats. Three consecutive
+   reloads on the live site gave the same greeting AND the same lead question.
+   A counter cannot do that.
+
+   `recentGreets` is the last three lines Coach opened with. It used to be one
+   id in settings/coach, written asynchronously as the app opened — which is
+   exactly the moment the page is most likely to be closed before the write
+   lands. A per-device display nicety is not worth a round trip it cannot rely
+   on, and getting it wrong costs a repeated greeting rather than a wrong
+   number, so the device is the right place for both.
+
+   LS is namespaced by uid (store.js:106), so a shared phone keeps two
+   accounts' counters apart without anything here having to think about it.
+
+   Both are read and bumped ONCE, in initCoachData(), before the first await —
+   coachInput() is called on every paint and a counter that moved on a paint
+   would change the line under the reader's thumb as the loads land. */
+const LS_OPENS  = 'coachOpens';
+const LS_GREETS = 'coachGreets';
+
+let opens        = 0;
+let recentGreets = [];
+let rotationRead = false;
+
+function readRotation() {
+  if (rotationRead) return;
+  rotationRead = true;
+  const n = LS.get(LS_OPENS, 0);
+  // Wraps well short of anything that loses integer precision, and the engine
+  // only ever takes it modulo a pool of a dozen.
+  opens = (Number.isFinite(n) ? Math.floor(n) : 0) + 1;
+  if (opens < 0 || opens > 1e9) opens = 0;
+  LS.set(LS_OPENS, opens);
+  const g = LS.get(LS_GREETS, []);
+  recentGreets = Array.isArray(g) ? g.filter(x => typeof x === 'string' && x).slice(0, 3) : [];
+}
 
 export function coachReady() { return ready; }
+
+/* Whether the LOG is known — which is a different and much earlier question
+   than whether every node has landed. The card can say something true the
+   moment this flips: whether the log is readable at all, whether the account
+   is new, and every training finding. Fuel, weight and steps arrive with
+   coachReady() a moment later, and until then their rules are silent because
+   their facts are null, which is the same silence a thin log gets. */
+export function coachLogKnown() { return logKnown; }
 
 /* ================= THE LOAD =================
    Idempotent, and it has to be: You and Train both want the snapshot and both
@@ -72,23 +121,36 @@ export function coachReady() { return ready; }
 let inFlight = null;
 
 export function initCoachData() {
-  if (!inFlight) inFlight = load();
+  if (!inFlight) {
+    // Before the first await, so the counter is settled by the time the very
+    // first paint asks for a snapshot.
+    readRotation();
+    inFlight = load();
+  }
   return inFlight;
 }
 
-async function load() {
-  openedAt = Date.now();
+/* SEVEN READS, ONE WAVE. This used to be four awaits in a row — the whole
+   workouts tree, then food/targets, then settings/coach, then a Promise.all of
+   the four small nodes — and none of them needs an answer from the one before
+   it. Every read in store.js is a real round trip when the device is online
+   (store.js:707, store.js:729), so four in a row is four latencies stacked
+   under a card that is the first thing on the screen the app opens to. It was
+   measured on the live site at over three seconds of skeleton. They all go out
+   together now and the wave costs the slowest one, which is the tree.
 
+   The tree is also why `logKnown` flips separately and earlier than `ready`:
+   it is the read that decides whether Coach may say anything at all, and every
+   training finding hangs off it, so the card paints the moment it and the
+   settings node have landed rather than waiting on food and steps. The rules
+   that need those stay silent until they arrive, which is the same silence
+   they give a log that is simply too thin — absent, never guessed. */
+async function load() {
   // The one read that has to tell absent from unreachable. Everything else can
   // fall back to a default without lying; this one cannot.
-  try {
-    const tree = await readExact('workouts');
-    sessions = flatten(tree);
-    logState = sessions.length ? 'readable' : 'empty';
-  } catch {
-    sessions = [];
-    logState = 'unknown';
-  }
+  const pLog = readExact('workouts').then(
+    tree => { sessions = flatten(tree); logState = sessions.length ? 'readable' : 'empty'; },
+    ()   => { sessions = []; logState = 'unknown'; });
 
   /* food/targets gets the same treatment for the same reason. food.js leaves a
      MODULE DEFAULT of 2,700 kcal in memory when onboarding is skipped
@@ -96,40 +158,39 @@ async function load() {
      the number — only by looking at whether the node exists. And a failed read
      is not an absent node: it is null here, and every fuel rule stays silent
      on null rather than announcing that nobody set any targets. */
-  try {
-    const t = await readExact('food/targets');
-    targets = t || null;
-    targetsSet = !!(t && typeof t === 'object' && Number.isFinite(t.cal) && t.cal > 0);
-  } catch {
-    targets = null;
-    targetsSet = null;
-  }
+  const pTargets = readExact('food/targets').then(
+    t  => { targets = t || null;
+            targetsSet = !!(t && typeof t === 'object' && Number.isFinite(t.cal) && t.cal > 0); },
+    () => { targets = null; targetsSet = null; });
 
   // Coach's own settings. A failed read leaves the defaults in place AND leaves
   // settingsRead false, which is what the Settings section reads to say out
   // loud that the switches it is showing are defaults rather than stored state.
-  try {
-    settings = normSettings(await readExact('settings/coach'));
-    settingsRead = true;
-  } catch {
-    settings = normSettings(null);
-    settingsRead = false;
-  }
+  // It is in the first wave because a card painted before it landed would be a
+  // card showing a category the account has switched off.
+  const pSettings = readExact('settings/coach').then(
+    v  => { settings = normSettings(v); settingsRead = true; },
+    () => { settings = normSettings(null); settingsRead = false; });
 
   // The rest are mirror-cached and none of them can lie in a way that matters:
   // an absent summaries node and an unreadable one both mean "no food average",
   // and every rule that quotes one has a min-data gate in front of it.
-  const [ds, we, sd, rt] = await Promise.all([
+  const pRest = Promise.all([
     read('food/daySummaries', null),
     read('weight/entries',    null),
     read('steps',             null),
     read('routines',          null)
-  ]);
-  summaries = ds || {};
-  entries   = we || {};
-  stepDays  = sd || {};
-  routines  = rt ? Object.entries(rt).map(([id, r]) => ({ id, ...(r || {}) })) : [];
+  ]).then(([ds, we, sd, rt]) => {
+    summaries = ds || {};
+    entries   = we || {};
+    stepDays  = sd || {};
+    routines  = rt ? Object.entries(rt).map(([id, r]) => ({ id, ...(r || {}) })) : [];
+  }, () => {});
 
+  await Promise.all([pLog, pSettings]);
+  logKnown = true;
+
+  await Promise.all([pTargets, pRest]);
   ready = true;
   return ready;
 }
@@ -173,9 +234,13 @@ export function coachInput(extra) {
 
   return {
     now: Date.now(),
-    openMs: openedAt,
+    /* The rotation's two inputs. `opens` replaces the openMs timestamp the
+       engine used to be seeded on — a timestamp is a hash, not a rotation, and
+       nothing passes one in any more. */
+    opens,
+    recentGreets,
     u: wu(),
-    log: ready ? logState : 'unknown',
+    log: logKnown ? logState : 'unknown',
     sessions,
     lib: libIndex(),
     routines,
@@ -381,15 +446,24 @@ export function markAsked(id) {
   return patch({ asked: { [id]: Date.now() } });
 }
 
-/* The greeting Coach opened with. Written at most once per app open, and only
-   when it actually changed — the pool drops the previous line so the same one
-   never runs twice, and that is the only thing this value is for. A failed
-   write costs a possible repeat and nothing else. */
+/* The greeting Coach opened with. Written at most once per app open, to the
+   DEVICE — synchronously, and that is the whole point of the move. The
+   database version of this fired an async write as the app opened and then
+   died with the page when somebody closed it a second later, which is exactly
+   the pattern that needs it: open, glance, close, open again.
+
+   Three ids rather than one. The counter in readRotation() is what makes
+   consecutive opens different; this list is what covers the case the counter
+   cannot, which is an eligible pool that changed size between two opens
+   because a gate stopped passing. Newest first, so the engine can just take
+   the head when it wants the last one. */
 let greetWritten = false;
 export function rememberGreeting(id) {
-  if (greetWritten || !id || id === settings.lastGreet) return;
+  if (greetWritten || !id) return;
   greetWritten = true;
-  patch({ lastGreet: id }).catch(() => {});
+  if (recentGreets[0] === id) return;
+  recentGreets = [id].concat(recentGreets.filter(x => x !== id)).slice(0, 3);
+  LS.set(LS_GREETS, recentGreets);
 }
 
 /* The live session, read from the device rather than from the database. A

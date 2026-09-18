@@ -62,6 +62,17 @@ export { allExercises } from './picker.js';
 
 /* ================= INIT ================= */
 export async function initWorkout() {
+  /* Train can be the tab the app opens on — a parked session always lands here
+     — so this screen cannot assume You has already asked for Coach's snapshot.
+     initCoachData() is idempotent, so whichever tab gets there first does the
+     reads and the other one just waits for the same promise. The READS start
+     here, before the first await, for the same reason they do in initYou():
+     four awaited stages in front of them is how the card came to sit on a
+     skeleton for three seconds. The repaint is attached further down, after
+     this screen has drawn once — render() has nothing to draw until the month
+     has loaded. */
+  const coachLoaded = initCoachData();
+
   // Read once and handed on. picker.js needs the same node for the Frequent
   // chip's cold start and has no way to reach this file (the import only goes
   // one way), so reading it there as well meant every launch downloading the
@@ -76,11 +87,7 @@ export async function initWorkout() {
 
   await loadMonth(monthKey(viewMonth));
   render();
-  /* Train can be the tab the app opens on — a parked session always lands
-     here — so this screen cannot assume You has already asked for Coach's
-     snapshot. initCoachData() is idempotent, so whichever tab gets there first
-     does the reads and the other one just waits for the same promise. */
-  initCoachData().then(render).catch(() => {});
+  coachLoaded.then(render).catch(() => {});
   // Only for a workout restored mid-flight, and deliberately not awaited. The
   // calendar has no set row to mark, and this question costs a whole-tree read
   // that nobody who is not actually training should pay for.

@@ -130,8 +130,17 @@ section('B. the clock is an argument, and there is no other way in');
                         (CODE.match(new RegExp('.*\\b' + g + '\\b.*')) || [''])[0].trim()));
   check('no console', !/\bconsole\s*\./.test(CODE));
   check('no setTimeout or setInterval', !/\bset(Timeout|Interval)\s*\(/.test(CODE));
-  check('`now` and `openMs` both arrive on the input rather than being taken',
-        /input\.now/.test(CODE) && /input\.openMs/.test(CODE));
+  check('`now` arrives on the input rather than being taken',
+        /input\.now/.test(CODE));
+  /* The rotation counter is device state and it arrives the same way the clock
+     does. The old seed was a TIMESTAMP divided by a thousand, which is a hash
+     of the second somebody opened the app rather than a rotation — this refuses
+     both the name and the arithmetic, so no caller can quietly hand a clock
+     back. tools-check/coach-rotation.mjs proves the counter actually rotates. */
+  check('the greeting counter arrives on the input too, and no timestamp does',
+        /input\.opens/.test(CODE) && !/openMs/.test(CODE));
+  check('and the rotation is a counter, not clock arithmetic',
+        /function rotate\(counter, n\)/.test(CODE) && !/seed\s*\/\s*1000/.test(CODE));
 }
 
 /* ================= C. NO MODULE STATE ================= */
@@ -172,7 +181,7 @@ section('D. driven — same log, same clock, same sentence');
   sessions.sort((a, b) => a.startedAt - b.startedAt);
 
   const input = {
-    now: NOW, openMs: NOW, u: 'lb', log: 'readable', sessions,
+    now: NOW, opens: 0, recentGreets: [], u: 'lb', log: 'readable', sessions,
     lib: {
       'barbell-bench-press': { group: 'chest', equipment: 'barbell' },
       'barbell-row':         { group: 'back',  equipment: 'barbell' },
@@ -211,16 +220,17 @@ section('D. driven — same log, same clock, same sentence');
 
   // Moving `now` by a day DOES move it — otherwise the check above would pass
   // on an engine that ignores its input entirely.
-  const tomorrow = shot({ ...input, now: NOW + DAY, openMs: NOW + DAY });
+  const tomorrow = shot({ ...input, now: NOW + DAY });
   check('moving `now` a day forward does change what it says', tomorrow !== a);
 
-  // The greeting is seeded on openMs, not on now, so the four or five repaints
-  // the You tab makes as its reads land cannot rotate the line under the reader.
+  /* The greeting is keyed on the open COUNTER and on nothing else in the clock,
+     so the four or five repaints the You tab makes as its reads land cannot
+     rotate the line under the reader's thumb. */
   const g1 = C.coach(input).greet.id;
   const g2 = C.coach({ ...input, now: NOW + 45000 }).greet.id;
-  check('the greeting is seeded on the app OPEN, so a repaint mid-load cannot change it', g1 === g2);
-  const g3 = C.coach({ ...input, now: NOW + DAY, openMs: NOW + DAY }).greet.id;
-  check('and a fresh open can rotate it', typeof g3 === 'string' && g3.length > 0);
+  check('the greeting is keyed on the app OPEN, so a repaint mid-load cannot change it', g1 === g2);
+  const g3 = C.coach({ ...input, opens: 1 }).greet.id;
+  check('and the next open moves it', typeof g3 === 'string' && g3.length > 0 && g3 !== g1);
 
   // Proof the stub never got asked for anything: every number below came out of
   // the fixture, so a read would have produced an empty answer rather than this.
@@ -240,8 +250,15 @@ section('E. what the native port copies, and what it rewrites');
           .every(v => {
             const s = C.normSettings(v);
             return s && typeof s.mute === 'object' && typeof s.answers === 'object' &&
-                   typeof s.asked === 'object' && typeof s.lastGreet === 'string';
+                   typeof s.asked === 'object';
           }));
+  /* lastGreet is NOT in here any more, and a stored one from v42 is dropped on
+     the way through. It was an async database write fired as the app opened,
+     which is the one moment the page is most likely to be closed before it
+     lands — so the rotation that needed it lost it exactly when it mattered.
+     It is device storage on both clients now; see NEXT-NATIVE-V43.md. */
+  check('and settings/coach no longer carries the greeting — that is device state on both clients',
+        C.normSettings({ lastGreet: 'g_hello' }).lastGreet === undefined);
   check('and refuses an answer that is not one of the question’s own options',
         C.normSettings({ answers: { q_goal_direction: 'sideways' } }).answers.q_goal_direction === undefined &&
         C.normSettings({ answers: { q_goal_direction: 'down' } }).answers.q_goal_direction === 'down');
@@ -263,6 +280,33 @@ section('E. what the native port copies, and what it rewrites');
         !/mergeUpdate/.test(D));
   check('and it writes settings/coach, never a new top-level node',
         /write\('settings\/coach'/.test(D) && !/write\('coach/.test(D));
+
+  /* The rotation is device state on this client and MMKV on the next one. Both
+     halves are here rather than in settings/coach because the write happens as
+     the app opens and the app is routinely closed a second later — the async
+     database write died with the page exactly when the value was wanted. */
+  check('the greeting counter and the recent lines are device storage, not settings/coach',
+        /LS\.set\(LS_OPENS/.test(D) && /LS\.set\(LS_GREETS/.test(D) &&
+        !/lastGreet/.test(D) && !/patch\(\{ lastGreet/.test(D));
+  check('and rememberGreeting writes synchronously, so closing the app a second after opening it keeps the line',
+        /export function rememberGreeting[\s\S]{0,400}LS\.set\(LS_GREETS, recentGreets\);/.test(D) &&
+        !/export function rememberGreeting[\s\S]{0,400}await/.test(D));
+  check('the counter moves once per app OPEN, not once per paint',
+        /export function initCoachData\(\) \{[\s\S]{0,300}readRotation\(\);/.test(D) &&
+        !/export function coachInput[\s\S]{0,600}readRotation\(/.test(D));
+
+  /* The reads go out together. Four awaited round trips in a row put the first
+     card on the screen the app opens to behind three seconds of skeleton, and
+     not one of them needed an answer from the one before it. */
+  // Scoped to load(), which is the boot path. patchNow() and reread() await a
+  // readExact each and are right to: both are one read answering one question.
+  const LOAD = (D.split('async function load()')[1] || '').split('\nfunction ')[0];
+  check('the load is one wave, not four — nothing awaits a read it does not depend on',
+        /await Promise\.all\(\[pLog, pSettings\]\)/.test(LOAD) &&
+        /await Promise\.all\(\[pTargets, pRest\]\)/.test(LOAD) &&
+        !/await readExact\(/.test(LOAD) && !/await read\(/.test(LOAD));
+  check('and the log has a readiness of its own, so the card speaks before food and steps land',
+        /export function coachLogKnown/.test(D) && /logKnown = true;/.test(D));
 
   /* The snapshot is gathered once per app open, so staying current is its own
      problem. The two cheap hooks take what a caller has ALREADY read — zero
