@@ -1604,10 +1604,15 @@ export const RESPONSES = Object.freeze({
    Short, five words at the outside, never an exclamation mark, and it sits
    BELOW the You tab's own four-bucket greeting rather than replacing it.
 
-   Two kinds in one pool. A data-aware line that passes its gate always beats a
-   generic one — a card that opens with a real number is worth more than one
-   that opens warmly — and the previous line is dropped from the pool so the
-   same one never runs twice.
+   Two kinds in one pool. A data-aware line that passes its gate is worth more
+   than a generic one — a card that opens with a real number beats one that
+   opens warmly — so once two of them qualify the rotation never leaves them,
+   and only a log offering fewer than two sends the walk out into the generics.
+   The last three lines Coach opened with come in with the counter, and the
+   walk steps PAST them rather than removing them, so the same line does not
+   run twice. How many of the three it consults depends on how wide the walk
+   is — see pickGreeting, where the cap is the thing that keeps a narrow walk
+   from having nowhere to step.
 
    `tone: 'warm'` lines are cheerful and are withheld entirely when the finding
    underneath counsels caution. The greeting must never contradict the sentence
@@ -1621,9 +1626,12 @@ export const RESPONSES = Object.freeze({
    the pool size, which is a hash of the moment somebody happened to open the
    app rather than a rotation — three opens in a row could and did produce the
    same line. `opens` is a per-device integer that goes up by one each time the
-   app opens, so consecutive opens land on consecutive entries and cannot
-   repeat. It is an input for the same reason `now` is: this file has no clock
-   and no storage of its own. */
+   app opens, so consecutive opens land on consecutive entries of whichever
+   pool is in force — the data-aware lines when two or more qualify, the whole
+   ordered list when fewer do — and cannot repeat inside it. A gate that starts
+   or stops passing moves the walk from one pool to the other between two
+   opens, and covering that is the whole job of the memory. It is an input for
+   the same reason `now` is: this file has no clock and no storage of its own. */
 export const GREETINGS = Object.freeze([
   // generic
   { id: 'g_hello',   kind: 'generic', tone: 'warm',    topic: null, text: () => 'Good to see you.' },
@@ -1698,14 +1706,22 @@ export const GREETINGS = Object.freeze([
 /* The one place a greeting is chosen. Deterministic: same log, same open
    count, same line.
 
-   The order of what is left is load-bearing. Data-aware lines come first and
-   the generics after, and the counter rotates across the WHOLE ordered pool
-   rather than across the data lines alone — which is what the first version
-   did, and it collapsed the pool to a single item on any open where exactly
-   one data line passed its gate. `n % 1` is always 0, so that card said the
-   same thing every time. A data line is still usually what comes up, because
-   there are more of them and they sit at the front of the walk, but "usually"
-   is the promise and "always" was the bug. */
+   WHAT THE COUNTER WALKS has now been wrong in both directions, and the rule
+   here is the line between them. The first version walked the data-aware lines
+   alone whenever ANY of them passed a gate, which on the ordinary account is a
+   pool of one — `n % 1` is always 0, so that card said the same five words for
+   ever. The second walked the whole ordered pool instead. That cannot repeat,
+   and it spent the thing the line is for: there are seven generics standing
+   behind two or three data lines, so a consecutive counter spends most of its
+   lap among them, and five opens in a row on a live account came up generic on
+   a log where several data lines qualified.
+
+   So the walk stays inside the data-aware lines when two or more of them pass,
+   and opens out to the whole ordered pool — data first, generics after — only
+   when fewer do. Two is the threshold because two is the smallest pool a
+   counter can rotate without repeating; one is the collapse, and one data line
+   is better read as an account with nothing much to say yet than as a line to
+   say twice. */
 function pickGreeting(d, finding) {
   const recent = d.f('coach.recentGreets') || [];
   const caution = finding && finding.tone === 'caution';
@@ -1718,21 +1734,36 @@ function pickGreeting(d, finding) {
     try { return !!g.gate(d); } catch { return false; }
   });
 
-  const ordered = ok.filter(g => g.kind === 'data').concat(ok.filter(g => g.kind !== 'data'));
+  const data = ok.filter(g => g.kind === 'data');
+  const ordered = data.length >= 2 ? data : data.concat(ok.filter(g => g.kind !== 'data'));
   if (!ordered.length) return { id: 'g_look', text: 'Here’s where you stand.' };
 
   /* The counter walks the pool; the recent list only ever pushes it forward.
      Both are needed. The counter is what makes consecutive opens different;
      the recent list is what covers the case the counter cannot, which is a
-     pool that changed size between two opens because a gate stopped passing.
-     A pool whose every entry is recent falls through to the counter's own
-     index rather than to nothing — three lines is a small pool and silence is
-     not an improvement on a repeat. */
+     pool that changed size between two opens because a gate stopped passing —
+     the counter's index means nothing across a pool it did not walk.
+
+     The memory is read one line short of the pool, and that cap is doing the
+     real work now. Three lines are remembered and the data-aware walk is often
+     two or three wide, so without it every candidate is recent, the loop finds
+     nowhere forward to step and falls back on the counter's own index — which
+     is exactly the index that repeats when the pool changed underneath it.
+     Driven against the log fixtures, that is a line repeating on consecutive
+     opens 26 times in 4,704 crossings; capped, none. Capped, the argument is
+     arithmetic rather than a sample: at most one short of the pool is ever
+     blocked, so on any pool of two or more there is always a free candidate and
+     the fall-through is unreachable, and the line just shown is always among
+     the blocked. Nothing can follow itself. Two or more is every pool the table
+     can produce — four generics carry no topic and no warm tone, which are the
+     only two things either filter removes, so nothing can withhold them and the
+     fall-through pool never drops below four. */
+  const memory = recent.slice(0, Math.max(1, ordered.length - 1));
   const start = rotate(d.input.opens, ordered.length);
   let i = start;
   for (let step = 0; step < ordered.length; step++) {
     const cand = ordered[(start + step) % ordered.length];
-    if (!recent.includes(cand.id)) { i = (start + step) % ordered.length; break; }
+    if (!memory.includes(cand.id)) { i = (start + step) % ordered.length; break; }
   }
 
   const g = ordered[i];

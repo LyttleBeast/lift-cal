@@ -20,17 +20,28 @@
 //
 // What this file fences, all of it by driving the real engine:
 //
-//   THE PROPERTY.   N consecutive opens on a pool of N give N distinct lines,
-//                   and no two consecutive opens ever match. Proved on four
-//                   pool sizes, because a rotation that only works on one pool
-//                   is an accident rather than a rotation.
+//   THE PROPERTY.   No two consecutive opens ever match, on every pool this
+//                   engine can be in — proved on six of them, because a
+//                   rotation that only works on one pool is an accident rather
+//                   than a rotation. N consecutive opens cover N distinct lines
+//                   of whichever pool is in force.
 //   THE OLD BUG.    The clock cannot move the line. Same counter, any time of
 //                   day, same greeting — the four or five repaints the You tab
 //                   makes as its reads land are one open, not five.
-//   THE OTHER ONE.  The walk covers the WHOLE ordered pool rather than the
-//                   data-aware lines alone. The first version collapsed to the
-//                   data lines whenever any of them passed a gate, and `n % 1`
-//                   is always 0 — one passing gate meant one line forever.
+//   THE OTHER ONE.  Which pool is in force, and it has been wrong twice. The
+//                   first version walked the data-aware lines whenever ANY of
+//                   them passed a gate — a pool of one, and `n % 1` is always
+//                   0, so one passing gate meant one line for ever. The second
+//                   walked the whole ordered pool instead, and five live opens
+//                   in a row came up generic on a log with several data lines
+//                   eligible. Two or more is the line between them, and this
+//                   file holds both ends of it: never a repeat, AND at least
+//                   two thirds of a long run saying something about the log.
+//   THE WITHHOLDING. A generic line the walk never offers is the rule working,
+//                   not the walk shrinking — but only where two or more data
+//                   lines qualify. Everywhere else it is still the old bug, so
+//                   the file asserts which case each fixture is in first and
+//                   reads everything else through that.
 //   TOTALITY.       A counter that came back from device storage as null, NaN,
 //                   negative or enormous still yields a line with words in it.
 //   THE DEVICE.     The counter moves once per app OPEN and never per paint,
@@ -130,7 +141,9 @@ const QUIET = {
 const ONE = { ...QUIET,
   weight: { latestLb: 186.4, latestAt: NOW - 2 * DAY, rateWk: -0.8, rateDays: 21,
             goalDir: null, goalRateWk: null } };
-// Two, so a pool can be watched growing by exactly what was added to the log.
+// Two, which is where the walk changes hands: one data line falls through to the
+// whole ordered pool, two keeps the rotation inside them. So this fixture is
+// watched for what it STOPS offering as much as for what the log added.
 const TWO = { ...ONE, summaries: { [key(NOW)]: { cal: 1800, p: 120, c: 180, f: 60 } } };
 
 const LIB = {
@@ -169,6 +182,18 @@ const FULL_MUTED = { ...FULL, settings: { ...FULL.settings, mute: { recency: tru
 const CAUTION = { ...FULL,
   sessions: FULL.sessions.concat([0, 1, 3, 5, 7, 9, 11].map(d => sess(d, [['bench', 3, 185]], 'x')))
     .sort((a, b) => a.startedAt - b.startedAt) };
+/* The log that has plenty to say: a heavy bench today on top of the full one,
+   and a step count above its own trailing week. It is here because every other
+   fixture with a CONFINED walk leaves two or three lines, and a walk that
+   narrow can only ever promise "not the line before it" — the memory of three
+   has nowhere to bite. This one is five wide, so the memory can be asked to
+   work at its full depth on a walk the change actually produces. The
+   fall-through fixtures are wide enough for that too, and section F uses one;
+   what they cannot show is the confined case, which is the new one. */
+const RICH = { ...FULL,
+  sessions: FULL.sessions.concat([sess(0, [['bench', 3, 225]], 'pr')])
+    .sort((a, b) => a.startedAt - b.startedAt),
+  steps: { days: { ...FULL.steps.days, [key(NOW)]: { steps: 14000 } } } };
 
 /* One simulated app open per step: the engine gets the counter this device is
    on and the lines it has already opened with, newest first, which is exactly
@@ -196,18 +221,39 @@ const greetsOver = (fx, from, count) => opens(fx, from, count).map(c => c.greet.
    which gates passed on a given log.
 
    The FLOOR comes from the real table instead: a line with no gate has nothing
-   to fail, so it is eligible on any log at all, and the only thing that
-   withholds one is a cautioning card taking the warm ones away. It is here
-   because a pool read off the engine ALONE would shrink to whatever the
-   rotation happened to visit — which is precisely how the clock version would
-   have walked past this file, by never offering three of the seven lines it
-   was supposed to be rotating through and then being asked to prove it could
-   manage four. */
+   to fail, and the only thing that withholds one is a cautioning card taking
+   the warm ones away. It is here because a pool read off the engine ALONE
+   would shrink to whatever the rotation happened to visit — which is precisely
+   how the clock version would have walked past this file, by never offering
+   three of the seven lines it was supposed to be rotating through and then
+   being asked to prove it could manage four.
+
+   The floor is CONDITIONAL now, and knowing when is the whole of what changed.
+   The rotation stays inside the data-aware lines once two of them qualify, so
+   on those logs the ungated generics are withheld on purpose and a floor built
+   from them would be asserting the bug. Below two the walk falls through to the
+   whole ordered pool and the floor is exactly what it always was.
+
+   Which case a fixture is in is read off the engine — the walk's own kinds say
+   it — and then asserted in section A before anything else leans on it, so a
+   rotation that quietly stopped offering its data lines cannot pass itself off
+   as a rotation that was confined to them.
+
+   `walk` is what the rotation may visit, and it is what every check below
+   measures against. `all` is the walk plus the floor where there is one, so on
+   a confined fixture the two are the same set and on a fall-through one the
+   floor is already inside the walk — which means `all` is an alias and NOT a
+   way to ask what the log left eligible behind the withholding. Nothing here
+   can answer that question, because nothing outside coach.js can evaluate a
+   gate. Do not write a check that assumes otherwise; it would assert nothing. */
 const UNGATED         = C.GREETINGS.filter(g => !g.gate).map(g => g.id);
 const UNGATED_NEUTRAL = C.GREETINGS.filter(g => !g.gate && g.tone !== 'warm').map(g => g.id);
 const poolOf = (fx, floor) => {
-  const found = [...new Set(greetsOver(fx, 0, 40))];   // long enough to walk any pool several times
-  return { floor, found, all: [...new Set(floor.concat(found))] };
+  const walk = [...new Set(greetsOver(fx, 0, 40))];   // long enough to walk any pool several times
+  const data = walk.filter(id => line(id).kind === 'data');
+  const confined = data.length >= 2 && walk.length === data.length;
+  return { floor: confined ? [] : floor, found: walk, walk, data, confined,
+           all: [...new Set((confined ? [] : floor).concat(walk))] };
 };
 
 const P_QUIET   = poolOf(QUIET, UNGATED);
@@ -215,6 +261,7 @@ const P_ONE     = poolOf(ONE, UNGATED);
 const P_TWO     = poolOf(TWO, UNGATED);
 const P_FULL    = poolOf(FULL, UNGATED);
 const P_MUTED   = poolOf(FULL_MUTED, UNGATED);
+const P_RICH    = poolOf(RICH, UNGATED);
 const P_CAUTION = poolOf(CAUTION, UNGATED_NEUTRAL);   // a caution card withholds the warm ones
 
 /* ================= A. WHAT EACH LOG LEAVES ELIGIBLE ================= */
@@ -223,16 +270,46 @@ section('A. the pool is the log’s, and the card’s — stated, not assumed');
   check('a brand-new log leaves exactly the ungated lines eligible, and that is a pool of ' + UNGATED.length,
         sameSet(P_QUIET.found, UNGATED), list(P_QUIET.found) + ' vs ' + list(UNGATED));
 
+  /* Which pool each fixture puts the walk in, stated before anything else
+     leans on it. Two or more data-aware lines qualifying is the whole of the
+     rule, so a fixture whose walk is confined has to have at least two of them
+     and nothing else in it, and a fixture that fell through has to have fewer
+     than two. Asserting the equivalence in both directions is what stops a
+     rotation that has quietly collapsed to one line passing itself off as one
+     that was correctly confined. */
+  const FIXTURES = [['a new log', P_QUIET, 0], ['one data line', P_ONE, 1],
+                    ['two data lines', P_TWO, 2], ['a full log', P_FULL, 3],
+                    ['the same log with the card muted', P_MUTED, 3],
+                    ['a log with plenty to say', P_RICH, 5],
+                    ['a caution card', P_CAUTION, 2]];
+  const miscounted = FIXTURES.filter(([, p, n]) => p.data.length !== n)
+    .map(([n, p, want]) => n + ': ' + p.data.length + ' not ' + want);
+  check('each log admits the number of data-aware lines it was built to admit', !miscounted.length,
+        list(miscounted));
+  const misfiled = FIXTURES.filter(([, p]) => p.confined !== (p.data.length >= 2))
+    .map(([n, p]) => n + ': ' + p.data.length + ' data lines, walk of ' + p.walk.length);
+  check('and the walk is inside the data lines on exactly those with two or more of them, and nowhere else',
+        !misfiled.length, list(misfiled));
+
   /* The floor is the fixture assumption every count below rests on, so it is
      asserted rather than trusted: a line nothing is withholding has to have
-     been offered, on every one of these logs. A rotation that skipped one
-     would otherwise quietly shrink the pool it is then asked to cover. */
-  const unoffered = [['a new log', P_QUIET], ['one data line', P_ONE], ['two data lines', P_TWO],
-                     ['a full log', P_FULL], ['a caution card', P_CAUTION]]
-    .filter(([, p]) => !p.floor.every(id => p.found.includes(id)))
-    .map(([n, p]) => n + ': ' + list(p.floor.filter(id => !p.found.includes(id))));
-  check('and every line nothing can withhold was actually offered, on every fixture below', !unoffered.length,
-        list(unoffered));
+     been offered — on the logs the walk can still reach it on. Where two data
+     lines qualify the generics are withheld deliberately and a run that never
+     offers one is the rule working; everywhere else a skipped generic is still
+     the pool quietly shrinking under a rotation it was about to be asked to
+     cover. */
+  const fell = FIXTURES.filter(([, p]) => !p.confined);
+  const unoffered = fell
+    .filter(([, p]) => !p.floor.every(id => p.walk.includes(id)))
+    .map(([n, p]) => n + ': ' + list(p.floor.filter(id => !p.walk.includes(id))));
+  check('and every line nothing can withhold was actually offered, on the ' + fell.length +
+        ' fixtures whose walk falls through to it',
+        fell.length > 0 && !unoffered.length,
+        fell.length ? list(unoffered) : 'no fixture falls through — this check is proving nothing');
+  check('while the ones confined to their data lines offer no generic at all — the withholding is the rule, not a gap',
+        FIXTURES.filter(([, p]) => p.confined).length > 0 &&
+        !FIXTURES.filter(([, p]) => p.confined).some(([, p]) => p.walk.some(id => line(id).kind !== 'data')),
+        list(FIXTURES.filter(([, p]) => p.confined).map(([n, p]) => n + ': ' + p.walk.length + ' wide')));
 
   const oneExtra = P_ONE.found.filter(id => !P_QUIET.found.includes(id));
   check('a weight trend on the same log admits exactly one data-aware line',
@@ -267,13 +344,22 @@ section('A. the pool is the log’s, and the card’s — stated, not assumed');
 }
 
 /* ================= B. THE PROPERTY ================= */
+/* The pool each case is measured against is the WALK — what the rotation may
+   visit on that log — because that is what the counter is taking its modulo
+   of. Section A is what makes that honest: it has already asserted which pool
+   each fixture puts the walk in and that the membership is what the log says
+   it should be, so a walk of two here is a walk of two by the rule rather than
+   a walk of nine with seven lines missing. Six cases, spanning walks two to
+   eight wide. */
 section('B. N opens on a pool of N give N different lines');
 {
   const cases = [
-    ['a brand-new account', QUIET, P_QUIET.all],
-    ['one data line and the generics', ONE, P_ONE.all],
-    ['two data lines and the generics', TWO, P_TWO.all],
-    ['a caution card, with the warm lines withheld', CAUTION, P_CAUTION.all]
+    ['a brand-new account', QUIET, P_QUIET.walk],
+    ['one data line and the generics', ONE, P_ONE.walk],
+    ['two data lines, and the walk confined to them', TWO, P_TWO.walk],
+    ['a full log, three of them', FULL, P_FULL.walk],
+    ['a log with plenty to say, five', RICH, P_RICH.walk],
+    ['a caution card, with the warm lines withheld', CAUTION, P_CAUTION.walk]
   ];
   cases.forEach(([name, fx, pool]) => {
     const n = pool.length;
@@ -410,69 +496,151 @@ section('F. the memory covers what the counter cannot, and never starves it');
   check('the engine remembers the last ' + depth + ' lines it opened with', depth >= 1 && depth < P_QUIET.all.length,
         'depth ' + depth + ' of a pool of ' + P_QUIET.all.length);
 
-  /* The floor under the walk. The ungated NEUTRAL lines are the ones no gate
-     and no caution can take away, and while there are more of them than the
-     memory is deep there is always somewhere forward to step. */
+  /* How many the engine will step past is emergent — it depends where in the
+     pool the counter started — so the number the brief actually fixes is how
+     many are KEPT, and that is a literal in two files. Read rather than
+     copied: the check fails when the files disagree with each other, whatever
+     the number is, and names it rather than asserting a three of its own. The
+     two have to match or the engine truncates a memory the device is still
+     paying to store, or worse, is handed more than it will look at. */
+  const kept = src('coach-data.js').match(/recentGreets = \[id\][\s\S]{0,120}?\.slice\(0, (\d+)\)/);
+  const takes = src('coach.js').match(/id: 'coach\.recentGreets'[\s\S]{0,400}?\.slice\(0, (\d+)\)/);
+  check('and the device keeps exactly as many as the engine will take — ' + (kept && kept[1]) + ' either side',
+        !!kept && !!takes && kept[1] === takes[1],
+        'coach-data.js keeps ' + (kept ? kept[1] : '?') + ', coach.js takes ' + (takes ? takes[1] : '?'));
+
+  /* The floor under the walk, and it is only under half of it. The ungated
+     NEUTRAL lines are the ones no gate and no caution can take away, so while
+     the walk is in the whole ordered pool there is always somewhere forward to
+     step. Inside the data-aware lines there is not — two or three of them
+     against a memory of three is a pool the memory can cover entirely — and
+     what keeps the walk moving there is that the engine reads the memory one
+     line short of the pool. Both are checked, because the second is the
+     ordinary case rather than the corner. */
   const floor = C.GREETINGS.filter(g => !g.gate && g.tone !== 'warm').length;
-  check('and the lines nothing can withhold outnumber that memory, so no gate failing can starve the walk',
+  check('and the lines nothing can withhold outnumber that memory, so no gate failing can starve the fall-through walk',
         floor > depth, floor + ' always-eligible vs a memory of ' + depth);
+
+  const narrow = [['two data lines', TWO, P_TWO], ['a full log', FULL, P_FULL],
+                  ['a caution card', CAUTION, P_CAUTION]].filter(([, , p]) => p.walk.length <= depth);
+  const starved = [];
+  narrow.forEach(([name, fx, p]) => {
+    // Every line in the walk already remembered, newest first — which on a walk
+    // this narrow is what two or three ordinary opens leave behind — and the
+    // newest is the one the reader is looking at. Stepping onto it is a repeat.
+    p.walk.forEach(last => {
+      const memory = [last].concat(p.walk.filter(id => id !== last));
+      for (let k = 0; k < 12; k++) {
+        const g = C.coach({ ...fx, opens: k, recentGreets: memory }).greet;
+        if (!g || !g.text.trim().length || g.id === last) starved.push(name + ' @' + k + ' after ' + last);
+      }
+    });
+  });
+  check('and a walk the memory could cover entirely still steps off the line just shown, on all ' +
+        narrow.length + ' of them — the engine remembers one line fewer than it has',
+        narrow.length > 0 && !starved.length, list(starved));
 
   const everything = C.coach({ ...TWO, opens: 3, recentGreets: P_TWO.all });
   check('a recent list naming every line in the pool still gets a line rather than silence',
         !!everything.greet && P_TWO.all.includes(everything.greet.id) &&
         everything.greet.text.trim().length > 0, JSON.stringify(everything.greet));
 
-  /* The case the counter alone cannot cover: the pool changed size between two
-     opens because a gate stopped passing, and the counter's own index lands
-     back on the line before it. The ks where that WOULD happen are found by
-     running the same two opens with no memory at all — if there were none of
-     them, the check below would be proving nothing. */
-  const would = [];
-  const still = [];
-  for (let k = 0; k < 64; k++) {
-    const first = C.coach({ ...TWO, opens: k, recentGreets: [] }).greet.id;
-    const blind = C.coach({ ...QUIET, opens: k + 1, recentGreets: [] }).greet.id;
-    if (blind !== first) continue;
-    would.push(k);
-    if (C.coach({ ...QUIET, opens: k + 1, recentGreets: [first] }).greet.id === first) still.push(k);
-  }
-  check('a pool that shrank between two opens still cannot repeat the line before it',
-        would.length > 0 && !still.length,
-        would.length + ' counters where the index alone would repeat, ' + still.length + ' that still do');
+  /* The case the counter alone cannot cover: the pool changed between two opens
+     because a gate stopped passing, and the counter's own index lands back on
+     the line before it. The pairs are logs that share lines and differ by one
+     gate — a third session dropping "two sessions in already", a day rolling
+     over and taking the food line with it — because a pool the counter did not
+     walk makes its index meaningless. The ks where that WOULD happen are found
+     by running the same two opens with no memory at all; if there were none of
+     them, the check below would be proving nothing.
 
-  // And the memory never sends the walk backwards onto something it just used.
-  const long = greetsOver(TWO, 7, 40);
+     This is the one that catches a memory too shallow for its pool. Confine
+     the walk to the data lines and leave the memory uncapped and these pairs
+     repeat: every candidate is recent, the walk finds nowhere to step and falls
+     back on the index that collides. Measured on the shipped fixtures, 26
+     crossings in 4,704 of them. */
+  const shrinks = [['a full log losing a gate', FULL, TWO], ['a rich log losing two', RICH, FULL],
+                   ['a caution card losing one', CAUTION, TWO],
+                   ['a fall-through pool losing a line', ONE, QUIET]];
+  const fewWould = [];
+  const still = [];
+  shrinks.forEach(([name, before, after]) => {
+    let would = 0;
+    for (let k = 0; k < 64; k++) {
+      const first = C.coach({ ...before, opens: k, recentGreets: [] }).greet.id;
+      const blind = C.coach({ ...after, opens: k + 1, recentGreets: [] }).greet.id;
+      if (blind !== first) continue;
+      would++;
+      /* Two memories, because the shallow one is not the one a device carries.
+         A phone that has been opened three times arrives with three ids, and on
+         a walk of two or three that is the whole pool — which is the state an
+         engine that reads its memory uncapped has no step left in. */
+      const walked = greetsOver(before, k - 2, 3);
+      [[first], [first].concat(walked.filter(id => id !== first)).slice(0, 3)].forEach(memory => {
+        if (C.coach({ ...after, opens: k + 1, recentGreets: memory }).greet.id === first) {
+          still.push(name + ' @' + k + ' remembering ' + memory.length);
+        }
+      });
+    }
+    if (!would) fewWould.push(name);
+  });
+  check('a pool that changed between two opens still cannot repeat the line before it, on all ' +
+        shrinks.length + ' crossings', !still.length && !fewWould.length,
+        list(still) + (fewWould.length ? '  [proving nothing on: ' + list(fewWould) + ']' : ''));
+
+  /* And the memory never sends the walk backwards onto something it just used.
+     How far back it can promise that is bounded by the walk itself: the engine
+     reads one line fewer than the pool has, so a walk of two can only ever
+     promise "not the line before it" and a walk wider than the memory promises
+     the whole of it. Both ends are checked, and the width is read off the walk
+     rather than assumed, so the promise stated is the one the pool can keep. */
   const tooSoon = [];
-  for (let i = depth; i < long.length; i++) {
-    if (long.slice(i - depth, i).includes(long[i])) tooSoon.push(i);
-  }
-  check('and no line comes back inside the window the engine remembers', !tooSoon.length,
-        list(tooSoon.map(String)));
+  [['two data lines', TWO, P_TWO], ['a full log', FULL, P_FULL], ['a log with plenty to say', RICH, P_RICH],
+   ['one data line and the generics', ONE, P_ONE]].forEach(([name, fx, p]) => {
+    const w = Math.min(depth, p.walk.length - 1);
+    const long = greetsOver(fx, 7, 40);
+    for (let i = w; i < long.length; i++) {
+      if (long.slice(i - w, i).includes(long[i])) tooSoon.push(name + ' @' + i + ' within ' + w);
+    }
+  });
+  check('and no line comes back inside the window the engine can remember on that walk', !tooSoon.length,
+        list(tooSoon));
+  check('and on a walk wider than the memory that window is the whole of it — ' + depth + ' deep',
+        Math.min(depth, P_RICH.walk.length - 1) === depth && Math.min(depth, P_ONE.walk.length - 1) === depth,
+        'rich walk ' + P_RICH.walk.length + ', one-data walk ' + P_ONE.walk.length);
 }
 
-/* ================= G. DATA FIRST, BUT NOT DATA ONLY ================= */
-section('G. the walk covers the whole pool — the collapse is what made it repeat');
+/* ================= G. WHERE THE WALK OPENS OUT ================= */
+/* The collapse to ONE line was the bug; a collapse to the data lines is the
+   rule. What separates them is how many qualify, so this section works the
+   boundary from the low side: one data line has to fall through to the whole
+   ordered pool, generics and all. */
+section('G. fewer than two data lines and the whole pool is the walk again');
 {
   const first = C.coach({ ...TWO, opens: 0, recentGreets: [] }).greet.id;
   check('a card with a real number in its greeting is worth more than a warm one, so the walk starts on a data line',
         line(first).kind === 'data', first + ' is ' + line(first).kind);
 
-  const kinds = new Set(greetsOver(TWO, 0, P_TWO.all.length * 2).map(id => line(id).kind));
-  check('and over a run of opens both a data-aware line and a generic one come up',
+  const kinds = new Set(greetsOver(ONE, 0, P_ONE.walk.length * 2).map(id => line(id).kind));
+  check('with one data line eligible both kinds come up — the walk fell through rather than sitting on the one',
         kinds.has('data') && kinds.has('generic'), list([...kinds]));
+
+  const confinedKinds = new Set(greetsOver(TWO, 0, 20).map(id => line(id).kind));
+  check('and with two of them it never leaves them, which is the whole of the change',
+        confinedKinds.has('data') && !confinedKinds.has('generic'), list([...confinedKinds]));
 
   /* The exact shape of the old bug. Exactly one data line passes its gate, the
      pool collapses to it, `n % 1` is 0 and that card says the same five words
      for ever. The fixture is built to be that one line, so the count of
      distinct lines over a full cycle is the whole check. */
-  const dataOnly = P_ONE.all.filter(id => line(id).kind === 'data');
+  const dataOnly = P_ONE.walk.filter(id => line(id).kind === 'data');
   check('with exactly one data line eligible, the pool is still the whole ordered list',
-        dataOnly.length === 1 && P_ONE.all.length > 1,
-        dataOnly.length + ' data line, pool of ' + P_ONE.all.length);
-  const run = greetsOver(ONE, 0, P_ONE.all.length);
-  check('and ' + P_ONE.all.length + ' opens on it give ' + P_ONE.all.length + ' different lines rather than one line ' +
-        P_ONE.all.length + ' times',
-        new Set(run).size === P_ONE.all.length, list(run));
+        dataOnly.length === 1 && P_ONE.walk.length > 1,
+        dataOnly.length + ' data line, pool of ' + P_ONE.walk.length);
+  const run = greetsOver(ONE, 0, P_ONE.walk.length);
+  check('and ' + P_ONE.walk.length + ' opens on it give ' + P_ONE.walk.length + ' different lines rather than one line ' +
+        P_ONE.walk.length + ' times',
+        new Set(run).size === P_ONE.walk.length, list(run));
 }
 
 /* ================= H. THE DEVICE HALF ================= */
@@ -595,6 +763,56 @@ export function sortedEntries() { return []; }
         C.normSettings({ lastGreet: 'g_hello' }).lastGreet === undefined);
   check('and the device keys are namespaced per account, so a shared phone keeps two counters apart',
         /function lsKey\(k\) \{ return 'rack:' \+ \(UID \|\| 'anon'\)/.test(src('store.js')));
+}
+
+/* ================= I. THE LINE IS STILL WORTH READING ================= */
+/* The half rack-v43 lost, and the reason this file needed a second visit. Every
+   check above it was green on a build whose card opened with five generic lines
+   in a row on a real account — "Nothing here is a guess.", "Here's where you
+   stand.", "Ready when you are.", "Read from your own log.", "Good to see you."
+   — on a log where several data-aware lines qualified. A rotation can be proved
+   never to repeat and still be allowed to go quietly generic, so both halves
+   are asserted here on the same run: no two consecutive opens match, AND at
+   least two thirds of a long one say something only this log could say.
+
+   Both, or the fix regresses in whichever direction is not being watched.
+   Neither is worth much alone: walking the whole pool passes the first and
+   fails the second, and a pool of one passes the second and fails the first. */
+section('I. where the log has several numbers to offer, the line is one of them');
+{
+  const N = 30;
+  [['a full log', FULL, P_FULL], ['a log with plenty to say', RICH, P_RICH]].forEach(([name, fx, p]) => {
+    check('the fixture qualifies — ' + p.data.length + ' data-aware lines pass their gates on ' + name +
+          ', so there is something to rotate within', p.data.length >= 2, list(p.data));
+
+    [['from a cold counter', 0], ['from a counter mid-life', 1000003]].forEach(([where, from]) => {
+      const run = greetsOver(fx, from, N);
+
+      const repeats = run.filter((id, i) => i > 0 && id === run[i - 1]);
+      check('no two consecutive opens give the same line, over ' + N + ' of them — ' + name + ', ' + where,
+            !repeats.length, list(repeats));
+
+      const aware = run.filter(id => line(id).kind === 'data').length;
+      check('and at least two thirds of them open with a number rather than a warm nothing — ' + name + ', ' + where,
+            aware * 3 >= N * 2, aware + ' of ' + N + ': ' + list([...new Set(run)].map(id => id + '/' + line(id).kind)));
+
+      /* The symptom itself, which is a run rather than a ratio: five in a row
+         is what was actually seen, and a ratio can hide one inside a long
+         enough sample. */
+      let longest = 0, streak = 0;
+      run.forEach(id => { streak = line(id).kind === 'data' ? 0 : streak + 1; longest = Math.max(longest, streak); });
+      check('and never five generic lines running, which is what was seen live — ' + name + ', ' + where,
+            longest < 5, 'longest generic run ' + longest);
+    });
+  });
+
+  /* And the promise is bounded honestly: below the threshold it is not made at
+     all. One data line cannot rotate against itself, so that account keeps the
+     generics and this file says so rather than asserting something it would
+     have to break the engine to deliver. */
+  const thin = greetsOver(ONE, 0, N).filter(id => line(id).kind === 'data').length;
+  check('and on a log with one data line the two-thirds promise is not made — it could only be kept by repeating',
+        thin * 3 < N * 2, thin + ' of ' + N + ' data-aware, and one line cannot rotate against itself');
 }
 
 /* ---------- report ---------- */

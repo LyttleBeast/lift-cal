@@ -177,6 +177,68 @@ Carried from `NEXT-NATIVE.md` §7 so it survives that file. Do not "fix" these:
 
 ---
 
+## What v44 left open in its own work
+
+v44 is the stale-asset fix — the service worker's network leg revalidates now,
+so a ship reaches the phone instead of being re-cached one build behind — plus a
+second pass over the greeting rotation. One cost it took on purpose, one
+verifier it did not write, and one case the fix deliberately does not reach.
+
+- **`index.html` is still served from the browser's HTTP cache for up to ten
+  minutes after a ship.** The revalidating leg is same-origin and
+  non-navigation, and the second half of that is the cost: passing any init at
+  all to `fetch()` makes it rebuild the Request, and while the Fetch spec says
+  a navigate-mode rebuild is downgraded to same-origin rather than thrown on,
+  engines have historically thrown there. A throw becomes a rejected promise in
+  the handler's `.catch()`, which on the first launch after a bump — with the
+  cache just emptied by `activate` — is a blank screen rather than a stale
+  file. Every module `index.html` loads is fresh, so this only bites on a ship
+  where `index.html` itself changed. Closing it starts with establishing what
+  current iOS Safari actually does with a navigate-mode Request and a non-empty
+  init, which is not a thing to guess at with a blank screen on the other side.
+- **Nothing in `tools-check/` asserts that `sw.js`'s `CACHE` and `usage.js`'s
+  `VERSION` are the same string.** `CLAUDE.md` makes it a hard rule and it is
+  checked by hand, which is the kind of rule that holds until the one session
+  that forgets — and the failure is the silent one, an account reporting a build
+  it is not running. It is a two-line verifier and no rule would need copying
+  into it: it reads both files and compares.
+- **The card pins its greeting before food, weight and steps have landed, so
+  the rotation fix reaches it only when two LOG-gated lines qualify.**
+  `coach-ui.js` pins at the `logKnown` paint, which `coach-data.js` reaches
+  after `Promise.all([pLog, pSettings])` and before `pRest`. Four of the ten
+  data-aware lines gate on the late reads; the other six gate on the training
+  log and are live at the pin. Measured at that paint, two of the verifier's
+  fixtures go from 27% data-aware to 100% and three do not move at all. The pin
+  itself is right — a card that rewrites its own top line under the reader's
+  thumb is worse than a generic one, and the boot path was on v44's do-not-touch
+  list — so the two ways out are to pin later (and pay that cost) or to give the
+  late-gated lines a cheap log-only sibling. Neither was in scope. Until then,
+  a generic line on a cold start is not evidence the rotation is broken.
+- **ZXing has never been cached by the service worker, and the README said it
+  was until v44.** `food.js` loads it with a `<script>` tag, so the request is
+  no-cors, the response is opaque with `status === 0`, and the handler's
+  `r.status===200` guard never writes it. Barcode scanning therefore does not
+  work offline on an iPhone, where it is the only scanner there is. Fixable by
+  adding `crossorigin` to the script tag — jsDelivr does send the header — but
+  that is a change to the food path and wants testing on a real phone.
+- **`g_in_a_row` prints a rolling-seven-day count under a calendar word.**
+  *"3 sessions this week."* counts the last seven days, so on a Tuesday it can
+  be reporting three sessions that all happened last week. It was always like
+  that; v44 made the card open with it about three times as often, which is how
+  it got noticed. The house law is that a wrong number is worse than no number,
+  and this is a right number under a wrong word — either the text says "in the
+  last seven days" or the fact becomes a calendar-week count.
+- **An account where only one data-aware greeting line passes its gates still
+  opens with a generic line roughly seven opens in eight.** That is not a bug —
+  one line cannot rotate against itself, and saying it twice running is the
+  collapse v43 fixed — but it means v44's change does nothing for a thin log,
+  and the last check in `tools-check/coach-rotation.mjs` says so rather than
+  asserting a floor the engine would have to break to deliver. Anyone reading a
+  live card should know which of the two cases it is in before reading anything
+  into the line it opened with.
+
+---
+
 ## What v43 left open in its own work
 
 v43 is the Coach fix run — the rotation, the boot path, the tier gate, the

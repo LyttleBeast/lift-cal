@@ -2,6 +2,12 @@
 
 Web shipped as `rack-v43`. The tree it mirrors is `~/dev/rack-mobile`.
 
+**Amended at rack-v44**, which got no port note of its own: v44 changed two
+things a port copies — the greeting rule in §1.1 and the recent-line cap that
+goes with it — and the `coach.js` pin below. Both are stated here as rack-v44
+rather than left as v43's and contradicted by a second file. Everything else in
+this document is v43's and is unchanged.
+
 **`rack-mobile` was not read at all by this ship, at any commit.** The run was
 fenced to `~/dev/ship-v42` and nothing outside it was opened. So, as with v42,
 this file makes **no claim about what native currently has**. Every "native
@@ -34,12 +40,15 @@ coach-tags.js 846501595feb06fddc7d85fb19ed526bc6c6cc69cecc5b7e9494eb96bd8c8a06  
 ## 1. `coach.js` — still copy-verbatim, and re-pin it
 
 ```
-coach.js   92ad1efee2c264bf23d7169571dce31cf28d2beaf84de61789cccc6d3f19ba27
+coach.js   3875fdc4c170a812e5612d26bb2999e353c7d5aafe07f3028b8d44c0bfd09fbe
 ```
 
-2,223 lines, still all of them copying. Still three imports, still no clock, no
-randomness, no DOM, no module state — and `tools-check/coach-pure.mjs` is
-stricter than it was. What changed inside:
+2,254 lines, still all of them copying. The hash and the count are rack-v44's —
+the greeting rule below moved after this document was first written, and a pin
+that names the wrong file fails a port that copied the right one.
+
+Still three imports, still no clock, no randomness, no DOM, no module state —
+and `tools-check/coach-pure.mjs` is stricter than it was. What changed inside:
 
 ### 1.1 THE ROTATION IS A COUNTER NOW, AND THIS IS THE HEADLINE
 
@@ -67,18 +76,34 @@ outright, so a port that keeps feeding it a clock fails the fence.
 Two supporting changes went with it, and without either the rotation still
 stutters:
 
-- **`pickGreeting` no longer collapses its pool.** v42 did
+- **`pickGreeting` has had this pool wrong in both directions.** v42 did
   `const from = data.length ? data : pool;`, which reduced the pool to a single
   entry whenever exactly one data-aware line passed its gate — and `n % 1` is
-  always 0, so that card said the same thing every open forever. Data-aware
-  lines are ordered first and the generics after, and the counter walks the
-  **whole ordered pool**. A data line is usually what comes up; "usually" is the
-  promise and "always" was the bug.
+  always 0, so that card said the same thing every open forever. v43 walked the
+  **whole ordered pool** instead, and that is the version this document shipped
+  with and the one not to port: it cannot repeat, but it spends what the line is
+  for, because seven generics stand behind two or three data lines and a
+  consecutive counter spends most of its lap among them. Five opens in a row on
+  a live account came up generic on a log where several data lines qualified.
+  The rule that holds both ends is a threshold of two: `data.length >= 2` and
+  the walk stays inside the data-aware lines, fewer than two and it opens out to
+  the whole ordered pool, data first and generics after. Two, because two is the
+  smallest pool a counter can rotate without repeating.
 - **The recent-line list is three ids, not one**, and it steps the index
   forward rather than filtering the pool. The counter is what makes consecutive
   opens differ; the list covers the case the counter cannot, which is an
   eligible pool that changed size between two opens because a gate stopped
-  passing.
+  passing. **It is read one line short of the pool** —
+  `recent.slice(0, Math.max(1, ordered.length - 1))` — and that cap is what
+  keeps the threshold from being a second bug. A data-aware walk two or three
+  lines wide against a memory of three leaves every candidate recent, so the
+  loop finds nowhere forward to step and falls back on the counter's own index,
+  which is exactly the index that collides when the pool changed size between
+  two opens. On the verifier's fixtures that is 26 repeats on consecutive opens
+  in 4,704 crossings uncapped and none capped, and capped the no-repeat
+  guarantee is arithmetic rather than a sample: at most one line short of the
+  pool is ever blocked, so a free candidate always exists and the line just
+  shown is always among the blocked.
 
 ### 1.2 The stall finding is answer-only, and its sentence is a readout
 
@@ -224,12 +249,18 @@ it is there ready for that.
 Both were found by audit rather than by eye, and both are real:
 
 1. **Pin the greeting for the app open.** Four of the greeting lines gate on
-   weigh-ins, food or steps, which arrive after the log does, so the eligible
-   pool genuinely grows between the log paint and the full one and the counter
-   lands somewhere else. Left alone the card rewrites its own top line half a
-   second after somebody starts reading it — and records the line that flashed
-   rather than the one they read, so the *next* open avoids the wrong id. Web
-   pins the first line chosen in the view layer, which keeps `coach.js` pure.
+   weigh-ins, food or steps, which arrive after the log does, and the eligible
+   pool does not merely grow between the log paint and the full one: crossing
+   two qualifying data lines moves the walk out of the whole ordered pool and
+   into the data-aware lines alone, so the counter can land somewhere entirely
+   unrelated. Left alone the card rewrites its own top line half a second after
+   somebody starts reading it — and records the line that flashed rather than
+   the one they read, so the *next* open avoids the wrong id. Web pins the first
+   line chosen in the view layer, which keeps `coach.js` pure. Pin it anyway,
+   and name what that costs: at the paint that pins it fewer data lines have
+   qualified, so an open that would have rotated inside them can lock a generic
+   instead, and the card reads more generic on a cold start than the engine
+   alone would make it. That is the smaller of the two wrongnesses.
 2. **Do not print a count that can go up.** The "N more with Pro" figure counts
    Pro findings that actually fire, and three of the ten read food and weight,
    so at the log phase it is genuinely "at least N". Web holds it back until the
@@ -344,7 +375,7 @@ Four new ones, on top of v42's six.
 
 | | |
 |---|---|
-| `coach-rotation.mjs` | The property the brief demanded: N consecutive opens with a pool of N produce N distinct lines, and no two consecutive opens ever match. Drives real opens through the real engine. **Ports as-is.** |
+| `coach-rotation.mjs` | Two properties that pull against each other on purpose, and a port needs both: no two consecutive opens ever match, AND at least two thirds of a thirty-open run say something about the log, with never five generic lines running. Holding only the first is what let the card go generic while this file stayed green. Drives real opens through the real engine. **Ports as-is.** |
 | `coach-voice.mjs` | The voice rule, mechanically, over every template and `because` string a card can reach — source text *and* rendered output, imperial and metric. **Ports as-is**, except for the part that sweeps `coach-ui.js`'s own hardcoded card strings, which is web-shaped. |
 | `coach-surface.mjs` | Drives `coach-ui.js` through a DOM shim: the tier gate, the surface-scoped topics, and that there is no purchase control anywhere in the sheet. **Does not port** — it is a fence around a web view layer. Native wants its own equivalent, and it wants one: both bugs it catches were invisible to everything else. |
 | `coach-boot.mjs` | Round-trip depth of the boot load. **Does not port** as written, but the property does. |

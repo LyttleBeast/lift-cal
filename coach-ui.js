@@ -136,14 +136,19 @@ export function coachCard(opts = {}) {
      The greeting is chosen from a pool whose membership depends on which reads
      have landed — four of the lines gate on weigh-ins, food or steps, which
      arrive after the log does — so the honest answer genuinely differs between
-     the log paint and the full one, and the counter lands on a different entry
-     because the pool is a different length. Left alone, the top line of the
-     card changes under the reader's thumb half a second after it appears, and
-     rememberGreeting() records the line that flashed rather than the one they
-     read, so the NEXT open avoids the wrong id.
+     the log paint and the full one. It is not only that the pool is a
+     different length: cross two qualifying data lines and the rotation moves
+     out of the whole ordered pool and into the data lines alone, so the
+     counter can land somewhere entirely unrelated. Left alone, the top line of
+     the card changes under the reader's thumb half a second after it appears,
+     and rememberGreeting() records the line that flashed rather than the one
+     they read, so the NEXT open avoids the wrong id.
 
-     So the first line chosen is the line, and it is the one written down. A
-     slightly narrower pool for one open is a much smaller cost than a card
+     So the first line chosen is the line, and it is the one written down. What
+     that costs is worth naming: at the paint that pins it fewer data-aware
+     lines have qualified, so an open that would have rotated inside them can
+     pin a generic instead, and the card reads more generic on a cold start
+     than the engine alone would make it. Still a much smaller cost than a card
      that rewrites its own greeting while somebody is reading it. */
   if (!opts.tight && c.greet && c.greet.id && !shownGreet) shownGreet = c.greet;
   const greet = opts.tight ? null : (shownGreet || c.greet);

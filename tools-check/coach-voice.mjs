@@ -440,7 +440,15 @@ const rendered = [];
   /* Every line, not most of them. The pool is filtered by gates and walked by
      the open counter, so a line nothing here satisfies is a line the ban above
      never saw — and the fix for that is a fixture, which is what this check
-     asks for by failing. */
+     asks for by failing.
+
+     It has a dependency worth naming, because it is invisible from here: the
+     rotation stays inside the data-aware lines once two of them qualify, so
+     the seven generics are reached only through the THIN fixtures — the ones
+     with fewer than two. They are what keeps this check honest, and a fixture
+     sweep that gave every account plenty to say would take the generics out of
+     reach and hollow this out rather than turning it red. If it ever fails on
+     a generic line, that is where to look first. */
   const greeted = new Set(rendered.filter(r => r.where === 'greet').map(r => r.id));
   check('every greeting line in the pool was rendered by the rotation, so the ban above saw all of them',
         C.GREETINGS.every(g => greeted.has(g.id)),

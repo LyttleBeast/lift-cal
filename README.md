@@ -129,7 +129,7 @@ node in the database. See *Access* below for what replaced them, and why.
 | `importer.js` | One-time Liftoff history migration |
 | `rack.css` | The stylesheet |
 | `404.html` | Branded not-found page |
-| `sw.js` | Service worker, network-first. The cache name is the build version — read it out of the file, never out of here |
+| `sw.js` | Service worker, network-first, and revalidating for our own files so a fresh ship is not re-cached stale. The cache name is the build version — read it out of the file, never out of here |
 | `AGENTS.md` | The database schema, node by node |
 | `rack.mjs` | **Dead file** — CLI for the removed agent account, kept as a record |
 
@@ -640,7 +640,7 @@ never leave the phone.
   to add a second helping as its own entry. **Copy JSON** lifts it out in the shape the paste
   box eats; on a past day, **Log on today** does the same trip without the clipboard. Library-linked foods scale by portion so the
   gram maths stays honest; everything else scales its macros directly.
-- Barcode scan uses the native `BarcodeDetector` where it exists and falls back to ZXing (plain JS, fetched from jsDelivr and cached by the service worker)
+- Barcode scan uses the native `BarcodeDetector` where it exists and falls back to ZXing (plain JS, fetched from jsDelivr by a `<script>` tag — which is a no-cors request, so the response is opaque and the service worker's `status === 200` guard never stores it. It is not cached and has never worked offline, whatever this line said before v44. Cross-origin either way, so it also sits outside the same-origin revalidation described under *Notes*)
   on iOS Safari. Lookups hit Open Food Facts; misses drop into manual entry.
 - Starter foods (Body Fortress scoop 44 g, work pizza crusts S–XL dough only, wings per oz)
   are seeded for the owner account only, once. Delete one and it stays deleted.
@@ -764,10 +764,21 @@ for somebody who picks metric, and changing units afterwards never touches it.
 - Flat file layout — GitHub Pages serves it directly from the repo root.
 - Timers are timestamp-based, so iOS background throttling doesn't cause drift.
 - Writes queue in `localStorage` when offline and flush on reconnect.
-- Service worker is network-first with cache fallback. Bump the cache name in
-  `sw.js` when you need to force-evict old assets. It bypasses `*.workers.dev` the same way
-  it bypasses Firebase — an estimate must never come out of a cache. `usage.js` holds the
-  same string a second time, because a service worker is not a module the app can import
-  and the version is what each account reports as its own; move the two together.
+- Service worker is network-first with cache fallback, and for our own files the network
+  leg revalidates. A plain `fetch()` inside the worker is answered out of the browser's own
+  HTTP cache, and Pages holds these assets about ten minutes, so for the first minutes after
+  every ship the worker faithfully re-cached the build before this one — while `sw.js` itself,
+  the one script browsers always revalidate, reported the new version. Navigations stay on a
+  plain fetch deliberately, which leaves `index.html` alone up to ten minutes stale after a
+  ship; every module it loads is fresh. If the revalidating leg fails it retries plainly before
+  the cache leg, because a conditional request needs the network and the launch right after a
+  bump is exactly when Cache Storage is empty — without the retry that launch is a blank app
+  offline. Bumping the cache name does not force-evict anything
+  online — once the network answers, the cached copy is only reachable through the offline
+  `.catch()` — it renames the build and drops the offline copy of the last one. It bypasses
+  `*.workers.dev` the same way it bypasses Firebase — an estimate must never come out of a
+  cache. `usage.js` holds the same string a second time, because a service worker is not a
+  module the app can import and the version is what each account reports as its own; move
+  the two together.
 - If a deploy looks stuck, edit `.nojekyll` (bump the "redeploy N") and push — that forces
   GitHub Pages to rebuild.

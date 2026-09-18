@@ -36,10 +36,18 @@ git push
 - `sw.js` — `const CACHE='rack-vN'`
 - `usage.js` — `const VERSION = 'rack-vN'`
 
-`sw.js` is what makes phones fetch the new bundle instead of serving the cached
-one. `usage.js` is what reports to the admin panel which build each person is
-actually running — which is how you find out that somebody's phone never took an
-update. If they disagree, the panel lies to you. Bump both, every ship.
+`sw.js` is what evicts the offline copy, and its cache name is the string each
+account reports as its build. `usage.js` is what reports it to the admin panel —
+which is how you find out that somebody's phone never took an update. If they
+disagree, the panel lies to you. Bump both, every ship.
+
+That report only means what it says from v44 onward. Before v44 the service
+worker fetched app files through the browser's own HTTP cache, which holds Pages
+assets about ten minutes, so for the first minutes after every ship it re-cached
+the build before this one — while `sw.js` itself, the one script browsers always
+revalidate, updated at once and reported the new version. rack-v43 was seen
+reporting itself on an account still running rack-v42's code. v44 revalidates
+its own files, so the version and the modules move together now.
 
 ### Two things that bite
 
@@ -124,10 +132,16 @@ Each step proves a different thing, so a failure tells you where to look.
 
 1. **Take the update.** Swipe Rack out of the app switcher, open it, swipe it out
    again, open it again. The first launch fetches the new files, the second runs
-   them.
+   them. Before v44 both launches could be handed the previous build, which is
+   what the second half of step 2 now catches.
 2. **Confirm the build.** Firebase → Realtime Database → Data →
    `usage/{your uid}/who/version`. It must read the version you just shipped. If
-   it shows the old one, your phone is still on the old bundle.
+   it shows the old one, your phone is still on the old bundle. That number comes
+   from `usage.js`, so it proves one module and not the graph — prove the rest
+   too: from any browser, fetch a `.js` or `.css` file you changed twice, once
+   plain and once with `?x=1` on the end, and confirm the two come back
+   identical. Before v44 they routinely did not. This cannot see a stale
+   `index.html`, which is the one file v44 deliberately left on the old path.
 3. **Confirm the rules.** In the same place, `usage/{your uid}/days/{today}` has
    an `appOpen` count. If the whole `usage` node is missing, step 2 above didn't
    happen.
@@ -135,8 +149,16 @@ Each step proves a different thing, so a failure tells you where to look.
    remaining estimates and your monthly cap. Then photograph a meal and log it,
    which exercises the whole path end to end.
 
-Still looks old after two relaunches: Safari → Settings → Clear History and
-Website Data, or delete the home-screen icon and re-add it.
+Still looks old after two relaunches: before v44 that was ordinary in the first
+ten minutes after a ship, and clearing storage never fixed it — the stale bytes
+sat in the browser's HTTP cache, not the service worker's, and only a reload that
+bypassed that cache helped. v44 removed that cause for every file the app loads,
+with one exception it kept on purpose: `index.html` itself, which can still be
+up to ten minutes behind. So if the ship changed `index.html`, wait ten minutes
+and relaunch before doing anything else. Otherwise run step 2's file check —
+a recurrence is now a real symptom rather than the ordinary case. Then Safari →
+Settings → Clear History and Website Data, or delete the home-screen icon and
+re-add it.
 
 ---
 

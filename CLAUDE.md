@@ -59,14 +59,20 @@ history, and that is no longer true. The handoff below is still how you end.
 
 `sw.js` opens with `const CACHE='rack-vNN'`. Read the current number and
 increment it — in the same change as any edit to `*.js`, `*.css`, `index.html`
-or `404.html`. The service worker caches under that name, so a change shipped
-without a bump reaches nobody's phone and looks, from the outside, exactly like
-a change that didn't work. State the new version in your summary. Changes
-confined to documentation do not need a bump.
+or `404.html`. The handler is network-first, so the cache name never gated what
+a connected phone runs. A bump does two other things: it evicts the stale
+offline copy, because the activate handler deletes every cache not named
+`CACHE`, and it is the string each account reports as its build. Ship without
+one and you leave a stale offline copy behind and a version number naming the
+wrong build. State the new version in your summary. Changes confined to
+documentation do not need a bump.
 
-`usage.js` holds the same string in its own `VERSION` constant, because it
-reports which build an account is running and a service worker is not a module
-the app can import. The two move together.
+`usage.js` holds the same string in its own `VERSION` constant, because a
+service worker is not a module the app can import. It reports which build an
+account is running, and that only became true in v44: browsers always
+revalidate `sw.js` itself but not the files it fetches, so before v44 a phone
+could be running modules from two deploys at once and the number named only the
+one `usage.js` came from. The two move together.
 
 **2. A new top-level node under `users/{uid}` needs a rules change too.**
 

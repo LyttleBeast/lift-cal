@@ -94,7 +94,8 @@ function readRotation() {
   rotationRead = true;
   const n = LS.get(LS_OPENS, 0);
   // Wraps well short of anything that loses integer precision, and the engine
-  // only ever takes it modulo a pool of a dozen.
+  // only ever takes it modulo a small pool — a dozen lines at the outside, and
+  // usually just the two or three data-aware ones that passed their gates.
   opens = (Number.isFinite(n) ? Math.floor(n) : 0) + 1;
   if (opens < 0 || opens > 1e9) opens = 0;
   LS.set(LS_OPENS, opens);

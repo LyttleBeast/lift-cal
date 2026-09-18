@@ -841,3 +841,367 @@ and `coach-surface` is the important one: it is the first thing in this repo
 that drives a view layer at all.
 
 A pure engine is easy to fence and is not where the bugs were.
+
+---
+---
+
+# COACH — the cache run (rack-v44)
+
+A third run in `~/dev/ship-v42`, against `COACH-FIX2-PROMPT.md`, with
+`COACH-PROMPT.md` §1 still governing the house rules. Everything above this line
+is unchanged, including the parts of it this section contradicts — §19 is where
+those are named rather than edited.
+
+Two items, both shipped. One of them **cannot be proven by anything in this
+repo** and is not pretended otherwise.
+
+---
+
+## 16. THE DEPLOY THAT DID NOT REACH A BROWSER
+
+### 16.1 What it was
+
+`sw.js`'s fetch handler was network-first: `fetch(e.request)`, cache only
+through the `.catch()`. That `fetch` is itself answered out of the browser's own
+HTTP cache, and GitHub Pages holds these assets for roughly ten minutes. So for
+the first minutes after every ship the service worker faithfully fetched, served
+and **re-cached the previous build**.
+
+The version number stayed honest the whole time and that is what made it
+invisible. Browsers deliberately bypass the HTTP cache when checking `sw.js`
+itself, so the one file that carries the build string updated promptly while
+every module behind it stayed stale. rack-v43 was observed reporting
+`rack-v43` on an account executing rack-v42's `coach-data.js`.
+
+The fix is one clause:
+
+```js
+const fresh = u.origin === self.location.origin && e.request.mode !== 'navigate';
+e.respondWith((fresh ? fetch(e.request, { cache: 'no-cache' }) : fetch(e.request)).then(…
+```
+
+`no-cache` and not `reload`: a conditional request and a 304 is one cheap round
+trip, where `reload` re-downloads every asset on every request. Same-origin
+only, because four cross-origin hosts reach this handler — `www.gstatic.com`,
+`fonts.gstatic.com`, `cdn.jsdelivr.net` (the ZXing barcode fallback) and
+`world.openfoodfacts.org` — and the existing early return covers none of them.
+It only knocks out Firebase, googleapis and `workers.dev`.
+
+Three of the four are stored by it. The ZXing script is not, and that is worth
+writing down because README.md had claimed otherwise since before this ship:
+`food.js` loads it with a `<script>` tag, which is a no-cors request, so the
+response is opaque with `status === 0` and the handler's `r.status===200` guard
+never writes it. Barcode scanning on an iPhone has never worked offline.
+Corrected in the README and logged in BACKLOG.md; not otherwise touched, because
+it is not this ship.
+
+`sw.js` also gained a header comment, the first it has carried since the v25–v28
+revert. It is a minified one-liner and now three decisions live in it that
+nothing else in the tree explains.
+
+### 16.2 The offline fallback is unchanged, and here is the argument
+
+The brief asks for this to be argued rather than asserted, so: the `.catch()` is
+attached to the whole chain, not to the `then`. What changed is one argument to
+`fetch`, inside the same expression, and a revalidating request fails exactly
+the way a plain one does when there is no network — `fetch` rejects, the
+`.catch()` fires, `caches.match(e.request)` answers, and a navigation that
+misses still falls through to `caches.match('./index.html')`. The cache write is
+still keyed on `e.request`, so nothing about what is stored or what answers
+offline moved.
+
+One real difference, and the review caught it after I had already written that
+there wasn't one. A revalidating request needs the network by definition, so it
+cannot be answered out of the HTTP cache the way a plain one can — and the
+launch right after a bump is exactly when Cache Storage is empty, because
+`activate` has just deleted the only cache there was. Offline in that window,
+v43 served every module from the HTTP cache and repopulated the new cache off
+the back of it; v44, as first written, served nothing. A blank app in a
+basement, where the old one worked.
+
+So the network leg retries plainly before it gives up:
+
+```js
+const net = fresh ? fetch(e.request, { cache: 'no-cache' }).catch(() => fetch(e.request))
+                  : fetch(e.request);
+```
+
+Online the first leg answers and the retry never runs. Offline it costs one
+rejected promise and restores exactly the fallback that was about to be lost.
+There is no precache in this worker — `install` is `skipWaiting()` and nothing
+else — so Cache Storage holds only what a successful fetch put there, which is
+why the cold-cache window is real rather than theoretical.
+
+### 16.3 What I did not do, and what it costs
+
+**Navigations are excluded.** Handing `fetch()` any init at all makes it rebuild
+the Request. The Fetch spec's Request constructor downgrades a navigate-mode
+request to `same-origin` rather than throwing — but engines have thrown there
+historically, and `fetch()` turns a constructor throw into a *rejected promise*,
+which lands in the `.catch()`, which on the first launch after a version bump
+finds a cache the `activate` handler has just emptied. That is a blank screen
+rather than a stale file, on the one launch every ship has.
+
+I could not test that in this environment: Node refuses to construct a
+navigate-mode Request at all, so there is nothing local to check the downgrade
+against. Weighing a spec recitation against a brickable app on nine phones, the
+navigation now executes byte-identical code to rack-v43 and the question stops
+mattering.
+
+The cost is real and is in BACKLOG.md: **`index.html` is still served from the
+HTTP cache for up to ten minutes after a ship.** Every module it loads is
+revalidated, so this only bites on a ship where `index.html` itself changed.
+
+### 16.4 What could not be measured here
+
+Nothing. No verifier was written for this and none should be — it is observable
+only against a real deploy, and a test that drove a stubbed `fetch` would be
+fencing the stub. The live check is in DEPLOY.md now: fetch an app file twice,
+once with a cache-busting query and once without, and confirm the two come back
+identical. They did not, for ten minutes after every ship before this one.
+
+---
+
+## 17. THE GREETING, AND THE HOLE IN THE BRIEF'S OWN REASONING
+
+### 17.1 The rule
+
+Two or more data-aware lines passing their gates and the counter rotates inside
+them; fewer than two and it falls through to the whole ordered pool, data first
+and generics after. Two is the threshold because two is the smallest pool a
+counter can rotate without repeating, and one data line is better read as an
+account with nothing much to say yet than as a line to say twice.
+
+That is the brief's suggested shape and it is two lines of code. It is also not
+sufficient, which is the interesting half.
+
+### 17.2 The brief's justification has a hole, and it is the old bug
+
+> *rotate within the data lines alone — the counter still guarantees no repeat,
+> because the pool has two or more members.*
+
+That holds only while the pool does not change. The data-aware walk is two or
+three lines wide on an ordinary log, against a `recentGreets` memory of three.
+So **every candidate is recent**, the walk finds nowhere forward to step, and it
+falls back on the counter's own index — which is exactly the index that collides
+when the pool changed size between two opens. A day rolls over and takes the
+food line; a third session drops *"Two sessions in already."*; the counter's
+index on the new pool has no relationship to the one it used on the old.
+
+Driven against the fixtures — every ordered pair of logs, 24 counters, one to
+four warm-up opens carrying the real history:
+
+| | repeats on consecutive opens |
+|---|---|
+| rack-v43 as shipped | 0 of 4,704 |
+| the brief's shape as written | **26 of 4,704** |
+| what shipped | 0 of 4,704 |
+
+The first one found is `FULL → TWO` at opens 3/4: `g_trend_down`, then
+`g_trend_down` again. Which is the defect rack-v43 existed to fix, reintroduced
+by a different route.
+
+### 17.3 The memory is read one line short of the pool
+
+```js
+const memory = recent.slice(0, Math.max(1, ordered.length - 1));
+```
+
+This is the load-bearing line of the two changes and it is not in the brief.
+With it, the no-repeat property stops being a sample and becomes arithmetic: at
+most one fewer than the pool is ever blocked, so a free candidate always exists
+and the fall-through is unreachable; and the line just shown is `recent[0]`,
+which is always inside the cap. **Nothing can follow itself**, on any pool of two
+or more, whether or not the pool changed underneath it.
+
+On a fall-through pool of seven or eight the cap is six or seven and the memory
+is three, so it changes nothing there. rack-v43's behaviour on a thin log is
+preserved exactly.
+
+### 17.4 Before and after
+
+Share of 60 consecutive opens that greeted with a real number, on the rotation
+verifier's fixtures:
+
+| the log | qualifying data lines | rack-v43 | rack-v44 |
+|---|---|---|---|
+| a brand-new account | 0 | 0% | 0% |
+| a weight trend only | 1 | 13% | 13% |
+| a trend and a day of food | 2 | 23% | 100% |
+| a full log | 3 | 30% | 100% |
+| the same, card muted | 3 | 30% | 100% |
+| a caution card | 2 | 33% | 100% |
+| a heavy day, steps up | 5 | 42% | 100% |
+
+Longest run of consecutive generic lines went to 0 on every one of those except
+the first two — from 7, or from 4 on the caution card, where three of the seven
+generics are warm and withheld anyway. The live symptom was five in a row.
+
+### 17.5 What this does not fix
+
+**An account with one qualifying data line is unchanged**: roughly seven opens
+in eight still open with a generic. One line cannot rotate against itself, and
+making it try is exactly the rack-v42 collapse. If Micah's account is that
+account, he will see no difference, and the honest way to find out is to open
+the card and look at what the lines are about rather than at how often they
+change. In BACKLOG.md.
+
+**A walk of exactly two alternates.** *"The trend is pointing down."* then
+*"Food already logged today."* then back. It never repeats and both lines say
+something true, but a reader who opens the app four times in a minute sees a
+cycle of two. The gates move day to day, which is what keeps it from being a
+cycle of two for long, and the alternative — padding the walk with a generic to
+widen it — spends a third of the opens on the thing the brief asked me to stop
+spending them on.
+
+### 17.6 The card pins its line before half the gates can pass, and that is
+what Micah will actually see
+
+The clearest thing the audit found, and it is a limit on the whole fix.
+
+`coach-ui.js` pins the greeting at the first paint that has one, and that paint
+is `logKnown` — `coach-data.js` sets it after `Promise.all([pLog, pSettings])`,
+which is before `pRest` brings back food, weight and steps. Four of the ten
+data-aware lines gate on exactly those late reads. So the line the card pins is
+chosen from a smaller set than the one every measurement in §17.4 was taken
+against, and the new threshold is tested against a set that may not have two in
+it yet.
+
+Driven at that paint rather than at the full snapshot:
+
+| the log | at the pin (v43 → v44) | at the full snapshot |
+|---|---|---|
+| a trend and a day of food | 0% → 0% | 100% |
+| a full log | 13% → 13% | 100% |
+| the same, card muted | 27% → **100%** | 100% |
+| a caution card | 20% → 20% | 100% |
+| a heavy day, steps up | 27% → **100%** | 100% |
+
+It comes down to which lines qualify. Six of the ten gate on the training log
+alone — the overdue group, the streak, the PR, trained-today, the layoff, two
+sessions in — and those are live at the pin. The other four are not. **Two of
+the six must qualify for the card to show the fix at all.**
+
+I did not change it. The pin is there because a card that rewrites its own top
+line half a second after somebody starts reading it is worse than a generic
+line, and the boot path is on the brief's do-not-touch list. But it means the
+honest statement of what shipped is narrower than §17.4: the ENGINE now opens
+with a number whenever two data lines qualify, and the CARD does when two of the
+six log-gated ones do. In BACKLOG.md, with the two ways out — pin later, or give
+the late-gated lines a cheap log-only sibling — neither of them this ship's.
+
+---
+
+## 18. WHERE THE BRIEF WAS WRONG ABOUT THE CODE
+
+Two things, and the first is the one that mattered.
+
+### 18.1 §2's no-repeat guarantee does not follow from the pool size
+
+Covered in §17.2. The brief's reasoning was sound for a pool that holds still
+and the pool does not hold still — its membership is a function of the day's
+data and of the finding on the card, both of which move between two opens on an
+unchanged log. A mute toggled in Settings does it too.
+
+### 18.2 §2 says "Add to `tools-check/coach-rotation.mjs`". It was not an addition
+
+Eight checks in that file went red the moment the engine changed, and they were
+right to. Five of them asserted, in one form or another, that the walk covers
+the whole eligible pool — which is precisely what the change stops being true.
+One failed by becoming *vacuous* rather than by going red on a real property:
+its shrinking-pool pair was `TWO → QUIET`, and under the new rule those two logs
+share no lines at all, so `would.length > 0` collapsed to zero and the check
+proved nothing while still looking like a check.
+
+The file is rewritten rather than appended to, and §20 is what it now holds.
+
+---
+
+## 19. WHAT rack-v43'S OWN REPORT SAID THAT IS NO LONGER TRUE
+
+The report is append-only by its own rule, so these are named here rather than
+edited above.
+
+1. **§12, "the counter walks the whole ordered pool."** True of rack-v43,
+   deliberately untrue now. It walks the data-aware lines whenever two of them
+   qualify.
+2. **§15, "Not the rotation — that is fixed and fenced."** It was neither. It
+   needed a second fix within hours of shipping, and the fence — a 57-check
+   verifier written specifically for it — was green the entire time the card was
+   opening with five generic lines in a row. That is §15's own lesson about the
+   nineteen verifiers, one ship later, about the file that was supposed to have
+   learned it. **A verifier fences the property you thought to write down**, and
+   *"no two consecutive opens match"* is not the same property as *"the line is
+   worth reading"*.
+3. **§14b, "`coach-rotation.mjs` — 57 checks."** 85 now.
+
+---
+
+## 20. THE VERIFIER, AND WHETHER IT FENCES ANYTHING
+
+`coach-rotation.mjs` now asserts both halves on the same run: no two consecutive
+opens match, **and** at least two thirds of a 30-open run are data-aware where
+several lines qualify, **and** never five generic lines running — the live
+symptom itself, because a ratio can hide a run of five inside a long enough
+sample. Neither half is worth much alone: walking the whole pool passes the
+first and fails the second, a pool of one passes the second and fails the first.
+
+The file's floor concept had to change with it. It used to reason that a line
+with no gate has nothing to fail, so it is eligible on any log — which is how it
+avoided deriving its expectations from the thing under test. That is now
+conditional: where two data lines qualify the generics are withheld *on purpose*,
+and a floor built from them would be asserting the bug. So the file asserts
+which case each fixture is in, in both directions, before anything else leans on
+it. A rotation that had quietly collapsed to one line cannot pass itself off as
+one that was correctly confined.
+
+Four mutations, each run against the real file:
+
+| what was reverted | checks red |
+|---|---|
+| rack-v43's whole-pool walk | 13 |
+| the brief's shape without the memory cap | 2 |
+| rack-v42's collapse to the data lines whenever any qualify | 7 |
+| the threshold moved from two to three | 3 |
+
+The second row is the one worth keeping. Before the shrinking-pool check was
+given the memory a real device carries — three ids, which on a walk of two is
+the whole pool — the uncapped engine failed only **one** check in the file. The
+original check handed the engine a memory of one, which a pool of two always has
+a step out of. A check can test the right property against the wrong state and
+look like coverage.
+
+---
+
+## 21. WHAT IS NOT DONE
+
+1. **The service-worker change is unverified.** It cannot be otherwise from
+   here. It needs the live check in DEPLOY.md, and until that is run, "shipped"
+   means "committed", not "working".
+2. **`index.html` still comes from the HTTP cache** for up to ten minutes after
+   a ship. §16.3, and BACKLOG.md.
+3. **Nothing fences `CACHE` against `VERSION`.** CLAUDE.md makes matching them a
+   hard rule and it is checked by hand every ship. It is a two-line verifier
+   that reads both files and copies no rule into itself. Not built — the brief
+   said nothing else was in scope, and I agree with it. In BACKLOG.md.
+4. **Everything §3 of the brief listed as working was left alone**, and the Pro
+   panel and the sheet's `dvh` height are still unverified for want of a real
+   account and a real phone.
+
+---
+
+## 22. IF THE NEXT RUN READS ONE THING
+
+The greeting was fenced by 57 checks and went wrong anyway, because all 57
+fenced the property that was easy to state. The card's only moving part is
+supposed to move *and* to be worth reading, and only one of those two is
+arithmetic. Both are in the file now, and they pull against each other on
+purpose: satisfy either one alone and you have shipped one of the two bugs this
+line has already had.
+
+The other thing is smaller and worse. **Every ship before this one had a
+ten-minute window after the deploy in which the app could be executing the
+previous build while reporting the new one**, and a walkthrough is what somebody
+does in the first ten minutes after a deploy. Anything in the reports above that
+was "confirmed live" shortly after one was confirmed against an unknown build.
+An hour later and it was fine. Nobody wrote down which.
