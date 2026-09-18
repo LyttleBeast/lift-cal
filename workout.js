@@ -20,6 +20,8 @@ import { openStats, isStatsOpen, renderStats, refresh as refreshStats } from './
 // use them without importing this file back.
 import { initPicker, allExercises, openPicker, openExerciseManager } from './picker.js';
 import { initRoutines, openRoutines, saveSessionAsRoutine } from './routines.js';
+import { coachCard } from './coach-ui.js';
+import { initCoachData } from './coach-data.js';
 import { bump } from './usage.js';
 import { wOut, wIn, fmtSetW, fmtSetLoad, fmtVol, volOut, unitW, limW } from './units.js';
 
@@ -74,6 +76,11 @@ export async function initWorkout() {
 
   await loadMonth(monthKey(viewMonth));
   render();
+  /* Train can be the tab the app opens on — a parked session always lands
+     here — so this screen cannot assume You has already asked for Coach's
+     snapshot. initCoachData() is idempotent, so whichever tab gets there first
+     does the reads and the other one just waits for the same promise. */
+  initCoachData().then(render).catch(() => {});
   // Only for a workout restored mid-flight, and deliberately not awaited. The
   // calendar has no set row to mark, and this question costs a whole-tree read
   // that nobody who is not actually training should pay for.
@@ -424,30 +431,52 @@ function renderCalendar() {
   wrap.appendChild(renderMonthStats(days));
   wrap.appendChild(renderWeekVolume());
 
+  /* Coach, directly above the primary button and in its tighter form — the You
+     tab's card leads with a greeting and this one has no room for one, because
+     what belongs here is the training answer and the button under it. Its
+     height is fixed for exactly that reason: a card that grew by a line would
+     push Start workout down under somebody's thumb.
+
+     coach.js has already made sure this is not the finding the You card is
+     showing, so opening one tab after the other reads as two things noticed
+     rather than one thing said twice. */
+  wrap.appendChild(coachCard({ tight: true, live: hasActiveSession() }));
+
   // While a session is parked the Resume bar above the dock is the way back in,
   // so a second button saying the same thing would just be noise.
-  if (!(hasActiveSession() && peek)) {
+  const parked = hasActiveSession() && peek;
+  if (!parked) {
     const start = el('button', 'btn btn-primary btn-block btn-lg', 'Start workout');
     start.onclick = () => startWorkout();
     wrap.appendChild(start);
-
-    // Routines pass startWorkout in as a callback — routines.js never imports
-    // this file, so the dependency stays one-way.
-    const rt = el('button', 'btn btn-ghost btn-block btn-lg', 'Routines');
-    rt.style.marginTop = '10px';
-    rt.onclick = () => openRoutines(preset => startWorkout(preset));
-    wrap.appendChild(rt);
   }
 
+  /* Routines and the library, side by side. Both are doors into a list rather
+     than things you do, so they get half the width each and none of the weight
+     of the primary button above them — the same .btn-split pair Fuel already
+     uses for its two secondary actions. With a session parked, Routines is gone
+     and Exercises fills the row on its own, which is what flex: 1 already does.
+
+     Routines passes startWorkout in as a callback — routines.js never imports
+     this file, so the dependency stays one-way. */
+  const pair = el('div', 'btn-split');
+  pair.style.marginTop = '10px';
+  if (!parked) {
+    const rt = el('button', 'btn btn-ghost', 'Routines');
+    rt.onclick = () => openRoutines(preset => startWorkout(preset));
+    pair.appendChild(rt);
+  }
   // The library itself — what exists, what it is called, what should not be
   // in the picker at all. Deliberately not Statistics: nothing here is about
   // how much you lifted.
-  const exBtn = el('button', 'btn btn-ghost btn-block btn-lg', 'Exercises');
-  exBtn.style.marginTop = '10px';
+  const exBtn = el('button', 'btn btn-ghost', 'Exercises');
   exBtn.onclick = () => openExerciseManager(() => render());
-  wrap.appendChild(exBtn);
+  pair.appendChild(exBtn);
+  wrap.appendChild(pair);
 
-  const stats = el('button', 'btn btn-ghost btn-block btn-lg', 'Statistics');
+  // Full width and quieter than the pair above it. It is the least frequent
+  // thing on this screen and the most expensive — it reads the whole history.
+  const stats = el('button', 'btn btn-ghost btn-block', 'Statistics');
   stats.style.marginTop = '10px';
   stats.onclick = async () => {
     toast('Crunching your history…');

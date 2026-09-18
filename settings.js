@@ -28,6 +28,7 @@ import { hasProxy } from './ai.js';
 import { canUseAi } from './access.js';
 import { hasActiveSession } from './workout.js';
 import { openInstallGuide } from './onboarding.js';
+import { coachToggleRows, coachAnswerRows, openCoachSheet } from './coach-ui.js';
 import { hIn as inchesFrom, fmtH, unitH, limH, labelRate } from './units.js';
 
 /* ---------- pieces ---------- */
@@ -200,6 +201,22 @@ export function openSettings(onEdit) {
   const trainList = rowList(train);
   navRow(trainList, 'Exercise library', null, () => { close(); openExerciseManager(); });
   navRow(trainList, 'Import workout history', null, () => { close(); openImport(); });
+
+  /* ---- coach ----
+     One switch per category of thing Coach may notice. Two categories are
+     deliberately absent and not mutable: the card's own state machine, which
+     is how it says it cannot read the log, and anything that counsels rest or
+     care. Everything else is somebody's to switch off, and an absent key means
+     on — so a fresh account has every switch on without a byte being written. */
+  const coachSec = section(sh, 'Coach');
+  coachSec.appendChild(noteEl(
+    'What Coach may bring up. It only ever compares you against numbers you set ' +
+    'or against your own trailing average, and a rule with thin data stays quiet ' +
+    'rather than guessing.'));
+  coachToggleRows(coachSec, onEdit);
+  coachAnswerRows(coachSec, onEdit);
+  const coachList = rowList(coachSec);
+  navRow(coachList, 'Ask Coach something', null, () => { close(); openCoachSheet(); });
 
   /* ---- steps ---- */
   const steps = rowList(section(sh, 'Steps'));

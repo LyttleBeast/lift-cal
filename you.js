@@ -76,6 +76,9 @@ import { isStandalone } from './usage.js';
 import { openInstallGuide } from './onboarding.js';
 import { openSettings, openGoal, openDailyTargets, pickProfilePhoto } from './settings.js';
 import { openAdmin, isAdminOpen } from './admin.js';
+import { hasActiveSession } from './workout.js';
+import { coachCard } from './coach-ui.js';
+import { initCoachData } from './coach-data.js';
 import { wOut, fmtW, fmtSetLoad, labelW, unitW, fmtRate, labelRate, fmtVol,
          kcalPerUnit } from './units.js';
 
@@ -172,6 +175,14 @@ export async function initYou(ctx = {}) {
    workouts tree, and one node per day of water. Each re-renders when it lands,
    and each fails to an empty result rather than to a missing card. */
 function loadHeavy() {
+  /* Coach's own snapshot. One pass, off the critical path with the other two,
+     and it repaints when it lands rather than blocking the screen on it — the
+     card draws a skeleton until then and says so. Everything it needs is read
+     HERE and never on a paint: this screen already issues around seven live
+     GETs per render and a card that read anything would multiply that by every
+     unawaited load that repaints it. */
+  initCoachData().then(render).catch(() => render());
+
   allSessions()
     .then(list => { sessions = list || []; sessionsFp = fpOf(sessions); render(); })
     .catch(() => { sessions = []; sessionsFp = fpOf(sessions); render(); });
@@ -511,6 +522,14 @@ function build() {
   const wrap = el('div', 'screen-pad');
 
   wrap.appendChild(hero());
+  /* Coach sits directly under the greeting and above everything else, because
+     it is the only thing on this screen that answers "what should I do about
+     it" rather than "what happened". Its own box is a fixed height whatever it
+     has to say, so the cards below it never move between one day and the next.
+     hasActiveSession() is passed in rather than reached for: coach-data.js
+     never imports workout.js, which is what keeps the card's module graph
+     one-way. */
+  wrap.appendChild(coachCard({ live: hasActiveSession(), go: goTab }));
   wrap.appendChild(sinceLine());
 
   // One maintenance estimate for the whole paint. Calling it per card would

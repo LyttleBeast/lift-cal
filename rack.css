@@ -1930,3 +1930,154 @@ body.peeking .view.active { padding-bottom: 58px; }
 .you-hero { align-items: start; }
 .you-avatar { margin-top: 3px; }
 .you-gear { margin-top: 11px; }
+
+/* ---------- Coach ----------
+   A card that says one true thing about your own log, and the sheet behind it.
+
+   THE HEIGHT IS FIXED AND IT IS LOAD-BEARING, not a style preference. What the
+   card says changes every day — a one-line finding today, a two-line one with a
+   two-line reason tomorrow — and on Train it sits directly above Start workout.
+   A box that grew by a line would move the app's primary button under somebody's
+   thumb between one morning and the next. So everything inside clamps, nothing
+   wraps past its allowance, and the box cannot resize. box-sizing is explicit
+   here rather than inherited from the reset, because that is the line the whole
+   guarantee rests on. */
+.coach-card {
+  display: flex; flex-direction: column;
+  width: 100%; height: 190px; box-sizing: border-box;
+  overflow: hidden;
+  text-align: left; color: inherit;
+  background: var(--bar);
+  border: 1px solid var(--collar);
+  border-radius: var(--r);
+  padding: 14px;
+  margin-top: 14px;
+  transition: transform var(--fast) var(--ease), border-color var(--fast) var(--ease);
+}
+.coach-card:active { transform: scale(.985); border-color: var(--knurl); }
+/* Train's form: the greeting goes, because what belongs above Start workout is
+   the answer and nothing else. Exactly one line's worth shorter. */
+.coach-card.tight { height: 164px; margin-bottom: 12px; }
+.coach-card.tight .coach-greet { display: none; }
+.coach-card.loading .coach-greet { color: var(--dim); }
+
+.coach-hd { display: flex; align-items: center; gap: 7px; }
+.coach-mark { display: flex; color: var(--p-yellow); }
+.coach-mark svg { width: 15px; height: 15px; display: block; }
+.coach-ttl {
+  font-size: 10px; letter-spacing: .16em; text-transform: uppercase;
+  color: var(--p-yellow);
+  font-variation-settings: 'wdth' 88, 'wght' 800;
+}
+/* Yellow and shut without Pro, grey and open with it. The shackle is the only
+   thing that moves between the two, which is what makes them readable at 14px. */
+.coach-lock { margin-left: auto; display: flex; color: var(--p-yellow); }
+.coach-lock.open { color: var(--steel); }
+.coach-lock svg { width: 14px; height: 14px; display: block; }
+
+.coach-greet {
+  margin-top: 9px;
+  font-size: 15px; line-height: 1.2;
+  font-variation-settings: 'wdth' 100, 'wght' 700;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.coach-line {
+  margin-top: 7px;
+  font-size: 14px; line-height: 1.35;
+  font-variation-settings: 'wdth' 96, 'wght' 600;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+.coach-line.caution { color: var(--p-yellow); }
+.coach-why {
+  margin-top: 5px;
+  font-size: 12px; line-height: 1.4; color: var(--steel);
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+/* margin-top: auto pins this to the floor of the box however little is above
+   it, so a one-line finding does not leave the tap target floating mid-card. */
+.coach-go {
+  margin-top: auto; padding-top: 10px;
+  display: flex; align-items: baseline; gap: 8px;
+  border-top: 1px solid var(--collar);
+}
+.coach-go-t {
+  flex: none;
+  font-size: 10px; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--p-yellow);
+  font-variation-settings: 'wdth' 88, 'wght' 800;
+}
+.coach-go-q {
+  flex: 1; min-width: 0;
+  font-size: 12px; color: var(--steel);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.coach-go-x { flex: none; color: var(--p-yellow); font-size: 16px; line-height: 1; }
+
+/* ---------- the COACH ME sheet ----------
+   Taller than Log food, because it is a conversation rather than a form. */
+.sheet.coach-sheet { max-height: calc(92dvh - var(--safe-top)); }
+.coach-thread { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; }
+.coach-bub {
+  align-self: flex-start; max-width: 90%;
+  padding: 11px 13px;
+  border-radius: 14px 14px 14px 4px;
+  background: var(--collar);
+}
+.coach-bub.ask { border-left: 3px solid var(--p-yellow); }
+.coach-bub.you {
+  align-self: flex-end;
+  border-radius: 14px 14px 4px 14px;
+  background: rgba(240,190,30,.12);
+  border: 1px solid rgba(240,190,30,.26);
+}
+.coach-bub-t { font-size: 14px; line-height: 1.42; }
+.coach-bub.you .coach-bub-t {
+  color: var(--p-yellow);
+  font-variation-settings: 'wdth' 94, 'wght' 700;
+}
+.coach-bub-r { font-size: 12px; line-height: 1.45; color: var(--steel); margin-top: 6px; }
+.coach-bub .coach-chips { margin-top: 10px; }
+.coach-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.coach-chip {
+  padding: 9px 13px; border-radius: 999px;
+  border: 1px solid var(--collar); background: transparent; color: var(--chalk);
+  font-size: 13px; font-variation-settings: 'wdth' 94, 'wght' 600;
+  transition: transform var(--fast) var(--ease), border-color var(--fast) var(--ease);
+}
+.coach-chip:active { transform: scale(.96); border-color: var(--p-yellow); }
+
+/* ---------- the Coach switches ----------
+   The app's first real switch. Everything binary before this was segmented(),
+   and seven segmented pairs stacked in the settings sheet is a wall rather than
+   a screen. ON is the ABSENCE of a stored key, so a fresh account sees every
+   one of these on without a byte having been written anywhere. */
+.set-row-tog {
+  display: flex; align-items: center; gap: 12px;
+  padding: 11px 2px; border-top: 1px solid var(--collar);
+}
+.set-list .set-row-tog:first-child { border-top: none; }
+.set-row-tog .set-row-l { display: flex; flex-direction: column; gap: 2px; }
+.set-row-sub { font-size: 11px; color: var(--dim); line-height: 1.4;
+  font-variation-settings: 'wdth' 92, 'wght' 400; }
+.tog {
+  flex: none; position: relative;
+  width: 44px; height: 26px; border-radius: 999px;
+  background: var(--knurl);
+  transition: background var(--fast) var(--ease);
+}
+.tog::after {
+  content: ''; position: absolute; top: 3px; left: 3px;
+  width: 20px; height: 20px; border-radius: 50%;
+  background: var(--steel);
+  transition: transform var(--fast) var(--ease), background var(--fast) var(--ease);
+}
+.tog.on { background: rgba(240,190,30,.28); }
+.tog.on::after { transform: translateX(18px); background: var(--p-yellow); }
+
+/* Two buttons sharing a row need to be allowed to shrink, or a long label
+   pushes its neighbour off the edge instead of ellipsing inside its half.
+   .add-row has always carried this; .btn-split did not, and Train's new
+   Routines / Exercises pair is the first place that showed. */
+.btn-split > .btn { min-width: 0; }
