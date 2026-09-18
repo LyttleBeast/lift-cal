@@ -649,7 +649,7 @@ export const FACTS = Object.freeze([
       });
       return best;
     },
-    because: v => 'the ' + plural(v.sessions, 'session') + ' of it since then are logged at or below that figure',
+    because: v => 'its last ' + plural(v.sessions, 'session') + ' are logged at or below that figure',
     age: v => v.daysAgo
   },
   {
