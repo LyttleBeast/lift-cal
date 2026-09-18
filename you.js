@@ -76,7 +76,6 @@ import { isStandalone } from './usage.js';
 import { openInstallGuide } from './onboarding.js';
 import { openSettings, openGoal, openDailyTargets, pickProfilePhoto } from './settings.js';
 import { openAdmin, isAdminOpen } from './admin.js';
-import { hasActiveSession } from './workout.js';
 import { coachCard } from './coach-ui.js';
 import { initCoachData } from './coach-data.js';
 import { wOut, fmtW, fmtSetLoad, labelW, unitW, fmtRate, labelRate, fmtVol,
@@ -526,10 +525,16 @@ function build() {
      it is the only thing on this screen that answers "what should I do about
      it" rather than "what happened". Its own box is a fixed height whatever it
      has to say, so the cards below it never move between one day and the next.
-     hasActiveSession() is passed in rather than reached for: coach-data.js
-     never imports workout.js, which is what keeps the card's module graph
-     one-way. */
-  wrap.appendChild(coachCard({ live: hasActiveSession(), go: goTab }));
+
+     Deliberately NOT passing workout.js's hasActiveSession() in. This file
+     imports none of the four tab modules and that is a property rather than a
+     tidiness: `session` is workout.js's module state, populated by
+     initWorkout(), and app.js starts initYou() BEFORE it — so the first paint
+     of this screen would read "no session running" with one parked on the
+     device. The card asks the device instead, which is right at any moment and
+     in any order. Train passes its own answer in, because there it IS the
+     authority. */
+  wrap.appendChild(coachCard({ go: goTab }));
   wrap.appendChild(sinceLine());
 
   // One maintenance estimate for the whole paint. Calling it per card would
