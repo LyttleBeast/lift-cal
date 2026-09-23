@@ -801,19 +801,21 @@ function persistSession() {
 
 // The block check box, in three pure pieces.
 //
-// It only ever touches sets that are ready to be logged — which means reps, and
-// reps alone. collectDone drops a set with a blank reps box, so ticking one
+// It only ever touches sets that will be ready to be logged once ticked —
+// which means reps, or a rep target a tick will fill them from (tickSet).
+// collectDone drops a set with a blank reps box, so ticking one with neither
 // would promise a set that never reaches the record, and the promise is the
 // whole value of a check box. A blank WEIGHT is a bodyweight set and records
 // fine, so requiring one here would leave the block box refusing to tick a
-// perfectly good round of pull-ups. The test is collectDone's own test,
-// character for character, so the two can never disagree about which sets
-// those are.
+// perfectly good round of pull-ups. Before v46 this took reps alone, so a block
+// started from a routine — every box grey — could not be ticked at all.
 function blockFillableSets(exercises, n) {
   const out = [];
   (exercises || []).forEach((ex, i) => {
     if (!ex || ex.block !== n) return;
-    (ex.sets || []).forEach((s, j) => { if (s.r !== '') out.push([i, j]); });
+    (ex.sets || []).forEach((s, j) => {
+      if (s.r !== '' || (s.tr != null && s.tr !== '')) out.push([i, j]);
+    });
   });
   return out;
 }
@@ -827,12 +829,17 @@ function blockTicked(exercises, n) {
 }
 
 // Ticking and unticking move the same rows, which is what makes the box a
-// toggle rather than two different buttons wearing one face.
+// toggle rather than two different buttons wearing one face. Each row goes
+// through tickSet — the rule a single tick follows — so a block of grey target
+// sets fills in exactly as ticking them one by one would, a typed box is never
+// overwritten, and unticking clears nothing. A row already where the box is
+// sending it is left alone: tickSet is a toggle, and a toggle twice is none.
 function setBlockDone(exercises, n, done) {
   const mark = new Set(blockFillableSets(exercises, n).map(([i, j]) => i + ':' + j));
   return (exercises || []).map((ex, i) => {
     if (!ex || ex.block !== n) return ex;
-    return { ...ex, sets: (ex.sets || []).map((s, j) => mark.has(i + ':' + j) ? { ...s, done } : s) };
+    return { ...ex, sets: (ex.sets || []).map((s, j) =>
+      mark.has(i + ':' + j) && !!s.done !== !!done ? tickSet(s) : s) };
   });
 }
 
@@ -1054,7 +1061,7 @@ function renderBlock(row, editing) {
   chk.setAttribute('aria-label', ticked
     ? 'Mark Block ' + n + ' incomplete'
     : 'Complete every filled-in set in Block ' + n);
-  chk.title = 'Tick every set in this block that has reps in it';
+  chk.title = 'Tick every set in this block that has reps or a target';
   chk.onclick = () => {
     const next = !ticked;
     // Count the sets this actually logs, not the ones that were already ticked.

@@ -492,8 +492,10 @@ function openSetSteps(k) {
   inp.type = 'number'; inp.inputMode = 'numeric'; inp.min = '0'; inp.max = LIMITS.steps[1];
   inp.placeholder = String(goal());
   if (stepsOn(k)) inp.value = String(stepsOn(k));
+  // No inline flex: `.qty-row .btn` gives this button 54px and zero padding,
+  // the room "Save" needs. An inline `flex: 0 0 auto` over that zero padding
+  // sized it to the word itself — the squash v46 took off Weight's Log.
   const go = el('button', 'btn btn-primary', 'Save');
-  go.style.flex = '0 0 auto';
   go.onclick = async () => {
     const n = parseInt(inp.value);
     if (!within(n, LIMITS.steps)) { toast(n > 0 ? 'That’s more than ' + LIMITS.steps[1].toLocaleString() + ' steps in a day' : 'Enter a step count'); return; }

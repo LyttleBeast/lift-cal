@@ -354,13 +354,76 @@ section('F. the set check box is the thing that calls it');
     const m = new RegExp('^(?:async )?function ' + name + '\\(', 'm').exec(WSRC);
     return m ? WSRC.slice(m.index, WSRC.indexOf('\n}\n', m.index)) : '';
   }
-  /* The block check box is a different control and is deliberately not given
-     the rule: it ticks only sets that already have reps (blockFillableSets), so
-     it never ticks a set collectFrom would drop, and a block holding only
-     targets shows it disabled rather than pretending. The line is here so a
-     later change to it is made on purpose. */
-  check('the block check box still ticks only sets with reps — it cannot make a set Finish would drop',
-        /if \(s\.r !== ''\) out\.push\(\[i, j\]\)/.test(WSRC));
+}
+
+/* ================= G. THE BLOCK CHECK BOX ================= */
+section('G. the block check box ticks through tickSet — a block of grey targets fills in like single ticks');
+{
+  /* Until v46 the block box ticked only sets that already had reps, so a block
+     started from a routine — every box grey — could not be ticked at all, and
+     one with some sets typed ticked those and left the rest. It goes through
+     tickSet now, row by row. Its three pure pieces are lifted out of the real
+     workout.js and run with the real tickSet. */
+  const liftB = name => {
+    const m = new RegExp('^function ' + name + '\\(', 'm').exec(WSRC);
+    if (!m) throw new Error('tick-targets: ' + name + '() is gone from workout.js');
+    return WSRC.slice(m.index, WSRC.indexOf('\n}\n', m.index) + 3);
+  };
+  const K = new Function('tickSet', [liftB('blockFillableSets'), liftB('blockTicked'), liftB('setBlockDone')].join('\n') +
+    '\nreturn { blockFillableSets, blockTicked, setBlockDone };')(tickSet);
+  const inBlock = (id, sets) => ({ ...ex(id, sets), block: 1 });
+  const grey = [inBlock('bench', [set('', '', { tw: '185', tr: '8' }), set('', '', { tw: '185', tr: '6' })]),
+                inBlock('dip', [set('', '', { tw: '', tr: '12' })])];
+  check('a block of grey target sets is tickable — every set in it has a rep target to fill from',
+        K.blockFillableSets(grey, 1).length === 3 && !K.blockTicked(grey, 1));
+  const on = K.setBlockDone(clone(grey), 1, true);
+  const one = clone(grey).map(e => ({ ...e, sets: e.sets.map(tickSet) }));
+  check('ticked, it fills in EXACTLY as ticking each set would', J(on) === J(one), J(on.map(e => e.sets.map(x => x.w + 'x' + x.r))));
+  check('and the box then reads ticked', K.blockTicked(on, 1));
+  check('and every set in it reaches the record at its target — none dropped',
+        J(collectFrom(on).map(e => e.sets.map(x => x.w + 'x' + x.r))) === J([['185x8', '185x6'], ['0x12']]),
+        J(collectFrom(on).map(e => e.sets.map(x => x.w + 'x' + x.r))));
+  const off = K.setBlockDone(clone(on), 1, false);
+  check('unticked, every set is unticked and keeps what it was filled with',
+        off.every(e => e.sets.every(x => x.done === false)) && off[0].sets[0].w === '185' && off[0].sets[0].r === '8');
+
+  const typed = [inBlock('bench', [set('200', '10', { tw: '185', tr: '8' }), set('', '', { tw: '185', tr: '8' })])];
+  const t = K.setBlockDone(clone(typed), 1, true)[0].sets;
+  check('a box he typed in is never overwritten by the block box either', t[0].w === '200' && t[0].r === '10' &&
+        t[1].w === '185' && t[1].r === '8', J(t));
+  const already = [inBlock('bench', [{ ...set('185', '5'), done: true }, set('', '', { tw: '185', tr: '5' })])];
+  const a2 = K.setBlockDone(clone(already), 1, true)[0].sets;
+  check('a set already ticked is left alone — tickSet is a toggle, and the box only ticks what is not',
+        a2[0].done === true && a2[1].done === true && a2[1].r === '5', J(a2));
+
+  const bare = [inBlock('bench', [set('', ''), set('', '', { tw: '185', tr: '' })])];
+  check('a set with neither reps nor a rep target is not tickable by the box — Finish could only drop it',
+        K.blockFillableSets(bare, 1).length === 0 && unsavedTicks(K.setBlockDone(clone(bare), 1, true)) === 0);
+  const mixed = [inBlock('bench', [set('', '', { tw: '185', tr: '8' }), set('', '')])];
+  const m2 = K.setBlockDone(clone(mixed), 1, true);
+  check('in a mixed block it ticks the one it can fill and leaves the empty one unticked',
+        m2[0].sets[0].done === true && m2[0].sets[1].done === false && unsavedTicks(m2) === 0);
+  check('other blocks and ungrouped exercises are untouched',
+        J(K.setBlockDone([{ ...ex('row', [set('', '', { tw: '155', tr: '8' })]) }, ...clone(grey)], 1, true)[0]) ===
+        J({ ...ex('row', [set('', '', { tw: '155', tr: '8' })]) }));
+  check('the block box’s handler goes through setBlockDone, and setBlockDone through tickSet',
+        /session\.exercises = setBlockDone\(session\.exercises, n, next\);/.test(WSRC) && /tickSet\(s\)/.test(liftB('setBlockDone')));
+}
+
+/* ================= H. THE QTY-ROW BUTTONS ================= */
+section('H. Log, Save and Add keep the 54px the stylesheet gives them');
+{
+  /* Phase 0b took an inline `flex: 0 0 auto` off Weight's Log: over the
+     .qty-row rule's zero padding it sized the button to its word. Steps' Save
+     and Water's Add carried the same line and lost it in the same ship. Read
+     from the files that draw them, and from the rule they now get. */
+  const css = readFileSync(SRC('rack.css'), 'utf8');
+  check('the stylesheet still reserves 54px for a .qty-row button', /\.qty-row \.btn \{ flex: 0 0 54px; padding: 0; \}/.test(css));
+  ['weight.js', 'steps.js', 'water.js'].forEach(f => {
+    const code = readFileSync(SRC(f), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+      .split('\n').map(l => l.replace(/(^|[^:'"\\])\/\/.*$/, '$1')).join('\n');
+    check(f + ': no inline flex on a button — it gets the 54px', !/\.style\.flex\s*=\s*'0 0 auto'/.test(code));
+  });
 }
 
 /* ---------- report ---------- */
