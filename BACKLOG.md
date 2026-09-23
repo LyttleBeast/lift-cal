@@ -7,7 +7,7 @@ Two things this file is not. It is not a design document — where a shape was
 already decided, the decision stays where it was written and this only points at
 it. And it is not a port brief: `NEXT-NATIVE.md`, `NEXT-NATIVE-UNITS.md`,
 `NEXT-NATIVE-V40.md`, `NEXT-NATIVE-V41.md`, `NEXT-NATIVE-V42.md`,
-`NEXT-NATIVE-V43.md` and `NEXT-NATIVE-V45.md` are the instructions for copying
+`NEXT-NATIVE-V43.md`, `NEXT-NATIVE-V45.md` and `NEXT-NATIVE-V46.md` are the instructions for copying
 work into `~/dev/rack-mobile`, and they stay. What is below is the list of
 things nobody has done yet.
 
@@ -42,6 +42,14 @@ That tree moves on its own, so verify before acting on one.
   level — or simply never learns about `coach` — the first Coach write after
   that publish fails silently and every switch in Settings → Coach goes back to
   its default on the next open. Shape is in AGENTS.md.
+- **The PROPOSED rules need `settings/coach/on`.** v46 added it — the Patterns
+  switch, `{ patterns: true }` or absent — and the PUBLISHED rules take it as
+  they are (they never mention `coach`). But the PROPOSED `coach` shape in
+  `NEXT-NATIVE-V43.md` §5 ends in `"$other": { ".validate": false }` and has no
+  `on`: published as it stands, every settings/coach write from an account with
+  Patterns on is refused silently and the switch flips back. Add
+  `"on": { "$cat": { ".validate": "newData.isBoolean()" } }`
+  (`NEXT-NATIVE-V46.md` §6).
 - **The stricter `.validate` rules themselves.** They were the reason v40's
   Phase 3 existed: until a refused write said so on screen and kept its payload,
   publishing them turned a too-strict rule into silent data loss. That half is
@@ -185,11 +193,74 @@ Carried from `NEXT-NATIVE.md` §7 so it survives that file. Do not "fix" these:
 
 ---
 
+## What v46 left open in its own work
+
+v46 is Coach ship three, part one — Coach in the gym (the live session's chip,
+its compact sheet, the one-line nudge) and Patterns in your data — plus three
+fixes Micah found walking v45 (0a–0c). Everything below is written up in
+`COACH-REPORT.md` §30–§37.
+
+- **Nothing in this ship has been seen on a screen.** The chip in the session's
+  header row (beside the name, the clock, the calendar button and Finish — on a
+  320-pixel phone the name box is what gives way), the one-line nudge in the
+  swipe hint's slot, the compact sheet, the Patterns bubbles, and Weight's Log
+  at 54px. The nudge keeps the hint's height by construction (same 10px type,
+  one clipped line, the × given a larger target by padding it hands back as
+  negative margin) — arithmetic, not a measurement.
+- **Steps' Save and Water's Add carry the same inline `flex: 0 0 auto`** that
+  squashed Weight's Log (steps.js:497, water.js:294), over the same `.qty-row
+  .btn` rule. One line each; not touched, because 0b named Log.
+- **The block check box does not take targets.** It ticks only sets that
+  already have reps, so it never makes a set Finish would drop, and a block
+  holding only targets shows it disabled. A routine block ticked through its
+  sets gets the targets (0a); ticked through its block box, it does not. Whether
+  the block box should also fill from targets is a decision, not a fix.
+- **Editing a past session has no unsaved-sets warning.** Every set of an edit
+  starts ticked with its reps, so the only way to make one is to clear a reps box
+  and save — close to deleting it on purpose. `saveEdit` drops it as it always
+  has.
+- **No switch for the in-session read.** It is ask-only (the chip) plus one
+  dismissible line per finished exercise. A switch would be a `mute` on a new
+  category, and this ship's one new stored key went to Patterns. If the line is
+  unwanted in use, that is the change.
+- **"The exercise in hand" is a guess when no line is up.** A set has no
+  timestamp, so the chip's answer is about the last exercise on the list with a
+  ticked working set; somebody who jumps back to an earlier exercise gets an
+  answer about the later one. It only changes "one more set" and "switch".
+- **"Next" is rare in a routine- or builder-started session**, by design: the
+  exercise that usually comes next is usually already on the list, and "next"
+  never names what is already planned.
+- **DONE-by-length needs three sessions of the same shape.** An account whose
+  sessions do not recur gets "you're probably good for today" only from the
+  fatigue route.
+- **The sheet covers the rest pill while it is open** (every sheet is modal).
+  The timer keeps running and still beeps; nothing about it is stopped.
+- **Patterns reads up to one `food/log/{date}` per session day of his most-logged
+  lift, once per app open, when switched on.** The maintenance model already
+  caches past days under `intake:{date}` on the device; sharing that cache would
+  save the reads and would tie coach-data.js to weightmodel.js's private format.
+  Not done.
+- **Patterns reads every past day against the protein target he has NOW**, and
+  its weekly weight change is the raw weekly mean of weigh-ins, not the
+  fasted-normalised trend the Weight tab fits. Both are said in the reason line.
+  There is no significance test, deliberately — both sample sizes are printed so
+  the reader can weigh them — and no bar on how big a difference must be.
+- **Nothing counts use of the chip, the nudge or Patterns.** A usage event
+  would be a new stored key, and this ship added one only.
+- **The free-text box (ship three part two) is not built.** When it is, the
+  in-session read is not a route: `c.live(session, { current })` takes the live
+  session, so the matcher needs a way to call it rather than an id in
+  `ROUTE_IDS`.
+- **Native was not read** — the run was fenced — so every native path in
+  `NEXT-NATIVE-V46.md` is V45's, unverified.
+
 ## What v45 left open in its own work
 
 v45 is Coach ship two — the workout builder, "Make me a workout" on Train — plus
 four small ones (4a–4d). Everything below is written up in `COACH-REPORT.md`
-§23–§29.
+§23–§29. (One more was closed by v46: a routine saved from the builder is named
+by it at once now — routines.js hands its list to `noteCoachData()` whenever it
+changes.)
 
 - **Nothing in this ship has been seen on a screen.** The proposal block, the
   Weighed-at box (4c) and the recap gap (4d) are CSS reasoned from the source
@@ -198,11 +269,6 @@ four small ones (4a–4d). Everything below is written up in `COACH-REPORT.md`
   shrinking the page to fit the overflow — that could not be reproduced here.
   If the box is still past the card's edge on a phone, doubt that mechanism
   first (`COACH-REPORT.md` §26.2).
-- **A routine saved from the builder is not named by the builder until the next
-  app open.** Coach reads `routines` once per open and nothing tells it about a
-  routine written since, so "You have a routine for this" waits for a relaunch.
-  The fix is the cheap kind `noteCoachData()` already is: hand Coach the list
-  routines.js has just written.
 - **A group focus ("Legs" under Train something else) builds the WHOLE base
   session**, not that group's exercises alone — by decision, because the brief
   names the session and a filtered one is a session he never did. If that reads
@@ -346,7 +412,10 @@ wanders into a neighbouring bug has scope-crept — and all of it is here.
   still read it, which is where a fix would have to start.
 - **A second session on the same day is invisible to the live-session facts.**
   `activeSession` in localStorage holds one, and finishing one and starting
-  another inside a day is not something Coach can see the shape of. Ship three.
+  another inside a day is not something Coach can see the shape of. Ship three
+  part one (v46) did not solve it, by instruction: `coach-live.js` reads the
+  active session and nothing else, so a morning session's sets count toward
+  neither "your usual" for today nor "done". See v46 below.
 - **The You tab issues around seven live GETs per render.** Coach adds none per
   paint — `coach-data.js` gathers once per app open — but the underlying number
   is unchanged and is the thing worth attacking before anything else is added to

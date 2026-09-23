@@ -1500,3 +1500,251 @@ confident wrong answer:
 
 Keep all three when the builder grows. And before trusting anything in this
 section about how the proposal looks: nobody has seen it yet.
+
+---
+---
+
+# COACH — ship three, part one: in the gym (rack-v46)
+
+A fifth run, in `~/dev/ship-v46` (a fenced clone at rack-v45, `f976fd0`),
+against `~/dev/SHIP-V46-PROMPT.md`, with `COACH-PROMPT.md` §1, §2, §3, §5 and §6
+still binding. Everything above this line is unchanged; where this section
+contradicts it, it says so rather than editing it.
+
+Ship one taught Coach to read and ship two to build. This one puts it in the gym:
+during a live workout it can say what usually comes next, or that he is done
+for the day — when he asks, or once, quietly, when a set has just finished an
+exercise. Plus Patterns in your data, off until he asks for it. Phase 0's three
+fixes came first, from Micah's own phone. All five phases shipped; nothing in
+scope was dropped. The free-text box (part two) and the native port were out of
+scope and were not touched.
+
+Verifiers at the start: **25**, all exit 0 under both `TZ=America/New_York` and
+`TZ=UTC`. At the end: **28**, all exit 0 under both.
+
+---
+
+## 30. WHAT IS NOT DONE, AND WHAT NOBODY HAS SEEN
+
+1. **No layout in this ship has been seen on a screen.** The chip in the
+   session's header row, the nudge in the swipe hint's slot, the compact sheet,
+   the Patterns bubbles, Weight's Log at 54px. §15's lesson stands — the DOM shim
+   has no box model and never loads `rack.css` — and it bites hardest on the
+   nudge, whose whole promise ("no row moves") is a CSS claim: the line keeps the
+   hint's box because it is the hint's class, 10px type, one clipped line, and a
+   × whose larger target is padding handed back as negative margin. That is
+   arithmetic. The first thing on the walkthrough that could prove it wrong is
+   item 4.
+2. **A second session on the same day is still invisible** to the live read, by
+   instruction. §35.
+3. **There is no switch for the in-session read.** The brief allowed one new
+   stored key and gave it to Patterns; the read is ask-only plus one dismissible
+   line per exercise. In BACKLOG.md.
+4. **Native was not read.** The run was fenced and a read of `~/dev/rack-mobile`
+   was refused, so `NEXT-NATIVE-V46.md` takes every native path from V45's read
+   and says so on every one.
+
+---
+
+## 31. WHAT GOT BUILT
+
+```
+coach-live.js   517 lines   NEW, PURE. liveRead(input). Native: src/pure/coach-live.js, verbatim.
+coach.js      2,787 lines   was 2,390. liveInput(), c.live(), LIVE_NONE; the patterns category
+                            (optIn), normSettings `on`, isMuted either way round, eight
+                            facts, PATTERN_FACTS, patterns_in_data, resp_patterns with
+                            `more`, ask_patterns, PATTERN_TOPIC, patternFoodDays()
+coach-ui.js                 liveChip, openLiveSheet, noteLiveTick, nudgeLine, dismissNudge;
+                            the toggle reads isMuted; the sheet draws an answer's `more`
+coach-data.js               coachPro(); weighIns and foodFirst on the snapshot; the
+                            Patterns food read; noteCoachData takes routines; the `on` write
+workout.js                  tickSet, unsavedTicks, the Finish warning (0a); addPicked, the
+                            chip, the nudge, noteLiveTick in the set handler (2); routines
+                            handed to Coach (0c)
+routines.js                 tell(): its list to a callback after every write and watch (0c)
+weight.js                   the inline flex on Log removed (0b)
+ui.js                       confirmSheet takes a cancelLabel (0a)
+rack.css                    the chip and the nudge (2)
+```
+
+| verifier | at `f976fd0` | at rack-v46 | |
+|---|---|---|---|
+| `tick-targets.mjs` | — | 48 | new (0a) |
+| `coach-live.mjs` | — | 51 | new (1) |
+| `coach-patterns.mjs` | — | 59 | new (3) |
+| `coach-surface.mjs` | 82 | 131 | sections G and H |
+| `coach-pure.mjs` | 74 | 92 | section G |
+| `coach-units.mjs` | 69 | 85 | sections H and I |
+| `coach-voice.mjs` | 49 | 60 | sections H and I, the causal-word list |
+| `coach-boot.mjs` | 43 | 54 | section G (0c) |
+| `coach-silence.mjs` | 90 | 93 | the Patterns case |
+| `units.mjs` | 128 | 128 | one more display site classified |
+| `month-erasure.mjs`, `merge-invariant.mjs` | | | follow `runFinish`'s new collaborator and signature |
+
+Ten verifiers stage `coach-live.js` beside `coach-build.js`. `database.rules.json`
+is byte-identical to rack-v45 and no pinned file moved (`NEXT-NATIVE-V46.md`
+has the hashes); `coach-build.js` did not change either.
+
+---
+
+## 32. PHASE 0 — what Micah found on his phone
+
+**0a, and where the rule lives.** `tickSet(s)` is in `workout.js`, beside
+`collectFrom`, exported and pure. Not in `blocks.js` — pinned, and about grouping
+rather than sets — and not in a new module: it is the other half of
+`collectFrom`'s rule (what a tick means, beside what a tick records), the port
+already copies `collectFrom` from this file, and `bodyweight-sets.mjs`'s rig
+imports both for real. The Finish half is `unsavedTicks()`, collectFrom's own
+test turned over, so the sheet and the record cannot disagree about which sets
+they mean. Two things the brief did not say and I decided: the "No completed
+sets" sheet names the count when every ticked set is reps-less (Discard is
+otherwise a surprise), and `confirmSheet` grew a `cancelLabel` because it had a
+hard-coded "Cancel" and the brief asked for "Go back". The block check box was
+left alone — it can only tick sets with reps, so it never makes a set Finish
+drops (BACKLOG).
+
+**0b** is one line. `weight.js`'s inline `flex: 0 0 auto` beat `.qty-row .btn`'s
+54px and the rule's `padding: 0` still applied, so Log was exactly as wide as the
+word. 54px holds "Log" at 14px Archivo with room; Fuel's `.qty-row` buttons set
+no inline flex and did not change. Steps' Save and Water's Add carry the same
+line and are listed, not changed.
+
+**0c took the whole class, not just the builder's case.** The cheap mechanism
+BACKLOG named is `noteCoachData()`. The obvious build passes the builder's save
+a callback; but a routine written from the routine editor, or the recap's Save as
+routine, had exactly the same staleness, and one hand-off at the source covers
+all three for the same lines. `routines.js` calls `tell()` after its own writes
+land (offline writes never reach the watch) and from its watch; `workout.js`
+hands it `noteCoachData`, so `routines.js` still imports nothing of Coach's. A
+Coach sheet already open keeps the proposal it drew; the next one names the
+routine.
+
+---
+
+## 33. THE DECISIONS THE BRIEF LEFT TO ME, AND WHAT I DID
+
+1. **The order the four are tried in: done, switch, another, next.** The brief
+   fixed DONE first. Switch before another is the same bias one step down: a
+   group already at its usual volume is never pushed one more set of it.
+2. **"Usually" is a strict majority,** for "another" and for "next". The brief
+   says another fires when the median exceeds today's count; I fire when MORE
+   THAN HALF his sessions of it went past today's count, which implies the
+   median does and excludes the five-and-five case. Printing counts ("4 or more
+   in 6 of your 9 sessions of it") rather than a median of 3.5 is what made the
+   sentence true by construction.
+3. **Which shape a live session is.** Today's signature does not exist until it
+   is finished, so: the shape whose members include exactly the groups on the
+   list; else the most-trained shape that contains them all; else the one that
+   contains the groups actually worked. Membership is the cluster's own
+   `members`, the builder's test — no second definition of §3.3.
+4. **"Next" is the exercise straight after the last of the ones done so far,**
+   in each of his sessions of that shape containing all of them. If that
+   exercise is already on today's list, or not pickable, the session votes for
+   nothing. So a builder-started session rarely hears "next": its plan is on
+   screen already.
+5. **DONE-by-length counts only sessions of the same shape** — §36 is how I
+   learned that the obvious fallback is wrong.
+6. **Add it goes to the end of the session, outside any block.** The brief
+   offered "into the current block if one is open". I chose the end because
+   appending moves no row he is looking at, it is exactly where the picker's own
+   "+ Add exercise" puts one, and a block is his to build.
+7. **The nudge takes the swipe hint's slot.** "Never moves a row" rules out an
+   added line; the hint is on every exercise with sets and is the right height.
+   Its state (`_coach`: which exercises have had a line, and the line up now)
+   rides on the live session in localStorage and never reaches the record.
+8. **Patterns' window is 26 weeks, and "the lift" is his most-logged one.** Twelve
+   weeks cannot hold eight busy and eight quiet weeks. Checks 1, 5, 6 and 8 need
+   a single lift for an estimated max to mean anything; the brief named "his most
+   trained lift" for 5 and I used it for all four.
+9. **Check 1 needs a read.** daySummaries has no times, so coach-data reads
+   `food/log/{date}` for exactly the days `patternFoodDays()` names, after the
+   boot wave, only when Patterns is on.
+10. **Every check that clears its sample gate is said** — no bar on the size of a
+    difference. A bar would be a search by another name.
+
+---
+
+## 34. WHERE THE BRIEF, OR THE CODE, WAS NOT WHAT IT SEEMED
+
+1. **The PROPOSED rules would refuse the new key.** `settings/coach.on` lands on
+   the published rules (they never mention `coach`) — but the proposed `coach`
+   shape in `NEXT-NATIVE-V43.md` §5 ends in an `$other` deny. Publishing it as it
+   stands would make the Patterns switch flip back silently for anybody who used
+   it. In BACKLOG's "Waiting on Micah" and `NEXT-NATIVE-V46.md` §6.
+2. **`merge-invariant.mjs` pinned `finishWorkout()` with no parameters.** The
+   property it fences — the re-entry guard is the first thing the function does —
+   holds; the pin now allows a parameter list, and says why.
+3. **"coach-units.mjs and coach-voice.mjs must render each one"** — done for the
+   live lines (H) and for Patterns (I). The voice ban is applied to the live
+   lines although nothing in `coach-live.js` is a card template, because the
+   nudge arrives unasked, which is what the ban is about.
+
+---
+
+## 35. A SECOND SESSION ON THE SAME DAY
+
+Said, as the brief asked, and not solved. The live read sees the active session
+and nothing else. A session finished and saved this morning is in the log as a
+session of its own: it counts toward his usual, like any other, and not toward
+today's. So an evening session after a morning one reads its own sets alone
+against "your usual" — it can say "one more set" where the day's total already
+passed his usual, and it will not say "done" on the strength of the morning. The
+way in is `live.*` facts that add today's saved sessions to the live one; the
+question to answer first is whether a double day is one session to him or two.
+
+---
+
+## 36. WHAT CAUGHT THE VERIFIERS — AND WHAT THEY CAUGHT IN ME
+
+Every new check was mutation-tested: what it fences was broken by hand in a
+scratch copy and the file run.
+
+| phase | mutations | red |
+|---|---|---|
+| 0a `tick-targets.mjs` | typed values overwritten; the bare flip back; no warning; a click event read as "anyway"; untick clears; a wrong count | 6 of 6 |
+| 0c `coach-boot.mjs` G | no routines in noteCoachData; tell before the write; no tell in the watch | 3 of 3 |
+| 1 `coach-live.mjs` | no fatigue gate; another before done; next at exactly half; next ignores pickable; next ignores the list; a nudged weight in the quote; no tier gate; no edit gate; warm-ups count toward fatigue; min sessions 2 and 4; a drop at a heavier weight; the window fallback for DONE | 13 of 13 |
+| 1 units, voice H | a banned word; a unit word by hand | 2 of 2 |
+| 2 `coach-surface.mjs` G/H | chip ignores Pro; ignores an edit; shown twice; silence spends the once; Add it not in an array; drawn in an edit; any set raises it; a parallel add path; the line adds a row; its CSS positioned; the toggle reads the mute map; `more` not drawn | 12 of 12 |
+| 3 `coach-patterns.mjs` | on by default; a minimum of 7; the quarter by ceil; four days counted close; counted rested; the median day counted below; today counted; the protein split moved; a causal word; on a card; read while off; the rate's sign flipped; morning's hour moved | 13 of 13 |
+
+What the fences caught in my own first drafts, which is the part worth keeping:
+
+1. **The DOM shim found an engine bug.** coach-surface's thin-history check
+   expected silence and got *"You're probably good for today — 7 working sets
+   against a usual 5.5"*: with no shape of its own, DONE-by-length had fallen
+   back to every session in the window and pooled short leg days with long chest
+   days. No engine verifier had a fixture shaped to see it. §15 said the bugs are
+   in the wiring; this time the wiring's verifier was the one that saw the
+   engine.
+2. **`window`, again.** v42's trap 1 — an input field named `window` in a module.
+   `coach-pure.mjs` refused it in both files the moment they were written. It is
+   `sessions` now, the name builderInput already used.
+3. **A sweep that looked like coverage.** coach-live's 400-session sweep used an
+   LCG's low bits, which cycle; 85% of its sessions carried an F, and when I added
+   the check that "one more set" does occur on the rest, it occurred once. The
+   high bits fixed it: 171 with an F, 108 answered "one more set".
+4. **Two checks passed by throwing.** The first hidden-exercise check removed the
+   exercise from the library as well, so the read threw and fell back to silence
+   — which is what the check wanted, for the wrong reason. It now keeps the
+   exercise in the library and hides it (native's convention), and the mutation
+   goes red. And one of my mutations was not a faithful revert: it crashed the
+   same way, so it looked like the check was blind when it was not.
+5. **A boundary that did not move.** Dropping a quiet week's session from the
+   Patterns fixture was meant to take the rest-gap check from eight rested
+   sessions to seven. It made the next session the rested one: eight again. The
+   boundary is now a four-day gap made on purpose.
+
+---
+
+## 37. IF THE NEXT RUN READS ONE THING
+
+The engine got two new modules and both are fenced, but the lesson of this ship
+is the same as §15's in a new place: **the thing that found the worst bug was
+the verifier of the screen.** A thin log is not a hypothetical in the gym — it is
+every new account's first month — and the answer to it was a confident wrong
+number, found only because a view test asked what the chip says to somebody with
+four sessions.
+
+And before trusting anything about how the chip, the line or the Patterns
+bubbles look: nobody has seen them yet.

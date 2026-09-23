@@ -606,7 +606,12 @@ both round to 69 in. A ft + in entry still writes whole inches.
 `tw` / `tr` are **target** weight and reps, both optional. They are deliberately
 not `w` / `r`: starting a routine puts them in as placeholder text, never as
 pre-filled values, so a number you forgot to change cannot end up in the log as
-a number you lifted.
+a number you lifted. Since v46 there is one way a target becomes a value, and it
+is a deliberate one: **ticking** a set fills each EMPTY box from its target
+("I did what it says"; `tickSet` in `workout.js`). A box that was typed in is
+never overwritten, unticking clears nothing, and `collectFrom` strips `tw` / `tr`
+from the record as before. A ticked set that still has no reps is counted at
+Finish and named before anything is saved.
 
 A lifting block is stored here exactly as it is in a workout record: `block: 1`
 on the exercise objects, and nothing else. A routine **never** carries a

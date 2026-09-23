@@ -9,7 +9,7 @@ steps, and no account can see or touch another's. New people get in with an
 invite code, or by asking the owner and being approved. See *Access* below.
 
 - **You** — the tab the app opens on. A read-only summary of the other four and of how their numbers pull on each other: this week against the last, intake against targets, the scale against maintenance, printed as arithmetic rather than asserted. Nothing on it writes anything. The gear in its header is where every setting in the app now lives.
-- **Coach** — a card at the top of You and above Start workout on Train that says one true thing about your own log and shows the arithmetic under it: which muscle group is furthest past its own usual gap, which of your recurring sessions has waited longest, how this week's sets compare with your own trailing normal. No AI, no network, no per-use cost — it is arithmetic over the log, and a rule whose data is thin stays silent. Tap it for **COACH ME** — from You a sheet you can ask about Train, Fuel or Weight, and from Train one that asks the training questions first. Part of Pro; the readouts are free.
+- **Coach** — a card at the top of You and above Start workout on Train that says one true thing about your own log and shows the arithmetic under it: which muscle group is furthest past its own usual gap, which of your recurring sessions has waited longest, how this week's sets compare with your own trailing normal. No AI, no network, no per-use cost — it is arithmetic over the log, and a rule whose data is thin stays silent. Tap it for **COACH ME** — from You a sheet you can ask about Train, Fuel or Weight, and from Train one that asks the training questions first. In a live workout a **Coach** chip answers *what should I do next?* from your own sessions — and a quiet line under a finished exercise says it once. **Patterns in your data**, off until you switch it on, sets two groups of your own days side by side as numbers. Part of Pro; the readouts are free.
 - **Train** — full workout tracker: saved routines, plate-colored calendar, session timer, W/F/D set tags, 231-exercise library, last-time numbers, rest timer, per-side plate math, e1RM, swipe-to-delete sets, editable history, a post-workout recap with personal records, and a full statistics page.
 - **Fuel** — nutrition: **photograph a plate and Claude reads the macros off it**, or just describe what you ate. Plus macro targets, saved-food library, barcode scanning via Open Food Facts, manual entry, saved meals, one-tap portion multiplying, micronutrient floors, paste import.
 - **Weight** — body-weight log: 7-day moving average chart, weekly rate, a learned time-of-day curve, and a maintenance (TDEE) estimate built on normalised weigh-ins with a stated confidence interval.
@@ -98,8 +98,9 @@ node in the database. See *Access* below for what replaced them, and why.
 | `coach.js` | **Coach's engine.** Facts, intents, responses, router — four tables and a sort. Pure: no clock, no DOM, no reads, no module state. Copied into the native tree verbatim |
 | `coach-build.js` | **The workout builder** — "Make me a workout" on Train. Turns the shape that has waited longest into a workout made out of his own log: the most recent such session, its exercises, blocks and logged numbers, never an invented weight. Pure, and copied into the native tree verbatim like `coach.js` |
 | `coach-tags.js` | Movement pattern, angle, load and side for every built-in exercise. A sidecar keyed on `exercises.js`'s ids, so a tagging mistake can never reach the picker. Pure; imports nothing. The builder reads it: pattern for "Swap one", load for "Fewer exercises" |
+| `coach-live.js` | **Coach in the gym** — during a live workout, what usually comes next, one more set, the next group, or "you're probably good for today", read off the session in progress against his own sessions of that shape. Never a weight. Pure, and copied into the native tree verbatim like `coach.js` |
 | `coach-data.js` | The impure half — the one file the native port rewrites. Reads once per app open and never on a paint |
-| `coach-ui.js` | Coach's card, the COACH ME sheet, and the Settings switches |
+| `coach-ui.js` | Coach's card, the COACH ME sheet, the Settings switches, and the live session's chip, sheet and one-line nudge |
 | `settings.js` | The settings hub behind the You gear, and the profile editor |
 | `admin.js` | Owner-only panel — feature usage, the Accounts page, People & access |
 | `accounts.js` | Account types and what each one may do. Pure, and the single entitlement choke point — every limit and feature check goes through `capabilitiesFor()` |
@@ -139,6 +140,7 @@ Import direction is strictly one-way, no cycles:
 ```
 app.js → you.js       → coach-ui.js  → coach.js   → analytics.js ──→ ui.js
                                                  → coach-build.js → blocks.js  coach-tags.js
+                                                 → coach-live.js
                                     → coach-data.js → picker.js
                                                     → tdee.js  insights.js
                                                     → access.js → store.js
@@ -190,7 +192,7 @@ close a loop, and `bump()` is one line at a call site that already has real work
 to do.
 
 `coach.js` is at the bottom of the graph with `units.js` and `blocks.js`: it
-imports `exercises.js`, `units.js`, `coach-build.js` and the SESSION MATH from
+imports `exercises.js`, `units.js`, `coach-build.js`, `coach-live.js` and the SESSION MATH from
 `analytics.js` (`e1rm`, `isWorking`, `mergeSessionExercises`, `exerciseIndex`)
 and nothing else — never `loadAll`/`allSessions`, which are that file's impure
 half. It holds no state and takes its clock as an argument, so two renders
@@ -206,6 +208,13 @@ which the Train card hands to `coach-ui.js` as callbacks, the way it hands
 `startWorkout` to Routines, because `coach-ui.js` cannot import `workout.js`
 without closing a ring. The You card hands in neither, so the builder is on
 Train alone.
+
+`coach-live.js` sits beside it on the same terms: `coach.js` hands it the
+window and the recurring shapes (`liveInput()`), it reads the live session it
+is given and never writes to it, and what it says reaches the screen through
+`coach-ui.js`. "Add it" in the live sheet is the picker's own callback, handed
+in by `workout.js` — `addPicked`, the one function "+ Add exercise" hands
+`openPicker` — so an exercise Coach adds lands exactly where the button puts one.
 
 `coach-data.js` is the only half that reads. It does the gathering once per app
 open and hands `coach.js` a plain object, which is what lets a card sit at the
@@ -544,6 +553,60 @@ it. `coach-build.js` decides all of it and writes nothing: the buttons end in
 the same `startWorkout` and `saveSessionAsRoutine` a routine and a finished
 session already use. `tools-check/coach-build.mjs` is its fence.
 
+### In the gym
+
+During a live workout, on Pro, a **Coach** chip sits in the session's header
+row. Tapped, it answers *What should I do next?* from your own sessions of this
+kind over the last twelve weeks — one of four answers, tried in this order:
+
+```
+done      you're probably good for today — your usual number of working sets
+          for a session like this is reached, or your last two exercises both
+          show fatigue: a set typed F, or reps down a quarter at the same or a
+          lighter weight
+switch    this group has had its usual sets, and your session of this kind has
+          a group with nothing in it yet — named, with the exercise you usually
+          open it with
+another   one more set of this exercise is in line with what you usually do
+next      what usually comes straight after what you've done so far
+```
+
+Done first, always: stopping one set early costs nothing, and Coach pushing a
+tired set is the one thing it must never do. It suggests no weight — the only
+figure it prints is a quote of the last time you logged the exercise it names.
+**Why?** shows the working; for *next* and *switch*, **Add it** adds the
+exercise the way **+ Add exercise** would, at the end of the session.
+
+When a tick finishes an exercise, the answer can appear once as a single line
+under it, in the slot the swipe hint uses — nothing pops up, no row moves, and
+the rest timer is untouched. It never appears twice for the same exercise, and
+never over an edit of a past session. A basic account sees none of it.
+`coach-live.js` decides; `tools-check/coach-live.mjs` and `coach-surface.mjs`
+are its fences.
+
+### Patterns in your data
+
+**Off until you switch it on** (Settings → Coach), the reverse of every other
+switch. Eight comparisons, chosen in advance, each setting two groups of your
+own days or sessions over the last 26 weeks side by side — the median or the
+share on each side, and how many are in each — and only when there are eight or
+more on both sides:
+
+1. your top quarter of sessions by estimated max, and how many had food logged
+   before you started, against the rest
+2. working sets the day after you reached your protein target, against not
+3. calories on days you trained, against rest days
+4. your weekly weight change in weeks of three or more sessions, against fewer
+5. your most-logged lift's top-set estimated max, morning against later
+6. the same, three or fewer days since that group, against five or more
+7. steps on days you trained, against rest days
+8. the same estimated max after a day above your median calories, against below
+
+They are readouts. Two groups that differ say nothing about why, and no
+sentence says one thing helps, causes or leads to another. There is no search
+for whatever happens to differ — that would find something every time.
+`tools-check/coach-patterns.mjs` is the fence.
+
 ### Three states it will not be talked out of
 
 ```
@@ -563,7 +626,8 @@ same answer, and one of the two cards would be a lie.
 under `users/{uid}`, which has no grant in the published rules and would fail
 silently. It needs no rules change: `settings` carries a section-level `.write`
 and the `$other` deny is nested inside `units`, not on `settings` itself. See
-AGENTS.md.
+AGENTS.md. Switches are stored as `mute` (absent means on); Patterns alone is
+stored as `on`, where absent means off.
 
 The one thing that is **not** there is the rotating greeting: the counter behind
 it and the last few lines it used live on the device, because that value is
@@ -597,7 +661,9 @@ honest place to keep it.
 - **Routines** (below Start workout) are pre-planned workouts — name, exercises, target
   weight and reps per set. Starting one fills the session out, but targets appear as
   *placeholder* text and never as pre-filled values: a number you forgot to change is a lie
-  in the log. Finishing any workout offers **Save as routine**, which is usually the fastest
+  in the log. Ticking a set is the one thing that takes the target — "I did what it says":
+  an empty box is filled from it as the set is ticked, a box you typed in never is, and a
+  ticked set that still has no reps is named at Finish rather than dropped without a word. Finishing any workout offers **Save as routine**, which is usually the fastest
   way to make one, because it captures what you actually did.
 - Records are **derived from the log**, never stored. There is no `records` node in the
   database; every statistic is computed from the workouts themselves.
