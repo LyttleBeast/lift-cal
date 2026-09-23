@@ -330,6 +330,12 @@ function libIndex() {
   return out;
 }
 
+/* Whether this account has Pro, for the one surface that has to know before
+   it draws anything at all: the Coach chip in a live session, which a basic
+   account does not get — not a lock, not a teaser. Cheap and synchronous, so
+   the session screen can ask on every paint without building a snapshot. */
+export function coachPro() { return hasPro(); }
+
 /* Pro, through the one choke point and no other route. access.js caches
    accounts.js's answer for the signed-in account; accounts.js fails open, so a
    record that could not be read is a basic account with the readouts and

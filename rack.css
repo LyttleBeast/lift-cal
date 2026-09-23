@@ -2108,6 +2108,38 @@ body.peeking .view.active { padding-bottom: 58px; }
 .coach-build-note { font-size: 12px; line-height: 1.45; color: var(--steel); }
 .coach-build-note.mine { color: var(--chalk); font-variation-settings: 'wdth' 94, 'wght' 600; }
 .coach-build-w { font-size: 11px; line-height: 1.4; color: var(--dim); margin-top: 2px; }
+
+/* ---------- Coach in a live session ----------
+   The chip sits in the session's header row beside the calendar button, at
+   that button's height and in its border, so the row keeps its rhythm; the
+   mark and the word are the card's own. */
+.wk-coach {
+  flex-shrink: 0;
+  height: 38px; padding: 0 11px; margin: 0 8px;
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 1px solid var(--collar);
+  border-radius: var(--r-sm);
+}
+.wk-coach .coach-mark svg { width: 14px; height: 14px; }
+.wk-coach:active { border-color: var(--p-yellow); }
+/* The one quiet line under a finished exercise. It takes the swipe hint's
+   slot and keeps its box — the same padding and the same 10px type, clipped
+   to one line rather than wrapping — so appearing and going moves no row. */
+.swipe-hint.coach-nudge { display: flex; align-items: center; gap: 8px; opacity: 1; }
+.coach-nudge-t {
+  flex: 1; min-width: 0; padding: 0; text-align: left;
+  font-size: inherit; letter-spacing: inherit; line-height: inherit;
+  color: var(--p-yellow);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* A thumb-sized target round a 10px glyph without a taller line: the padding
+   is handed back as negative margin, so the row sees the glyph's box. Both
+   buttons take the hint's own size and line — body's line-height is unitless,
+   so a bigger glyph here would inherit a taller line and move the row. */
+.coach-nudge-x {
+  flex: none; font-size: inherit; line-height: inherit; color: var(--dim);
+  padding: 10px 12px; margin: -10px -12px -10px 0;
+}
 .coach-build-acts { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
 .coach-build .coach-chips { margin-top: 4px; }
 

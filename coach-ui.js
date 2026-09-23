@@ -20,13 +20,14 @@
 // Imports coach.js, coach-data.js, ui.js and exercises.js (for a group's
 // colour, nothing more). Nothing imports back — workout.js imports THIS file,
 // which is why starting a workout from the sheet is a function the Train card
-// hands in rather than an import here.
+// hands in rather than an import here, and why "Add it" in a live session is
+// the picker's own callback handed in the same way.
 
 import { el, sheet, noteEl, segmented, toast } from './ui.js';
 import { GROUPS } from './exercises.js';
-import { coach, CATEGORIES, QUESTIONS, PRO_ADDS } from './coach.js';
+import { coach, CATEGORIES, QUESTIONS, PRO_ADDS, LIVE_NONE } from './coach.js';
 import { coachInput, coachReady, coachLogKnown, rememberGreeting, coachSettings, coachSettingsKnown,
-         setCategoryMuted, answerQuestion, markAsked, liveSessionOnDevice } from './coach-data.js';
+         setCategoryMuted, answerQuestion, markAsked, liveSessionOnDevice, coachPro } from './coach-data.js';
 
 /* The two marks. Inline rather than in a sprite because there are two of them
    and the app has no icon system — the gear on You is written out the same way. */
@@ -673,4 +674,173 @@ export function coachAnswerRows(host, onChange) {
     host.appendChild(f);
   });
   return given.length;
+}
+
+/* ================= IN THE GYM =================
+   Ship three, part one. During a live workout Coach can say what usually comes
+   next, or that he is probably done — and the whole of this section is about
+   WHEN it is allowed to, because mid-workout is the most sensitive place it
+   will ever speak. He is under a bar. So:
+
+     NOTHING POPS UP. There is a chip in the session's header row, and a tap
+     on it is the only way the sheet opens.
+     ONE QUIET LINE, ONCE. When a tick finishes an exercise — its last set —
+     the answer may appear as one line in the slot under that exercise where
+     the swipe hint sits. The same height, the same place, so no row moves;
+     it is inline, so it covers nothing, least of all the rest timer; it is
+     dismissible; and it is never shown for the same exercise twice in one
+     session. The next tick anywhere clears it, because the moment it was
+     about has passed.
+     BASIC SEES NOTHING NEW. No chip, no line, no lock and no teaser —
+     nobody is sold anything under a bar. And an EDIT of a past session is
+     not a workout in progress: nothing appears over one.
+
+   What to say is coach-live.js's, through coach.js's c.live(); the gates on it
+   are the engine's too. This file decides only where and when it is drawn. */
+
+/* The chip. Null for a basic account and during an edit, so the header row
+   simply has no chip rather than a disabled one. `opts.session` is the live
+   session; `opts.add` is the callback the picker hands chosen exercises to. */
+export function liveChip(opts = {}) {
+  const s = opts.session;
+  if (!s || typeof s !== 'object' || s._edit) return null;
+  let pro = false;
+  try { pro = coachPro() === true; } catch { pro = false; }
+  if (!pro) return null;
+  const b = el('button', 'wk-coach');
+  b.setAttribute('aria-label', 'Ask Coach what to do next');
+  const mark = el('span', 'coach-mark');
+  mark.appendChild(bubbleIcon());
+  b.appendChild(mark);
+  b.appendChild(el('span', 'coach-ttl', 'Coach'));
+  b.onclick = () => openLiveSheet(opts);
+  return b;
+}
+
+const LIVE_ASK = 'What should I do next?';
+const LIVE_WAIT = 'Coach is reading your log — ask again in a moment.';
+
+/* The compact sheet: the question, answered at once, and at most two ways on —
+   the reasons behind the answer, and, when the answer names an exercise he
+   has not got on today's list, a button that adds it. */
+export function openLiveSheet(opts = {}) {
+  const { sh, close } = sheet();
+  sh.classList.add('coach-sheet', 'coach-live');
+  sh.appendChild(el('div', 'eyebrow', 'Coach'));
+  const thread = el('div', 'coach-thread');
+  sh.appendChild(thread);
+  const bubble = (who, text) => {
+    const b = el('div', 'coach-bub ' + who);
+    b.appendChild(el('div', 'coach-bub-t', text));
+    thread.appendChild(b);
+    return b;
+  };
+
+  bubble('you', LIVE_ASK);
+  let a = null;
+  const known = coachLogKnown();
+  if (known) {
+    try { a = coach(coachInput({ live: true })).live(opts.session, { current: opts.current }); } catch { a = null; }
+  }
+  bubble('coach', a ? a.text : known ? LIVE_NONE.text : LIVE_WAIT);
+
+  const why = a ? a.why : known ? LIVE_NONE.why : [];
+  const row = el('div', 'coach-chips');
+  if (why.length) {
+    const w = el('button', 'coach-chip', 'Why?');
+    w.onclick = () => {
+      w.remove();
+      const b = bubble('coach', why[0]);
+      why.slice(1).forEach(t => b.appendChild(el('div', 'coach-bub-r', t)));
+      try { sh.scrollTop = sh.scrollHeight; } catch {}
+    };
+    row.appendChild(w);
+  }
+  thread.appendChild(row);
+
+  /* ADD IT goes through the picker's own path — workout.js hands in the very
+     function the "+ Add exercise" button hands openPicker — with the library
+     row the picker would have handed back. So it lands where that button puts
+     an exercise, at the end of the session and outside any block, with the
+     sets that button gives one; nothing above it moves. */
+  if (a && a.add && typeof opts.add === 'function') {
+    const go = el('button', 'btn btn-primary btn-block', 'Add it');
+    go.style.marginTop = '12px';
+    go.onclick = () => { close(); opts.add([{ ...a.add }]); };
+    sh.appendChild(go);
+  }
+
+  const done = el('button', 'btn btn-ghost btn-block', 'Close');
+  done.style.marginTop = '10px';
+  done.onclick = close;
+  sh.appendChild(done);
+}
+
+/* Which exercise a line belongs to: its id and which occurrence of that id it
+   is, so a block duplicated in one session is two exercises to a person and
+   gets a line each, and removing an unrelated exercise above it cannot hand
+   one exercise's line to another. */
+function nudgeKey(session, exIdx) {
+  const list = (session && session.exercises) || [];
+  const ex = list[exIdx];
+  if (!ex || !ex.exId) return null;
+  let nth = 0;
+  for (let k = 0; k < exIdx; k++) if (list[k] && list[k].exId === ex.exId) nth++;
+  return ex.exId + '#' + nth;
+}
+
+function nudgeState(v) {
+  const o = v && typeof v === 'object' ? v : {};
+  return {
+    shown: Array.isArray(o.shown) ? o.shown.filter(x => typeof x === 'string') : [],
+    nudge: o.nudge && typeof o.nudge === 'object' && typeof o.nudge.key === 'string' ? o.nudge : null
+  };
+}
+
+/* After a tick: the live session's line state, as it should be now. Never
+   mutates what it is handed — workout.js assigns the answer to the session,
+   the way it assigns what every other helper returns. The line appears only
+   when this tick finished the exercise (its LAST set, ticked on), only when
+   the engine has something to say, and only if that exercise has not had a
+   line already this session. Any other tick clears whatever line was up. */
+export function noteLiveTick(session, exIdx, setIdx) {
+  const was = nudgeState(session && session._coach);
+  const quiet = { shown: was.shown, nudge: null };
+  if (!session || typeof session !== 'object' || session._edit) return quiet;
+  const ex = (session.exercises || [])[exIdx];
+  const sets = ex && Array.isArray(ex.sets) ? ex.sets : [];
+  const set = sets[setIdx];
+  if (!set || !set.done || setIdx !== sets.length - 1) return quiet;
+  const key = nudgeKey(session, exIdx);
+  if (!key || was.shown.includes(key)) return quiet;
+  if (!coachLogKnown()) return quiet;
+  let a = null;
+  try { a = coach(coachInput({ live: true })).live(session, { current: exIdx }); } catch { a = null; }
+  if (!a || !a.short) return quiet;
+  return { shown: was.shown.concat(key), nudge: { key, kind: a.kind, short: a.short } };
+}
+
+// Dismissed: the line goes, and the exercise stays counted as shown.
+export function dismissNudge(state) {
+  const was = nudgeState(state);
+  return { shown: was.shown, nudge: null };
+}
+
+/* The line itself, or null — in which case the caller draws its swipe hint as
+   it always has. Same class as the hint, so it is the same one-line box in the
+   same place; the text is clipped to one line rather than wrapping, which is
+   what keeps the height, and the rows under it, exactly where they were. */
+export function nudgeLine(session, exIdx, on = {}) {
+  if (!session || session._edit) return null;
+  const st = nudgeState(session._coach);
+  if (!st.nudge || st.nudge.key !== nudgeKey(session, exIdx)) return null;
+  const line = el('div', 'swipe-hint coach-nudge');
+  const t = el('button', 'coach-nudge-t', 'Coach · ' + st.nudge.short);
+  t.setAttribute('aria-label', 'Coach: ' + st.nudge.short + ' Tap for why.');
+  t.onclick = () => { if (typeof on.open === 'function') on.open(); };
+  const x = el('button', 'coach-nudge-x', '×');
+  x.setAttribute('aria-label', 'Dismiss');
+  x.onclick = () => { if (typeof on.dismiss === 'function') on.dismiss(); };
+  line.append(t, x);
+  return line;
 }

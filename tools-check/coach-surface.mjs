@@ -174,6 +174,7 @@ const IMPL = {
   coachInput:         extra => ({ ...(state.ready ? state.input : logPhase(state.input)),
                                   live: { active: !!(extra && extra.live) }, tier: { pro: state.pro } }),
   liveSessionOnDevice: () => false,
+  coachPro:           () => state.pro,
   rememberGreeting:   id => { state.calls.push(['rememberGreeting', id]); },
   setCategoryMuted:   (id, m) => { state.calls.push(['setCategoryMuted', id, m]); return Promise.resolve(true); },
   answerQuestion:     (id, v) => { state.calls.push(['answerQuestion', id, v]); return Promise.resolve(true); },
@@ -256,6 +257,7 @@ const textOf = n => texts(n).join(' ');
 const find = (n, cls) => walk(n).filter(x => x.classList.contains(cls));
 const buttonsIn = n => walk(n).filter(x => x.tag === 'button');
 const chipsIn = n => buttonsIn(n).filter(x => x.classList.contains('coach-chip'));
+const J_ = v => JSON.stringify(v);
 
 // A tap on the card, and whatever it put on the screen.
 function open(ui, opts) {
@@ -765,6 +767,208 @@ section('F. the workout on the sheet, and the four ways out of it');
         /start: preset => \{\s*if \(hasActiveSession\(\)\)/.test(W));
   check('the You card is handed no start, so the You sheet never offers the builder',
         /coachCard\(/.test(Y) && !/coachCard\(\{[^)]*\bstart\s*:/.test(Y));
+}
+
+/* ================= G. COACH IN THE GYM ================= */
+section('G. in a live session: a chip when asked, one quiet line once, nothing for Basic or an edit');
+{
+  /* Mid-workout is the most sensitive place Coach speaks, so this section is
+     about WHEN and WHERE as much as what: the chip is the only door to the
+     sheet, the answer is the engine's word for word, "Add it" hands the
+     picker's own callback exactly what the picker would, and the line under a
+     finished exercise appears once, clears on the next tick, and is never
+     drawn for a basic account or over an edit. The fixture is coach-live.mjs's
+     twelve weeks of push, pull and leg days, so every answer here is one that
+     file has already proved right. */
+  const GL = {
+    bench:    { name: 'Barbell Bench Press',          group: 'chest', equipment: 'barbell' },
+    incline:  { name: 'Incline Dumbbell Bench Press', group: 'chest', equipment: 'dumbbell' },
+    fly:      { name: 'Cable Crossover',              group: 'chest', equipment: 'cable' },
+    curl:     { name: 'Barbell Curl',                 group: 'arms',  equipment: 'barbell' },
+    pushdown: { name: 'Triceps Pushdown (Rope)',      group: 'arms',  equipment: 'cable' },
+    row:      { name: 'Barbell Row',                  group: 'back',  equipment: 'barbell' },
+    squat:    { name: 'Back Squat (High Bar)',        group: 'legs',  equipment: 'barbell' }
+  };
+  const W = { bench: '185', incline: '65', fly: '40', curl: '75', pushdown: '50', row: '155', squat: '245' };
+  const R = { bench: 8, incline: 10, fly: 12, curl: 10, pushdown: 12, row: 8, squat: 5 };
+  const lx = (id, c) => ({ exId: id, name: GL[id].name, group: GL[id].group, equipment: GL[id].equipment,
+    sets: Array.from({ length: c }, () => ({ w: W[id], r: String(R[id]), type: 'N', done: true })) });
+  const hist = [];
+  for (let k = 0; k < 10; k++) {
+    const at = (tag, ago, rows) => hist.push({ id: tag + ago, startedAt: NOW - ago * DAY, _date: key(NOW - ago * DAY), exercises: rows });
+    at('push', 3 + 7 * k, k === 4 || k === 7
+      ? [lx('bench', 4), lx('incline', 3), lx('pushdown', 3), lx('curl', 3)]
+      : [lx('bench', 4), lx('incline', 3), lx('fly', 3), lx('curl', 3), lx('pushdown', 3)]);
+    at('pull', 5 + 7 * k, [lx('row', 4), lx('curl', 3)]);
+    at('legs', 1 + 7 * k, [lx('squat', 4)]);
+  }
+  const LIVEX = { ...BASE, lib: GL, hidden: [], libReady: true, sessions: hist.slice().sort((a, b) => a.startedAt - b.startedAt) };
+  // A live session the way workout.js holds it. Rows: [exId, sets, ticked?]
+  const liveS = (rows, extra) => ({ id: 'wlive', name: 'Live', startedAt: NOW - 1800000, ...(extra || null),
+    exercises: rows.map(([id, c, ticked]) => ({ exId: id, name: GL[id].name, group: GL[id].group, equipment: GL[id].equipment,
+      sets: Array.from({ length: c }, (_, j) => ({ w: W[id], r: String(R[id]), type: 'N',
+        done: ticked === undefined ? true : j < ticked })) })) });
+  const eng = () => C.coach({ ...LIVEX, live: { active: true }, tier: { pro: state.pro } });
+  const sheetIn = () => body.children.find(x => x.classList.contains('sheet')) || null;
+  const tapChip = chip => { body.children.length = 0; chip.onclick(); return sheetIn(); };
+  const saidIn = sh => find(sh, 'coach-bub').map(b => ({ who: b.classList.contains('you') ? 'you' : 'coach',
+    t: (find(b, 'coach-bub-t')[0] || {}).textContent, r: find(b, 'coach-bub-r').map(x => x.textContent) }));
+  const btn = (sh, label) => buttonsIn(sh).find(b => b.textContent === label) || null;
+
+  state.input = LIVEX; state.logKnown = true; state.ready = true; state.pro = true;
+
+  /* ---- the chip ---- */
+  const NEXT = liveS([['bench', 4], ['incline', 3]]);
+  const adds = [];
+  const add = chosen => adds.push(chosen);
+  const chip = UI.liveChip({ session: NEXT, add });
+  check('Pro, a live session: the header row gets a Coach chip',
+        !!chip && chip.tag === 'button' && chip.classList.contains('wk-coach') && textOf(chip).includes('Coach'),
+        chip ? chip.className : 'null');
+  state.pro = false;
+  check('Basic, the same session: no chip at all — not a lock, not a teaser', UI.liveChip({ session: NEXT, add }) === null);
+  state.pro = true;
+  check('an edit of a past session: no chip', UI.liveChip({ session: { ...NEXT, _edit: { mk: '2026-09', dd: '01' } }, add }) === null);
+  check('no session: no chip', UI.liveChip({ add }) === null);
+
+  /* ---- the sheet ---- */
+  const want = eng().live(NEXT);
+  let sh = tapChip(chip);
+  const said = sh ? saidIn(sh) : [];
+  check('the chip opens a sheet that asks "What should I do next?" and answers at once, in the engine’s words',
+        !!sh && said.length === 2 && said[0].who === 'you' && said[0].t === 'What should I do next?' &&
+        said[1].who === 'coach' && !!want && said[1].t === want.text, said.map(x => x.t).join(' / '));
+  check('the answer here is the next exercise — the fixture’s true one', !!want && want.kind === 'next' && want.exId === 'fly',
+        want && want.kind);
+  check('and the sheet offers exactly Why?, Add it and Close — nothing else to tap',
+        !!sh && J_(buttonsIn(sh).map(b => b.textContent)) === J_(['Why?', 'Add it', 'Close']), sh && list(buttonsIn(sh).map(b => b.textContent)));
+  btn(sh, 'Why?').onclick();
+  const why = saidIn(sh).pop();
+  check('"Why?" shows the engine’s reasons, all of them, once',
+        why && why.who === 'coach' && J_([why.t].concat(why.r)) === J_(want.why) && !btn(sh, 'Why?'),
+        why && [why.t].concat(why.r).join(' / '));
+  adds.length = 0;
+  btn(sh, 'Add it').onclick();
+  check('"Add it" closes the sheet', !sheetIn());
+  check('and hands the picker’s callback exactly what the picker hands it: one library row, in an array',
+        adds.length === 1 && J_(adds[0]) === J_([{ id: 'fly', name: 'Cable Crossover', group: 'chest', equipment: 'cable' }]),
+        J_(adds));
+
+  const ANOTHER = liveS([['bench', 3]]);
+  sh = tapChip(UI.liveChip({ session: ANOTHER, add }));
+  check('"one more set" is answered, with Why? and no Add it — the exercise is already in hand',
+        saidIn(sh)[1].t === eng().live(ANOTHER).text && eng().live(ANOTHER).kind === 'another' &&
+        !btn(sh, 'Add it') && !!btn(sh, 'Why?'));
+  const SWITCH = liveS([['bench', 4], ['incline', 3], ['fly', 3]]);
+  sh = tapChip(UI.liveChip({ session: SWITCH, add }));
+  adds.length = 0;
+  const sw = eng().live(SWITCH);
+  check('a switch offers Add it for the exercise that usually opens the next group',
+        sw && sw.kind === 'switch' && saidIn(sh)[1].t === sw.text && !!btn(sh, 'Add it'), sw && sw.kind);
+  btn(sh, 'Add it').onclick();
+  check('and adds it through the same callback',
+        adds.length === 1 && Array.isArray(adds[0]) && !!adds[0][0] && adds[0][0].id === 'curl', J_(adds));
+  const DONE = liveS([['bench', 4], ['incline', 3], ['fly', 3], ['curl', 3], ['pushdown', 3]]);
+  sh = tapChip(UI.liveChip({ session: DONE, add }));
+  check('"you’re probably good for today" has nothing to add', eng().live(DONE).kind === 'done' &&
+        /^You’re probably good for today/.test(saidIn(sh)[1].t) && !btn(sh, 'Add it'));
+
+  state.input = { ...LIVEX, sessions: LIVEX.sessions.slice(-4) };
+  sh = tapChip(UI.liveChip({ session: NEXT, add }));
+  const none = C.coach({ ...state.input, live: { active: true }, tier: { pro: true } }).live(NEXT);
+  check('thin history: the sheet says it has nothing to add, and why — never a guess',
+        none === null && saidIn(sh)[1].t === C.LIVE_NONE.text && !btn(sh, 'Add it') && !!btn(sh, 'Why?'),
+        saidIn(sh)[1] && saidIn(sh)[1].t);
+  state.input = LIVEX;
+  state.logKnown = false;
+  sh = tapChip(UI.liveChip({ session: NEXT, add }));
+  check('the log not read yet: the sheet says so, and offers nothing it cannot back',
+        /reading your log/.test(saidIn(sh)[1].t) && !btn(sh, 'Add it') && !btn(sh, 'Why?'), saidIn(sh)[1].t);
+  state.logKnown = true;
+
+  /* ---- the line under a finished exercise ---- */
+  // Incline's last set has just been ticked; bench was finished before it.
+  const s1 = liveS([['bench', 4], ['incline', 3]]);
+  const before = J_(s1);
+  const st1 = UI.noteLiveTick(s1, 1, 2);
+  check('ticking the LAST set of an exercise raises one line, the engine’s short answer for it',
+        !!st1.nudge && st1.nudge.short === eng().live(s1, { current: 1 }).short && st1.shown.includes('incline#0'),
+        J_(st1));
+  check('and noteLiveTick hands back a new state — the session it was given is untouched', J_(s1) === before);
+  s1._coach = st1;
+  const line = UI.nudgeLine(s1, 1, { open() { line.opened = true; }, dismiss() { line.dismissed = true; } });
+  check('drawn under that exercise, in the swipe hint’s own box — same slot, same height, no row moves',
+        !!line && line.classList.contains('swipe-hint') && line.classList.contains('coach-nudge') &&
+        textOf(line).includes(st1.nudge.short), line ? line.className + ' · ' + textOf(line) : 'null');
+  check('and under no other exercise', UI.nudgeLine(s1, 0, {}) === null);
+  const [lt, lx_] = buttonsIn(line);
+  lt.onclick(); lx_.onclick();
+  check('tapping it opens the sheet, and × dismisses it', line.opened === true && line.dismissed === true);
+
+  // Once per exercise, per session.
+  const again = UI.noteLiveTick(s1, 1, 2);
+  check('the same exercise finished again — an untick and a re-tick — raises nothing: once is once',
+        again.nudge === null && again.shown.includes('incline#0'), J_(again));
+  s1._coach = UI.dismissNudge(st1);
+  check('dismissed, the line goes and the exercise stays counted', UI.nudgeLine(s1, 1, {}) === null &&
+        s1._coach.shown.includes('incline#0'));
+  // A tick that finishes nothing clears whatever line was up.
+  const s2 = liveS([['bench', 4], ['incline', 3], ['fly', 3, 1]]);
+  s2._coach = st1;
+  const mid = UI.noteLiveTick(s2, 2, 0);
+  check('a tick that does not finish an exercise clears the line, and remembers what was shown',
+        mid.nudge === null && mid.shown.includes('incline#0'), J_(mid));
+  // Another exercise finishing gets its own.
+  const s3 = liveS([['bench', 4], ['incline', 3], ['fly', 3]]);
+  s3._coach = mid;
+  const st3 = UI.noteLiveTick(s3, 2, 2);
+  check('a different exercise finishing gets its own line', !!st3.nudge && st3.nudge.key === 'fly#0' &&
+        st3.shown.includes('incline#0') && st3.shown.includes('fly#0'), J_(st3));
+  const dupe = liveS([['bench', 4], ['incline', 3], ['bench', 2]]);
+  dupe._coach = { shown: ['bench#0'], nudge: null };
+  check('the same lift again in a duplicated block is its own exercise, with its own line',
+        UI.noteLiveTick(dupe, 2, 1).nudge && UI.noteLiveTick(dupe, 2, 1).nudge.key === 'bench#1');
+
+  // Silence.
+  state.pro = false;
+  check('Basic: finishing an exercise raises no line', UI.noteLiveTick(liveS([['bench', 4], ['incline', 3]]), 1, 2).nudge === null);
+  state.pro = true;
+  const edit = { ...liveS([['bench', 4], ['incline', 3]]), _edit: { mk: '2026-09', dd: '01' } };
+  check('an edit of a past session: no line raised', UI.noteLiveTick(edit, 1, 2).nudge === null);
+  check('and none drawn, even over state left on it', UI.nudgeLine({ ...edit, _coach: st1 }, 1, {}) === null);
+  state.input = { ...LIVEX, sessions: LIVEX.sessions.slice(-4) };
+  const thin = UI.noteLiveTick(liveS([['bench', 4], ['incline', 3]]), 1, 2);
+  check('nothing to say: no line, and the exercise is not marked shown — silence is not a use of its once',
+        thin.nudge === null && !thin.shown.length, J_(thin));
+  state.input = LIVEX;
+  check('a set that is not the exercise’s last raises nothing',
+        UI.noteLiveTick(liveS([['bench', 4, 3], ['incline', 3]]), 0, 2).nudge === null);
+  check('and an untick raises nothing', UI.noteLiveTick(liveS([['bench', 4, 3]]), 0, 3).nudge === null);
+
+  /* ---- the wiring, read from the file that does it ---- */
+  const WS = src('workout.js');
+  check('"+ Add exercise" and Coach’s Add it are the same function — the picker’s own path, never a parallel one',
+        /add\.onclick = \(\) => openPicker\(addPicked\);/.test(WS) &&
+        /liveChip\(\{ session, add: addPicked/.test(WS) && /openLiveSheet\(\{ session, add: addPicked/.test(WS));
+  check('and that function appends at the end of the session, outside any block',
+        /function addPicked\(chosen\) \{[\s\S]{0,200}session\.exercises\.push\(newExercise\(x, !!session\._edit\)\)/.test(WS));
+  const tick = (WS.split('chk.onclick = () => {')[2] || WS.split('chk.onclick = () => {')[1] || '').split('\n  };')[0];
+  check('the set tick raises the line only when it ticks ON and never in an edit, and the rest timer still follows',
+        /if \(s\.done && !session\._edit\) session\._coach = noteLiveTick\(session, exIdx, i\);/.test(tick) &&
+        tick.indexOf('noteLiveTick') < tick.indexOf('startRest()'), tick.slice(0, 80));
+  check('the line takes the swipe hint’s place rather than adding a row',
+        /if \(nudge\) block\.appendChild\(nudge\);\n  else if \(ex\.sets\.length\) block\.appendChild\(el\('div', 'swipe-hint'/.test(WS));
+  const gym = (UI_SRC.split('/* ================= IN THE GYM =================')[1] || '');
+  const raise = (gym.split('export function noteLiveTick')[1] || '').split('\nexport function nudgeLine')[0];
+  check('nothing that raises or draws the line opens a sheet or a toast — it is inline, and nothing pops up',
+        raise.length > 0 && !/\bsheet\(|\btoast\(/.test(raise + (gym.split('export function nudgeLine')[1] || '')));
+  const css = src('rack.css');
+  const rules = (css.split('/* ---------- Coach in a live session ----------')[1] || '').split('\n/*')[0] +
+                (css.split('.swipe-hint.coach-nudge')[1] || '').slice(0, 800);
+  check('its CSS positions nothing — no fixed or absolute box that could sit over the rest timer',
+        rules.length > 0 && !/position:\s*(fixed|absolute|sticky)/.test(rules));
+  check('and it is clipped to one line, which is what keeps the hint’s height',
+        /\.coach-nudge-t \{[^}]*white-space: nowrap;[^}]*text-overflow: ellipsis;/.test(css));
 }
 
 /* ---------- report ---------- */

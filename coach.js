@@ -44,7 +44,7 @@ import { GROUPS, GROUP_ORDER } from './exercises.js';
 import { e1rm, isWorking, mergeSessionExercises, exerciseIndex } from './analytics.js';
 import { labelW, labelRate, unitW, fmtW } from './units.js';
 import { propose, liveRefusal } from './coach-build.js';
-import { liveRead } from './coach-live.js';
+import { liveRead, LIVE_NONE } from './coach-live.js';
 
 const DAY = 864e5;
 
@@ -1360,6 +1360,10 @@ const INTENT_BY_ID = Object.freeze(Object.fromEntries(INTENTS.map(i => [i.id, i]
    largest thing Pro adds, off the list of what Pro adds. A guard or a state is
    the card's own machinery and is never something one tier has and the other
    does not. */
+/* The in-session read's own words for "nothing to add", handed on to the view
+   so the sheet says what the pure layer says rather than a second copy. */
+export { LIVE_NONE };
+
 export const PRO_ADDS = Object.freeze(
   CATEGORIES
     .filter(c => INTENTS.some(i => (i.kind === 'finding' || i.kind === 'selector') &&

@@ -335,6 +335,19 @@ section('D. thin history, and every gate, is silence');
         read(live([['bench', [[185, 8, 'N', false], [185, 8, 'N', false]]]])) === null);
   check('no session at all: nothing', read(null) === null && read(undefined) === null);
 
+  // A usual length is a usual length among sessions of the same kind. With no
+  // recurring shape in the log — one of each — a chest day half done is not
+  // "good for today" because leg days are short.
+  // Built so the median of the WHOLE window is 7 — three short leg days, a pull
+  // day and a push day — which is exactly the seven sets on the list: pooled,
+  // it would call this chest day done.
+  const mixed = [HISTORY.filter(x => x.id.startsWith('push')).slice(-1)[0],
+                 ...HISTORY.filter(x => x.id.startsWith('pull')).slice(-1),
+                 ...HISTORY.filter(x => x.id.startsWith('legs')).slice(-3)];
+  const half = read(live([['bench', n('bench', 4)], ['incline', n('incline', 3)]]), { sessions: mixed.sort((a, b) => a.startedAt - b.startedAt) });
+  check('no shape of its own in the log: never "good for today" off a median of other kinds of session',
+        !half || half.kind !== 'done', half && half.text);
+
   // "Usually" has to be true. Five chest days go to the fly after bench and
   // incline and five to the pushdown: half and half is not a habit.
   const split = [];

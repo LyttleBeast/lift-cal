@@ -831,6 +831,20 @@ section('H. the in-session read — unprompted under a bar, and under the ban wi
         !health.length, list(health.map(x => x.t)));
   check('the sweep reached all four answers',
         ['next', 'another', 'switch', 'done'].every(k => liveAll('lb').some(x => x.a && x.a.kind === k)));
+
+  /* And the words the view writes around them — the chip, the question, the
+     waiting line, the buttons and the nudge's own prefix — which live in
+     coach-ui.js's IN THE GYM section rather than in a template. */
+  const UIS = src('coach-ui.js');
+  // From the marker's own opening, so the section's header comment is still a
+  // whole comment and decomment() takes it off rather than reading its prose.
+  const at = UIS.indexOf('/* ================= IN THE GYM =================');
+  const gym = at === -1 ? '' : UIS.slice(at);
+  const gymCopy = literals(decomment(gym)).filter(t => /[a-z]{3}/i.test(t));
+  const gymBad = gymCopy.map(t => ({ t, w: offence(t) })).filter(x => x.w);
+  check('the in-session copy in coach-ui.js was found and read (' + gymCopy.length + ' strings)',
+        ['What should I do next?', 'Why?', 'Add it'].every(l => gymCopy.includes(l)), list(gymCopy));
+  check('and carries no banned word', !gymBad.length, list(gymBad.map(x => '“' + x.w + '” in: ' + x.t)));
 }
 
 /* ---------- report ---------- */

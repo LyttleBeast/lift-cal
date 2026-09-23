@@ -30,8 +30,9 @@
 //
 // FOUR ANSWERS, OR NONE (liveRead):
 //
-//   done     his usual session length in working sets is reached, or the last
-//            two exercises both show fatigue. Tried FIRST.
+//   done     his usual length for a session of this shape, in working sets,
+//            is reached, or the last two exercises both show fatigue. Tried
+//            FIRST.
 //   switch   the current exercise's group has had its usual sets for a
 //            session, and the shape he usually trains has a group with nothing
 //            in it yet today. Names the group, and the exercise his sessions
@@ -313,12 +314,15 @@ const fatigueWords = f => (f.kind === 'failure' ? 'a set taken to failure'
    ================================================================ */
 
 function doneRead(i, t, history, shape) {
-  // The usual length of a session like this one, in working sets. His
-  // sessions of this shape if there are enough of them; otherwise every
-  // session in the window; otherwise no length at all.
+  /* The usual length of a session like this one, in working sets — his
+     sessions of this SHAPE, and nothing else. Every session in the window was
+     the first draft's fallback, and it pooled short leg days with long chest
+     days: "7 working sets against a usual 5.5" to somebody half way through a
+     chest day. A usual length is only a usual length among sessions of the
+     same kind, so without three of them there is no length at all, and only
+     fatigue can say stop. */
   const mine = shape ? history.filter(s => (shape.members || []).includes(s.key)) : [];
-  const pool = mine.length >= MIN_SESSIONS ? mine : history;
-  const usual = pool.length >= MIN_SESSIONS ? median(pool.map(s => s.total)) : null;
+  const usual = mine.length >= MIN_SESSIONS ? median(mine.map(s => s.total)) : null;
   const long = usual != null && t.total > 0 && t.total >= usual;
 
   // The last two exercises worked, and what their sets show — said in the
@@ -329,11 +333,10 @@ function doneRead(i, t, history, shape) {
   const tired = lastTwo.length === 2 && lastTwo.every(x => x.f);
 
   if (!long && !tired) return null;
-  const poolWord = pool === mine && shape ? 'your ' + kindOf(shape) : 'your sessions';
 
   const why = [];
   if (long) {
-    why.push(plural(t.total, 'working set') + ' so far this session. Across ' + poolWord +
+    why.push(plural(t.total, 'working set') + ' so far this session. Across your ' + kindOf(shape) +
              ' in the last twelve weeks, the median is ' + one(usual) + '.');
   }
   if (tired) lastTwo.forEach(x => why.push(x.e.name + ': ' + fatigueWords(x.f) + '.'));

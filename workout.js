@@ -20,7 +20,7 @@ import { openStats, isStatsOpen, renderStats, refresh as refreshStats } from './
 // use them without importing this file back.
 import { initPicker, allExercises, openPicker, openExerciseManager } from './picker.js';
 import { initRoutines, openRoutines, saveSessionAsRoutine } from './routines.js';
-import { coachCard } from './coach-ui.js';
+import { coachCard, liveChip, openLiveSheet, noteLiveTick, nudgeLine, dismissNudge } from './coach-ui.js';
 import { initCoachData, coachLogReady, refreshCoachSessions, noteCoachData } from './coach-data.js';
 import { bump } from './usage.js';
 import { wOut, wIn, fmtSetW, fmtSetLoad, fmtVol, volOut, unitW, limW } from './units.js';
@@ -712,6 +712,21 @@ function coachExIdx(s) {
   return ((s && s.exercises) || []).findIndex(ex => ex && (ex.sets || []).length);
 }
 
+/* The exercise in hand, for the chip, when this screen knows it: the one the
+   line under a finished exercise is about. Otherwise null, and coach-live.js
+   works it out itself — one definition of "the exercise in hand", not two. */
+function nudgedAt(s) {
+  const list = (s && s.exercises) || [];
+  const on = s && s._coach && s._coach.nudge && s._coach.nudge.key;
+  if (!on) return null;
+  const [id, nth] = on.split('#');
+  let seen = -1;
+  for (let k = 0; k < list.length; k++) {
+    if (list[k] && list[k].exId === id && ++seen === Number(nth)) return k;
+  }
+  return null;
+}
+
 function startWorkout(preset) {
   session = {
     id: 'w' + Date.now().toString(36),
@@ -860,6 +875,18 @@ function newExercise(x, editing) {
   };
 }
 
+/* What "+ Add exercise" hands the picker, and — the same function, never a
+   second one — what Coach's "Add it" is handed in a live session. The picker
+   hands back library rows and so does Coach, so an exercise Coach adds lands
+   exactly where the button puts one: at the end of the session, outside any
+   block, with the one empty set every added exercise starts with. Appending
+   at the end moves nothing above it, and a block stays his to build. */
+function addPicked(chosen) {
+  if (!session) return;
+  (chosen || []).forEach(x => session.exercises.push(newExercise(x, !!session._edit)));
+  persistSession(); render();
+}
+
 function renderSession() {
   const editing = !!session._edit;
   const wrap = el('div');
@@ -880,6 +907,13 @@ function renderSession() {
     lt.appendChild(clock);
   }
   bar.appendChild(lt);
+
+  /* Coach, as a chip beside the calendar: tapped, it answers "what should I do
+     next?" in a small sheet. Null for a basic account and in an edit, so the
+     row simply has no chip rather than a disabled one. */
+  const coachChip = editing ? null
+    : liveChip({ session, add: addPicked, current: nudgedAt(session) });
+  if (coachChip) bar.appendChild(coachChip);
 
   if (!editing) {
     const cal = el('button', 'wk-cal-btn');
@@ -931,10 +965,7 @@ function renderSession() {
   // it always has; a block is a box to put the repeated ones in.
   const addRow = el('div', 'add-row');
   const add = el('button', 'btn btn-ghost', '+  Add exercise');
-  add.onclick = () => openPicker(chosen => {
-    chosen.forEach(x => session.exercises.push(newExercise(x, editing)));
-    persistSession(); render();
-  });
+  add.onclick = () => openPicker(addPicked);
   const addBlk = el('button', 'btn btn-ghost', '+  Add Lifting Block');
   addBlk.onclick = () => commitBlocks(addBlock(session));
   addRow.append(add, addBlk);
@@ -1121,7 +1152,17 @@ function renderExercise(ex, exIdx) {
   // PAIR with the Train tour card in onboarding.js — the two say one rule and
   // move together, in this tree and in native. Change one and you have to
   // change three.
-  if (ex.sets.length) block.appendChild(el('div', 'swipe-hint',
+  //
+  // Coach's one quiet line takes that same slot when a tick has just finished
+  // this exercise (coach-ui.js nudgeLine): same box, same height, so nothing
+  // below it moves. Tapped, it opens the sheet with the why; dismissed, the
+  // hint comes back.
+  const nudge = nudgeLine(session, exIdx, {
+    open: () => openLiveSheet({ session, add: addPicked, current: exIdx }),
+    dismiss: () => { session._coach = dismissNudge(session._coach); persistSession(); render(); }
+  });
+  if (nudge) block.appendChild(nudge);
+  else if (ex.sets.length) block.appendChild(el('div', 'swipe-hint',
     exIdx === coachExIdx(session) && showCoach(session, coachNone, coachTapped)
       ? 'Fill in the weight and reps, then tap the box on the right to log the set'
       : 'Swipe a set left to delete it'));
@@ -1198,6 +1239,11 @@ function renderSet(ex, exIdx, s, i) {
     // rule, and why, is at tickSet below.
     Object.assign(s, tickSet(s));
     if (s.done) bump('setLogged');
+    // Coach's line under a finished exercise, decided here and drawn by
+    // renderExercise. A tick is the only thing that can raise one, and a tick
+    // that does not finish an exercise clears whatever was up. An untick
+    // leaves it alone. Never in an edit.
+    if (s.done && !session._edit) session._coach = noteLiveTick(session, exIdx, i);
     persistSession();
     const wasDone = s.done;
     render();
