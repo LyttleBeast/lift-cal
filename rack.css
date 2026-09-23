@@ -817,6 +817,12 @@ body.peeking .view.active { padding-bottom: 58px; }
 @keyframes summaryIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 
 .summary-hero { margin-bottom: 16px; }
+/* The three tiles under the hero. .stat-row carries no margin of its own —
+   every screen that uses it spaces it where it sits — and every card in this
+   recap is spaced by its own margin-bottom of 12px, so the tiles sat flush on
+   whichever card came next ("Against your last 4 weeks", or a record). Scoped
+   to the recap so no other screen's tiles move. */
+.summary-page .stat-row { margin-bottom: 12px; }
 .summary-hero h1 { margin-top: 2px; }
 .summary-date { font-size: 12px; color: var(--dim); margin-top: 4px; }
 
