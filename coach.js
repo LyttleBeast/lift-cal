@@ -156,6 +156,10 @@ export const CATEGORIES = Object.freeze([
   { id: 'volume',      label: 'Balance and volume',  mutable: true,  note: 'Sets for a group against your own normal.' },
   { id: 'recency',     label: 'Overdue and layoffs', mutable: true,  note: 'How long since a group, and since a session.' },
   { id: 'progression', label: 'Stalls and records',  mutable: true,  note: 'Where your best estimated maxes sit, and records as they land.' },
+  /* Ship two's. After the training rows because it is one, and it moves no
+     existing finding: the builder is a selector, it never competes for a card,
+     and every category that does keeps its order relative to the others. */
+  { id: 'build',       label: 'Workout builder',     mutable: true,  note: 'Offering to put a workout together from your log.' },
   { id: 'fuel',        label: 'Food',                mutable: true,  note: 'Calories and macros against your own targets.' },
   { id: 'weight',      label: 'Weight',              mutable: true,  note: 'Rate of change, and days since a weigh-in.' },
   { id: 'steps',       label: 'Steps',               mutable: true,  note: 'Today against your own trailing average.' },
@@ -1307,6 +1311,22 @@ export const INTENTS = Object.freeze([
     response: 'resp_question'
   },
   {
+    /* THE WORKOUT BUILDER. A selector: it picks something rather than saying
+       something, so it never competes for a card and is never counted in "N
+       more with Pro". What it picks is coach-build.js's to decide; what it
+       takes from here is the log, read the way every other rule reads it (see
+       builderInput). It is offered only when that proposal exists — the same
+       rule every Train bubble follows — and not at all when the account has
+       switched the category off. Absent means on, so every account that
+       predates it has it without a byte written. */
+    id: 'build_workout', kind: 'selector', priorityBand: 5, severity: 1,
+    category: 'build', tier: 'pro', surfaces: ['sheet'],
+    factsNeeded: ['session.shapeOverdue', 'session.windowCount'], supersedes: [],
+    minData: d => !isMuted(d.input.settings, 'build'),
+    when: d => d.build({}) != null,
+    response: 'resp_build'
+  },
+  {
     /* Registered, and deliberately unreachable from any button tonight. Coach
        does not do injuries, and the seam where ship three's text box routes a
        question about pain has to exist before the box does — otherwise the
@@ -1330,10 +1350,17 @@ const INTENT_BY_ID = Object.freeze(Object.fromEntries(INTENTS.map(i => [i.id, i]
    typed by hand is a list that goes stale the first time an intent changes
    tier — which is the kind of untrue sentence this whole ship exists to avoid.
    Categories, in the order of the toggle table, with the same labels and notes
-   the Settings switches use. */
+   the Settings switches use.
+
+   Findings AND selectors. The first version counted findings alone, which was
+   right while every selector was free — and would have left the builder, the
+   largest thing Pro adds, off the list of what Pro adds. A guard or a state is
+   the card's own machinery and is never something one tier has and the other
+   does not. */
 export const PRO_ADDS = Object.freeze(
   CATEGORIES
-    .filter(c => INTENTS.some(i => i.kind === 'finding' && i.tier === 'pro' && i.category === c.id))
+    .filter(c => INTENTS.some(i => (i.kind === 'finding' || i.kind === 'selector') &&
+                                   i.tier === 'pro' && i.category === c.id))
     .map(c => Object.freeze({ id: c.id, label: c.label, note: c.note })));
 
 /* ================================================================
@@ -1601,6 +1628,14 @@ export const RESPONSES = Object.freeze({
 
   resp_greet:    { text: () => '' },
   resp_lead:     { text: () => '' },
+  /* The builder's answer is the proposal's own first line and its reason —
+     coach-build.js writes both, and every word of it is fenced by
+     coach-units.mjs and coach-voice.mjs section G. What the sheet draws
+     underneath (the exercises, the four ways out) is the proposal itself. */
+  resp_build: {
+    text: d => { const p = d.build({}); return p ? p.headline : ''; },
+    reason: d => { const p = d.build({}); return p ? p.reason.join(' ') : ''; }
+  },
   resp_question: {
     text: d => {
       const q = QUESTION_BY_ID[d.askQuestionId || ''];
@@ -1817,14 +1852,17 @@ export const TOPICS = Object.freeze([
   { id: 'topic_weight', label: 'Where’s my weight going?', category: 'weight' }
 ]);
 
-/* Train's set, and every id in it is one the router already answers — these are
-   promotions, not new routes, so nothing here can offer a bubble with no rule
-   behind it. Training-first and in the order somebody standing in a gym would
-   want them: what to train, what has waited longest, how the week is going.
+/* Train's set, and every id in it is one the router already answers, so
+   nothing here can offer a bubble with no rule behind it. Training-first and in
+   the order somebody standing in a gym would want them: a workout, what to
+   train, what has waited longest, how the week is going.
 
-   There is deliberately no "make me a workout". That is the builder, it is the
-   next ship, and a chip that says it and cannot do it is worse than no chip. */
+   "Make me a workout" is first because it is the one that ends in a session.
+   It is the builder, and like every other bubble here it is offered only when
+   its route answers — which for the builder means a proposal really exists,
+   so the chip that says it is never a chip that cannot do it. */
 export const TRAIN_TOPICS = Object.freeze([
+  { id: 'ask_build',   label: 'Make me a workout',          category: 'build' },
   { id: 'ask_shape',   label: 'What should I train today?', category: 'recency' },
   { id: 'ask_overdue', label: 'What’s waited longest?',     category: 'recency' },
   { id: 'ask_volume',  label: 'How’s my week going?',       category: 'volume' }
@@ -1843,6 +1881,7 @@ const ROUTES = Object.freeze({
 
   ask_overdue:  ['group_overdue'],
   ask_shape:    ['session_shape_most_overdue', 'train_today_recommendation'],
+  ask_build:    ['build_workout'],
   ask_stall:    ['stalled_lift', 'pr_proximity'],
   ask_records:  ['recent_pr', 'pr_proximity'],
   ask_volume:   ['group_under_weekly_normal', 'weekly_sessions_vs_trailing'],
@@ -1866,7 +1905,7 @@ const FOLLOWUPS = Object.freeze({
   topic_weight: ['ask_rate', 'ask_weighin', 'ask_steps'],
   topic_steps:  ['ask_rate', 'ask_weighin'],
   ask_overdue:  ['ask_shape', 'ask_volume'],
-  ask_shape:    ['ask_overdue', 'ask_rest'],
+  ask_shape:    ['ask_build', 'ask_overdue', 'ask_rest'],
   ask_stall:    ['ask_records', 'ask_volume'],
   ask_records:  ['ask_stall', 'ask_overdue'],
   ask_volume:   ['ask_overdue', 'ask_rest'],
@@ -1877,7 +1916,19 @@ const FOLLOWUPS = Object.freeze({
   ask_rate:     ['ask_weighin', 'ask_steps'],
   ask_weighin:  ['ask_rate', 'ask_steps'],
   ask_steps:    ['ask_rate', 'ask_weighin'],
+  // Nothing: the proposal carries its own four ways on, and a row of chips
+  // under it would be a fifth, sixth and seventh.
+  ask_build:    [],
   injury:       []
+});
+
+/* What an ANSWER offers next, over and above the button's own list — for the
+   one finding whose next step is the same whichever button reached it. "If you
+   train today, your chest and arms day has waited longest" is answered by
+   "Build it" whether it came up under "How's my training?" or "What should I
+   train today?". Filtered like every other follow-up: no proposal, no chip. */
+const FOLLOWUPS_AFTER = Object.freeze({
+  train_today_recommendation: ['ask_build']
 });
 
 /* Every id the router answers, exported so that a verifier can drive all of
@@ -1886,6 +1937,7 @@ const FOLLOWUPS = Object.freeze({
 export const ROUTE_IDS = Object.freeze(Object.keys(ROUTES));
 
 const ASK_LABELS = Object.freeze({
+  ask_build:    'Build it',
   ask_overdue:  'What’s overdue?',
   ask_shape:    'Which session is due?',
   ask_stall:    'Anything stalled?',
@@ -2260,7 +2312,7 @@ function ask(d, u, id) {
     if (!gate(it, d)) continue;
     if (!fires(it, d)) continue;
     const v = renderIntent(it, d, u);
-    if (v) return { ...v, followups: followupsFor(d, u, id) };
+    if (v) return { ...v, followups: followupsFor(d, u, id, v.id) };
   }
   return {
     id,
@@ -2281,9 +2333,10 @@ function nothingFor(id) {
   return 'Nothing to say about your training yet.';
 }
 
-// Only offer a follow-up that has an answer behind it.
-function followupsFor(d, u, id) {
-  const list = FOLLOWUPS[id] || [];
+// Only offer a follow-up that has an answer behind it. The answer's own
+// follow-ups come first, then the button's, each id once.
+function followupsFor(d, u, id, answeredBy) {
+  const list = [...new Set((FOLLOWUPS_AFTER[answeredBy] || []).concat(FOLLOWUPS[id] || []))];
   return list.filter(next => answerable(d, next))
              .map(next => ({ id: next, label: ASK_LABELS[next] || next }));
 }

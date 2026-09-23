@@ -267,8 +267,19 @@ export function openCoachSheet(opts = {}) {
   const thread = el('div', 'coach-thread');
   sh.appendChild(thread);
 
+  /* THE BUILDER NEEDS A WAY TO START WHAT IT BUILDS. startWorkout is
+     workout.js's, and this file must not import workout.js — workout.js imports
+     this one, and that edge would close a ring the module graph cannot load.
+     So the card that can start a workout hands the function in, the way
+     openRoutines(preset => startWorkout(preset)) already does, and a sheet
+     opened without one (the You card; Settings) never offers the builder at
+     all. A proposal whose Start button can do nothing is worse than no
+     proposal. */
+  const canBuild = typeof opts.start === 'function';
+  const offer = list => (canBuild ? list : list.filter(x => x.id !== 'ask_build'));
+
   const asked = new Set();
-  const topics = c.topicsFor(surface);
+  const topics = offer(c.topicsFor(surface));
   let buttons = null;
 
   const scroll = () => { try { sh.scrollTop = sh.scrollHeight; } catch {} };
@@ -305,9 +316,11 @@ export function openCoachSheet(opts = {}) {
       bubble('coach', a.text, a.reason);
     }
     // Never offer the same question twice in one sitting, and always leave a
-    // way back to this surface's own topics.
-    const next = ((a && a.followups) || []).filter(f => !asked.has(f.id));
-    showButtons(next.concat(topics.filter(t => !asked.has(t.id))));
+    // way back to this surface's own topics. A follow-up and a topic can be the
+    // same route under two labels — "Build it" is "Make me a workout" — so a
+    // topic already offered as a follow-up is not offered twice.
+    const next = offer((a && a.followups) || []).filter(f => !asked.has(f.id));
+    showButtons(next.concat(topics.filter(t => !asked.has(t.id) && !next.some(f => f.id === t.id))));
     scroll();
   }
 

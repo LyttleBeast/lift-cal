@@ -167,8 +167,12 @@ const IMPL = {
   coachReady:         () => state.ready,
   coachSettingsKnown: () => true,
   coachSettings:      () => state.input.settings,
+  /* The card hands coachInput() `{ live: bool }` and coach-data.js turns it
+     into `live: { active }`. This stub used to spread the flag straight in,
+     which the engine reads as NO session — so a live sheet was never really
+     driven here until the builder needed one. It mirrors the real contract. */
   coachInput:         extra => ({ ...(state.ready ? state.input : logPhase(state.input)),
-                                  ...(extra || {}), tier: { pro: state.pro } }),
+                                  live: { active: !!(extra && extra.live) }, tier: { pro: state.pro } }),
   liveSessionOnDevice: () => false,
   rememberGreeting:   id => { state.calls.push(['rememberGreeting', id]); },
   setCategoryMuted:   (id, m) => { state.calls.push(['setCategoryMuted', id, m]); return Promise.resolve(true); },
@@ -413,12 +417,12 @@ section('B. the sheet takes its questions from the card that opened it');
         !dead.length, list(dead));
   check('and every tap leaves a way back — the follow-up row is never empty', !stuck.length, list(stuck));
 
-  /* The builder is the next ship. A chip that says "make me a workout" and
-     cannot is worse than no chip at all, and this refuses one on either
-     surface, drawn rather than declared. */
+  /* No placeholder for anything. The builder is real now (section E), and a
+     chip for anything else still to come would be a promise the sheet cannot
+     keep. */
   const everyChip = chipsIn(youSheet).concat(chipsIn(trainSheet)).map(b => b.textContent);
-  check('and no button anywhere promises a workout Coach cannot build yet',
-        !everyChip.some(l => /make me a workout|build.*workout|coming soon/i.test(l)), list(everyChip));
+  check('and no button anywhere promises something that is not built yet',
+        !everyChip.some(l => /coming soon|not yet|soon/i.test(l)), list(everyChip));
 }
 
 /* ================= C. THE CARD ITSELF ================= */
@@ -495,6 +499,73 @@ section('D. the top line does not rewrite itself while somebody is reading it');
   state.input = { ...BASE, opens: 1 };
   const later = (find(nextOpen.coachCard({ go() {} }), 'coach-greet')[0] || {}).textContent || '';
   check('the NEXT app open is free to say something else, and does', later !== first, later);
+}
+
+/* ================= E. "MAKE ME A WORKOUT" ================= */
+section('E. the builder’s bubble — offered where it can be kept, nowhere else');
+{
+  /* The same rule as every Train bubble — no bubble without an answer behind
+     it — plus the one the builder adds: no bubble without a way to START what
+     it builds. The Train card is handed startWorkout the way Routines is; the
+     You card is not, because you.js does not import workout.js (the README's
+     invariant, and COACH-REPORT §3.10's bug when it was broken), so the You
+     sheet does not offer the builder at all. Drawn, not declared. */
+  const BUILD = { ...BASE, libReady: true, hidden: [] };
+  const trainOpts = { tight: true, live: false, start() {}, save() {} };
+  const MAKE = C.TRAIN_TOPICS.find(t => t.id === 'ask_build').label;
+  const labelsIn = sh => chipsIn(sh).map(b => b.textContent);
+  const builderIn = sh => labelsIn(sh).filter(l => l === MAKE || l === 'Build it');
+
+  state.input = BUILD; state.pro = true; state.logKnown = true; state.ready = true;
+  check('the fixture really builds a proposal', !!engine(BUILD).build({}));
+  const pro = open(UI, trainOpts).sh;
+  check('present on Train, for Pro, with a log that builds — and it is the first bubble',
+        labelsIn(pro)[0] === MAKE, list(labelsIn(pro)));
+
+  state.pro = false;
+  const basic = open(UI, trainOpts).sh;
+  check('absent for a Basic account — no bubble, no follow-up', !builderIn(basic).length, list(labelsIn(basic)));
+  const panel = find(basic, 'coach-bub').filter(b => b.classList.contains('pro'))[0];
+  const buildCat = C.CATEGORIES.find(x => x.id === 'build');
+  check('and the Pro panel names the builder — out of PRO_ADDS, with nothing in the panel edited for it',
+        C.PRO_ADDS.some(a => a.id === 'build') && !!panel && textOf(panel).includes(buildCat.label),
+        panel ? textOf(panel).slice(0, 120) : 'no panel');
+  state.pro = true;
+
+  state.input = { ...BUILD, sessions: BUILD.sessions.slice(-5) };
+  check('absent with a log too thin to build from', !builderIn(open(UI, trainOpts).sh).length);
+  state.input = BUILD;
+
+  check('absent during a live session', !builderIn(open(UI, { ...trainOpts, live: true }).sh).length);
+
+  const you = open(UI, { go() {} }).sh;
+  check('absent on the You sheet — the You card has no way to start a workout',
+        !builderIn(you).length, list(labelsIn(you)));
+  // Tapped through, too: the engine offers "Build it" after the answer that
+  // names what to train, and the You sheet must not pass it on.
+  const eng = engine(BUILD);
+  const viaTopic = eng.ask('topic_train').followups.some(f => f.id === 'ask_build');
+  const chip = chipsIn(you).find(b => b.textContent === C.TOPICS.find(t => t.id === 'topic_train').label);
+  if (chip) chip.onclick();
+  check('including as a follow-up the engine would otherwise offer there',
+        viaTopic && !builderIn(you).length, (viaTopic ? 'engine offers it; ' : 'engine does not; ') + list(labelsIn(you)));
+  check('and a Train sheet with no start to call does not offer it either',
+        !builderIn(open(UI, { tight: true, live: false }).sh).length);
+
+  // On Train, "Build it" follows "What should I train today?" — once.
+  const t = open(UI, trainOpts).sh;
+  const shape = chipsIn(t).find(b => b.textContent === C.TRAIN_TOPICS.find(x => x.id === 'ask_shape').label);
+  shape.onclick();
+  const after = labelsIn(t);
+  check('on Train, the answer to "What should I train today?" offers "Build it"', after.includes('Build it'), list(after));
+  check('and does not also offer "Make me a workout" beside it — one route, one chip',
+        !after.includes(MAKE), list(after));
+
+  // Switched off in Settings → Coach: gone from the sheet entirely.
+  state.input = { ...BUILD, settings: { ...BUILD.settings, mute: { build: true } } };
+  const muted = open(UI, trainOpts).sh;
+  check('switched off in Settings → Coach, it is gone', !builderIn(muted).length, list(labelsIn(muted)));
+  state.input = BASE;
 }
 
 /* ---------- report ---------- */

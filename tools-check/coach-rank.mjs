@@ -388,11 +388,49 @@ section('G2. the topic set belongs to the surface that opened the sheet');
   check('and every one offered has a rule that actually fires behind it',
         trainSet.every(id => { const a = full.ask(id); return a && !/^Nothing to say/.test(a.text); }),
         list(trainSet));
-  /* The builder is ship two. A chip that says "make me a workout" and cannot
-     is worse than no chip, so there must be no placeholder anywhere in here. */
-  check('and nothing offers a workout Coach cannot build yet',
-        !C.TRAIN_TOPICS.some(t => /workout|build|make|soon/i.test(t.id + ' ' + t.label)),
-        list(C.TRAIN_TOPICS.map(t => t.label)));
+  /* THE BUILDER, ship two. In ship one this was a check that no chip promised
+     a workout, because nothing could build one. It can now, so the check is the
+     rule every Train bubble lives by, applied to it: offered exactly when there
+     is a proposal behind it, and never otherwise. */
+  const built = on({ libReady: true, hidden: [] });
+  const offers = x => x.topicsFor('train').some(t => t.id === 'ask_build');
+  check('"Make me a workout" is first in Train’s own table',
+        C.TRAIN_TOPICS[0] && C.TRAIN_TOPICS[0].id === 'ask_build', list(C.TRAIN_TOPICS.map(t => t.id)));
+  check('offered, first, when the log builds a proposal',
+        !!built.build({}) && built.topicsFor('train')[0].id === 'ask_build', list(built.topicsFor('train').map(t => t.id)));
+  check('and its answer is that proposal’s own first line',
+        built.ask('ask_build').id === 'build_workout' && built.ask('ask_build').text === built.build({}).headline,
+        built.ask('ask_build').text);
+  check('NOT offered while the library is unread — no proposal, no bubble',
+        full.build({}) === null && !offers(full), list(trainSet));
+  check('not offered during a live session',
+        !offers(on({ libReady: true, hidden: [], live: { active: true } })));
+  check('not offered on a log too thin to build from',
+        !offers(on({ libReady: true, hidden: [], sessions: BASE.sessions.slice(-5) })));
+  check('never on the You sheet', !built.topicsFor('you').some(t => t.id === 'ask_build'));
+
+  /* The switch. Absent means on — every account that predates the category has
+     it without a byte written — and off takes the bubble and the follow-up
+     both. */
+  check('an account with no `build` key at all has the builder on',
+        C.normSettings({ v: 1, mute: { fuel: true } }).mute.build === undefined &&
+        !C.isMuted(C.normSettings({ v: 1, mute: { fuel: true } }), 'build') && offers(built));
+  const off = on({ libReady: true, hidden: [], settings: { ...BASE.settings, mute: { build: true } } });
+  check('switched off, the bubble goes', !offers(off) && C.isMuted(C.normSettings({ mute: { build: true } }), 'build'));
+
+  /* "Build it", after the two answers that name what to train. */
+  const fu = (x, id) => x.ask(id).followups.map(f => f.id);
+  check('the answer to "What should I train today?" offers "Build it" when a proposal exists',
+        fu(built, 'ask_shape').includes('ask_build') && !fu(full, 'ask_shape').includes('ask_build'),
+        list(fu(built, 'ask_shape')));
+  check('and labels it so', (built.ask('ask_shape').followups.find(f => f.id === 'ask_build') || {}).label === 'Build it');
+  check('and not when the builder is switched off', !fu(off, 'ask_shape').includes('ask_build'));
+  // Reached through "How's my training?" rather than through ask_shape, whose
+  // own list already carries it — so this is FOLLOWUPS_AFTER doing the work.
+  const today = built.ask('topic_train');
+  check('train_today_recommendation offers it too, whichever button reached it',
+        today.id === 'train_today_recommendation' && today.followups.some(f => f.id === 'ask_build'),
+        today.id + ': ' + list(today.followups.map(f => f.id)));
 
   // A log too thin for any of the promotions falls back rather than showing an
   // empty sheet — a broader question beats no way to ask anything.
