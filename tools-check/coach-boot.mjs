@@ -453,6 +453,26 @@ section('E. both tabs ask for it before their own first await');
         /coachLogReady\(\)/.test(Y) && /coachLogReady\(\)/.test(W));
 }
 
+/* ================= F. THE DIRECTION, FROM THE CALORIES ================= */
+section('F. a calorie target under maintenance reads as a goal pointing down');
+{
+  /* goalDirection(targets, maintCal) takes the maintenance NUMBER, and
+     coachInput() used to hand it effectiveMaint()'s whole { cal, source, auto }
+     object. `object > 0` is false, so every account without targets.auto — a
+     goal set as a plain calorie target — read goalDir null: no direction for
+     weight_rate_vs_goal, no deficit reading for the stall, and a question put
+     to somebody whose own targets already answered it. Driven through the real
+     coach-data.js, tdee.js and insights.js: a PINNED maintenance of 2,600
+     (effectiveMaint answers it whatever the weight model says, so this does not
+     depend on a single weigh-in) and a 2,300 target, with no auto block. */
+  const { D } = await rig({ data: { workouts: TREE,
+    'food/targets': { cal: 2300, p: 180, f: 70, maint: 2600 } } });
+  await withTimeout(D.initCoachData(), 40 * LATENCY);
+  const w = D.coachInput({}).weight;
+  check('no targets.auto, a target 300 kcal under maintenance: goalDir is -1',
+        w.goalDir === -1, 'goalDir ' + JSON.stringify(w.goalDir));
+}
+
 /* ---------- report ---------- */
 console.log('\nCoach’s snapshot is one round trip deep, and it starts before anything else\n');
 console.log(results.join('\n'));

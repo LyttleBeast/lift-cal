@@ -181,6 +181,8 @@ What changed inside, all of it additive:
 
 No read is added for any of it: all three come from the picker's memory.
 
+Native already does `goalDir` right: at `581e84a`, `src/state/coachData.js:292` passes `goalDirection(targets, maint && maint.cal)`, which is what web's `coach-data.js` was fixed to in rack-v45 (it passed the whole `effectiveMaint` object, so an account with no `targets.auto` read no direction).
+
 ---
 
 ## 4. The surfaces — where each web change lands on native

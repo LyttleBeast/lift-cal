@@ -279,7 +279,10 @@ export function coachInput(extra) {
       latestAt: last ? last.t : null,
       rateWk:   Number.isFinite(rate.rateWk) ? rate.rateWk : null,
       rateDays: Number.isFinite(rate.days) ? rate.days : null,
-      goalDir:  safe(() => goalDirection(targets, maint), null),
+      // The maintenance NUMBER: goalDirection compares it to targets.cal, and
+      // handed effectiveMaint's whole object every account without an auto
+      // goal read no direction at all (tools-check/coach-boot.mjs F).
+      goalDir:  safe(() => goalDirection(targets, maint && maint.cal), null),
       goalRateWk: targets && targets.auto && Number.isFinite(targets.auto.rateWk)
         ? targets.auto.rateWk : null
     },
