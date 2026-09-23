@@ -1,0 +1,414 @@
+[
+ {
+  "group": "you",
+  "scenes": [
+   {
+    "name": "you",
+    "js": "await __h.dock('you');",
+    "check": "return __h.buttonsIn(document.querySelector('#view-you')).slice(-6);"
+   },
+   {
+    "name": "you-coach-sheet",
+    "js": "await __h.clickSel('#view-you .coach-card');",
+    "check": "return __h.buttonsIn(__h.top());",
+    "fatal": false
+   },
+   {
+    "name": "settings-hub",
+    "js": "await __h.closeAll(); await __h.clickSel('.you-gear');",
+    "check": "return __h.buttonsIn(__h.top());"
+   },
+   {
+    "name": "settings-details",
+    "js": "await __h.click('your details', __h.top());",
+    "check": "return __h.buttonsIn(__h.top());",
+    "fatal": false
+   },
+   {
+    "name": "settings-targets",
+    "js": "await __h.closeAll(); await __h.clickSel('.you-gear'); await __h.click('daily targets', __h.top());",
+    "check": "return __h.buttonsIn(__h.top());",
+    "fatal": false
+   },
+   {
+    "name": "settings-water",
+    "js": "await __h.closeAll(); await __h.clickSel('.you-gear'); await __h.click('water goal', __h.top());",
+    "check": "return __h.buttonsIn(__h.top());",
+    "fatal": false
+   },
+   {
+    "name": "settings-ai",
+    "js": "await __h.closeAll(); await __h.clickSel('.you-gear'); await __h.click('ai estimator', __h.top());",
+    "check": "return __h.buttonsIn(__h.top());",
+    "fatal": false
+   },
+   {
+    "name": "settings-memory",
+    "js": "await __h.closeAll(); await __h.clickSel('.you-gear'); await __h.click('food memory', __h.top());",
+    "check": "return __h.buttonsIn(__h.top());",
+    "fatal": false
+   },
+   {
+    "name": "settings-paste",
+    "js": "await __h.closeAll(); await __h.clickSel('.you-gear'); await __h.click('paste food json', __h.top());",
+    "check": "return __h.buttonsIn(__h.top());",
+    "fatal": false
+   },
+   {
+    "name": "settings-library",
+    "js": "await __h.closeAll(); await __h.clickSel('.you-gear'); await __h.click('exercise library', __h.top());",
+    "check": "return __h.buttonsIn(__h.top());",
+    "fatal": false
+   },
+   {
+    "name": "settings-import",
+    "js": "await __h.closeAll(); await __h.clickSel('.you-gear'); await __h.click('import workout history', __h.top());",
+    "check": "return __h.buttonsIn(__h.top());",
+    "fatal": false
+   },
+   {
+    "name": "settings-ask",
+    "js": "await __h.closeAll(); await __h.clickSel('.you-gear'); await __h.click('ask coach something', __h.top());",
+    "check": "return __h.buttonsIn(__h.top());",
+    "fatal": false
+   },
+   {
+    "name": "settings-steps",
+    "js": "await __h.closeAll(); await __h.clickSel('.you-gear'); await __h.click('step goal', __h.top());",
+    "check": "return __h.buttonsIn(__h.top());",
+    "fatal": false
+   },
+   {
+    "name": "settings-home",
+    "js": "await __h.closeAll(); await __h.clickSel('.you-gear'); await __h.click('add to home screen', __h.top());",
+    "check": "return __h.buttonsIn(__h.top());",
+    "fatal": false
+   },
+   {
+    "name": "settings-goal",
+    "js": "await __h.closeAll(); await __h.clickSel('.you-gear'); await __h.click('goal', __h.top());",
+    "check": "return __h.buttonsIn(__h.top());",
+    "fatal": false
+   }
+  ]
+ },
+ {
+  "group": "admin",
+  "scenes": [
+   {
+    "name": "admin",
+    "js": "await __h.dock('you'); await __h.click('admin');",
+    "check": "return 1;"
+   },
+   {
+    "name": "admin-person-trial",
+    "js": "await __h.click('trial', document, 'button'); await __h.clickSel('.set-row-nav');",
+    "check": "return __h.buttonsIn(__h.top());",
+    "fatal": false
+   },
+   {
+    "name": "admin-person-pro",
+    "js": "await __h.closeAll(); await __h.click('pro', document, 'button'); await __h.clickSel('.set-row-nav');",
+    "check": "return __h.buttonsIn(__h.top());",
+    "fatal": false
+   }
+  ]
+ },
+ {
+  "group": "train",
+  "scenes": [
+   {
+    "name": "train",
+    "js": "await __h.dock('workout');",
+    "check": "return __h.buttonsIn(document.querySelector('#view-workout')).slice(-6);"
+   },
+   {
+    "name": "train-coach-sheet",
+    "js": "await __h.clickSel('#view-workout .coach-card');",
+    "check": "return __h.buttonsIn(__h.top());",
+    "fatal": false
+   },
+   {
+    "name": "coach-build",
+    "js": "await __h.click('make me a workout', __h.top());",
+    "check": "return __h.buttonsIn(__h.top());",
+    "fatal": false
+   },
+   {
+    "name": "coach-build-2",
+    "js": "const b = __h.top().querySelector('.coach-chip'); if (b) { b.click(); await __h.sleep(500); }",
+    "check": "return __h.buttonsIn(__h.top());",
+    "fatal": false
+   },
+   {
+    "name": "routines",
+    "js": "await __h.closeAll(); await __h.click('routines');",
+    "check": "return __h.buttonsIn(__h.top());"
+   },
+   {
+    "name": "routine-open",
+    "js": "await __h.click('push day', __h.top());",
+    "check": "return __h.buttonsIn(__h.top());",
+    "fatal": false
+   },
+   {
+    "name": "routine-edit",
+    "js": "await __h.click('edit', __h.top());",
+    "check": "return __h.buttonsIn(__h.top());",
+    "fatal": false
+   },
+   {
+    "name": "exercises",
+    "js": "await __h.closeAll(); await __h.click('exercises');",
+    "check": "return __h.buttonsIn(__h.top()).slice(0,12);"
+   },
+   {
+    "name": "day",
+    "js": "await __h.closeAll(); await __h.clickSel('#view-workout .cal-day.has-work');",
+    "check": "return __h.buttonsIn(__h.top() || document.querySelector('#view-workout'));",
+    "fatal": false
+   },
+   {
+    "name": "stats",
+    "js": "await __h.closeAll(); await __h.dock('workout'); await __h.click('statistics');",
+    "check": "return __h.buttonsIn(document.querySelector('#view-workout'));",
+    "fatal": false
+   }
+  ]
+ },
+ {
+  "group": "session",
+  "cfg": {
+   "live": true
+  },
+  "scenes": [
+   {
+    "name": "session",
+    "js": "await __h.dock('workout');",
+    "check": "return __h.buttonsIn(document.querySelector('#view-workout')).slice(0,8);"
+   },
+   {
+    "name": "session-live-sheet",
+    "js": "await __h.click('coach', document.querySelector('#view-workout'));",
+    "check": "return __h.buttonsIn(__h.top());",
+    "fatal": false
+   },
+   {
+    "name": "session-confirm",
+    "js": "await __h.closeAll(); await __h.clickSel('#view-workout .wk-block-x');",
+    "check": "return __h.buttonsIn(__h.top());",
+    "fatal": false
+   },
+   {
+    "name": "session-picker",
+    "js": "await __h.closeAll(); await __h.click('+ add exercise', document.querySelector('#view-workout'));",
+    "check": "return __h.buttonsIn(__h.top()).slice(-6);",
+    "fatal": false
+   },
+   {
+    "name": "peek",
+    "js": "await __h.closeAll(); await __h.clickSel('#view-workout .wk-cal-btn');",
+    "check": "const bar = document.querySelector('.peek-bar'); const st = [...document.querySelectorAll('#view-workout .btn')].filter(__h.vis).pop(); scrollTo(0, document.documentElement.scrollHeight); await __h.sleep(200); const br = bar && bar.getBoundingClientRect(), sr = st && st.getBoundingClientRect(); return { bar: br && [br.top, br.bottom, br.height], last: st && [__h.norm(st.textContent), sr.top, sr.bottom], covered: br && sr ? Math.max(0, sr.bottom - br.top) : null, pad: getComputedStyle(document.querySelector('.view.active')).paddingBottom };",
+    "fatal": false
+   }
+  ]
+ },
+ {
+  "group": "fuel",
+  "scenes": [
+   {
+    "name": "fuel",
+    "js": "await __h.dock('food');",
+    "check": "return __h.buttonsIn(document.querySelector('#view-food')).slice(-8);"
+   },
+   {
+    "name": "fuel-add",
+    "js": "await __h.clickSel('.fuel-fab');",
+    "check": "return __h.buttonsIn(__h.top());"
+   },
+   {
+    "name": "fuel-manual",
+    "js": "await __h.click('manual', __h.top(), '.add-tile, button');",
+    "check": "return __h.buttonsIn(__h.top());",
+    "fatal": false
+   },
+   {
+    "name": "fuel-describe",
+    "js": "await __h.closeAll(); await __h.clickSel('.fuel-fab'); await __h.click('describe', __h.top(), '.add-tile, button');",
+    "check": "return __h.buttonsIn(__h.top());",
+    "fatal": false
+   },
+   {
+    "name": "fuel-photo",
+    "js": "await __h.closeAll(); await __h.clickSel('.fuel-fab'); await __h.click('photo', __h.top(), '.add-tile, button');",
+    "check": "return __h.buttonsIn(__h.top());",
+    "fatal": false
+   },
+   {
+    "name": "fuel-foods",
+    "js": "await __h.closeAll(); await __h.clickSel('.fuel-fab'); await __h.click('foods', __h.top());",
+    "check": "return __h.buttonsIn(__h.top());",
+    "fatal": false
+   },
+   {
+    "name": "fuel-foods-item",
+    "js": "await __h.click('body fortress', __h.top());",
+    "check": "return __h.buttonsIn(__h.top());",
+    "fatal": false
+   },
+   {
+    "name": "fuel-meals",
+    "js": "await __h.closeAll(); await __h.clickSel('.fuel-fab'); await __h.click('meals', __h.top());",
+    "check": "return __h.buttonsIn(__h.top());",
+    "fatal": false
+   },
+   {
+    "name": "fuel-entry",
+    "js": "await __h.closeAll(); await __h.click('chicken and rice', document.querySelector('#view-food'));",
+    "check": "return __h.buttonsIn(__h.top());",
+    "fatal": false
+   },
+   {
+    "name": "fuel-gear",
+    "js": "await __h.closeAll(); await __h.clickSel('#view-food .gear-btn');",
+    "check": "return __h.buttonsIn(__h.top());",
+    "fatal": false
+   },
+   {
+    "name": "fuel-water-sheet",
+    "js": "await __h.closeAll(); const w = [...document.querySelectorAll('#view-food .btn')].find(b => /bottle/i.test(b.textContent)); if (w) { w.click(); await __h.sleep(500); }",
+    "check": "return __h.buttonsIn(__h.top() || document.querySelector('#view-food')).slice(-8);",
+    "fatal": false
+   }
+  ]
+ },
+ {
+  "group": "weight",
+  "scenes": [
+   {
+    "name": "weight",
+    "js": "await __h.dock('weight');",
+    "check": "return __h.buttonsIn(document.querySelector('#view-weight')).slice(0,10);"
+   },
+   {
+    "name": "weight-earlier",
+    "js": "await __h.click('weighed earlier?', document.querySelector('#view-weight'));",
+    "check": "return __h.buttonsIn(document.querySelector('#view-weight')).slice(0,10);",
+    "fatal": false
+   }
+  ]
+ },
+ {
+  "group": "steps",
+  "scenes": [
+   {
+    "name": "steps",
+    "js": "await __h.dock('steps');",
+    "check": "return __h.buttonsIn(document.querySelector('#view-steps')).slice(0,10);"
+   },
+   {
+    "name": "steps-set",
+    "js": "await __h.click('set total', document.querySelector('#view-steps'));",
+    "check": "return __h.buttonsIn(__h.top() || document.querySelector('#view-steps')).slice(0,10);",
+    "fatal": false
+   }
+  ]
+ },
+ {
+  "group": "auth",
+  "cfg": {
+   "user": null
+  },
+  "scenes": [
+   {
+    "name": "auth",
+    "js": "await __h.sleep(300);",
+    "check": "return __h.buttonsIn(document.querySelector('#auth'));"
+   }
+  ]
+ },
+ {
+  "group": "gate",
+  "cfg": {
+   "user": {
+    "uid": "stranger1",
+    "email": "s@example.test",
+    "displayName": "Stranger"
+   }
+  },
+  "scenes": [
+   {
+    "name": "gate",
+    "js": "await __h.sleep(300);",
+    "check": "return __h.buttonsIn(document.querySelector('#gate'));"
+   }
+  ]
+ },
+ {
+  "group": "onboard",
+  "cfg": {
+   "user": {
+    "uid": "newbie",
+    "email": "n@example.test",
+    "displayName": "Newbie"
+   },
+   "approve": true
+  },
+  "scenes": [
+   {
+    "name": "onboard-1",
+    "js": "await __h.sleep(300);",
+    "check": "return __h.buttonsIn(document.querySelector('#onboard'));"
+   },
+   {
+    "name": "onboard-2",
+    "js": "await __h.clickSel('#onboard .btn-primary');",
+    "check": "return __h.buttonsIn(document.querySelector('#onboard'));",
+    "fatal": false
+   },
+   {
+    "name": "onboard-3",
+    "js": "await __h.clickSel('#onboard .btn-primary');",
+    "check": "return __h.buttonsIn(document.querySelector('#onboard'));",
+    "fatal": false
+   },
+   {
+    "name": "onboard-4",
+    "js": "await __h.clickSel('#onboard .btn-primary');",
+    "check": "return __h.buttonsIn(document.querySelector('#onboard'));",
+    "fatal": false
+   },
+   {
+    "name": "onboard-5",
+    "js": "await __h.clickSel('#onboard .btn-primary');",
+    "check": "return __h.buttonsIn(document.querySelector('#onboard'));",
+    "fatal": false
+   }
+  ]
+ },
+ {
+  "group": "tour",
+  "cfg": {
+   "tour": true
+  },
+  "scenes": [
+   {
+    "name": "tour-1",
+    "js": "await __h.sleep(300);",
+    "check": "return __h.buttonsIn(document.querySelector('#onboard'));"
+   },
+   {
+    "name": "tour-2",
+    "js": "await __h.clickSel('#onboard .btn-primary');",
+    "check": "return __h.buttonsIn(document.querySelector('#onboard'));",
+    "fatal": false
+   },
+   {
+    "name": "tour-3",
+    "js": "await __h.clickSel('#onboard .btn-primary');",
+    "check": "return __h.buttonsIn(document.querySelector('#onboard'));",
+    "fatal": false
+   }
+  ]
+ }
+]

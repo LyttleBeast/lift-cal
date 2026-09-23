@@ -180,9 +180,17 @@ h2 { font-size: 18px; }
 .card-hd { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
 
 /* ============ BUTTONS ============ */
+/* min-height, not padding: the touch target is 44px and a border-box min-height
+   is exactly that whatever the padding, border, type size or font metrics —
+   `line-height: normal` on Archivo made the old box 39px (primary) or 41px
+   (ghost, danger), and the compact variants below went as low as 26px. It only
+   ever adds height: no width, no padding and no wrap moves, and a button that
+   was already taller (.btn-lg, the qty-row and water buttons) is untouched.
+   Every site was measured before and after in v47 (report/btn-44.md). */
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   padding: 12px 18px;
+  min-height: 44px;
   border-radius: var(--r-sm);
   background: var(--collar);
   color: var(--chalk);
@@ -376,7 +384,10 @@ h2 { font-size: 18px; }
 }
 .peek-bar .btn { padding: 8px 16px; flex-shrink: 0; }
 .peek-bar .timer { font-size: 12px; color: var(--steel); margin-top: 1px; }
-body.peeking .view.active { padding-bottom: 58px; }
+/* Room for the bar under the last thing on the page. The bar is 64px since
+   .btn's 44px minimum reached Resume (it was 57), so 58px here would put it
+   flush against the bottom button; 65 keeps the ~7px gap it always had. */
+body.peeking .view.active { padding-bottom: 65px; }
 .wk-cal-btn {
   flex-shrink: 0;
   width: 38px; height: 38px;
