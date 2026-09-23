@@ -76,6 +76,23 @@ const OVERDUE_RATIO = 1.4;
    again tomorrow is nagging. A week. */
 const ASK_COOLDOWN_DAYS = 7;
 
+/* PATTERNS (ship three). Half a year rather than twelve weeks, because each of
+   the eight checks needs eight on BOTH sides and several of them count weeks
+   — twelve weeks cannot hold sixteen of anything, and twenty-six still
+   describe the habits he has now rather than the ones he had last year. */
+export const PATTERN_DAYS = 182;
+/* Eight on each side, or the comparison is not made. With fewer, one odd day
+   moves a median, and a pattern one day can make is not a pattern. */
+export const PATTERN_MIN = 8;
+/* "Morning" is a session started before noon, on the account's own clock. */
+const PATTERN_NOON = 12;
+/* A busy week against a quieter one, counted in sessions. */
+const PATTERN_BUSY_WEEK = 3;
+/* A group trained within three days against one rested five or more. The day
+   between belongs to neither side, so the two groups cannot share a session. */
+const PATTERN_CLOSE = 3;
+const PATTERN_RESTED = 5;
+
 /* ================================================================
    0.  DATES
    ================================================================
@@ -164,7 +181,13 @@ export const CATEGORIES = Object.freeze([
   { id: 'fuel',        label: 'Food',                mutable: true,  note: 'Calories and macros against your own targets.' },
   { id: 'weight',      label: 'Weight',              mutable: true,  note: 'Rate of change, and days since a weigh-in.' },
   { id: 'steps',       label: 'Steps',               mutable: true,  note: 'Today against your own trailing average.' },
-  { id: 'questions',   label: 'Questions',           mutable: true,  note: 'Whether Coach may ask you anything at all.' }
+  { id: 'questions',   label: 'Questions',           mutable: true,  note: 'Whether Coach may ask you anything at all.' },
+  /* Ship three's, and the one category that is OFF until it is switched on
+     (`optIn`): a comparison between two groups of somebody's own days is a
+     thing they ask for, not a thing Coach volunteers. Last, so it moves no
+     other category's place in the ranking. */
+  { id: 'patterns',    label: 'Patterns in your data', mutable: true, optIn: true,
+    note: 'Off until you switch it on. Two groups of your own days or sessions side by side, as numbers — never as advice.' }
 ]);
 
 export const CATEGORY_IDS = Object.freeze(CATEGORIES.map(c => c.id));
@@ -376,12 +399,63 @@ function derive(input) {
     return out;
   });
 
+  /* ---------- patterns ----------
+     The pieces the eight PATTERN_FACTS share. Their window is PATTERN_DAYS,
+     not WINDOW_DAYS (see the constant), and every day-based count is over
+     COMPLETE days — today is unfinished, so it sits in neither group. */
+  const pDays = () => once('pDays', () => keysBack(now - DAY, PATTERN_DAYS));
+  const pSessions = () => once('pSessions', () => all().filter(s => s.daysAgo >= 0 && s.daysAgo < PATTERN_DAYS));
+  const trainedDays = () => once('trainedDays', () => new Set(all().filter(s => s.groups.length).map(s => s.date)));
+  /* The lift four of the eight are about: the one logged in the most sessions
+     in the window with a real estimated max — a bodyweight lift has none — and
+     cardio never. Ties go to the one done most recently, then to the id. Its
+     rows carry each session's TOP-SET estimated max: exerciseIndex's own e1rm
+     of the session's best set, never a second copy of the formula. */
+  const pLift = () => once('pLift', () => {
+    const idx = index();
+    let best = null;
+    Object.keys(idx).sort().forEach(id => {
+      const e = idx[id];
+      if (((lib[id] && lib[id].equipment) || e.equipment) === 'cardio') return;
+      const rows = e.entries.filter(r => { const a = daysBetween(r.startedAt, now); return a >= 0 && a < PATTERN_DAYS; })
+        .slice().sort((a, b) => a.startedAt - b.startedAt);
+      if (!rows.length) return;
+      const last = rows[rows.length - 1].startedAt;
+      if (!best || rows.length > best.rows.length || (rows.length === best.rows.length && last > best.last)) {
+        best = { exId: id, name: String((lib[id] && lib[id].name) || e.name || id),
+                 group: (lib[id] && lib[id].group) || e.group || null, rows, last };
+      }
+    });
+    return best ? {
+      exId: best.exId, name: best.name, group: best.group,
+      rows: best.rows.map(r => ({ startedAt: r.startedAt, date: r.date || dayKey(r.startedAt), top: r.e1rm }))
+    } : null;
+  });
+
   return {
     now, lib, input,
     all, inWindow, shapes, groupDays, groupGap,
     setsThisWeek, setsTrailing, sessionsIn, sessionGap, index,
+    pDays, pSessions, trainedDays, pLift,
     groupOf, equipOf
   };
+}
+
+/* Two groups of numbers, and whether they may be compared at all: eight on
+   each side or nothing. Both sides carry their size, because a median with no
+   count beside it is a number nobody can weigh. */
+function sides(a, b) {
+  if (a.length < PATTERN_MIN || b.length < PATTERN_MIN) return null;
+  return { a: { n: a.length, med: median(a) }, b: { n: b.length, med: median(b) } };
+}
+// The calendar day before a date key, anchored at noon so a clock change
+// cannot land it two days back.
+const prevDay = k => dayKey(new Date(k + 'T12:00:00').getTime() - DAY);
+// A session's working sets, cardio left out: what a session holds, counted the
+// way every set count in this file is — isWorking, warm-ups excluded.
+function workingSets(d, s) {
+  return mergeSessionExercises((s.session && s.session.exercises) || []).reduce((a, ex) =>
+    (!ex || d.equipOf(ex) === 'cardio') ? a : a + (ex.sets || []).filter(isWorking).length, 0);
 }
 
 function symDiff(a, b) {
@@ -937,6 +1011,174 @@ export const FACTS = Object.freeze([
     age: () => 1
   },
 
+  /* ---------- patterns ----------
+     EIGHT, PRE-REGISTERED, AND NO OTHERS. Each compares two groups of his own
+     days or sessions, needs PATTERN_MIN on each side, and yields both numbers
+     and both sample sizes — or null. There is no search here for whatever
+     happens to differ: an open search across a log this size finds something
+     every time, and the something is noise that reads like a finding. So the
+     eight were chosen before any log was looked at (SHIP-V46-PROMPT, Phase 3)
+     and none of them has a bar for how BIG a difference must be — printing
+     every one that clears its sample gate is the honest version; printing
+     only the ones that look interesting would be the search by another name.
+
+     DESCRIPTIVE, NEVER CAUSAL. Two groups side by side say that they differ,
+     not why. Nothing in their sentences says one thing helps, makes, boosts
+     or leads to another, and tools-check/coach-voice.mjs holds them to it.
+     Off unless the account has switched the `patterns` category on. */
+  {
+    // 1. His top quarter of sessions by estimated max, against the rest: how
+    //    many had food logged before the session started.
+    id: 'lift.fedBeforeTop', unit: 'pct', requires: [],
+    compute: d => {
+      const L = d.pLift(), first = d.input.foodFirst || {};
+      if (!L) return null;
+      // Only days whose food log has been read and has an entry in it: a day
+      // with nothing logged says nothing about whether he ate.
+      const known = L.rows.filter(r => Number.isFinite(first[r.date]));
+      const ranked = known.slice().sort((a, b) => b.top - a.top || b.startedAt - a.startedAt);
+      const q = Math.floor(ranked.length / 4);
+      const top = ranked.slice(0, q), rest = ranked.slice(q);
+      if (top.length < PATTERN_MIN || rest.length < PATTERN_MIN) return null;
+      const fed = rows => rows.filter(r => first[r.date] < r.startedAt).length;
+      return { lift: L.name, a: { n: top.length, k: fed(top) }, b: { n: rest.length, k: fed(rest) } };
+    },
+    because: () => 'sessions of your most-logged lift on days with food logged, over the last 26 weeks'
+  },
+  {
+    // 2. Working sets in a session the day after the protein target was
+    //    reached, against the day after it was not.
+    id: 'session.setsAfterProtein', unit: 'count', requires: ['fuel.proteinTarget'],
+    compute: d => {
+      const want = d.f('fuel.proteinTarget'), sums = d.input.summaries || {};
+      const hit = [], under = [];
+      d.pSessions().forEach(s => {
+        const y = sums[prevDay(s.date)];
+        if (!y || !(y.cal > 0)) return;
+        const n = workingSets(d, s);
+        if (!n) return;
+        ((y.p || 0) >= want ? hit : under).push(n);
+      });
+      const sd = sides(hit, under);
+      return sd ? { target: want, ...sd } : null;
+    },
+    because: () => 'sessions after a day with food logged, over the last 26 weeks'
+  },
+  {
+    // 3. Calories on days he trained, against days he did not.
+    id: 'fuel.trainingDayCalories', unit: 'kcal', requires: [],
+    compute: d => {
+      const sums = d.input.summaries || {}, trained = d.trainedDays();
+      const on = [], off = [];
+      d.pDays().forEach(k => {
+        const x = sums[k];
+        if (x && x.cal > 0) (trained.has(k) ? on : off).push(x.cal);
+      });
+      return sides(on, off);
+    },
+    because: () => 'complete days with food logged, over the last 26 weeks'
+  },
+  {
+    // 4. The weekly change in weight, in weeks of three or more sessions
+    //    against weeks of fewer. A week is seven complete days back from
+    //    yesterday, its weight the average of its weigh-ins, and its change
+    //    that average against the week before's.
+    id: 'weight.rateBySessions', unit: 'lbWk', requires: [],
+    compute: d => {
+      const ins = Array.isArray(d.input.weighIns) ? d.input.weighIns : [];
+      const byDay = {};
+      ins.forEach(w => {
+        if (w && Number.isFinite(w.lb) && Number.isFinite(w.t)) (byDay[dayKey(w.t)] = byDay[dayKey(w.t)] || []).push(w.lb);
+      });
+      const weeks = [];
+      for (let k = 0; k < Math.floor(PATTERN_DAYS / 7); k++) {
+        const keys = new Set(keysBack(d.now - DAY - k * 7 * DAY, 7));
+        const lbs = [...keys].flatMap(x => byDay[x] || []);
+        weeks.push({ mean: lbs.length ? mean(lbs) : null, sessions: d.all().filter(s => keys.has(s.date)).length });
+      }
+      const busy = [], quiet = [];
+      for (let k = 0; k + 1 < weeks.length; k++) {
+        if (weeks[k].mean == null || weeks[k + 1].mean == null) continue;
+        (weeks[k].sessions >= PATTERN_BUSY_WEEK ? busy : quiet).push(weeks[k].mean - weeks[k + 1].mean);
+      }
+      return sides(busy, quiet);
+    },
+    because: () => 'each week against the week before it, from the average of its weigh-ins'
+  },
+  {
+    // 5. The lift's top-set estimated max in sessions started before noon,
+    //    against sessions started later.
+    id: 'lift.morningTop', unit: 'lb', requires: [],
+    compute: d => {
+      const L = d.pLift();
+      if (!L) return null;
+      const am = [], pm = [];
+      L.rows.forEach(r => (new Date(r.startedAt).getHours() < PATTERN_NOON ? am : pm).push(r.top));
+      const sd = sides(am, pm);
+      return sd ? { lift: L.name, ...sd } : null;
+    },
+    because: () => 'your most-logged lift over the last 26 weeks, by the hour each session started'
+  },
+  {
+    // 6. The lift's top-set estimated max when its group had been trained three
+    //    or fewer days before, against five or more.
+    id: 'lift.restGapTop', unit: 'lb', requires: [],
+    compute: d => {
+      const L = d.pLift();
+      if (!L || !L.group) return null;
+      const before = d.all().filter(s => s.groups.includes(L.group));
+      const close = [], rested = [];
+      L.rows.forEach(r => {
+        let prev = null;
+        before.forEach(s => { if (s.startedAt < r.startedAt) prev = s; });
+        if (!prev) return;
+        const gap = daysBetween(prev.startedAt, r.startedAt);
+        if (gap <= PATTERN_CLOSE) close.push(r.top);
+        else if (gap >= PATTERN_RESTED) rested.push(r.top);
+      });
+      const sd = sides(close, rested);
+      return sd ? { lift: L.name, group: L.group, ...sd } : null;
+    },
+    because: v => 'counted back to the last session with a working set for ' + groupLabel(v.group)
+  },
+  {
+    // 7. Steps on days he trained, against days he did not.
+    id: 'steps.trainingDays', unit: 'count', requires: [],
+    compute: d => {
+      const days = (d.input.steps || {}).days || {}, trained = d.trainedDays();
+      const on = [], off = [];
+      d.pDays().forEach(k => {
+        const x = days[k];
+        if (x && Number.isFinite(x.steps) && x.steps > 0) (trained.has(k) ? on : off).push(x.steps);
+      });
+      return sides(on, off);
+    },
+    because: () => 'complete days with steps logged, over the last 26 weeks'
+  },
+  {
+    // 8. The lift's top-set estimated max after a day above his median daily
+    //    calories, against after a day below it.
+    id: 'lift.caloriesBeforeTop', unit: 'lb', requires: [],
+    compute: d => {
+      const L = d.pLift();
+      if (!L) return null;
+      const sums = d.input.summaries || {};
+      const cals = d.pDays().map(k => sums[k]).filter(x => x && x.cal > 0).map(x => x.cal);
+      if (cals.length < PATTERN_MIN * 2) return null;
+      const mid = median(cals);
+      const above = [], below = [];
+      L.rows.forEach(r => {
+        const y = sums[prevDay(r.date)];
+        if (!y || !(y.cal > 0)) return;
+        if (y.cal > mid) above.push(r.top);
+        else if (y.cal < mid) below.push(r.top);
+      });
+      const sd = sides(above, below);
+      return sd ? { lift: L.name, median: mid, ...sd } : null;
+    },
+    because: v => 'calories the day before each session of ' + v.lift + ', over the last 26 weeks'
+  },
+
   /* ---------- coach's own state ---------- */
   {
     /* The last few lines Coach opened with, newest first. It arrives on the
@@ -978,6 +1220,14 @@ export const FACTS = Object.freeze([
 ]);
 
 const FACT_BY_ID = Object.freeze(Object.fromEntries(FACTS.map(f => [f.id, f])));
+
+/* The eight, in the order they were registered in, which is the order they
+   are said in. A ninth is a decision, not a line of code, and
+   tools-check/coach-patterns.mjs fails on anything but eight. */
+export const PATTERN_FACTS = Object.freeze([
+  'lift.fedBeforeTop', 'session.setsAfterProtein', 'fuel.trainingDayCalories', 'weight.rateBySessions',
+  'lift.morningTop', 'lift.restGapTop', 'steps.trainingDays', 'lift.caloriesBeforeTop'
+]);
 
 /* ================================================================
    4.  THE QUESTIONS
@@ -1330,6 +1580,20 @@ export const INTENTS = Object.freeze([
     response: 'resp_build'
   },
   {
+    /* PATTERNS IN YOUR DATA. Sheet-only and answer-only: it reaches no card,
+       it is never the lead question, and there is no bubble for it unless the
+       account has switched the category ON — absent means off for this one —
+       and at least one of the eight clears its gate. The answer says every one
+       that does, first to last, and nothing about what to do with them. */
+    id: 'patterns_in_data', kind: 'finding', priorityBand: 5, severity: 5,
+    category: 'patterns', tier: 'pro', surfaces: ['sheet'],
+    factsNeeded: PATTERN_FACTS.slice(), supersedes: [],
+    minData: d => !isMuted(d.input.settings, 'patterns'),
+    when: d => PATTERN_FACTS.some(id => d.f(id) != null),
+    tone: 'neutral',
+    response: 'resp_patterns'
+  },
+  {
     /* Registered, and deliberately unreachable from any button tonight. Coach
        does not do injuries, and the seam where ship three's text box routes a
        question about pain has to exist before the box does — otherwise the
@@ -1633,6 +1897,60 @@ export const RESPONSES = Object.freeze({
     reason: () => 'Averaged over the days you logged steps, not over fourteen — four logged days is a four-day average.'
   },
 
+  /* Every pattern that clears its gate, as a readout: the lift or the days it
+     is about, both medians or both shares, and both sample sizes. The first is
+     the answer and the rest follow it in the thread (`more`). No sentence here
+     says what to do, and none says why the two groups differ — see
+     PATTERN_FACTS. Every weight goes through units.js. */
+  resp_patterns: {
+    lines: (d, u) => {
+      const out = [];
+      const say = (id, text, reason) => { const v = d.f(id); if (v != null) out.push({ id, text: text(v), reason }); };
+      const pct = x => Math.round(x.k / x.n * 100) + '%';
+      const way = r => (r < 0 ? 'down ' + labelRate(-r, u) : r > 0 ? 'up ' + labelRate(r, u) : 'level');
+      say('lift.fedBeforeTop', v =>
+        v.lift + ': food was logged before the session started in ' + v.a.k + ' of your ' + v.a.n +
+        ' top-quarter sessions by estimated max (' + pct(v.a) + '), and in ' + v.b.k + ' of the other ' +
+        v.b.n + ' (' + pct(v.b) + ').',
+        'Sessions on days with food logged, over the last 26 weeks, ranked by the best estimated max of each.');
+      say('session.setsAfterProtein', v =>
+        'Sessions the day after you reached your ' + int(v.target) + ' g protein target: a median of ' + one(v.a.med) +
+        ' working sets across ' + plural(v.a.n, 'session') + '. After days under it: ' + one(v.b.med) +
+        ' across ' + plural(v.b.n, 'session') + '.',
+        'Against the protein target you have now, over the last 26 weeks. A day with no food logged is left out.');
+      say('fuel.trainingDayCalories', v =>
+        'Calories on days you trained: a median of ' + int(v.a.med) + ' kcal across ' + plural(v.a.n, 'day') +
+        '. On rest days: ' + int(v.b.med) + ' kcal across ' + plural(v.b.n, 'day') + '.',
+        'Complete days with food logged, over the last 26 weeks.');
+      say('weight.rateBySessions', v =>
+        'Weeks with ' + PATTERN_BUSY_WEEK + ' or more sessions: weight ' + way(v.a.med) + ' a week at the median, across ' +
+        plural(v.a.n, 'week') + '. Weeks with fewer: ' + way(v.b.med) + ' a week, across ' + plural(v.b.n, 'week') + '.',
+        'Each week against the week before it, from the average of its weigh-ins, over the last 26 weeks.');
+      say('lift.morningTop', v =>
+        v.lift + ', median top-set estimated max: ' + labelW(v.a.med, u) + ' across ' + plural(v.a.n, 'session') +
+        ' started before noon, and ' + labelW(v.b.med, u) + ' across ' + v.b.n + ' started later.',
+        'Your most-logged lift over the last 26 weeks, by the hour each session started.');
+      say('lift.restGapTop', v =>
+        v.lift + ' with ' + groupLabel(v.group) + ' last trained ' + PATTERN_CLOSE + ' or fewer days before: a median ' +
+        'top-set estimated max of ' + labelW(v.a.med, u) + ' across ' + plural(v.a.n, 'session') + '. After ' +
+        PATTERN_RESTED + ' or more days: ' + labelW(v.b.med, u) + ' across ' + v.b.n + '.',
+        'Counted back to the last session with a working set for that group. A gap between the two belongs to neither side.');
+      say('steps.trainingDays', v =>
+        'Steps on days you trained: a median of ' + int(v.a.med) + ' across ' + plural(v.a.n, 'day') +
+        '. On rest days: ' + int(v.b.med) + ' across ' + plural(v.b.n, 'day') + '.',
+        'Complete days with steps logged, over the last 26 weeks.');
+      say('lift.caloriesBeforeTop', v =>
+        v.lift + ' after a day above your median ' + int(v.median) + ' kcal: a median top-set estimated max of ' +
+        labelW(v.a.med, u) + ' across ' + plural(v.a.n, 'session') + '. After a day below it: ' +
+        labelW(v.b.med, u) + ' across ' + v.b.n + '.',
+        'Calories the day before each session of your most-logged lift, over the last 26 weeks. A day at the median itself is left out.');
+      return out;
+    },
+    text: (d, u) => { const l = RESPONSES.resp_patterns.lines(d, u); return l.length ? l[0].text : ''; },
+    reason: (d, u) => { const l = RESPONSES.resp_patterns.lines(d, u); return l.length ? l[0].reason : ''; },
+    more: (d, u) => RESPONSES.resp_patterns.lines(d, u).slice(1).map(l => ({ text: l.text, reason: l.reason }))
+  },
+
   resp_greet:    { text: () => '' },
   resp_lead:     { text: () => '' },
   /* The builder's answer is the proposal's own first line and its reason —
@@ -1865,6 +2183,12 @@ export const TOPICS = Object.freeze([
   { id: 'topic_weight', label: 'Where’s my weight going?', category: 'weight' }
 ]);
 
+/* The Patterns bubble. Not one of TOPICS, because TOPICS is also what the You
+   card's lead question is drawn from, and a pattern is never volunteered — it
+   is offered in the sheet, on the general set, only when the category is on
+   and a check clears its gate (topicsFor). */
+export const PATTERN_TOPIC = Object.freeze({ id: 'ask_patterns', label: 'Patterns', category: 'patterns' });
+
 /* Train's set, and every id in it is one the router already answers, so
    nothing here can offer a bubble with no rule behind it. Training-first and in
    the order somebody standing in a gym would want them: a workout, what to
@@ -1905,6 +2229,7 @@ const ROUTES = Object.freeze({
   ask_rate:     ['weight_rate_vs_goal'],
   ask_weighin:  ['weight_no_recent_weighin'],
   ask_steps:    ['steps_today_vs_trailing'],
+  ask_patterns: ['patterns_in_data'],
   injury:       ['coach_not_injuries']
 });
 
@@ -1932,6 +2257,8 @@ const FOLLOWUPS = Object.freeze({
   // Nothing: the proposal carries its own four ways on, and a row of chips
   // under it would be a fifth, sixth and seventh.
   ask_build:    [],
+  // Nothing: the answer is already every pattern that clears its bar.
+  ask_patterns: [],
   injury:       []
 });
 
@@ -1963,6 +2290,7 @@ const ASK_LABELS = Object.freeze({
   ask_rate:     'How fast am I moving?',
   ask_weighin:  'When did I last weigh in?',
   ask_steps:    'How are my steps?',
+  ask_patterns: 'Patterns',
   injury:       'Something hurts'
 });
 
@@ -2121,6 +2449,13 @@ function renderIntent(intent, d, u) {
     reason = first ? first.replace(/^./, c => c.toUpperCase()) + '.' : '';
   }
 
+  // A response may say more than one thing — Patterns says every check that
+  // clears — and the rest ride along to follow the first in the thread.
+  let more = [];
+  if (r.more) {
+    try { more = (r.more(d, u) || []).filter(m => m && m.text); } catch { more = []; }
+  }
+
   const ages = (intent.factsNeeded || []).map(id => d.age(id)).filter(n => n != null);
   return {
     id: intent.id,
@@ -2131,7 +2466,8 @@ function renderIntent(intent, d, u) {
     band: intent.priorityBand,
     severity: intent.severity,
     evidenceRecencyDays: ages.length ? Math.min(...ages) : 999,
-    text, reason
+    text, reason,
+    ...(more.length ? { more } : null)
   };
 }
 
@@ -2147,7 +2483,6 @@ function renderIntent(intent, d, u) {
            impossible and two devices agree.
    Step 3  the head fills the slot. */
 function rank(d, u) {
-  const muted = (d.input.settings && d.input.settings.mute) || {};
   const pro = d.f('meta.tierPro') === true;
 
   // --- step 0 ---
@@ -2170,8 +2505,8 @@ function rank(d, u) {
   firing.forEach(i => {
     if (i.kind !== 'finding') return;
     if (beaten.has(i.id)) return;
-    const cat = CATEGORIES.find(c => c.id === i.category);
-    if (cat && cat.mutable && muted[i.category] === true) return;
+    // isMuted, not the mute map: an opt-in category is off until switched on.
+    if (isMuted(d.input.settings, i.category)) return;
     if (i.tier === 'pro' && !pro) { lockedCount++; return; }
     const v = renderIntent(i, d, u);
     if (v) candidates.push(v);
@@ -2217,7 +2552,7 @@ function answerable(d, routeId) {
    with no way to ask anything is a worse answer than a broader question. */
 function topicsFor(d, surface) {
   const general = TOPICS.filter(t => liveTopics(d).includes(t.id));
-  if (surface !== 'train') return general;
+  if (surface !== 'train') return answerable(d, PATTERN_TOPIC.id) ? general.concat(PATTERN_TOPIC) : general;
   const mine = TRAIN_TOPICS.filter(t => answerable(d, t.id));
   return mine.length ? mine : general;
 }
@@ -2376,6 +2711,7 @@ function nothingFor(id) {
     return 'Nothing to say about your weight yet.';
   }
   if (id.startsWith('ask_steps')) return 'Nothing to say about your steps yet.';
+  if (id === 'ask_patterns') return 'Nothing to say about patterns in your data yet.';
   return 'Nothing to say about your training yet.';
 }
 
@@ -2397,7 +2733,15 @@ export function normSettings(v) {
   const o = v && typeof v === 'object' && !Array.isArray(v) ? v : {};
   const mute = {};
   const rawMute = o.mute && typeof o.mute === 'object' ? o.mute : {};
-  CATEGORIES.forEach(c => { if (c.mutable && rawMute[c.id] === true) mute[c.id] = true; });
+  CATEGORIES.forEach(c => { if (c.mutable && !c.optIn && rawMute[c.id] === true) mute[c.id] = true; });
+  /* `on` is `mute` turned over, for the categories that are OFF by default —
+     Patterns, and only Patterns. ABSENT MEANS OFF here, the reverse of every
+     other category: a fresh account has every switch on without a byte
+     written, except this one, which is off without a byte written. Only `true`
+     survives, and only for a category the table declares optIn. */
+  const on = {};
+  const rawOn = o.on && typeof o.on === 'object' ? o.on : {};
+  CATEGORIES.forEach(c => { if (c.optIn && rawOn[c.id] === true) on[c.id] = true; });
   const answers = {};
   const rawA = o.answers && typeof o.answers === 'object' ? o.answers : {};
   QUESTIONS.forEach(q => {
@@ -2414,12 +2758,30 @@ export function normSettings(v) {
      stored key left over from v42 is simply dropped on the way through here. */
   return {
     v: COACH_SETTINGS_VERSION,
-    mute, answers, asked
+    mute, on, answers, asked
   };
 }
 
+// Off, whichever way round the category's switch is stored.
 export function isMuted(settings, categoryId) {
   const c = CATEGORIES.find(x => x.id === categoryId);
   if (!c || !c.mutable) return false;
+  if (c.optIn) return !(settings && settings.on && settings.on[categoryId] === true);
   return !!(settings && settings.mute && settings.mute[categoryId] === true);
+}
+
+/* Which days' food logs the first pattern needs: the days of the sessions it
+   would count, where that day's summary says food was logged. Exported for
+   coach-data.js, so the gatherer reads what the pure layer asks for and
+   nothing more — and nothing at all while Patterns is off. */
+export function patternFoodDays(input) {
+  try {
+    const d = factStore(input || {});
+    if (isMuted(d.input.settings, 'patterns')) return [];
+    const L = d.pLift();
+    const sums = d.input.summaries || {};
+    return L ? [...new Set(L.rows.map(r => r.date))].filter(k => sums[k] && sums[k].cal > 0).sort() : [];
+  } catch {
+    return [];
+  }
 }

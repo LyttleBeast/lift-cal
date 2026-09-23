@@ -520,6 +520,7 @@ inside it. A step term would count the same walking twice.
 ```json
 { "v": 1,
   "mute":    { "fuel": true },
+  "on":      { "patterns": true },
   "answers": { "q_goal_direction": "down" },
   "asked":   { "q_goal_direction": 1789307130123 } }
 ```
@@ -527,7 +528,19 @@ inside it. A step term would count the same walking twice.
 Everything Coach remembers, and it is deliberately almost nothing: the user's
 data is the only state Coach has. `mute` holds the categories switched off under
 Settings → Coach, **absent means on**, so a fresh account has every switch on
-without a byte having been written. `answers` holds the replies to Coach's own
+without a byte having been written.
+
+`on` is the reverse, and it exists for one category: **Patterns** (v46), the
+eight comparisons between two groups of the account's own days. It is OFF until
+switched on — **absent means off** — because comparing somebody's days is a
+thing they ask for, not a thing Coach volunteers. Only `true` survives
+`normSettings()`, and only for a category the table in `coach.js` declares
+`optIn`; switching it off drops the key. A `mute` written on Patterns means
+nothing. It is the one key v46 added, a child of an already granted section, so
+it needed no rules change for the same reason `settings/coach` itself did not.
+Turned on, Coach reads `food/log/{date}` for the days its first comparison needs
+(when a session's day began) — reads only, and only for an account that has
+switched it on. `answers` holds the replies to Coach's own
 questions — one exists, `q_goal_direction`, and it exists only because
 `weight_rate_vs_goal` and the stall readout are both silent or different without
 a direction and the data genuinely cannot supply one. `asked` stamps when each

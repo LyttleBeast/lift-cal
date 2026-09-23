@@ -25,7 +25,7 @@
 
 import { el, sheet, noteEl, segmented, toast } from './ui.js';
 import { GROUPS } from './exercises.js';
-import { coach, CATEGORIES, QUESTIONS, PRO_ADDS, LIVE_NONE } from './coach.js';
+import { coach, CATEGORIES, QUESTIONS, PRO_ADDS, LIVE_NONE, isMuted } from './coach.js';
 import { coachInput, coachReady, coachLogKnown, rememberGreeting, coachSettings, coachSettingsKnown,
          setCategoryMuted, answerQuestion, markAsked, liveSessionOnDevice, coachPro } from './coach-data.js';
 
@@ -326,6 +326,9 @@ export function openCoachSheet(opts = {}) {
       bubble('coach', 'Coach can’t answer that one.', 'It only says things it can back with a number from your own log.');
     } else {
       bubble('coach', a.text, a.reason);
+      // An answer that says more than one thing — Patterns says every check
+      // that clears — follows its first bubble with the rest, one each.
+      (a.more || []).forEach(m => bubble('coach', m.text, m.reason));
       // The builder's answer is a bubble AND the workout under it. Nothing is
       // asked first: the default proposal is on screen the moment the chip is.
       if (a.id === 'build_workout' && canBuild) {
@@ -621,7 +624,8 @@ function toggle(cat, onChange) {
   const b = el('button', 'tog');
   b.setAttribute('role', 'switch');
   b.setAttribute('aria-label', cat.label);
-  let on = !coachSettings().mute[cat.id];
+  // isMuted, not the mute map: Patterns is stored the other way round.
+  let on = !isMuted(coachSettings(), cat.id);
   let busy = false;
   const paint = () => {
     b.classList.toggle('on', on);

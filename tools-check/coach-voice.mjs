@@ -847,6 +847,72 @@ section('H. the in-session read — unprompted under a bar, and under the ban wi
   check('and carries no banned word', !gymBad.length, list(gymBad.map(x => '“' + x.w + '” in: ' + x.t)));
 }
 
+/* ================= I. PATTERNS ================= */
+section('I. Patterns — two groups side by side, and never a cause');
+{
+  /* Patterns is sheet-only, so the card's ban above does not bind it — but it
+     is the one place in Coach that sets two groups of his days beside each
+     other, which is the exact shape of sentence that slides into a claim about
+     why. So it has a ban of its own: no word that says one thing brings about
+     another, and no word that says what he ought to do about it. Applied to
+     every literal the Patterns response and the eight facts are built from,
+     and to everything they render, in both units. */
+  const CAUSAL = [/\bbecause\b/i, /\bhelps?\b/i, /\bmakes?\b/i, /\bleads? to\b/i, /\bboosts?\b/i, /\bso you\b/i,
+                  /\bcauses?\b/i, /\bdue to\b/i, /\bresults? in\b/i, /\bthanks to\b/i, /\bdrives?\b/i];
+  const ADVICE = [/\bshould\b/i, /\btry\b/i, /\baim\b/i, /\beat (more|less)\b/i, /\bbetter\b/i, /\bworse\b/i, /\bimprove/i];
+  const at = CODE.indexOf('resp_patterns: {');
+  let depth = 0, end = -1;
+  for (let j = CODE.indexOf('{', at); at !== -1 && j < CODE.length; j++) {
+    if (CODE[j] === '{') depth++;
+    else if (CODE[j] === '}' && --depth === 0) { end = j; break; }
+  }
+  const respCopy = at === -1 ? [] : literals(CODE.slice(at, end + 1)).filter(t => /[a-z]{3}/i.test(t));
+  const factCopy = C.PATTERN_FACTS.flatMap(id => copyOf(factOf(id).because));
+  const srcCopy = respCopy.concat(factCopy);
+  const srcBad = srcCopy.filter(t => CAUSAL.concat(ADVICE).some(re => re.test(t)));
+  check('the Patterns response and its eight facts were read (' + srcCopy.length + ' strings)',
+        respCopy.length >= 20 && factCopy.length >= 8, list(srcCopy.slice(0, 3)));
+  check('and no literal in them says why, or what to do', !srcBad.length, list(srcBad));
+
+  /* A twenty-six-week log on which all eight patterns clear — the same
+     construction as coach-patterns.mjs, which proves each number right; here
+     the only question is what the words look like. Dates and hours are built
+     in the local zone, the one the engine reads them in. */
+  const PLIB = { bench: { name: 'Barbell Bench Press', group: 'chest', equipment: 'barbell' },
+                 row:   { name: 'Barbell Row',         group: 'back',  equipment: 'barbell' } };
+  const hourOn = (i, h, m = 0) => { const x = new Date(NOW - i * DAY); x.setHours(h, m, 0, 0); return x.getTime(); };
+  const pset = (n, w, r) => Array.from({ length: n }, () => ({ w: String(w), r: String(r), type: 'N', done: true }));
+  const PS = [], PSUM = {}, PSTEP = {}, PFOOD = {}, PWEIGH = [];
+  for (let i = 1; i <= 181; i++) {
+    const k = key(NOW - i * DAY);
+    const quiet = Math.floor((i - 1) / 7) % 3 === 2;
+    const trains = i % 7 === 1 || (!quiet && (i % 7 === 3 || i % 7 === 5));
+    PSUM[k] = { cal: 2000 + (i % 3) * 300, p: i % 2 ? 190 : 150, c: 250, f: 70 };
+    PSTEP[k] = { steps: (trains ? 9000 : 6000) + (i % 3) * 100 };
+    PWEIGH.push({ lb: 180 + i * 0.05, t: hourOn(i, 6, 30) });
+    if (!trains) continue;
+    const am = i % 7 === 1;
+    PS.push({ id: 'pp' + i, startedAt: hourOn(i, am ? 7 : 17), _date: k, exercises: [
+      { exId: 'bench', ...PLIB.bench, sets: pset(4, 180 + (i % 4) * 10 + (am ? 0 : 5), 5) },
+      { exId: 'row', ...PLIB.row, sets: pset(i % 2 ? 3 : 4, 155, 8) }] });
+    PFOOD[k] = hourOn(i, i % 5 === 0 ? 20 : 6);
+  }
+  PS.sort((a, b) => a.startedAt - b.startedAt);
+  const patternLines = u => {
+    const a = C.coach(base({ u, sessions: PS, lib: PLIB, summaries: PSUM, steps: { days: PSTEP }, weighIns: PWEIGH,
+      foodFirst: PFOOD, targets: { cal: 2300, p: 170, f: 70 }, targetsSet: true,
+      settings: { v: 1, mute: {}, on: { patterns: true }, answers: {}, asked: {} } })).ask('ask_patterns');
+    return a.id === 'patterns_in_data' ? [{ text: a.text, reason: a.reason }].concat(a.more || []) : [];
+  };
+
+  const said = ['lb', 'kg'].flatMap(u => patternLines(u).flatMap(l => [u + ': ' + l.text, u + ': ' + l.reason]));
+  check('all eight render, in both units (' + said.length + ' lines)', said.length === 32, String(said.length));
+  const causal = said.filter(t => CAUSAL.some(re => re.test(t)));
+  check('no causal word in anything they say: because, helps, makes, leads to, boosts, so you', !causal.length, list(causal));
+  const advice = said.filter(t => ADVICE.some(re => re.test(t)));
+  check('and no advice: should, try, aim, better, worse', !advice.length, list(advice));
+}
+
 /* ---------- report ---------- */
 console.log('\nCoach describes the numbers, and never the person, on a card nobody asked\n');
 console.log(results.join('\n'));

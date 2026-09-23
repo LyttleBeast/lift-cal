@@ -178,7 +178,16 @@ const CASES = [
   ['fuel_protein_vs_trailing',   'ask_protein',  RICH()],
   ['weight_rate_vs_goal',        'ask_rate',     RICH()],
   ['weight_no_recent_weighin',   'ask_weighin',  RICH()],
-  ['steps_today_vs_trailing',    'ask_steps',    RICH()]
+  ['steps_today_vs_trailing',    'ask_steps',    RICH()],
+  /* Patterns is OFF until switched on, so this case switches it on — and
+     gives it sixty days of food, because its bar is eight on each side, not
+     the eight days RICH carries for the fuel rules. Calories on days trained
+     against days rested is the one it clears. */
+  ['patterns_in_data',           'ask_patterns', RICH({
+    settings: { v: 1, mute: {}, on: { patterns: true }, answers: {}, asked: {}, lastGreet: '' },
+    summaries: Object.fromEntries(Array.from({ length: 60 }, (_, i) =>
+      [key(NOW - (i + 1) * DAY), { cal: 2300 + (i % 5) * 60, p: 150, c: 250, f: 70 }]))
+  })]
 ];
 
 /* ================= A. EVERY FINDING HAS A BAR, AND CLEARS IT ================= */

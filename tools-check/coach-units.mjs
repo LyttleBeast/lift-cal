@@ -764,6 +764,56 @@ section('H. the in-session read — every line it prints, imperial and metric');
         quotes.length > 0 && !offLog.length, list(offLog) || quotes[0]);
 }
 
+/* ================= I. PATTERNS ================= */
+section('I. Patterns — the four that print a weight, imperial and metric');
+{
+  /* A twenty-six-week log on which all eight patterns clear — the same
+     construction as coach-patterns.mjs, which proves each number right; here
+     the only question is what the words look like. Dates and hours are built
+     in the local zone, the one the engine reads them in. */
+  const PLIB = { bench: { name: 'Barbell Bench Press', group: 'chest', equipment: 'barbell' },
+                 row:   { name: 'Barbell Row',         group: 'back',  equipment: 'barbell' } };
+  const hourOn = (i, h, m = 0) => { const x = new Date(NOW - i * DAY); x.setHours(h, m, 0, 0); return x.getTime(); };
+  const pset = (n, w, r) => Array.from({ length: n }, () => ({ w: String(w), r: String(r), type: 'N', done: true }));
+  const PS = [], PSUM = {}, PSTEP = {}, PFOOD = {}, PWEIGH = [];
+  for (let i = 1; i <= 181; i++) {
+    const k = key(NOW - i * DAY);
+    const quiet = Math.floor((i - 1) / 7) % 3 === 2;
+    const trains = i % 7 === 1 || (!quiet && (i % 7 === 3 || i % 7 === 5));
+    PSUM[k] = { cal: 2000 + (i % 3) * 300, p: i % 2 ? 190 : 150, c: 250, f: 70 };
+    PSTEP[k] = { steps: (trains ? 9000 : 6000) + (i % 3) * 100 };
+    PWEIGH.push({ lb: 180 + i * 0.05, t: hourOn(i, 6, 30) });
+    if (!trains) continue;
+    const am = i % 7 === 1;
+    PS.push({ id: 'pp' + i, startedAt: hourOn(i, am ? 7 : 17), _date: k, exercises: [
+      { exId: 'bench', ...PLIB.bench, sets: pset(4, 180 + (i % 4) * 10 + (am ? 0 : 5), 5) },
+      { exId: 'row', ...PLIB.row, sets: pset(i % 2 ? 3 : 4, 155, 8) }] });
+    PFOOD[k] = hourOn(i, i % 5 === 0 ? 20 : 6);
+  }
+  PS.sort((a, b) => a.startedAt - b.startedAt);
+  const patternLines = u => {
+    const a = C.coach(base({ u, sessions: PS, lib: PLIB, summaries: PSUM, steps: { days: PSTEP }, weighIns: PWEIGH,
+      foodFirst: PFOOD, targets: { cal: 2300, p: 170, f: 70 }, targetsSet: true,
+      settings: { v: 1, mute: {}, on: { patterns: true }, answers: {}, asked: {} } })).ask('ask_patterns');
+    return a.id === 'patterns_in_data' ? [{ text: a.text, reason: a.reason }].concat(a.more || []) : [];
+  };
+
+  const lb = patternLines('lb'), kg = patternLines('kg');
+  check('all eight render in both units', lb.length === 8 && kg.length === 8, lb.length + ' / ' + kg.length);
+  const pairs = lb.map((l, n) => [l.text, (kg[n] || {}).text || '']);
+  const weighted = pairs.filter(([a]) => /\blb\b/.test(a));
+  check('the four that carry a weight: the weekly rate, morning, the rest gap and the day before',
+        weighted.length === 4, weighted.map(([a]) => a.slice(0, 30)).join(' | '));
+  const crossed = pairs.filter(([a, b]) => /\bkg\b/.test(a) || /\blb\b/.test(b));
+  check('no imperial line carries kg, and no metric one lb', !crossed.length, list(crossed.map(x => x.join(' | '))));
+  check('each says kg on the other side, and the number moves with the word',
+        weighted.every(([a, b]) => /\bkg\b/.test(b) && a.replace(/lb/g, '') !== b.replace(/kg/g, '')),
+        list(weighted.map(([, b]) => b)));
+  const unweighted = pairs.filter(([a]) => !/\blb\b/.test(a));
+  check('and the four with no weight in them read the same in both units — kcal, steps, sets and shares do not convert',
+        unweighted.length === 4 && unweighted.every(([a, b]) => a === b), list(unweighted.filter(([a, b]) => a !== b).map(x => x.join(' | '))));
+}
+
 /* ---------- report ---------- */
 console.log('\nevery weight Coach prints goes through units.js\n');
 console.log(results.join('\n'));

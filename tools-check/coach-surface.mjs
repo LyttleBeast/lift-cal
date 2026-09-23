@@ -971,6 +971,87 @@ section('G. in a live session: a chip when asked, one quiet line once, nothing f
         /\.coach-nudge-t \{[^}]*white-space: nowrap;[^}]*text-overflow: ellipsis;/.test(css));
 }
 
+/* ================= H. PATTERNS ================= */
+section('H. Patterns: a switch that starts off, and a bubble only when it is on and something clears');
+{
+  const PLIB = { bench: { name: 'Barbell Bench Press', group: 'chest', equipment: 'barbell' },
+                 row:   { name: 'Barbell Row',         group: 'back',  equipment: 'barbell' } };
+  const hourOn = (i, h, m = 0) => { const x = new Date(NOW - i * DAY); x.setHours(h, m, 0, 0); return x.getTime(); };
+  const pset = (n, w, r) => Array.from({ length: n }, () => ({ w: String(w), r: String(r), type: 'N', done: true }));
+  const PS = [], PSUM = {}, PSTEP = {}, PFOOD = {}, PWEIGH = [];
+  for (let i = 1; i <= 181; i++) {
+    const k = key(NOW - i * DAY);
+    const quiet = Math.floor((i - 1) / 7) % 3 === 2;
+    const trains = i % 7 === 1 || (!quiet && (i % 7 === 3 || i % 7 === 5));
+    PSUM[k] = { cal: 2000 + (i % 3) * 300, p: i % 2 ? 190 : 150, c: 250, f: 70 };
+    PSTEP[k] = { steps: (trains ? 9000 : 6000) + (i % 3) * 100 };
+    PWEIGH.push({ lb: 180 + i * 0.05, t: hourOn(i, 6, 30) });
+    if (!trains) continue;
+    const am = i % 7 === 1;
+    PS.push({ id: 'pp' + i, startedAt: hourOn(i, am ? 7 : 17), _date: k, exercises: [
+      { exId: 'bench', ...PLIB.bench, sets: pset(4, 180 + (i % 4) * 10 + (am ? 0 : 5), 5) },
+      { exId: 'row', ...PLIB.row, sets: pset(i % 2 ? 3 : 4, 155, 8) }] });
+    PFOOD[k] = hourOn(i, i % 5 === 0 ? 20 : 6);
+  }
+  PS.sort((a, b) => a.startedAt - b.startedAt);
+  const OFF = { v: 1, mute: {}, answers: {}, asked: {} };
+  const ONS = { ...OFF, on: { patterns: true } };
+  const PAT = settings => ({ ...BASE, sessions: PS, lib: PLIB, summaries: PSUM, steps: { days: PSTEP },
+    weighIns: PWEIGH, foodFirst: PFOOD, targets: { cal: 2300, p: 170, f: 70 }, targetsSet: true, settings });
+  const LABEL = C.PATTERN_TOPIC.label;
+  state.pro = true; state.logKnown = true; state.ready = true;
+
+  /* ---- the switch ---- */
+  state.input = PAT(OFF);
+  const host = mkEl('div');
+  UI.coachToggleRows(host);
+  const cat = C.CATEGORIES.find(c => c.id === 'patterns');
+  const sw = buttonsIn(host).find(b => b.getAttribute('aria-label') === cat.label);
+  check('Settings → Coach draws a Patterns switch, with its note', !!sw && textOf(host).includes(cat.note));
+  check('and it starts OFF — absent means off, the reverse of every other switch',
+        !!sw && sw.getAttribute('aria-checked') === 'false' &&
+        buttonsIn(host).filter(b => b.classList.contains('tog') && b !== sw).every(b => b.getAttribute('aria-checked') === 'true'));
+  state.calls.length = 0;
+  sw.onclick();
+  await new Promise(r => setTimeout(r, 0));
+  check('tapped, it writes Patterns ON through the one settings writer',
+        J_(state.calls.filter(c => c[0] === 'setCategoryMuted')) === J_([['setCategoryMuted', 'patterns', false]]),
+        J_(state.calls));
+  state.input = PAT(ONS);
+  const host2 = mkEl('div');
+  UI.coachToggleRows(host2);
+  const sw2 = buttonsIn(host2).find(b => b.getAttribute('aria-label') === cat.label);
+  check('and drawn from a node that says on, it shows on', !!sw2 && sw2.getAttribute('aria-checked') === 'true');
+
+  /* ---- the bubble ---- */
+  state.input = PAT(OFF);
+  const offSheet = openBare(UI);
+  check('off: the sheet has no Patterns bubble, on a log where all eight would clear',
+        !chipsIn(offSheet).some(b => b.textContent === LABEL), list(chipsIn(offSheet).map(b => b.textContent)));
+  state.input = PAT(ONS);
+  const onSheet = openBare(UI);
+  const chip = chipsIn(onSheet).find(b => b.textContent === LABEL);
+  check('on: the Patterns bubble is there', !!chip, list(chipsIn(onSheet).map(b => b.textContent)));
+  const before = find(onSheet, 'coach-bub').length;
+  if (chip) chip.onclick();
+  const eng = C.coach({ ...PAT(ONS), tier: { pro: true } }).ask('ask_patterns');
+  const drawn = find(onSheet, 'coach-bub').slice(before).filter(b => b.classList.contains('coach'))
+    .map(b => (find(b, 'coach-bub-t')[0] || {}).textContent);
+  const want = [eng.text].concat((eng.more || []).map(m => m.text));
+  check('tapped, it draws every pattern that clears — one bubble each, the engine’s words, in order',
+        want.length === 8 && J_(drawn) === J_(want), drawn.length + ' drawn of ' + want.length);
+  check('and each carries its own reason line', find(onSheet, 'coach-bub').slice(before)
+        .filter(b => b.classList.contains('coach')).every(b => find(b, 'coach-bub-r').length === 1));
+  const tr = open(UI, { tight: true, live: false }).sh;
+  check('Train’s sheet does not offer it — it is not a training question', !chipsIn(tr).some(b => b.textContent === LABEL));
+  state.pro = false;
+  const basic = openBare(UI);
+  check('Basic, on: no bubble, and the Pro panel names it among what Pro adds',
+        !chipsIn(basic).some(b => b.textContent === LABEL) && textOf(basic).includes(cat.label));
+  state.pro = true;
+  state.input = BASE;
+}
+
 /* ---------- report ---------- */
 console.log('\nthe lock means something, and the sheet knows which card opened it\n');
 console.log(results.join('\n'));

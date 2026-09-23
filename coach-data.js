@@ -40,7 +40,7 @@ import { allExercises, hiddenIds, libraryReady } from './picker.js';
 import { maintenance, effectiveMaint, trendRate, sortedEntries } from './tdee.js';
 import { goalDirection } from './insights.js';
 import { capabilities } from './access.js';
-import { normSettings } from './coach.js';
+import { normSettings, isMuted, patternFoodDays, CATEGORIES } from './coach.js';
 
 /* ================= STATE =================
    Everything here is set once by initCoachData() and read synchronously
@@ -58,6 +58,10 @@ let stepDays    = {};
 let routines    = [];
 let settings    = normSettings(null);
 let settingsRead = false;      // false means the node has never been read cleanly
+// Patterns only: when each day's first food entry was logged, for the days the
+// first pattern asks about. A day read and found empty is null; a day not read
+// is absent. See loadPatternFood().
+let foodFirst   = {};
 
 /* ================= THE ROTATION, AND WHY IT IS ON THE DEVICE =================
    The greeting rotates once per app OPEN, and both halves of that live in
@@ -211,7 +215,37 @@ async function load() {
 
   await Promise.all([pTargets, pRest]);
   ready = true;
+  // After the wave, never in it, and only for an account that asked for
+  // Patterns: nothing on the card waits on these, and most accounts never
+  // pay for them at all.
+  if (!isMuted(settings, 'patterns')) loadPatternFood();
   return ready;
+}
+
+/* THE ONE READ PATTERNS ADDS, and it is paid only by an account that switched
+   Patterns on. The first of the eight asks whether food was logged before a
+   session started, and daySummaries has no times in it — so the food log of
+   each day that pattern would count is read, and reduced to the moment of its
+   first entry. Which days is the pure layer's answer (patternFoodDays), so this
+   reads what coach.js asks for and nothing more: the sessions of one lift over
+   the pattern window, on days whose summary says food was logged.
+
+   read(), not readExact(): a failed read and an empty day both come back null
+   here, and both mean the same thing to the pattern — that day is left out.
+   Nothing is guessed from a day that could not be read. Once per app open,
+   and not awaited by anything: the pattern is silent until its days land, the
+   same silence a thin log gets. */
+let patternFood = null;
+function loadPatternFood() {
+  if (patternFood) return patternFood;
+  let days = [];
+  try { days = patternFoodDays(coachInput({})); } catch { days = []; }
+  patternFood = Promise.all(days.map(k => read('food/log/' + k, null).then(v => {
+    const ts = Object.values(v && typeof v === 'object' ? v : {})
+      .map(e => (e && Number.isFinite(e.t) ? e.t : null)).filter(t => t != null);
+    foodFirst = { ...foodFirst, [k]: ts.length ? Math.min(...ts) : null };
+  }, () => {}))).then(() => true, () => false);
+  return patternFood;
 }
 
 // The routines node is keyed by id; Coach wants a list that carries the id.
@@ -281,6 +315,10 @@ export function coachInput(extra) {
     targetsSet,
     summaries,
     steps: { days: stepDays },
+    // Patterns' two extra inputs: every weigh-in, for the weekly rate (the
+    // snapshot below carries only the latest), and foodFirst, above.
+    weighIns: safe(() => sortedEntries(entries).map(e => ({ lb: e.lb, t: e.t })), []),
+    foodFirst,
     weight: {
       latestLb: last ? last.lb : null,
       latestAt: last ? last.t : null,
@@ -380,6 +418,7 @@ async function patchNow(change) {
     ...fresh,
     ...change,
     mute:    { ...fresh.mute,    ...(change.mute    || {}) },
+    on:      { ...fresh.on,      ...(change.on      || {}) },
     answers: { ...fresh.answers, ...(change.answers || {}) },
     asked:   { ...fresh.asked,   ...(change.asked   || {}) }
   });
@@ -481,7 +520,18 @@ export function coachSettingsKnown() { return settingsRead; }
 // `false` rather than a delete: normSettings keeps only `=== true`, so the key
 // is dropped on the way through and the stored node never grows a row that
 // means "on", which is already what an absent key means.
+//
+// An opt-in category (Patterns) is stored the other way round, under `on`,
+// where absent means OFF — so switching it off drops its key the same way,
+// and the node holds a row only for what was deliberately switched on.
 export function setCategoryMuted(categoryId, muted) {
+  const c = CATEGORIES.find(x => x.id === categoryId);
+  if (c && c.optIn) {
+    return patch({ on: { [categoryId]: muted !== true } }).then(ok => {
+      if (ok && muted !== true && ready) loadPatternFood();
+      return ok;
+    });
+  }
   return patch({ mute: { [categoryId]: muted === true } });
 }
 
