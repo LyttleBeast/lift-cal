@@ -94,8 +94,10 @@ export async function render() {
   inp.type = 'number'; inp.inputMode = 'decimal'; inp.step = '0.1';
   inp.min = lim[0]; inp.max = lim[1];
   inp.placeholder = s.latest ? fmtW(s.latest.lb, u) : fmtW(208, u);
+  // No inline flex. `.qty-row .btn` gives this button 54px and zero padding,
+  // which is the room "Log" needs; an inline `flex: 0 0 auto` on top of that
+  // zero padding sized it to the word itself, and it read as squashed.
   const btn = el('button', 'btn btn-primary', 'Log');
-  btn.style.flex = '0 0 auto';
 
   /* ---- "Weighed earlier?" ----
      Collapsed, and it stays collapsed until it is asked for. Stepping off the
