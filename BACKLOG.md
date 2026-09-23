@@ -49,7 +49,9 @@ That tree moves on its own, so verify before acting on one.
   `on`: published as it stands, every settings/coach write from an account with
   Patterns on is refused silently and the switch flips back. Add
   `"on": { "$cat": { ".validate": "newData.isBoolean()" } }`
-  (`NEXT-NATIVE-V46.md` §6).
+  (`NEXT-NATIVE-V46.md` §6). v46's second switch, "In the gym", is
+  `settings/coach/mute/live`: the V43 shape's `mute.$cat` accepts it, but if
+  the PROPOSED file has since enumerated the categories, `live` must join them.
 - **The stricter `.validate` rules themselves.** They were the reason v40's
   Phase 3 existed: until a refused write said so on screen and kept its payload,
   publishing them turned a too-strict rule into silent data loss. That half is
@@ -197,8 +199,12 @@ Carried from `NEXT-NATIVE.md` §7 so it survives that file. Do not "fix" these:
 
 v46 is Coach ship three, part one — Coach in the gym (the live session's chip,
 its compact sheet, the one-line nudge) and Patterns in your data — plus three
-fixes Micah found walking v45 (0a–0c). Everything below is written up in
-`COACH-REPORT.md` §30–§37.
+fixes Micah found walking v45 (0a–0c), and a second round from walking the
+builder before the push (§38). Everything below is written up in
+`COACH-REPORT.md` §30–§38. Three items this section first listed were closed in
+that round: Steps' Save and Water's Add have their room, the block check box
+ticks through `tickSet`, and the in-session read has a switch (Settings →
+Coach → In the gym).
 
 - **Nothing in this ship has been seen on a screen.** The chip in the session's
   header row (beside the name, the clock, the calendar button and Finish — on a
@@ -207,22 +213,19 @@ fixes Micah found walking v45 (0a–0c). Everything below is written up in
   at 54px. The nudge keeps the hint's height by construction (same 10px type,
   one clipped line, the × given a larger target by padding it hands back as
   negative margin) — arithmetic, not a measurement.
-- **Steps' Save and Water's Add carry the same inline `flex: 0 0 auto`** that
-  squashed Weight's Log (steps.js:497, water.js:294), over the same `.qty-row
-  .btn` rule. One line each; not touched, because 0b named Log.
-- **The block check box does not take targets.** It ticks only sets that
-  already have reps, so it never makes a set Finish would drop, and a block
-  holding only targets shows it disabled. A routine block ticked through its
-  sets gets the targets (0a); ticked through its block box, it does not. Whether
-  the block box should also fill from targets is a decision, not a fix.
 - **Editing a past session has no unsaved-sets warning.** Every set of an edit
   starts ticked with its reps, so the only way to make one is to clear a reps box
   and save — close to deleting it on purpose. `saveEdit` drops it as it always
   has.
-- **No switch for the in-session read.** It is ask-only (the chip) plus one
-  dismissible line per finished exercise. A switch would be a `mute` on a new
-  category, and this ship's one new stored key went to Patterns. If the line is
-  unwanted in use, that is the change.
+- **The "In the gym" switch is one switch for two things** — the chip and the
+  line. If the line turns out unwanted and the chip wanted, splitting them is a
+  second category, and a second key under `mute`.
+- **"Make me a workout" shows every choice that builds, merging none.** Coach's
+  pick and the shape it picked, or a shape and one of its groups, can build the
+  same workout under two labels. Each is still the answer to its own question,
+  which is why nothing is merged; if the list reads long on a phone, the
+  builder's own "Train something else" dedupes by base session and is the
+  model.
 - **"The exercise in hand" is a guess when no line is up.** A set has no
   timestamp, so the chip's answer is about the last exercise on the list with a
   ticked working set; somebody who jumps back to an earlier exercise gets an

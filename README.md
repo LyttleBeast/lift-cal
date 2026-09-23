@@ -533,9 +533,14 @@ warm-ups. Every group Coach names is derived fresh from the sets.
 
 ### Make me a workout
 
-On Train, and on Pro, the first bubble in the sheet. It builds the session that
-has waited longest out of your own log: the most recent session of that shape,
-its exercises in the order you did them, your lifting blocks, and the numbers
+On Train, and on Pro, the second bubble in the sheet, after *What should I train
+today?* It asks first — *What do you want to train?* — and offers **Tell me what
+to train** (Coach's pick: the session that has waited longest), then your own
+recurring sessions by their names, then the six muscle groups, each only if
+there is something in your log to build it from. The answer to *What should I
+train today?* offers **Build it**, which skips the question and builds what that
+answer named. Either way it is built out of your own log: the most recent
+session of that kind, its exercises in the order you did them, your lifting blocks, and the numbers
 you actually lifted — never a weight you did not. It says which session it was
 built from, offers your own routine for that shape by your name if you have one,
 and says what it left out (an exercise you hid, one no longer in your library)
@@ -580,7 +585,8 @@ exercise the way **+ Add exercise** would, at the end of the session.
 When a tick finishes an exercise, the answer can appear once as a single line
 under it, in the slot the swipe hint uses — nothing pops up, no row moves, and
 the rest timer is untouched. It never appears twice for the same exercise, and
-never over an edit of a past session. A basic account sees none of it.
+never over an edit of a past session. A basic account sees none of it, and
+Settings → Coach → **In the gym** switches the chip and the line off.
 `coach-live.js` decides; `tools-check/coach-live.mjs` and `coach-surface.mjs`
 are its fences.
 
@@ -663,7 +669,8 @@ honest place to keep it.
   *placeholder* text and never as pre-filled values: a number you forgot to change is a lie
   in the log. Ticking a set is the one thing that takes the target — "I did what it says":
   an empty box is filled from it as the set is ticked, a box you typed in never is, and a
-  ticked set that still has no reps is named at Finish rather than dropped without a word. Finishing any workout offers **Save as routine**, which is usually the fastest
+  ticked set that still has no reps is named at Finish rather than dropped without a word.
+  A lifting block's own check box does the same for every set in the block. Finishing any workout offers **Save as routine**, which is usually the fastest
   way to make one, because it captures what you actually did.
 - Records are **derived from the log**, never stored. There is no `records` node in the
   database; every statistic is computed from the workouts themselves.

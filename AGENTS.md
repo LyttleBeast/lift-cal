@@ -528,7 +528,8 @@ inside it. A step term would count the same walking twice.
 Everything Coach remembers, and it is deliberately almost nothing: the user's
 data is the only state Coach has. `mute` holds the categories switched off under
 Settings → Coach, **absent means on**, so a fresh account has every switch on
-without a byte having been written.
+without a byte having been written. Since v46 that includes `live` — "In the
+gym", the chip and the one quiet line in a live workout.
 
 `on` is the reverse, and it exists for one category: **Patterns** (v46), the
 eight comparisons between two groups of the account's own days. It is OFF until
@@ -608,7 +609,8 @@ not `w` / `r`: starting a routine puts them in as placeholder text, never as
 pre-filled values, so a number you forgot to change cannot end up in the log as
 a number you lifted. Since v46 there is one way a target becomes a value, and it
 is a deliberate one: **ticking** a set fills each EMPTY box from its target
-("I did what it says"; `tickSet` in `workout.js`). A box that was typed in is
+("I did what it says"; `tickSet` in `workout.js`) — one set at a time, or a whole
+lifting block through its check box. A box that was typed in is
 never overwritten, unticking clears nothing, and `collectFrom` strips `tw` / `tr`
 from the record as before. A ticked set that still has no reps is counted at
 Finish and named before anything is saved.

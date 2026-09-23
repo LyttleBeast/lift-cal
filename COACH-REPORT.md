@@ -1748,3 +1748,78 @@ four sessions.
 
 And before trusting anything about how the chip, the line or the Patterns
 bubbles look: nobody has seen them yet.
+
+---
+
+## 38. AFTER WALKING THE BUILDER, BEFORE THE PUSH
+
+Micah walked v46's builder on his phone before pushing it and asked for seven
+changes, from that walk and from §30–§37's own BACKLOG. All seven shipped, in
+three commits after `rack-v46`, which stays the version: nothing here has
+reached a phone yet, so one number still names one build.
+
+1. **Train's sheet leads with "What should I train today?"**; "Make me a
+   workout" is second. `TRAIN_TOPICS` order.
+2. **"Make me a workout" asks "What do you want to train?" first.** The choices
+   are `coach-build.js`'s `buildMenu()` — pure, verbatim for native — handed on
+   by `c.buildMenu()`, and the sheet only draws them: **Tell me what to train**
+   (Coach's pick, the default focus — the shape the answer to "What should I
+   train today?" names), then his recurring shapes by the existing naming rule,
+   then the six groups, each only if `propose()` answers it. Nothing is merged:
+   Coach's pick and the shape it picked can build the same workout under two
+   labels, and each is still the answer to its own question (BACKLOG). The
+   question is only ever asked when the default builds — the gate on "Make me a
+   workout" did not move — so a thin log is never asked a question with nothing
+   behind it, even where a group alone would build.
+3. **"Build it" goes straight through.** It needed its own route for that:
+   `ask_build` is now "Make me a workout" → `build_menu` (a new selector, the
+   question), and `ask_build_now` is "Build it" → `build_workout` (the
+   proposal). Two routes would have drawn two builder chips side by side after
+   "What should I train today?", which the sheet has never done, so a follow-up
+   now carries `stands` — "Build it" stands for "Make me a workout" — and the
+   topic is not drawn beside it.
+4. **The pure layer decides the list** — every choice, its order, its label and
+   whether it is offered. `coach-ui.js` writes none of the words.
+5. **"In the gym" in Settings → Coach**: the chip and the line, on by default,
+   `mute.live` (absent = on). A category needs an intent, so there is a
+   registered selector, `live_read`, never answered through the router — the
+   live read needs the session, which only the caller has — and that also puts
+   "In the gym" in `PRO_ADDS`. `c.live()` reads the switch in the engine; the
+   chip and the line read it in the view, so a line left up goes with it.
+6. **Steps' Save and Water's Add** lost the inline `flex: 0 0 auto` 0b took off
+   Log.
+7. **The block check box ticks through `tickSet`.** A set is fillable when it
+   has reps or a rep target, and each row goes through the single-tick rule, so
+   a block of grey targets fills in exactly as ticking them one by one would. A
+   row already where the box is sending it is left alone — `tickSet` is a
+   toggle, and without that guard ticking a half-ticked block would have
+   UNticked the half already done.
+
+**What §30–§37 said that is no longer true.** §30.3 ("there is no switch for
+the in-session read") — there is. §32 ("the block check box was left alone";
+"Steps' Save and Water's Add … are listed, not changed") — both are changed.
+§33.6 (Add it) and everything else there stands. `NEXT-NATIVE-V46.md`'s pins
+said `coach-build.js` had not moved; it has now (`buildMenu`), and the file is
+corrected.
+
+**The verifiers.** `coach-surface.mjs` 131 → 148 (E and F follow the
+question-first flow; I proves each item on the drawn sheet), `coach-build.mjs`
+94 → 110 (K: the menu in the pure layer), `tick-targets.mjs` 48 → 62 (G: the
+block box's three pieces run with the real `tickSet`; H: the three buttons),
+`coach-rank.mjs` 77 → 79 (the builder's checks restated for the new design),
+`coach-live.mjs` 51 → 52 (the switch in the engine). Fifteen mutations — the
+old order, no question, "Build it" asking, the menu written in the view, no
+`stands` dedupe, the switch ignored by the chip and by the engine, the menu's
+filter removed, the pick moved, shapes labelled by key, the block box's bare
+`done`, its reps-only test, its toggle guard, a squashed Save — each red.
+
+What the fences caught in me this round: my own find-and-replace rewrote the
+one deliberate "Make me a workout" tap in section F into the two-tap helper, so
+the question-first check was tapping past the question; a check I wrote in
+section I asserted that "What should I train today?" was absent after a pick,
+when it was unasked and rightly back; and section F, written in v45, died on
+the first missing proposal rather than failing its checks, so a broken flow read
+as a crash — it has a stand-in box now and fails with reasons.
+
+Still unseen: the menu on a phone. On the fixture it is eight chips; on a log
+with four recurring shapes and all six groups it is eleven.
