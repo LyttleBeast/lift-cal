@@ -2605,10 +2605,20 @@ function openManual(mealId, prefill, onPick) {
 }
 
 /* ================= BARCODE ================= */
+/* `crossOrigin` is what lets the service worker keep ZXing. A plain <script>
+   is a no-cors request, its response is opaque with status 0, and sw.js caches
+   only a 200 — so the scanner never worked offline on an iPhone, where ZXing is
+   the only scanner there is. As a CORS request the response is an ordinary 200
+   (jsDelivr sends `access-control-allow-origin: *`) and the existing guard
+   stores it. The cost: if jsDelivr ever stopped sending that header the script
+   would fail to load online too, where no-cors never could — and fail through
+   onerror below, which the scanner already reports. Checked by
+   tools-check/scanner-offline.mjs. */
 let zxingPromise = null;
 function loadZXing() {
   zxingPromise = zxingPromise || new Promise((res, rej) => {
     const s = document.createElement('script');
+    s.crossOrigin = 'anonymous';
     s.src = 'https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js';
     s.onload = () => res(window.ZXingBrowser);
     s.onerror = () => { zxingPromise = null; rej(new Error('scanner load failed')); };
