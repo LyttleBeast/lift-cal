@@ -426,7 +426,10 @@ function renderCalendar() {
         plates.appendChild(p);
       });
       cell.appendChild(plates);
-      cell.setAttribute('aria-label', `${d} — ${groups.map(g => GROUPS[g].label).join(', ')}`);
+      // A warm-up-only session claims no group (recordGroups), so a trained
+      // day can have no plates; the label says it was trained rather than
+      // trailing off after the dash.
+      cell.setAttribute('aria-label', `${d} — ${groups.length ? groups.map(g => GROUPS[g].label).join(', ') : 'workout logged'}`);
       cell.onclick = () => openDay(mk, dd);
     } else {
       cell.setAttribute('aria-label', `${d} — no training`);
@@ -1491,6 +1494,19 @@ export function computeVolume(done) {
     s + ex.sets.filter(isWorking).reduce((a, x) => a + (parseFloat(x.w) || 0) * (parseInt(x.r) || 0), 0), 0));
 }
 
+/* The groups a record claims, and so the calendar's plate colours: the group of
+   every exercise with at least one WORKING set. collectFrom keeps a ticked set
+   with reps whatever its type, so the old `done.map(e => e.group)` let a
+   session of nothing but warm-up bench claim chest. A warm-up-only session now
+   claims no group — the day still shows as trained, with no plates on it.
+   Records saved before v47 keep what they stored until they are edited and
+   saved again. Pure, one place, and the port copies it with computeVolume;
+   tools-check/record-groups.mjs drives it through runFinish, saveEdit and the
+   calendar. */
+export function recordGroups(done) {
+  return [...new Set(done.filter(ex => ex.sets.some(isWorking)).map(ex => ex.group))];
+}
+
 /* ---------- finish ---------- */
 // Finish awaits the network twice before it touches the index, and the button
 // stays live the whole time, so a second tap re-entered the whole function.
@@ -1556,7 +1572,7 @@ async function runFinish(anyway) {
     endedAt: Date.now(),
     durationSec: Math.round((Date.now() - session.startedAt) / 1000),
     volume: computeVolume(done),
-    groups: [...new Set(done.map(e => e.group))],
+    groups: recordGroups(done),
     exercises: done
   };
 
@@ -1681,7 +1697,7 @@ async function saveEdit() {
     endedAt: startedAt + (meta.durationSec || 0) * 1000,
     durationSec: meta.durationSec || 0,
     volume: computeVolume(done),
-    groups: [...new Set(done.map(e => e.group))],
+    groups: recordGroups(done),
     exercises: done
   };
 

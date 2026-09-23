@@ -87,7 +87,7 @@ for (const [file, text] of sources) {
       return base && REAL.includes(base) ? `from './${base.replace(/\.js$/, '.mjs')}'` : `from './stub.mjs'`;
     }));
 }
-const { tickSet, unsavedTicks, collectFrom } = await import(pathToFileURL(join(dir, 'workout.mjs')).href);
+const { tickSet, unsavedTicks, collectFrom, recordGroups } = await import(pathToFileURL(join(dir, 'workout.mjs')).href);
 
 /* ---------- harness ---------- */
 let pass = 0, fail = 0;
@@ -231,13 +231,15 @@ section('E. Finish — the real runFinish, and the sheet it puts up first');
   const COLLECT_DONE = 'function collectDone() { return collectFrom(session.exercises); }';
   check('collectDone is still the one-line caller of collectFrom this harness assumes', WSRC.includes(COLLECT_DONE));
 
-  const STUBS = ['collectFrom', 'confirmSheet', 'write', 'toast', 'bump', 'LS', 'todayKey', 'computeVolume',
+  // recordGroups (v47) is handed in as the real export: runFinish builds the
+  // record's groups with it, and what it answers is record-groups.mjs's job.
+  const STUBS = ['collectFrom', 'recordGroups', 'confirmSheet', 'write', 'toast', 'bump', 'LS', 'todayKey', 'computeVolume',
                  'allSessions', 'detectPRs', 'sessionMilestones', 'wu', 'trimHistory', 'foldSessionIntoHistory',
                  'loadMonth', 'invalidate', 'refreshCoachSessions', 'releaseWakeLock', 'clearRest', 'render'];
   function rig(exercises) {
     const log = { sheets: [], writes: [], toasts: [] };
     const stubs = {
-      collectFrom,
+      collectFrom, recordGroups,
       confirmSheet: o => log.sheets.push(o),
       write: async (p, v) => { log.writes.push([p, clone(v)]); },
       toast: m => log.toasts.push(m), bump: () => {},

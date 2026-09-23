@@ -213,6 +213,9 @@ const CURRENT = () =>
    // session below it answers 0, which is what keeps these the same scenarios
    // they were — tools-check/tick-targets.mjs is where the other answers live.
    lift('unsavedTicks'),
+   // v47. Both record builders take their groups from recordGroups, which is
+   // pure and reads isWorking — lifted for the same reason unsavedTicks is.
+   lift('recordGroups'),
    lift('finishWorkout'), lift('runFinish'), lift('saveEdit')].join('\n');
 
 /* The code as it stood before the fix, kept verbatim so the scenarios below
