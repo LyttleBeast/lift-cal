@@ -337,6 +337,20 @@ section('C. no English phrase that is really a pounds threshold');
   // count of days rather than a measurement, so it converts to nothing.
   check('the day windows are written as words ("the last 7 days", "twelve weeks") and are not weights',
         STRINGS.some(s => /twelve weeks/.test(s)) && STRINGS.some(s => /last 7 days/.test(s)));
+
+  /* And every window Coach counts is ROLLING — the last seven days, the seven
+     full days before today, twelve weeks back — so no sentence may name it
+     with a calendar word. "3 sessions this week" shipped over a rolling count
+     and was a right number under a wrong word on six days out of seven. */
+  const calendar = STRINGS.concat([...src('coach-build.js').replace(/\/\*[\s\S]*?\*\//g, '')
+    .matchAll(/'((?:[^'\\]|\\.)*)'/g)].map(m => m[1]))
+    .filter(s => /\b(this|last|next) week\b|\bcomplete week\b|\bthis month\b/i.test(s));
+  check('no template names a rolling window with a calendar word — "this week", "last week", "complete week"',
+        !calendar.length, list(calendar));
+  const inARow = C.GREETINGS.find(g => g.id === 'g_in_a_row');
+  const said = inARow ? inARow.text({ f: id => (id === 'session.last7' ? 3 : null) }) : '';
+  check('the streak line counts seven days and says seven days, in five words',
+        /seven days/.test(said) && said.trim().split(/\s+/).length <= 5, said);
 }
 
 /* ================= D. THE FACTS DECLARE THEIR UNIT ================= */

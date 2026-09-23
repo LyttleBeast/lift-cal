@@ -791,13 +791,15 @@ export const FACTS = Object.freeze([
     /* The last seven COMPLETE days. Today is excluded for the reason every
        other intake average in the app gives (tdee.js:75): half a day of food
        read against whole ones is not a smaller appetite, it is an unfinished
-       day. */
+       day. Said as "the last seven full days" in every sentence that quotes
+       it, and never "this week" or "last week": those are calendar words, and
+       this is a rolling window that is last week only on a Monday. */
     id: 'fuel.loggedDays', unit: 'count', requires: [],
     compute: d => {
       const sums = d.input.summaries || {};
       return keysBack(d.now - DAY, 7).filter(k => sums[k] && sums[k].cal > 0).length;
     },
-    because: v => 'from the ' + plural(v, 'day') + ' you logged food in the last complete week',
+    because: v => 'from the ' + plural(v, 'day') + ' you logged food in the last seven full days',
     age: () => 1
   },
   {
@@ -813,7 +815,7 @@ export const FACTS = Object.freeze([
       const c = Math.max(0, cal - p - f);
       return { p: p / cal * 100, c: c / cal * 100, f: f / cal * 100 };
     },
-    because: (v, d) => 'across ' + plural(d.f('fuel.loggedDays'), 'logged day') + ' in the last complete week',
+    because: (v, d) => 'across ' + plural(d.f('fuel.loggedDays'), 'logged day') + ' in the last seven full days',
     age: () => 1
   },
   {
@@ -843,7 +845,7 @@ export const FACTS = Object.freeze([
       const sums = d.input.summaries || {};
       return mean(keysBack(d.now - DAY, 7).map(k => sums[k]).filter(s => s && s.cal > 0).map(s => s.p || 0));
     },
-    because: (v, d) => 'averaged over ' + plural(d.f('fuel.loggedDays'), 'logged day') + ' in the last complete week',
+    because: (v, d) => 'averaged over ' + plural(d.f('fuel.loggedDays'), 'logged day') + ' in the last seven full days',
     age: () => 1
   },
 
@@ -1567,14 +1569,14 @@ export const RESPONSES = Object.freeze({
       const rows = [['Protein', now.p, want.p], ['Carbs', now.c, want.c], ['Fat', now.f, want.f]];
       rows.sort((a, b) => Math.abs(b[1] - b[2]) - Math.abs(a[1] - a[2]));
       const [name, got, aim] = rows[0];
-      return name + ' is ' + Math.round(got) + '% of your calories this week, against the ' +
+      return name + ' is ' + Math.round(got) + '% of your calories over the last seven full days, against the ' +
              Math.round(aim) + '% your targets work out to.';
     }
   },
   resp_protein: {
     text: d => {
       const got = d.f('fuel.proteinTrailing'), want = d.f('fuel.proteinTarget');
-      return 'Protein averaged ' + int(got) + ' g a day last week, against your ' + int(want) + ' g target.';
+      return 'Protein averaged ' + int(got) + ' g a day over the last seven full days, against your ' + int(want) + ' g target.';
     }
   },
 
@@ -1700,9 +1702,15 @@ export const GREETINGS = Object.freeze([
     text: d => { const v = d.f('group.overdue'); return v.days + ' days since ' + groupLabel(v.group) + '.'; }
   },
   {
+    /* A ROLLING count under a rolling word. It said "this week", which on a
+       Tuesday could be three sessions that all happened last week — a right
+       number under a wrong word. "In the last seven days" is the brief's
+       phrase and is two words past this pool's five, so it says the same fact
+       in five: session.last7 is today and the six days before it, which is
+       exactly seven days. */
     id: 'g_in_a_row', kind: 'data', tone: 'warm', topic: 'volume',
     gate: d => d.f('session.last7') >= 3,
-    text: d => d.f('session.last7') + ' sessions this week.'
+    text: d => d.f('session.last7') + ' sessions in seven days.'
   },
   {
     id: 'g_moving', kind: 'data', tone: 'warm', topic: 'progression',
