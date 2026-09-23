@@ -96,9 +96,18 @@ writeFileSync(join(dir, 'analytics.mjs'), src('analytics.js')
   .replace("from './exercises.js'", 'from ' + real('exercises.js'))
   .replace("from './ui.js'", 'from ' + real('ui.js'))
   .replace("from './units.js'", 'from ' + real('units.js')));
+/* coach-build.js, the workout builder, is staged the same way: coach.js
+   imports it, and it takes analytics.js's session math through the same stub. */
+writeFileSync(join(dir, 'coach-build.mjs'), src('coach-build.js')
+  .replace("from './exercises.js'", 'from ' + real('exercises.js'))
+  .replace("from './units.js'", 'from ' + real('units.js'))
+  .replace("from './blocks.js'", 'from ' + real('blocks.js'))
+  .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
+  .replace("from './analytics.js'", 'from ' + here('analytics.mjs')));
 writeFileSync(join(dir, 'coach.mjs'), src('coach.js')
   .replace("from './exercises.js'", 'from ' + real('exercises.js'))
   .replace("from './units.js'", 'from ' + real('units.js'))
+  .replace("from './coach-build.js'", 'from ' + here('coach-build.mjs'))
   .replace("from './analytics.js'", 'from ' + here('analytics.mjs')));
 const C = await import(pathToFileURL(join(dir, 'coach.mjs')).href);
 
@@ -660,7 +669,8 @@ section('H. driven across real app opens — the counter moves once, and only on
     .replace("from './insights.js'", 'from ' + here('insights-stub.mjs'))
     .replace("from './access.js'", 'from ' + here('access-stub.mjs'))
     .replace("from './coach.js'", 'from ' + here('coach.mjs'));
-  writeFileSync(join(dir, 'picker-stub.mjs'), 'export function allExercises() { return []; }\n');
+  writeFileSync(join(dir, 'picker-stub.mjs'), 'export function allExercises() { return []; }\n' +
+    'export function hiddenIds() { return []; }\nexport function libraryReady() { return false; }\n');
   writeFileSync(join(dir, 'tdee-stub.mjs'), `
 export function maintenance() { return null; }
 export function effectiveMaint() { return null; }

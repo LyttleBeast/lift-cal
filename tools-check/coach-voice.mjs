@@ -78,9 +78,18 @@ writeFileSync(join(dir, 'analytics.mjs'), src('analytics.js')
   .replace("from './exercises.js'", 'from ' + real('exercises.js'))
   .replace("from './ui.js'", 'from ' + real('ui.js'))
   .replace("from './units.js'", 'from ' + real('units.js')));
+/* coach-build.js, the workout builder, is staged the same way: coach.js
+   imports it, and it takes analytics.js's session math through the same stub. */
+writeFileSync(join(dir, 'coach-build.mjs'), src('coach-build.js')
+  .replace("from './exercises.js'", 'from ' + real('exercises.js'))
+  .replace("from './units.js'", 'from ' + real('units.js'))
+  .replace("from './blocks.js'", 'from ' + real('blocks.js'))
+  .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
+  .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href)));
 writeFileSync(join(dir, 'coach.mjs'), src('coach.js')
   .replace("from './exercises.js'", 'from ' + real('exercises.js'))
   .replace("from './units.js'", 'from ' + real('units.js'))
+  .replace("from './coach-build.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-build.mjs')).href))
   .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href)));
 const C = await import(pathToFileURL(join(dir, 'coach.mjs')).href);
 const U = await import(pathToFileURL(join(ROOT, 'units.js')).href);
@@ -610,6 +619,113 @@ section('F. the stall sentence — a figure, a date, and the goal’s own direct
         stallText({ goalDir: -1, rateWk: null }, 'lb') === plain);
   check('nor a stated down goal the account is moving against',
         stallText({ goalDir: -1, rateWk: 0.9, rateDays: 21 }, 'lb') === plain);
+}
+
+/* ================= G. THE WORKOUT BUILDER ================= */
+section('G. the workout builder — sheet-only, and under the ban anyway');
+{
+  /* Everything above exempts sheet-only copy, on the argument that somebody who
+     asked a question is owed its answer in the words the answer needs. The
+     builder is sheet-only and is NOT exempt, and the reason is what it is: a
+     proposal is Coach putting a plan in front of him, with his own numbers on
+     it, about to be lifted from. That is the most prescription-shaped thing in
+     Coach and the place a judgement would land hardest — "you only managed 6",
+     "still at 185" — so its copy is held to the card's rule, all of it, with no
+     exemption list: every literal in coach-build.js, every template an intent in
+     the builder's category answers with, and everything a proposal renders to. */
+  const BCODE = decomment(src('coach-build.js'));
+  const lits = literals(BCODE).filter(t => /[a-z]{3}/i.test(t));
+  const srcBad = lits.map(t => ({ t, w: offence(t) })).filter(x => x.w);
+  check('no literal in coach-build.js carries a banned word (' + lits.length + ' read)',
+        lits.length >= 25 && !srcBad.length, list(srcBad.map(x => '“' + x.w + '” in: ' + x.t)));
+
+  const buildIntents = C.INTENTS.filter(i => i.category === 'build');
+  const tplBad = [];
+  buildIntents.forEach(i => {
+    const r = C.RESPONSES[i.response] || {};
+    ['text', 'reason'].forEach(part => copyOf(r[part] || '').forEach(t => {
+      const w = offence(t); if (w) tplBad.push(i.response + '.' + part + ' — “' + w + '” in: ' + t);
+    }));
+  });
+  check('no template the builder’s own intents answer with carries one either', !tplBad.length, list(tplBad));
+
+  /* Rendered, across the proposals a person can reach: the default, every swap
+     and focus it offers, fewer, a layoff, a hidden and a deleted exercise, his
+     routine by name, a set taken to failure, a swap into a lift he has never
+     logged — imperial and metric. */
+  const R = { 'barbell-bench-press': ['Barbell Bench Press', 'chest', 'barbell'],
+              'cable-crossover': ['Cable Crossover', 'chest', 'cable'],
+              'triceps-pushdown-rope': ['Triceps Pushdown (Rope)', 'arms', 'cable'],
+              'barbell-row': ['Barbell Row', 'back', 'barbell'],
+              'barbell-curl': ['Barbell Curl', 'arms', 'barbell'],
+              'back-squat-high-bar': ['Back Squat (High Bar)', 'legs', 'barbell'],
+              'incline-dumbbell-bench-press': ['Incline Dumbbell Bench Press', 'chest', 'dumbbell'],
+              'custom-gone-press-x1y2z': ['Gone Press', 'chest', 'barbell'] };
+  const VLIB = {};
+  Object.keys(R).filter(id => id !== 'cable-crossover' && id !== 'custom-gone-press-x1y2z')
+    .forEach(id => { VLIB[id] = { name: R[id][0], group: R[id][1], equipment: R[id][2] }; });
+  const vex = (id, rows) => ({ exId: id, name: R[id][0], group: R[id][1], equipment: R[id][2],
+    sets: rows.map(([w, r, t]) => ({ w: String(w), r: String(r), type: t || 'N', done: true })) });
+  const vs = (id, ago, exs) => ({ id, startedAt: NOW - ago * DAY, _date: key(NOW - ago * DAY), exercises: exs });
+  const VLOG = [];
+  for (let k = 0; k < 10; k++) {
+    VLOG.push(vs('p' + k, 9 + 7 * k, [vex('barbell-bench-press', [[135, 10, 'W'], [185, 8], [185, 8], [185, 6, 'F']]),
+                                     vex('cable-crossover', [[40, 12], [40, 12]]),
+                                     vex('custom-gone-press-x1y2z', [[95, 10], [95, 10]]),
+                                     vex('triceps-pushdown-rope', [[50, 12], [50, 12]])]));
+    VLOG.push(vs('b' + k, 4 + 7 * k, [vex('barbell-row', [[155, 8], [155, 8]]), vex('barbell-curl', [[65, 10], [65, 10]])]));
+    VLOG.push(vs('l' + k, 6 + 7 * k, [vex('back-squat-high-bar', [[245, 5], [245, 5], [245, 5]])]));
+  }
+  const vin = extra => base({ sessions: sort(VLOG), lib: VLIB, hidden: ['cable-crossover'], libReady: true,
+    routines: [{ id: 'r1', name: 'Pull Day', exercises: [{ exId: 'barbell-row', group: 'back' }, { exId: 'barbell-curl', group: 'arms' }] }],
+    ...extra });
+
+  const said = [];
+  const take = (name, pp) => {
+    if (!pp) return;
+    [pp.headline, pp.reason.join(' '), pp.routineLine, pp.layoffLine, pp.leftOutLine]
+      .concat(pp.exercises.flatMap(e => [e.line, e.note, e.name]))
+      .concat(pp.focuses.map(f => f.label), pp.exercises.flatMap(e => e.swaps.map(x => x.name)))
+      .filter(Boolean).forEach(t => said.push({ name, t }));
+  };
+  ['lb', 'kg'].forEach(u => {
+    [['plain', vin({ u })], ['layoff', vin({ u, now: NOW + 30 * DAY })]].forEach(([name, fx]) => {
+      const cc = C.coach(fx);
+      const pp = cc.build({});
+      take(name + '/' + u, pp);
+      if (!pp) return;
+      pp.focuses.forEach(f => take(name + '/' + u + '/' + f.label, cc.build(f.opts)));
+      pp.exercises.forEach(e => e.swaps.forEach(x => take(name + '/' + u + '/swap ' + x.exId, cc.build(x.opts))));
+      if (pp.fewer) take(name + '/' + u + '/fewer', cc.build(pp.fewer));
+      buildIntents.forEach(i => {
+        const route = C.ROUTE_IDS.find(r => cc.ask(r).id === i.id);
+        if (route) { const a = cc.ask(route); said.push({ name: name + '/' + u + '/' + route, t: a.text + ' ' + a.reason }); }
+      });
+    });
+    const live = C.coach(vin({ u, live: { active: true } })).buildLive();
+    if (live) said.push({ name: 'live/' + u, t: live });
+  });
+  const bad = said.map(x => ({ ...x, w: offence(x.t) })).filter(x => x.w);
+  check('nothing a proposal renders, in either unit, carries a banned word', !bad.length,
+        list(bad.map(x => x.name + ' — “' + x.w + '” in: ' + x.t)));
+  // Coverage, so the check above cannot pass on silence.
+  const blob = said.map(x => x.t).join('\n');
+  check('and the sweep reached every kind of line a proposal has (' + said.length + ' rendered)',
+        said.length >= 60 && /Built from/.test(blob) && /Left out:/.test(blob) && /hidden in your library/.test(blob) &&
+        /not in your library/.test(blob) && /You have a routine for this: Pull Day/.test(blob) &&
+        /Your last session was/.test(blob) && /taken to failure/.test(blob) && /reached/.test(blob) &&
+        /A workout is running/.test(blob),
+        said.length + ' lines');
+
+  /* The nudge is a readout and never a push. A set taken to failure is SAID,
+     not answered — no "try", no "go up", no next weight — which is the whole
+     of what "progression is a nudge, never baked in" means in a sentence. */
+  const PUSH = [/\btry\b/i, /\bgo up\b/i, /\bnext time\b/i, /\baim\b/i, /\bshould\b/i, /\bincrease\b/i,
+                /\badd\b/i, /\bmore\b/i, /\bbeat\b/i, /\bpush (it|harder)\b/i];
+  const notes = said.filter(x => /last time/.test(x.t));
+  const pushy = notes.filter(x => PUSH.some(re => re.test(x.t)));
+  check('no progression note names a next step — it says what the log shows and stops',
+        notes.length > 0 && !pushy.length, list(pushy.map(x => x.t)));
 }
 
 /* ---------- report ---------- */

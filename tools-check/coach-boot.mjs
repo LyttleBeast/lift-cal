@@ -214,9 +214,13 @@ async function rig({ data = {}, slow = [], fail = [] } = {}) {
   const ACCESS = put('access.mjs', swap(src('access.js'), [
     ['./store.js', STORE], ['./firebase-config.js', real('firebase-config.js')],
     ['./accounts.js', real('accounts.js')], ['./ui.js', real('ui.js')]]));
+  const BUILD  = put('coach-build.mjs', swap(src('coach-build.js'), [
+    ['./exercises.js', real('exercises.js')], ['./analytics.js', ANALY],
+    ['./units.js', real('units.js')], ['./blocks.js', real('blocks.js')],
+    ['./coach-tags.js', real('coach-tags.js')]]));
   const COACH  = put('coach.mjs', swap(src('coach.js'), [
     ['./exercises.js', real('exercises.js')], ['./analytics.js', ANALY],
-    ['./units.js', real('units.js')]]));
+    ['./units.js', real('units.js')], ['./coach-build.js', BUILD]]));
   const DATA_  = put('coach-data.mjs', swap(src('coach-data.js'), [
     ['./store.js', STORE], ['./exercises.js', real('exercises.js')],
     ['./picker.js', PICK], ['./tdee.js', TDEE], ['./insights.js', INSI],

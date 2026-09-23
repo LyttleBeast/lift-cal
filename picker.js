@@ -34,13 +34,26 @@ let hidden    = [];
 // who never opens the picker. It goes stale after a finished session, and that
 // costs nothing: the real counts come off the log and answer over the top of it.
 let history   = {};
+// Whether the three nodes above have been read at all. Before they have, the
+// library is the built-ins alone and a custom exercise looks exactly like a
+// deleted one — which is fine for a picker nobody has opened yet and is not
+// fine for Coach's workout builder, which drops a deleted exercise and says so.
+let loaded    = false;
 
 export async function initPicker(seedHistory) {
   customEx  = (await read('exercises/custom',    null)) || [];
   overrides = (await read('exercises/overrides', null)) || {};
   hidden    = (await read('exercises/hidden',    null)) || [];
   history   = seedHistory || {};
+  loaded    = true;
 }
+
+/* The two things coach-data.js asks of the library beyond allExercises(): what
+   is hidden, because a hidden exercise is never proposed and is named when it
+   is left out, and whether any of this has been read yet. Copies, so no caller
+   can edit the picker's own list. */
+export function hiddenIds()    { return hidden.slice(); }
+export function libraryReady() { return loaded; }
 
 function applyOverride(x) {
   const o = overrides[x.id];

@@ -35,12 +35,15 @@
 // loadAll/allSessions are the impure half and are never touched. coach-data.js
 // is the impure gatherer and is the one file the native port rewrites.
 //
-// Imports units.js, exercises.js and the pure half of analytics.js. Nothing
+// Imports units.js, exercises.js, the pure half of analytics.js, and
+// coach-build.js — the workout builder, which decides what goes into a
+// proposal and takes everything it knows about the log from here. Nothing
 // imports back.
 
 import { GROUPS, GROUP_ORDER } from './exercises.js';
 import { e1rm, isWorking, mergeSessionExercises, exerciseIndex } from './analytics.js';
 import { labelW, labelRate, unitW, fmtW } from './units.js';
+import { propose, liveRefusal } from './coach-build.js';
 
 const DAY = 864e5;
 
@@ -215,7 +218,10 @@ function derive(input) {
       daysAgo: daysBetween(s.startedAt, now),
       sets,
       groups: Object.keys(sets),
-      signature: GROUP_ORDER.filter(g => sig.has(g))
+      signature: GROUP_ORDER.filter(g => sig.has(g)),
+      // The record itself, untouched. Nothing in this file reads it; the
+      // builder does, because a proposal is that session's own exercises.
+      session: s
     };
   }
 
@@ -275,7 +281,8 @@ function derive(input) {
         count: c.count,
         members: c.members,
         daysAgo: daysBetween(c.lastAt, now),
-        name: shapeName(c.groups, input.routines, lib)
+        name: shapeName(c.groups, input.routines, lib),
+        routine: routineRef(shapeRoutine(c.groups, input.routines, lib))
       }));
   });
 
@@ -383,8 +390,10 @@ function symDiff(a, b) {
 /* A shape is named descriptively, from the group labels — never from programme
    jargon Rack has no way to know applies. The one exception is the account's
    own vocabulary: a saved routine whose exercises cover exactly these groups is
-   what this person already calls this session, so it wins. */
-function shapeName(groups, routines, lib) {
+   what this person already calls this session, so it wins. The builder offers
+   that routine by the same test, which is why the test is its own function
+   rather than a second loop over the routines somewhere else. */
+function shapeRoutine(groups, routines, lib) {
   const want = groups.slice().sort().join('+');
   const saved = Array.isArray(routines) ? routines : [];
   for (const r of saved) {
@@ -395,8 +404,15 @@ function shapeName(groups, routines, lib) {
       const g = (lib[ex.exId] && lib[ex.exId].group) || ex.group || null;
       if (g && GROUPS[g] && (ex.equipment !== 'cardio')) gs.add(g);
     });
-    if ([...gs].sort().join('+') === want) return String(r.name);
+    if ([...gs].sort().join('+') === want) return r;
   }
+  return null;
+}
+const routineRef = r => (r ? { id: r.id || null, name: String(r.name) } : null);
+
+function shapeName(groups, routines, lib) {
+  const mine = shapeRoutine(groups, routines, lib);
+  if (mine) return String(mine.name);
   /* A descriptive name needs the noun, because it is used as one: "your chest
      and shoulders day", not "your chest and shoulders". A routine's own name
      does not — somebody who called it Upper A did not mean Upper A day. */
@@ -1931,7 +1947,55 @@ function factStore(input) {
     try { const n = fact.age(v, d); return Number.isFinite(n) ? n : null; } catch { return null; }
   };
 
+  /* The workout builder, memoised per set of options. The same opts on the
+     same log is the same proposal, and the sheet asks for it more than once —
+     to decide whether to offer it, and then to draw it. */
+  const built = new Map();
+  let buildIn = null;
+  d.build = opts => {
+    const k = JSON.stringify(opts || {});
+    if (!built.has(k)) {
+      if (!buildIn) buildIn = builderInput(d);
+      built.set(k, propose(buildIn, opts || {}));
+    }
+    return built.get(k);
+  };
+  d.buildLive = () => {
+    if (!buildIn) buildIn = builderInput(d);
+    return liveRefusal(buildIn);
+  };
+
   return d;
+}
+
+/* Everything the builder is allowed to know, and every piece of it is a fact
+   or a gate this file already owns. The builder derives nothing about the log
+   itself: the shapes, the window, the gate and the layoff are read here and
+   handed over, so that each of them has exactly one definition.
+
+   Two of them are INTENTS' own functions, called rather than copied. `ready`
+   is train_today_recommendation's min-data gate, because the brief's rule is
+   "the same gate", and a restated gate is a gate that stops being the same the
+   first time one of them is tuned. `layoffDays` is set exactly when
+   returning_from_layoff would fire. */
+function builderInput(d) {
+  const back = INTENT_BY_ID.returning_from_layoff;
+  return {
+    now: d.now,
+    u: d.input.u === 'kg' ? 'kg' : 'lb',
+    live: d.f('live.active') === true,
+    ready: gate(INTENT_BY_ID.train_today_recommendation, d),
+    overdue: d.f('session.shapeOverdue'),
+    overdueWhy: d.because('session.shapeOverdue'),
+    shapes: d.f('session.shapes') || [],
+    sessions: d.inWindow(),
+    log: d.all(),
+    groupDays: d.groupDays(),
+    layoffDays: gate(back, d) && fires(back, d) ? d.f('session.lastDaysAgo') : null,
+    lib: d.lib,
+    hidden: Array.isArray(d.input.hidden) ? d.input.hidden : [],
+    libReady: d.input.libReady === true
+  };
 }
 
 function toneOf(intent, d) {
@@ -2166,7 +2230,15 @@ export function coach(input) {
        available answer. */
     ask: id => (d.f('log.confidence') === 'unknown'
       ? { ...renderIntent(INTENT_BY_ID.guard_log_unreadable, d, u), followups: [] }
-      : ask(d, u, id))
+      : ask(d, u, id)),
+    /* The workout builder, behind the same silence. `build(opts)` is a
+       proposal or null — coach-build.js decides, this only refuses on an
+       unreadable log, for the same reason the router does. `buildLive()` is
+       the one line the sheet shows instead while a session is running, and
+       only when there would otherwise have been a proposal. Both are functions
+       so that a card paint, which asks for neither, pays for neither. */
+    build: opts => (d.f('log.confidence') === 'unknown' ? null : d.build(opts)),
+    buildLive: () => (d.f('log.confidence') === 'unknown' ? null : d.buildLive())
   };
 }
 

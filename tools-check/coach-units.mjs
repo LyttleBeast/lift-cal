@@ -57,9 +57,18 @@ writeFileSync(join(dir, 'analytics.mjs'), src('analytics.js')
   .replace("from './exercises.js'", 'from ' + real('exercises.js'))
   .replace("from './ui.js'", 'from ' + real('ui.js'))
   .replace("from './units.js'", 'from ' + real('units.js')));
+/* coach-build.js, the workout builder, is staged the same way: coach.js
+   imports it, and it takes analytics.js's session math through the same stub. */
+writeFileSync(join(dir, 'coach-build.mjs'), src('coach-build.js')
+  .replace("from './exercises.js'", 'from ' + real('exercises.js'))
+  .replace("from './units.js'", 'from ' + real('units.js'))
+  .replace("from './blocks.js'", 'from ' + real('blocks.js'))
+  .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
+  .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href)));
 writeFileSync(join(dir, 'coach.mjs'), src('coach.js')
   .replace("from './exercises.js'", 'from ' + real('exercises.js'))
   .replace("from './units.js'", 'from ' + real('units.js'))
+  .replace("from './coach-build.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-build.mjs')).href))
   .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href)));
 const C = await import(pathToFileURL(join(dir, 'coach.mjs')).href);
 const U = await import(pathToFileURL(join(ROOT, 'units.js')).href);
@@ -479,6 +488,144 @@ section('F. the thresholds are pounds, they never move, and they are never print
   check('nothing is converted twice — the metric figure is one conversion from the stored one',
         !kgStall.includes(U.labelW(U.wOut(lbNum, 'kg'), 'kg')),
         'a second pass would have read ' + U.labelW(U.wOut(lbNum, 'kg'), 'kg'));
+}
+
+/* ================= G. THE WORKOUT BUILDER ================= */
+section('G. the workout builder — every line it prints, imperial and metric');
+{
+  /* coach-build.js is a second file of Coach copy, and the most number-dense
+     one: a proposal prints a load for every set run of every exercise. So the
+     same four questions, asked of it — the vocabulary, the rendering twice,
+     the secret thresholds, and one this file has not needed before: that the
+     STORED numbers do not move with the unit at all. A proposal pre-fills
+     boxes, and a box holds pounds on every account; only the sheet converts. */
+  const BRAW = src('coach-build.js');
+  const BCODE = BRAW.replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n').map(l => l.replace(/(^|[^:'"\\])\/\/.*$/, '$1')).join('\n');
+  // The unit TOKEN is a selector, never printed — stripped exactly as section
+  // A strips it from coach.js, so that what is left is copy.
+  const BSTR = [...BCODE
+    .replace(/=== '(kg|lb)' \? '(kg|lb)' : '(kg|lb)'/g, '')
+    .replace(/=== '(kg|lb)'/g, '')
+    .matchAll(/'((?:[^'\\]|\\.)*)'/g)].map(m => m[1]);
+
+  const BANNED = [/\blbs?\b/i, /\bpounds?\b/i, /\bkgs?\b/i, /\bkilo/i, /\bkilogram/i, /\bstone\b/i];
+  const words = BSTR.filter(t => BANNED.some(re => re.test(t)));
+  check('no string literal in coach-build.js writes a unit word — unitW() is the only source of one',
+        !words.length, list(words));
+  const named = (/import \{([^}]*)\} from '\.\/units\.js'/.exec(BRAW) || [, ''])[1]
+    .split(',').map(t => t.trim()).filter(Boolean);
+  check('it imports real formatters from units.js, and never the raw factors',
+        named.some(n => ['fmtSetLoad', 'fmtSetW', 'labelW'].includes(n)) &&
+        !named.includes('LB_PER_KG') && !/2\.2046/.test(BCODE), named.join(', '));
+  const TRAPS = [
+    /\bnearest\b/i, /\bround(ed|s)?\s+(it\s+)?(up|down|to)\b/i, /\bthe next \d/i, /\bin (fives|tens|twos)\b/i,
+    /\bstep of \d/i, /\bincrements? of \d/i, /\bplates?\b/i, /\badd \d+\b/i, /\bby \d+ a week\b/i,
+    /\bpercent\b|%/i, /\bnext weight\b|\bgo up\b|\bincrease\b|\bheavier\b/i
+  ];
+  const traps = BSTR.filter(t => TRAPS.some(re => re.test(t)));
+  check('no builder template names a rounding, a step, a plate, a percentage or a next weight',
+        !traps.length, list(traps));
+  const typed = BSTR.filter(t => / /.test(t) && /\d/.test(t.replace(/\b\d+ (day|days|week|weeks)\b/g, '')));
+  check('no builder template contains a typed number — every figure is read off the log',
+        !typed.length, list(typed));
+
+  /* A log built for the builder: real exercise ids, so the tags and the names
+     are the library's own, and a push session with a warm-up, a bodyweight set
+     and fractional loads — the loads a conversion is most likely to garble. */
+  const REAL = { 'barbell-bench-press': ['Barbell Bench Press', 'chest', 'barbell'],
+                 'push-up': ['Push-Up', 'chest', 'bodyweight'],
+                 'triceps-pushdown-rope': ['Triceps Pushdown (Rope)', 'arms', 'cable'],
+                 'barbell-row': ['Barbell Row', 'back', 'barbell'],
+                 'barbell-curl': ['Barbell Curl', 'arms', 'barbell'],
+                 'back-squat-high-bar': ['Back Squat (High Bar)', 'legs', 'barbell'],
+                 'dumbbell-bench-press': ['Dumbbell Bench Press', 'chest', 'dumbbell'] };
+  const BLIB = Object.fromEntries(Object.keys(REAL).map(id => [id, { name: REAL[id][0], group: REAL[id][1], equipment: REAL[id][2] }]));
+  const bex = (id, rows) => ({ exId: id, name: REAL[id][0], group: REAL[id][1], equipment: REAL[id][2],
+    sets: rows.map(([w, r, t]) => ({ w: String(w), r: String(r), type: t || 'N', done: true })) });
+  const bs = (id, ago, exs) => ({ id, startedAt: NOW - ago * DAY, _date: key(NOW - ago * DAY), exercises: exs });
+  const LOGB = [];
+  for (let k = 0; k < 10; k++) {
+    LOGB.push(bs('p' + k, 9 + 7 * k, [bex('barbell-bench-press', [[95, 10, 'W'], [187.5, 8], [187.5, 8], [187.5, 6, 'F']]),
+                                     bex('push-up', [[0, 15], [0, 12]]),
+                                     bex('triceps-pushdown-rope', [[52.5, 12], [52.5, 12]])]));
+    LOGB.push(bs('b' + k, 4 + 7 * k, [bex('barbell-row', [[157.5, 8], [157.5, 8]]), bex('barbell-curl', [[67.5, 10], [67.5, 10]])]));
+    LOGB.push(bs('l' + k, 6 + 7 * k, [bex('back-squat-high-bar', [[247.5, 5], [247.5, 5], [247.5, 5]])]));
+  }
+  LOGB.push(bs('x', 40, [bex('dumbbell-bench-press', [[72.5, 10], [72.5, 10]])]));
+  const bin = extra => base({ sessions: sort(LOGB), lib: BLIB, hidden: [], libReady: true, ...extra });
+
+  const renderB = (fx, u, opts) => {
+    const pp = C.coach({ ...fx, u }).build(opts || {});
+    if (!pp) return null;
+    const out = [['headline', pp.headline], ['reason', pp.reason.join(' ')],
+                 ['routine', pp.routineLine], ['layoff', pp.layoffLine], ['leftOut', pp.leftOutLine]];
+    pp.exercises.forEach(e => { out.push(['line:' + e.exId, e.line]); out.push(['note:' + e.exId, e.note]); });
+    return { p: pp, out: out.filter(x => x[1]) };
+  };
+  const CASES = [];
+  const plain = bin({});
+  const d0 = renderB(plain, 'lb');
+  CASES.push(['default', plain, {}]);
+  if (d0) {
+    const bench = d0.p.exercises.find(e => e.exId === 'barbell-bench-press');
+    if (bench && bench.swaps.length) CASES.push(['swapped', plain, bench.swaps[0].opts]);
+    if (d0.p.fewer) CASES.push(['fewer', plain, d0.p.fewer]);
+    d0.p.focuses.forEach(f => CASES.push(['focus ' + f.label, plain, f.opts]));
+  }
+  CASES.push(['layoff', bin({ now: NOW + 30 * DAY }), {}]);
+  CASES.push(['group', plain, { focus: 'group:legs' }]);
+
+  const crossed = [], mismatched = [], identical = [], stored = [];
+  let weighted = 0, rendered = 0;
+  CASES.forEach(([name, fx, opts]) => {
+    const L = renderB(fx, 'lb', opts), K = renderB(fx, 'kg', opts);
+    check('builder case "' + name + '" renders in both units', !!L && !!K && L.out.length === K.out.length,
+          name + ': ' + (L ? L.out.length : 'null') + ' / ' + (K ? K.out.length : 'null'));
+    if (!L || !K) return;
+    if (JSON.stringify([L.p.placeholders, L.p.lastNumbers, L.p.record]) !==
+        JSON.stringify([K.p.placeholders, K.p.lastNumbers, K.p.record])) stored.push(name);
+    L.out.forEach(([part, a], n) => {
+      const b = K.out[n][1];
+      rendered++;
+      const at = name + ' ' + part + ':\n           lb: ' + a + '\n           kg: ' + b;
+      const aLb = /\blb\b/.test(a), aKg = /\bkg\b/.test(a), bLb = /\blb\b/.test(b), bKg = /\bkg\b/.test(b);
+      if (aKg || bLb) crossed.push(at);
+      if (aLb !== bKg) mismatched.push(at);
+      if (aLb) weighted++;
+      if (aLb && bKg && a.replace(/lb/g, '') === b.replace(/kg/g, '')) identical.push(at);
+    });
+  });
+  check('no imperial builder line carries "kg", and no metric one "lb"', !crossed.length, list(crossed));
+  check('a builder line that says lb in one unit says kg in the other', !mismatched.length, list(mismatched));
+  check('and the number moves with the word', !identical.length, list(identical));
+  check('the builder cases printed real loads (' + weighted + ' weighted lines of ' + rendered + ')',
+        weighted >= 8 && rendered >= 30);
+  check('and the STORED numbers — every box and every target — are identical on both accounts',
+        !stored.length, list(stored));
+
+  // The fractional loads, through units.js and nowhere else: the imperial line
+  // prints the stored string back to the digit, the metric one converts once.
+  const bl = (renderB(plain, 'lb').p.exercises.find(e => e.exId === 'barbell-bench-press') || {}).line || '';
+  const bk = (renderB(plain, 'kg').p.exercises.find(e => e.exId === 'barbell-bench-press') || {}).line || '';
+  check('an imperial line prints the stored load exactly as the set row does',
+        bl.includes(U.fmtSetLoad('187.5', 'lb') + ' lb') && bl.includes(U.fmtSetLoad('95', 'lb') + ' lb'), bl);
+  check('and the metric line is units.js’s one conversion of it, never two',
+        bk.includes(U.fmtSetLoad('187.5', 'kg') + ' kg') &&
+        !bk.includes(U.fmtSetLoad(String(U.wOut(187.5, 'kg')), 'kg') + ' kg'), bk);
+  check('a bodyweight set is words in both units, never a converted zero',
+        /bodyweight/.test((renderB(plain, 'kg').p.exercises.find(e => e.exId === 'push-up') || {}).line || '') &&
+        !/\b0 kg\b/.test((renderB(plain, 'kg').p.exercises.find(e => e.exId === 'push-up') || {}).line || ''));
+
+  // The router's answer to "Make me a workout", once the engine asks it, is a
+  // builder template too — rendered here so the coverage does not depend on
+  // which phase of the ship added the route.
+  if (C.ROUTE_IDS.includes('ask_build')) {
+    const al = C.coach({ ...plain, u: 'lb' }).ask('ask_build'), ak = C.coach({ ...plain, u: 'kg' }).ask('ask_build');
+    check('the router’s build answer carries no unit word it did not get from units.js',
+          !/\b(lb|kg)\b/.test(al.text + al.reason + ak.text + ak.reason) || /\blb\b/.test(al.text) === /\bkg\b/.test(ak.text),
+          al.text + ' // ' + ak.text);
+  }
 }
 
 /* ---------- report ---------- */

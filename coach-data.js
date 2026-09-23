@@ -36,7 +36,7 @@
 
 import { read, readExact, write, wu, LS } from './store.js';
 import { EXERCISES } from './exercises.js';
-import { allExercises } from './picker.js';
+import { allExercises, hiddenIds, libraryReady } from './picker.js';
 import { maintenance, effectiveMaint, trendRate, sortedEntries } from './tdee.js';
 import { goalDirection } from './insights.js';
 import { capabilities } from './access.js';
@@ -264,6 +264,11 @@ export function coachInput(extra) {
     lib: libIndex(),
     routines,
     live: { active: !!e.live },
+    /* The builder's two extra questions of the library: what has been taken
+       out of the picker, and whether the picker has read anything yet. Asked
+       of picker.js's memory, never of the database — no read per paint. */
+    hidden: safe(() => hiddenIds(), []),
+    libReady: safe(() => libraryReady(), false) === true,
     tier: { pro: hasPro() },
     targets,
     targetsSet,
@@ -290,12 +295,14 @@ function lastWeighIn() {
   return e && Number.isFinite(e.lb) && Number.isFinite(e.t) ? e : null;
 }
 
-/* The merged effective library, reduced to the two fields Coach asks of it.
+/* The merged effective library, reduced to the three fields Coach asks of it.
    picker.js owns the merge — built-ins, the account's customs, its renames and
    refiles, minus anything hidden — and this is the same list the picker itself
-   shows. A hidden exercise is deliberately still in here when picker has it:
-   hiding takes something out of the PICKER, not out of history, and a session
-   that trained it still trained that group.
+   shows. A hidden exercise is therefore NOT in here, and nothing needs it to
+   be: coach.js falls back to what the session record stored for an id this
+   cannot resolve, so a session that trained a hidden lift still trained that
+   group. The name is the builder's: a proposal carries the name the picker
+   shows today, the way an exercise added from the picker would.
 
    The fallback to EXERCISES matters at boot: You starts loading before Train
    does, so allExercises() can legitimately answer with the built-ins alone for
@@ -308,7 +315,7 @@ function libIndex() {
   const out = {};
   (list.length ? list : EXERCISES).forEach(x => {
     if (!x || !x.id) return;
-    out[x.id] = { group: x.group, equipment: x.equipment };
+    out[x.id] = { name: x.name, group: x.group, equipment: x.equipment };
   });
   return out;
 }
