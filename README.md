@@ -547,7 +547,9 @@ and says what it left out (an exercise you hid, one no longer in your library)
 rather than quietly substituting. Then four buttons: **Start it** (your numbers
 as ghost text), **Start with my last numbers** (filled in, nothing ticked),
 **Save as routine**, and **Change something** — train something else, fewer
-exercises, or swap one for another of yours in the same group and movement.
+exercises, or swap one for another of yours in the same group and movement,
+or for **Something else…** — the exercise picker, opened on that lift's group,
+one tap to pick.
 
 Three refusals, each where the obvious answer would be a confident wrong one:
 after a layoff there are no pre-filled numbers, only targets, and it says how

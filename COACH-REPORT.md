@@ -1823,3 +1823,45 @@ as a crash — it has a stand-in box now and fails with reasons.
 
 Still unseen: the menu on a phone. On the fixture it is eight chips; on a log
 with four recurring shapes and all six groups it is eleven.
+
+---
+
+## 39. TWO MORE FROM THE PHONE
+
+Two more before the push, committed as one (`Not twice, and something else`),
+`rack-v46` unchanged.
+
+**8. Not twice.** The sheet opens on the You card's finding — on Train as well,
+since v43 — and on Train "What should I train today?" is often answered by that
+same finding. The thread then held the same sentence twice, one above the other.
+The engine now marks an answer `repeats` when its text is the opening bubble's,
+word for word; the sheet prints neither the question nor the answer and hangs
+the answer's follow-ups — "Build it" first — under the opening bubble, keeping
+the rest of the questions in the bottom row and nothing offered twice. The mark
+is about the sheet, not the answer: move the opening (mute its category) and
+the same answer stops being a repeat, and `coach-rank.mjs` I proves both ways.
+One decision: a repeating answer with no follow-ups prints nothing at all. The
+sentence it would have said is already at the top.
+
+**9. Something else.** "Swap one" listed five alternatives at most, and the one
+he wanted was not always there. Every row now ends with "Something else…",
+which opens the ordinary picker on that lift's group with the workout's own
+lifts and the hidden ones left out, one tap to pick. Both halves of the
+decision are pure: each proposal exercise carries `other` (what the picker
+opens on and leaves out), and `swapTo()` says what the pick means — the SAME
+opts a listed alternative gives, checked against all 35 listed ones in the
+fixture, or a refusal with its reason. A lift with no listed alternative is
+now on Swap one's list, because the picker is always somewhere to go. The
+picker opens on the group and is not locked to it; the engine refuses only what
+cannot stand in (BACKLOG). When he makes a new exercise from inside the picker,
+the sheet asks the engine afresh, because the library it opened with did not
+have it.
+
+`coach-surface.mjs` K is the first check in the tree that drives picker.js's
+sheet itself — its store stubbed to answer one hidden id — and the fourteen
+mutations of this round (the mark, the printing, where the follow-ups hang, the
+button, the swap bypassing `swapTo`, the picker's filter, exclude and single
+tap, the list of swappable lifts, and `swapTo`'s own refusals and opts shape)
+each turn a verifier red. `frequent.mjs`'s pins on the picker's `touched` guard
+still hold: a picker opened on a group counts as a chip already tapped, so the
+late Frequent counts never move it.

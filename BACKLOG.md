@@ -220,6 +220,15 @@ Coach → In the gym).
 - **The "In the gym" switch is one switch for two things** — the chip and the
   line. If the line turns out unwanted and the chip wanted, splitting them is a
   second category, and a second key under `mute`.
+- **An answer that repeats the opening and has no follow-ups prints nothing at
+  all** — its chip goes, and the sentence it would have said is the one already
+  at the top. By decision: printing it again is what v46 stopped doing. If it
+  reads as a tap that did nothing, a one-word acknowledgement is the change.
+- **"Something else…" opens the picker on the lift's group, not locked to it.**
+  The picker's chips still work, so he can pick from another group, and the
+  engine allows it (his explicit choice) — it refuses only what is hidden, on
+  the workout already, or across the cardio line. Locking the picker to the
+  group is a small change in `openPicker` if cross-group swaps turn out wrong.
 - **"Make me a workout" shows every choice that builds, merging none.** Coach's
   pick and the shape it picked, or a shape and one of its groups, can build the
   same workout under two labels. Each is still the answer to its own question,

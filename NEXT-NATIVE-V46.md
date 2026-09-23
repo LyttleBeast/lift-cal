@@ -12,7 +12,9 @@ And three fixes Micah found on his phone walking v45 (Phase 0), plus a second
 round from walking v46's builder before it was pushed: "What should I train
 today?" leads Train's sheet, "Make me a workout" asks what to train before it
 builds, a switch for the in-gym read, the block check box ticking through the
-0a rule, and Steps' and Water's buttons given their room.
+0a rule, and Steps' and Water's buttons given their room. And a third: an
+answer that would repeat the sheet's opening bubble is not printed twice, and
+"Swap one" ends with "Something else…", which opens the exercise picker.
 
 **`rack-mobile` was NOT read this time.** The run was fenced to `~/dev/ship-v46`
 and a read of `~/dev/rack-mobile` was refused. Every native file path below is
@@ -47,8 +49,8 @@ tdee.js       83c2e76b71cfa2f6c8260fae807182e0682af48459bcd30b7be9eb9c4d48fe3d  
 or arrive:
 
 ```
-coach.js       14b09f22c5990dea07f3ec586b2a2adb800b73242af4b9b8a3d81b20be088fca   CHANGED — re-copy, 2,855 lines
-coach-build.js 97bae6bf56c7c47fa7e1bbc15a178c9fd77b567e17078a28b46eba84953d8bad   CHANGED — re-copy, 600 lines (buildMenu)
+coach.js       6a80c986368da29b3a5f2114c56d36fb38f59808cdb6ff3d44df5b5b38349628   CHANGED — re-copy, 2,870 lines
+coach-build.js ec6e5b6b15ff43ac78a1b1582da01ffab4ac267c400f780f770564eb93fe0d0a   CHANGED — re-copy, 649 lines (buildMenu, swapTo)
 coach-live.js  877528f81150c0553f2d81188198d2535c9321ea74c80049e1f7ad324038e1d9   NEW — copy to src/pure/, 517 lines
 ```
 
@@ -130,6 +132,16 @@ away. Empty when a session is live, the library is unread or the log thin, the
 same silences as `propose()`. `coach.js` feeds it `builderInput(d)` and
 memoises it; the view draws exactly what it returns.
 
+And a second: **`swapTo(input, opts, from, to)` → `{ opts, why }`**, what a lift
+picked from the picker means for the proposal. It gives EXACTLY the opts a
+listed alternative gives (verified against every listed one), or `opts: null`
+with a reason from `SWAP_WHY` — not in the library (hidden included: native's
+library keeps hidden ones, so this check is the one that keeps them out there),
+already on the workout, or across the cardio line. Picking the slot's own lift
+takes the swap off. Every proposal exercise now carries `other: { group,
+exclude }` — the group the picker opens on, and the ids it must leave out (the
+workout's own lifts and every hidden one).
+
 ---
 
 ## 2. `coach.js` — re-copy it
@@ -152,6 +164,12 @@ What changed inside, all of it additive:
     offer `ask_build_now`, and a follow-up now carries `stands: 'ask_build'`
     (`STANDS_FOR`) so the view does not draw "Make me a workout" beside
     "Build it"
+- **An answer that repeats the opening:** `coach().ask(id)` marks an answer
+  `repeats: true` when its text is the opening bubble's word for word
+  (`opening` is the You card's finding, on both sheets). The view prints
+  neither the question nor the answer and hangs the answer's follow-ups under
+  the opening bubble
+- `coach()` returns `swapTo(opts, from, to)` (§1b), silent on an unreadable log
 - **The in-gym switch:** category `live` — "In the gym", mutable, after `build` —
   and a registered selector `live_read` (never answered through the router;
   it gives the category its intent and puts it in `PRO_ADDS`)
@@ -271,6 +289,8 @@ Native paths are V45's, unverified.
 | Train's sheet: "What should I train today?" first, "Make me a workout" second | wherever native draws `topicsFor('train')` | nothing if it draws the engine's order |
 | "Make me a workout" asks "What do you want to train?" | `src/ui/coach/sheets.jsx` | when the answer's id is `build_menu`, draw `c.buildMenu()` as chips in place of the topic row; a pick says its label, then draws `c.build(item.opts)` exactly as a proposal is drawn now, and the topics come back. Write none of the words — they are the engine's |
 | "Build it" goes straight to the proposal | same | answer id `build_workout`: draw `c.build({})`, with no question. Do not draw a topic that a follow-up `stands` for |
+| an answer marked `repeats` | same | print nothing; draw its follow-ups (filtered as any follow-up row is) under the opening bubble; the bottom row keeps the remaining topics, never one already offered |
+| "Something else…" at the end of every Swap one row | same, and native's exercise picker | offered only when the Train card hands in a picker, and then for every lift (a lift with no listed alternative included). Open the ordinary picker on `e.other.group`, leaving out `e.other.exclude`, ONE tap to pick; pass the pick to `c.swapTo(currentOpts, e.from, id)` and redraw from its `opts` exactly as a listed swap does, or say "Coach can't swap that one in." with its `why`. Native's picker needs web's four options — `filter`, `exclude`, `single`, `title` — or an equivalent |
 | the sheet's **Patterns** bubble, and one bubble per pattern | `src/ui/coach/sheets.jsx` | `topicsFor('you')` offers it; draw `a.more` after `a.text` |
 | Pro panel | wherever native walks `PRO_ADDS` | nothing; it now names Patterns |
 | Weight → Log's width | `weight.jsx` | nothing — V45 recorded native's Log as `flex: 0, minWidth: 54` already |
@@ -320,9 +340,9 @@ Three new files; eleven changed.
 | `coach-voice.mjs` | + H: the live lines under the card's ban (the nudge is unprompted). + I: the causal-word list over Patterns. Ports, except the `coach-ui.js` slice H reads. |
 | `coach-silence.mjs` | + the Patterns case. Ports. |
 | `coach-boot.mjs` | + G: the routines hand-off costs no read. Web-shaped. |
-| `coach-surface.mjs` | + G (the chip, the sheet, Add it, the line's appear-once rule, Basic and edit see nothing), H (the Patterns switch and bubble) and I (the builder's order, its question and choices, Build it straight through, the In the gym switch); E and F follow the question-first flow. 148 checks. **Does not port** — native wants its own, and G found an engine bug no engine verifier did. |
-| `coach-build.mjs` | + K: `buildMenu` in the pure layer — the pick first and equal to the default, shapes then groups, only what builds, silent where the builder is, the two doors. 110 checks. Ports. |
-| `coach-rank.mjs` | the builder's checks state the new order and the two doors. Ports. |
+| `coach-surface.mjs` | + G (the chip, the sheet, Add it, the line's appear-once rule, Basic and edit see nothing), H (the Patterns switch and bubble), I (the builder's order, its question and choices, Build it straight through, the In the gym switch), J (an answer that repeats the opening, and "Something else…" end to end) and K (the real picker.js in single mode); E and F follow the question-first flow. 170 checks. **Does not port** — native wants its own, and G found an engine bug no engine verifier did. |
+| `coach-build.mjs` | + K: `buildMenu` in the pure layer — the pick first and equal to the default, shapes then groups, only what builds, silent where the builder is, the two doors. + L: `swapTo` — equal to every listed alternative's opts, each refusal with its reason, the picker spec on every lift. 125 checks. Ports. |
+| `coach-rank.mjs` | the builder's checks state the new order and the two doors; + I: `repeats` set exactly when the answer's text is the opening's. 83 checks. Ports. |
 | `month-erasure.mjs` `merge-invariant.mjs` | Follow `runFinish`'s new collaborator and `finishWorkout(anyway)`'s signature. Web-shaped. |
 | `units.mjs` | classifies `coach-live.js`'s one `fmtSetLoad` display site. |
 
