@@ -58,9 +58,11 @@ export const WINDOW_DAYS = 84;
    declines to call it anything. POUNDS, and it stays pounds — it is a bar, and
    a bar that moved when somebody switched to kilos would mean two accounts
    changing at the same speed got different readings. Only the printed number
-   converts. See §5.1 of the brief: insights.js `rateVerdict` returns 'good' for
+   converts. See §5.1 of the brief: insights.js `rateVerdict` returned 'good' for
    any rate in the goal's direction, unbounded, and Coach must not inherit that.
-   Nothing in a Coach sentence ever names this number. */
+   Since v47 it carries this same band (its own RATE_BAND_LB, held equal to this
+   one by tools-check/rate-band.mjs). Nothing in a Coach sentence ever names
+   this number. */
 const RATE_BAND_LB = 1.5;
 
 /* How far past its own median gap a group has to be before Coach calls it
@@ -1886,10 +1888,10 @@ export const RESPONSES = Object.freeze({
   },
 
   resp_weight_rate: {
-    /* The magnitude guard, in the one place it matters. insights.js's
-       rateVerdict calls any rate in the goal's direction 'good', unbounded, and
-       LIMITS.rateWk allows five a week — so an account dropping weight very
-       fast currently gets a green number and an approving sentence. Coach
+    /* The magnitude guard. Until v47 insights.js's rateVerdict called any rate
+       in the goal's direction 'good', unbounded, while LIMITS.rateWk allows
+       five a week — so an account dropping weight very fast got a green number
+       and an approving sentence; it carries this band now too. Coach
        reports the number and, past the band, declines to call it anything. The
        band itself is never printed: it is a pound figure, and a pound figure
        named in a sentence is a false sentence on a metric account. */

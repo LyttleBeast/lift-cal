@@ -84,16 +84,35 @@ export function goalDirection(targets, maintCal) {
 // about the same question.
 export const HOLD_RATE_LB = 0.5;
 
+/* A weekly rate past which nothing calls the pace anything: the figure is
+   printed and left uncoloured, in the goal's direction and against it. It is
+   Coach's band (RATE_BAND_LB in coach.js) — the same 1.5 lb, held equal by
+   tools-check/rate-band.mjs — and it is here because this function used to
+   call ANY rate in the goal's direction 'good', unbounded, while LIMITS.rateWk
+   allows five a week: an account losing very fast got a green number and a
+   "Doing well". POUNDS, and it stays pounds: a bar that moved when somebody
+   switched to kilos would give two accounts losing at one speed two readings.
+   Only the printed number converts. */
+export const RATE_BAND_LB = 1.5;
+
 /* Is this week's rate of change going the way the goal points.
    'good' | 'warn' | null, and null is the answer whenever the goal is unknown —
    an uncoloured number says nothing, and saying nothing is the only honest
-   thing left when you do not know which way somebody meant to go.
+   thing left when you do not know which way somebody meant to go. It is also
+   the answer past RATE_BAND_LB, either way: a rate that size is a number to
+   read, not one to be told is fine, or wrong.
 
-   A stated direction gets no tolerance band: on a cut, up is up. The band is
-   for "hold", where every rate is against the goal in one direction or the
-   other and only the size of it means anything. */
+   Inside the band a stated direction gets no tolerance: on a cut, up is up.
+   HOLD_RATE_LB is for "hold", where every rate is against the goal in one
+   direction or the other and only the size of it means anything.
+
+   Every colour either tab gives a weekly rate asks this, and so do the two
+   sentences that approve one — the "Doing well" pace line and the Goal
+   card's "the right way" — so none of them can call a rate good that the
+   others decline. */
 export function rateVerdict(rateWk, dir) {
   if (dir == null || rateWk == null || !Number.isFinite(rateWk)) return null;
+  if (Math.abs(rateWk) > RATE_BAND_LB) return null;
   if (dir === 0) return Math.abs(rateWk) <= HOLD_RATE_LB ? 'good' : 'warn';
   return (dir < 0 ? rateWk <= 0 : rateWk >= 0) ? 'good' : 'warn';
 }
@@ -254,12 +273,16 @@ export function assess(ctx) {
   if (rateWk != null && dir != null && thisWk.weighDays + lastWk.weighDays >= 4) {
     const abs = fmtRate(Math.abs(rateWk), u);
     const plan = planned ? fmtRate(Math.abs(planned), u) : '';
-    if (dir < 0 && rateWk <= -0.3) {
+    // Past RATE_BAND_LB a pace is not a win: rateVerdict declines it, as it
+    // declines to colour it. The "wrong way" line below is not gated — it
+    // approves nothing — and neither is the note under it.
+    const approve = rateVerdict(rateWk, dir) === 'good';
+    if (dir < 0 && rateWk <= -0.3 && approve) {
       win({ id: 'pace-good', subject: 'weight', score: 90,
         title: 'Losing ' + abs + ' ' + W + ' a week',
         detail: planned ? 'Your plan is ' + plan + ' ' + W + ' a week.' : 'The trend is heading the way a cut should.',
         why: 'The slope of your normalised trend weight, which corrects every weigh-in for the food and water in you at the time. Down at least ' + labelRate(0.3, u) + ' a week is the bar on a cut.' });
-    } else if (dir > 0 && rateWk >= 0.2) {
+    } else if (dir > 0 && rateWk >= 0.2 && approve) {
       win({ id: 'pace-good', subject: 'weight', score: 90,
         title: 'Gaining ' + abs + ' ' + W + ' a week',
         detail: planned ? 'Your plan is ' + plan + ' ' + W + ' a week.' : 'The trend is heading the way a bulk should.',
@@ -612,7 +635,9 @@ export function trajectory(ctx, rateWk, planned, tw) {
         fmtRate(Math.abs(rateWk), u) + ' ' + W + ' a week against ' + fmtRate(Math.abs(planned), u) + ' planned.';
     } else {
       out.status = 'on';
-      out.reason = fmtRate(Math.abs(rateWk), u) + ' ' + W + ' a week, the right way.';
+      // "The right way" is an approval, and past the band rateVerdict gives
+      // none: the figure alone.
+      out.reason = fmtRate(Math.abs(rateWk), u) + ' ' + W + ' a week' + (rateVerdict(rateWk, dir) === 'good' ? ', the right way.' : '.');
     }
     if (goalLb && tw != null) {
       const left = (tw - goalLb) * (dir < 0 ? 1 : -1);

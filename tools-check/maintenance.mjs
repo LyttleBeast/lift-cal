@@ -366,10 +366,15 @@ const GOAL = { on: true, rateWk: -1, pPerLb: 1, fPerLb: 0.35, floor: 0, lastAdj:
   const INS = readFileSync(SRC('insights.js'), 'utf8');
   const holdLine = /export const HOLD_RATE_LB = ([\d.]+);/.exec(INS);
   if (!holdLine) throw new Error('insights.js no longer exports HOLD_RATE_LB');
+  // v47: rateVerdict also reads Coach's band. tools-check/rate-band.mjs is
+  // where the band is proven; here it only has to be there for the lift.
+  const bandLine = /export const RATE_BAND_LB = ([\d.]+);/.exec(INS);
+  if (!bandLine) throw new Error('insights.js no longer exports RATE_BAND_LB');
   const gdFile = join(dir, 'goaldir.mjs');
   writeFileSync(gdFile,
     'export function goalDirection(targets, maintCal) {' + bodyOf(INS, '\nexport function goalDirection(') + '}\n' +
     'export const HOLD_RATE_LB = ' + holdLine[1] + ';\n' +
+    'export const RATE_BAND_LB = ' + bandLine[1] + ';\n' +
     'export function rateVerdict(rateWk, dir) {' + bodyOf(INS, '\nexport function rateVerdict(') + '}\n');
   const { goalDirection, rateVerdict, HOLD_RATE_LB } = await import(pathToFileURL(gdFile).href);
 
@@ -411,9 +416,15 @@ const GOAL = { on: true, rateWk: -1, pPerLb: 1, fPerLb: 0.35, floor: 0, lastAdj:
   check('the two screens now read one rule — neither restates it',
     /const d = goalDirection\(targets, maintCal\);/.test(readFileSync(SRC('food.js'), 'utf8')) &&
     /return goalDirection\(targets, maint && maint\.cal\);/.test(readFileSync(SRC('you.js'), 'utf8')));
+  // Since v47 the You tab's weekly-rate judges ask rateVerdict itself, so the
+  // hold band lives in one function, not merely in one constant. (The Weight
+  // card's 30-day arrow keeps half a pound over the MONTH, a different number
+  // that happens to share the figure — rate-band.mjs covers it.)
   check('and the hold band is one number, not two',
     HOLD_RATE_LB === 0.5 &&
-    readFileSync(SRC('you.js'), 'utf8').includes('Math.abs(n - p) <= HOLD_RATE_LB'));
+    readFileSync(SRC('you.js'), 'utf8').includes('const v = rateVerdict(n - p, dir);') &&
+    readFileSync(SRC('you.js'), 'utf8').includes('const judgeRate = r => { const v = rateVerdict(r, dir);') &&
+    !/HOLD_RATE_LB/.test(readFileSync(SRC('you.js'), 'utf8')));
 
   // null is not zero, and the Weight tab is the screen that needs the two apart.
   check('a stated cut is -1, a stated gain is +1',
@@ -427,16 +438,21 @@ const GOAL = { on: true, rateWk: -1, pPerLb: 1, fPerLb: 0.35, floor: 0, lastAdj:
   check('a maintenance of 0 is not a maintenance',
     goalDirection({ cal: 2450 }, 0) === null);
 
-  /* ---- the colour ---- */
-  check('a cut is green going down and amber going up — exactly v40’s colouring',
-    [-2, -0.4, 0].every(r => rateVerdict(r, -1) === 'good') &&
-    [0.1, 2].every(r => rateVerdict(r, -1) === 'warn'));
+  /* ---- the colour ----
+     Inside Coach's 1.5 lb band, which v47 put into rateVerdict. Past it the
+     answer is null whichever way the rate points — rate-band.mjs proves that
+     half — so these rates stay inside it. */
+  check('a cut is green going down and amber going up — exactly v40’s colouring, inside the band',
+    [-1.5, -0.4, 0].every(r => rateVerdict(r, -1) === 'good') &&
+    [0.1, 1.5].every(r => rateVerdict(r, -1) === 'warn'));
   check('a GAIN is green going up — the bug: this was amber on every account gaining',
-    [2, 0.4, 0].every(r => rateVerdict(r, 1) === 'good') &&
-    [-0.1, -2].every(r => rateVerdict(r, 1) === 'warn'));
+    [1.5, 0.4, 0].every(r => rateVerdict(r, 1) === 'good') &&
+    [-0.1, -1.5].every(r => rateVerdict(r, 1) === 'warn'));
   check('holding is green inside half a pound a week, amber outside it',
     [0, 0.5, -0.5, 0.49].every(r => rateVerdict(r, 0) === 'good') &&
-    [0.51, -0.51, 3].every(r => rateVerdict(r, 0) === 'warn'));
+    [0.51, -0.51, 1.5].every(r => rateVerdict(r, 0) === 'warn'));
+  check('and past the band, no colour at all, either way (v47)',
+    [-2, 2, 3].every(r => [-1, 0, 1].every(d => rateVerdict(r, d) === null)));
   check('an unknown goal gets no colour at all, whatever the rate',
     [-2, 0, 2].every(r => rateVerdict(r, null) === null));
   check('and no rate gets no colour, whatever the goal',

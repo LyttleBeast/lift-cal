@@ -202,7 +202,9 @@ export async function render() {
 
        Now it is coloured by AGREEMENT with the direction the account stated,
        and when nobody knows which way that is the number is simply left alone.
-       An uncoloured number says nothing, which is the only honest thing left. */
+       An uncoloured number says nothing, which is the only honest thing left.
+       Since v47 it is also left alone past RATE_BAND_LB (1.5 lb a week), either
+       way: rateVerdict used to call a rate of any size toward the goal green. */
     const verdict = rateVerdict(rate, dir);
     sr.appendChild(cell(
       rate != null ? (rate > 0 ? '+' : '') + fmtRate(rate, u) : '–',

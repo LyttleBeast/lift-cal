@@ -400,6 +400,11 @@ export function todayKey(d = new Date()) {
     const newA = await load('new-analytics.mjs', src('analytics.js'));
     const oldI = await load('old-insights.mjs', oldInsights,
       { "from './analytics.js'": 'from ' + JSON.stringify(pathToFileURL(join(dir, 'old-analytics.mjs')).href) });
+    // The baseline again with its three-win cut lifted, for the one declared
+    // v47 difference below.
+    const oldAll = await load('old-insights-all.mjs', oldInsights,
+      { "from './analytics.js'": 'from ' + JSON.stringify(pathToFileURL(join(dir, 'old-analytics.mjs')).href),
+        'wins: wins.slice(0, 3),': 'wins: wins.slice(0),' });
     const newI = await load('new-insights.mjs', src('insights.js'),
       { "from './analytics.js'": 'from ' + JSON.stringify(pathToFileURL(join(dir, 'new-analytics.mjs')).href) });
 
@@ -460,7 +465,23 @@ export function todayKey(d = new Date()) {
       const ctx = { ...ctxBase, dir, rate: { rateWk, model: true },
                     targets: { ...ctxBase.targets,
                                auto: { ...ctxBase.targets.auto, rateWk: dir === 0 ? 0 : dir * 1 } } };
-      const before = runAll(oldI, ctx);
+      // v47 put Coach's band into insights.js: past RATE_BAND_LB a pace is not
+      // a win, so "Losing N a week" leaves Doing well. That is the ONE
+      // difference from the baseline this section allows, it is applied to the
+      // baseline's own output, and only when the fixture's rate is past the
+      // band — everything else still has to match byte for byte.
+      // tools-check/rate-band.mjs is where the band itself is proven.
+      // Wins are ranked and cut to three, so taking one out lets the fourth in:
+      // the baseline is run a second time with its cut lifted, the pace win is
+      // dropped from that full list, and it is cut to three here.
+      const v47 = json => {
+        if (!(Math.abs(rateWk) > newI.RATE_BAND_LB)) return json;
+        const o = JSON.parse(json);
+        const all = JSON.parse(runAll(oldAll, ctx)).assess.wins;
+        o.assess.wins = all.filter(f => f.id !== 'pace-good').slice(0, 3);
+        return JSON.stringify(o);
+      };
+      const before = v47(runAll(oldI, ctx));
       const absent = runAll(newI, ctx);                       // no `u` at all
       const explicit = runAll(newI, { ...ctx, u: 'lb' });      // and an explicit one
       check('insights on ' + label + ': identical to ' + BASE + ' with units absent',

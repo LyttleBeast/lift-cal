@@ -66,7 +66,7 @@
 import { read, LS, todayKey, isOwner, wu } from './store.js';
 import { $, el, noteEl, parseKey, fmtDate, compact, fmtDuration, sheet } from './ui.js';
 import { assess, keysBack as keysBackI, streakOf, fmtRange,
-         goalDirection, HOLD_RATE_LB } from './insights.js';
+         goalDirection, rateVerdict } from './insights.js';
 import { allSessions, exerciseIndex, filterByRange, groupSplit, topBy, weeklyVolume,
          lineChart, barChart, ring, sparkline, heatStrip, emptyChart, legend,
          groupColor } from './analytics.js';
@@ -826,10 +826,14 @@ function weekCard(maint) {
     const dn = Math.abs(n - targets.cal), dp = Math.abs(p - targets.cal);
     return dn < dp - 60 ? 'up' : dn > dp + 60 ? 'down' : 'flat';
   };
+  // Week on week is a weekly rate, so it is judged by the function the Weight
+  // tab's number is: the same verdict inside the band, and past it, no colour
+  // either way. Hold never goes red here — it is quiet, as it always was.
   const towardGoal = (n, p) => {
-    if (dir == null) return 'flat';
-    if (dir === 0) return Math.abs(n - p) <= HOLD_RATE_LB ? 'up' : 'flat';
-    return dir < 0 ? higherBetter(p, n) : higherBetter(n, p);
+    const v = rateVerdict(n - p, dir);
+    if (v == null) return 'flat';
+    if (dir === 0) return v === 'good' ? 'up' : 'flat';
+    return v === 'warn' ? 'down' : n === p ? 'flat' : 'up';
   };
 
   // Four subjects, one tile each. Protein, water and volume have their own
@@ -1072,7 +1076,14 @@ function weightCard(maint) {
   // here would paint a deliberate bulk in the warning colour on the tab the app
   // opens on. When the direction is unknowable the arrow stays uncoloured.
   const dir = goalDir(maint);
-  const judge = v => (dir == null) ? 'flat'
+  // The /week arrow is the Weight tab's number, so it is judged by the Weight
+  // tab's function, rateVerdict: its answer inside the band, and past it no
+  // colour at all, either way.
+  const judgeRate = r => { const v = rateVerdict(r, dir); return v === 'good' ? 'up' : v === 'warn' ? 'warn' : 'flat'; };
+  // The 30-day arrow keeps its own reading inside the band — its hold test is
+  // half a pound over the month, not a week — and past the band, taken as a
+  // weekly pace, it is left uncoloured like the rest.
+  const judge30 = v => (rateVerdict(v * 7 / 30, dir) == null) ? 'flat'
     : dir === 0 ? (Math.abs(v) <= 0.5 ? 'up' : 'warn')
     : dir < 0   ? (v <= 0 ? 'up' : 'warn')
     :             (v >= 0 ? 'up' : 'warn');
@@ -1083,10 +1094,10 @@ function weightCard(maint) {
   hl.appendChild(el('span', 'headline-v num', fmtW(latest.lb, u)));
   hl.appendChild(el('span', 'headline-u', unitW(u)));
   if (!modelReady)       hl.appendChild(deltaEl('…', 'flat', '/ week'));
-  else if (rate != null) hl.appendChild(arrowEl(rate, judge(rate), labelRate(Math.abs(rate), u), '/ week' + (tr.model ? ' ✓' : '')));
+  else if (rate != null) hl.appendChild(arrowEl(rate, judgeRate(rate), labelRate(Math.abs(rate), u), '/ week' + (tr.model ? ' ✓' : '')));
   else                   hl.appendChild(deltaEl('–', 'flat', '/ week'));
   if (Number.isFinite(s.change30)) {
-    hl.appendChild(arrowEl(s.change30, judge(s.change30), labelW(Math.abs(s.change30), u), '30 days'));
+    hl.appendChild(arrowEl(s.change30, judge30(s.change30), labelW(Math.abs(s.change30), u), '30 days'));
   }
   c.appendChild(hl);
 
@@ -1502,7 +1513,10 @@ function trajectoryCard(found, est, maint) {
   // when there is one, then the progress bar when there is a start and an
   // end to run it between.
   const hl = el('div', 'headline');
-  const dot = el('i', 'traj-dot ' + (t.status === 'on' || t.status === 'ahead' ? 'good' : t.status === 'wrong' || t.status === 'drift' ? 'bad' : t.status ? 'warn' : ''));
+  // Past RATE_BAND_LB the pace gets no colour at all — not green, not red —
+  // because rateVerdict, which the Weight tab's number asks, gives it none.
+  const called = !(t.enough && t.rate != null && rateVerdict(t.rate, t.dir) == null);
+  const dot = el('i', 'traj-dot ' + (!called ? '' : t.status === 'on' || t.status === 'ahead' ? 'good' : t.status === 'wrong' || t.status === 'drift' ? 'bad' : t.status ? 'warn' : ''));
   hl.appendChild(dot);
   if (t.enough && t.rate != null) {
     hl.appendChild(el('span', 'headline-v num', fmtRate(Math.abs(t.rate), gu)));
@@ -1531,7 +1545,7 @@ function trajectoryCard(found, est, maint) {
       const bar = el('div', 'traj-bar');
       const fill = el('div', 'traj-fill');
       fill.style.width = Math.round(t.progress * 100) + '%';
-      fill.style.background = t.status === 'wrong' || t.status === 'drift' ? 'var(--warn)' : C_WEIGHT;
+      fill.style.background = called && (t.status === 'wrong' || t.status === 'drift') ? 'var(--warn)' : C_WEIGHT;
       bar.appendChild(fill);
       c.appendChild(bar);
       const ends = el('div', 'traj-ends');
