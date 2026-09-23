@@ -65,10 +65,17 @@ writeFileSync(join(dir, 'coach-build.mjs'), src('coach-build.js')
   .replace("from './blocks.js'", 'from ' + real('blocks.js'))
   .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
   .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href)));
+/* coach-live.js, the in-session read (ship three), is staged the same way:
+   coach.js imports it too, and it takes the same session math through the stub. */
+writeFileSync(join(dir, 'coach-live.mjs'), src('coach-live.js')
+  .replace("from './exercises.js'", 'from ' + real('exercises.js'))
+  .replace("from './units.js'", 'from ' + real('units.js'))
+  .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href)));
 writeFileSync(join(dir, 'coach.mjs'), src('coach.js')
   .replace("from './exercises.js'", 'from ' + real('exercises.js'))
   .replace("from './units.js'", 'from ' + real('units.js'))
   .replace("from './coach-build.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-build.mjs')).href))
+  .replace("from './coach-live.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-live.mjs')).href))
   .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href)));
 const C = await import(pathToFileURL(join(dir, 'coach.mjs')).href);
 const U = await import(pathToFileURL(join(ROOT, 'units.js')).href);
@@ -640,6 +647,121 @@ section('G. the workout builder — every line it prints, imperial and metric');
           !/\b(lb|kg)\b/.test(al.text + al.reason + ak.text + ak.reason) || /\blb\b/.test(al.text) === /\bkg\b/.test(ak.text),
           al.text + ' // ' + ak.text);
   }
+}
+
+/* ================= H. THE IN-SESSION READ ================= */
+section('H. the in-session read — every line it prints, imperial and metric');
+{
+  /* coach-live.js is the third file of Coach copy, and the one read under a
+     bar. It prints exactly one kind of weight — a quote of the last time a
+     suggested exercise was logged — and the same four questions are asked of
+     it as of the builder: the vocabulary, the rendering twice, the secret
+     thresholds and the calendar words. */
+  const LRAW = src('coach-live.js');
+  const LCODE = LRAW.replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n').map(l => l.replace(/(^|[^:'"\\])\/\/.*$/, '$1')).join('\n');
+  const LSTR = [...LCODE
+    .replace(/=== '(kg|lb)' \? '(kg|lb)' : '(kg|lb)'/g, '')
+    .replace(/=== '(kg|lb)'/g, '')
+    .matchAll(/'((?:[^'\\]|\\.)*)'/g)].map(m => m[1]);
+  const BANNED = [/\blbs?\b/i, /\bpounds?\b/i, /\bkgs?\b/i, /\bkilo/i, /\bkilogram/i, /\bstone\b/i];
+  const words = LSTR.filter(t => BANNED.some(re => re.test(t)));
+  check('no string literal in coach-live.js writes a unit word — unitW() is the only source of one (' + LSTR.length + ' read)',
+        LSTR.length > 20 && !words.length, list(words));
+  const named = (/import \{([^}]*)\} from '\.\/units\.js'/.exec(LRAW) || [, ''])[1]
+    .split(',').map(t => t.trim()).filter(Boolean);
+  check('it imports the display formatters from units.js and never a raw factor',
+        named.includes('fmtSetLoad') && named.includes('unitW') && !named.some(n => /^(wOut|wIn|KG|LB)/.test(n)),
+        named.join(', '));
+  const TRAPS = [/\bnearest\b/i, /\bround(ed|s)?\s+(it\s+)?(up|down|to)\b/i, /\bthe next \d/i,
+                 /\bin (fives|tens|twos)\b/i, /\bstep of \d/i, /\bincrements? of \d/i, /\bplates?\b/i, /\badd \d+\b/i];
+  const traps = LSTR.filter(t => TRAPS.some(re => re.test(t)));
+  check('no line names a rounding, a step or a plate jump', !traps.length, list(traps));
+  const cal = LSTR.filter(t => /\b(this|last|next) week\b|\bthis month\b/i.test(t));
+  check('no rolling window wears a calendar word', !cal.length, list(cal));
+  const typed = LSTR.filter(t => / /.test(t) && /\d/.test(t));
+  check('no line carries a typed number — every figure is counted off the log', !typed.length, list(typed));
+
+  /* The battery: twelve weeks of a chest-and-arms day, a back-and-arms day and
+     a leg day, with a warm-up on the bench and a bodyweight lift in the log,
+     and a spread of live sessions that between them reach all four answers —
+     next, another, switch, done by length and done by fatigue. Mirrored in
+     coach-live.mjs, which proves each answer is the RIGHT one; here the only
+     question is what the words and the numbers look like. */
+  const LLIB = {
+    bench:    { name: 'Barbell Bench Press',          group: 'chest', equipment: 'barbell' },
+    incline:  { name: 'Incline Dumbbell Bench Press', group: 'chest', equipment: 'dumbbell' },
+    fly:      { name: 'Cable Crossover',              group: 'chest', equipment: 'cable' },
+    dips:     { name: 'Chest Dip',                    group: 'chest', equipment: 'bodyweight' },
+    curl:     { name: 'Barbell Curl',                 group: 'arms',  equipment: 'barbell' },
+    pushdown: { name: 'Triceps Pushdown (Rope)',      group: 'arms',  equipment: 'cable' },
+    row:      { name: 'Barbell Row',                  group: 'back',  equipment: 'barbell' },
+    pulldown: { name: 'Lat Pulldown',                 group: 'back',  equipment: 'cable' },
+    squat:    { name: 'Back Squat (High Bar)',        group: 'legs',  equipment: 'barbell' },
+    rdl:      { name: 'Romanian Deadlift',            group: 'back',  equipment: 'barbell' }
+  };
+  const LLOAD = { bench: '185', incline: '65', fly: '40', dips: '0', curl: '75', pushdown: '50',
+                  row: '155', pulldown: '140', squat: '245', rdl: '205' };
+  const LREPS = { bench: 8, incline: 10, fly: 12, dips: 10, curl: 10, pushdown: 12, row: 8, pulldown: 10, squat: 5, rdl: 8 };
+  const lx = (id, n, warm) => ({ exId: id, name: LLIB[id].name, group: LLIB[id].group, equipment: LLIB[id].equipment,
+    sets: (warm ? [{ w: '95', r: '10', type: 'W', done: true }] : [])
+      .concat(Array.from({ length: n }, () => ({ w: LLOAD[id], r: String(LREPS[id]), type: 'N', done: true }))) });
+  const ls = (tag, ago, rows) => ({ id: tag + ago, startedAt: NOW - ago * DAY, _date: key(NOW - ago * DAY), exercises: rows });
+  const LHIST = [];
+  for (let k = 0; k < 10; k++) {
+    LHIST.push(ls('push', 3 + 7 * k, k === 4 || k === 7
+      ? [lx('bench', 4, true), lx('incline', 3), lx('dips', 3), lx('curl', 3)]
+      : [lx('bench', 4, true), lx('incline', 3), lx('fly', 3), lx('curl', 3), lx('pushdown', 3)]));
+    LHIST.push(ls('pull', 5 + 7 * k, [lx('row', 4), lx('pulldown', 3), lx('curl', 3)]));
+    LHIST.push(ls('legs', 1 + 7 * k, [lx('squat', 4), lx('rdl', 3)]));
+  }
+  const liveOf = rows => ({ id: 'wl', startedAt: NOW - 30 * 60 * 1000, exercises: rows.map(([id, sets]) => ({
+    exId: id, name: LLIB[id].name, group: LLIB[id].group, equipment: LLIB[id].equipment,
+    sets: sets.map(([w, r, type]) => ({ w: String(w), r: String(r), type: type || 'N', done: true })) })) });
+  const nx = (id, c) => Array.from({ length: c }, () => [LLOAD[id], LREPS[id]]);
+  const LIVES = [
+    ['next',     liveOf([['bench', nx('bench', 4)], ['incline', nx('incline', 3)]]), undefined],
+    ['another',  liveOf([['bench', nx('bench', 3)]]), undefined],
+    ['switch',   liveOf([['bench', nx('bench', 4)], ['incline', nx('incline', 3)], ['fly', nx('fly', 3)]]), undefined],
+    ['length',   liveOf([['bench', nx('bench', 4)], ['incline', nx('incline', 3)], ['fly', nx('fly', 3)],
+                         ['curl', nx('curl', 3)], ['pushdown', nx('pushdown', 3)]]), undefined],
+    ['fatigue',  liveOf([['bench', [[185, 8], [185, 8], [185, 6, 'F']]], ['incline', [[65, 10], [65, 10], [65, 7]]]]), undefined],
+    ['pull',     liveOf([['row', nx('row', 4)], ['pulldown', nx('pulldown', 3)]]), undefined],
+    ['hint',     liveOf([['bench', nx('bench', 3)], ['incline', nx('incline', 3)]]), { current: 0 }]
+  ];
+  const liveAll = u => LIVES.map(([name, s, opts]) => {
+    const a = C.coach(base({ u, sessions: sort(LHIST), lib: LLIB, hidden: [], live: { active: true } })).live(s, opts);
+    return { name, a };
+  });
+
+  const lb = liveAll('lb'), kg = liveAll('kg');
+  check('every session in the battery gets an answer, the same kind in both units',
+        lb.every((x, k) => x.a && kg[k].a && x.a.kind === kg[k].a.kind && x.a.exId === kg[k].a.exId),
+        lb.map((x, k) => x.name + ':' + (x.a && x.a.kind) + '/' + (kg[k].a && kg[k].a.kind)).join(' '));
+  check('and between them they reach all four', new Set(lb.map(x => x.a && x.a.kind)).size === 4,
+        [...new Set(lb.map(x => x.a && x.a.kind))].join(', '));
+  const crossed = [], mismatched = [], identical = [];
+  let weighted = 0;
+  lb.forEach((L, k) => {
+    const K = kg[k];
+    if (!L.a || !K.a) return;
+    const A = [L.a.text, L.a.short].concat(L.a.why), B = [K.a.text, K.a.short].concat(K.a.why);
+    A.forEach((a, j) => {
+      const b = B[j] || '';
+      const aLb = /\blb\b/.test(a), bKg = /\bkg\b/.test(b);
+      if (/\bkg\b/.test(a) || /\blb\b/.test(b)) crossed.push(L.name + ': ' + a + ' | ' + b);
+      if (aLb !== bKg) mismatched.push(L.name + ': ' + a + ' | ' + b);
+      if (aLb && bKg) { weighted++; if (a.replace(/lb/g, '') === b.replace(/kg/g, '')) identical.push(L.name + ': ' + a); }
+    });
+  });
+  check('no imperial line carries kg, and no metric one lb', !crossed.length, list(crossed));
+  check('a line that says lb in one unit says kg in the other', !mismatched.length, list(mismatched));
+  check('and the number moves with the word (' + weighted + ' weighted lines)', weighted > 0 && !identical.length, list(identical));
+  const quotes = kg.flatMap(x => x.a ? x.a.why : []).filter(t => /^Last time on /.test(t));
+  const allowedKg = new Set(LHIST.flatMap(s => s.exercises.flatMap(e => e.sets.map(x => U.fmtSetLoad(x.w, 'kg')))));
+  const offLog = quotes.flatMap(t => [...t.matchAll(/(\d[\d.]*) kg/g)].map(m => m[1])).filter(v => !allowedKg.has(v));
+  check('every metric figure is one conversion of a logged load — units.js, once, and nothing else',
+        quotes.length > 0 && !offLog.length, list(offLog) || quotes[0]);
 }
 
 /* ---------- report ---------- */

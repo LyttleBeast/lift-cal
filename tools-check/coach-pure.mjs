@@ -61,10 +61,17 @@ writeFileSync(join(dir, 'coach-build.mjs'), src('coach-build.js')
   .replace("from './blocks.js'", 'from ' + real('blocks.js'))
   .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
   .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href)));
+/* coach-live.js, the in-session read (ship three), is staged the same way:
+   coach.js imports it too, and it takes the same session math through the stub. */
+writeFileSync(join(dir, 'coach-live.mjs'), src('coach-live.js')
+  .replace("from './exercises.js'", 'from ' + real('exercises.js'))
+  .replace("from './units.js'", 'from ' + real('units.js'))
+  .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href)));
 writeFileSync(join(dir, 'coach.mjs'), src('coach.js')
   .replace("from './exercises.js'", 'from ' + real('exercises.js'))
   .replace("from './units.js'", 'from ' + real('units.js'))
   .replace("from './coach-build.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-build.mjs')).href))
+  .replace("from './coach-live.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-live.mjs')).href))
   .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href)));
 const C = await import(pathToFileURL(join(dir, 'coach.mjs')).href);
 
@@ -91,12 +98,13 @@ section('A. three imports, and the analytics one is a closed list');
   const imports = [...RAW.matchAll(/^import\s+(?:([^;]*?)\s+from\s+)?['"]([^'"]+)['"];?$/gm)]
     .map(m => ({ names: (m[1] || '').trim(), from: m[2] }));
 
-  // coach-build.js is the fourth, and it is held to this file's own rules in
-  // section F below — a pure module importing another pure module is still a
-  // pure module, and only while that stays true.
-  const ALLOWED = ['./exercises.js', './analytics.js', './units.js', './coach-build.js'];
+  // coach-build.js is the fourth and coach-live.js the fifth, and each is held
+  // to this file's own rules in sections F and G below — a pure module
+  // importing another pure module is still a pure module, and only while that
+  // stays true.
+  const ALLOWED = ['./exercises.js', './analytics.js', './units.js', './coach-build.js', './coach-live.js'];
   const extra = imports.map(i => i.from).filter(f => !ALLOWED.includes(f));
-  check('coach.js imports nothing outside exercises.js, analytics.js, units.js and coach-build.js',
+  check('coach.js imports nothing outside exercises.js, analytics.js, units.js, coach-build.js and coach-live.js',
         !extra.length, list(extra));
   check('and imports none of them twice',
         new Set(imports.map(i => i.from)).size === imports.length);
@@ -392,6 +400,54 @@ section('F. coach-build.js — the builder is copied byte for byte as well');
   check('propose() is what it exports, and coach.js is what calls it',
         /export function propose\(input, opts\)/.test(BCODE) &&
         /import \{[^}]*\bpropose\b[^}]*\} from '\.\/coach-build\.js'/.test(RAW));
+}
+
+/* ================= G. COACH-LIVE.JS IS HELD TO THE SAME FENCE =================
+   The in-session read is the third file the native port copies verbatim
+   (src/pure/coach-live.js). Everything F asks of the builder it asks of this,
+   and one thing that matters more here than anywhere: no clock of its own. A
+   read of a workout in progress is exactly where Date.now() is the easy thing
+   to reach for, and exactly where two renders a second apart would then
+   disagree about what he should do next. */
+section('G. coach-live.js — the in-session read is copied byte for byte as well');
+{
+  const LRAW = src('coach-live.js');
+  const LCODE = LRAW.replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n').map(l => l.replace(/(^|[^:'"\\])\/\/.*$/, '$1')).join('\n');
+  const imports = [...LRAW.matchAll(/^import\s+(?:([^;]*?)\s+from\s+)?['"]([^'"]+)['"];?$/gm)]
+    .map(m => ({ names: (m[1] || '').trim(), from: m[2] }));
+  const ALLOWED = ['./exercises.js', './analytics.js', './units.js'];
+  const extra = imports.map(i => i.from).filter(f => !ALLOWED.includes(f));
+  check('it imports nothing outside exercises.js, analytics.js and units.js', !extra.length, list(extra));
+  check('and never coach.js or coach-build.js — coach.js imports IT',
+        !imports.some(i => /coach/.test(i.from)));
+  const a = imports.find(i => i.from === './analytics.js');
+  const named = a ? a.names.replace(/[{}]/g, '').split(',').map(s => s.trim()).filter(Boolean) : [];
+  check('it takes only session math from analytics.js',
+        named.length > 0 && named.every(n => ['e1rm', 'isWorking', 'setVolume', 'mergeSessionExercises', 'exerciseIndex'].includes(n)),
+        list(named));
+  check('and never names store.js, reads or writes',
+        !/store\.js/.test(LCODE) && !/\bread\s*\(|\breadExact\s*\(|\bwrite\s*\(/.test(LCODE));
+  check('no clock at all — not even an argless new Date()',
+        !/Date\.now\s*\(/.test(LCODE) && ![...LCODE.matchAll(/new\s+Date\s*\(/g)].length &&
+        !/performance\s*\.\s*now/.test(LCODE));
+  check('no Math.random() — the same session has to read the same on both clients',
+        !/Math\s*\.\s*random/.test(LCODE));
+  ['document', 'window', 'navigator', 'localStorage', 'sessionStorage', 'fetch', 'XMLHttpRequest']
+    .forEach(g => check('no ' + g, !new RegExp('\\b' + g + '\\b').test(LCODE),
+                        (LCODE.match(new RegExp('.*\\b' + g + '\\b.*')) || [''])[0].trim()));
+  check('no console, no timers', !/\bconsole\s*\./.test(LCODE) && !/\bset(Timeout|Interval)\s*\(/.test(LCODE));
+  const topLevel = LCODE.split('\n').filter(l => /^(export\s+)?(let|var)\s/.test(l));
+  check('no top-level let or var — nothing remembered between reads',
+        !topLevel.length, list(topLevel.map(l => l.trim())));
+  check('no default export — the port copies named functions', !/export\s+default/.test(LCODE));
+  check('liveRead() is what it exports, and coach.js is what calls it',
+        /export function liveRead\(input\)/.test(LCODE) &&
+        /import \{[^}]*\bliveRead\b[^}]*\} from '\.\/coach-live\.js'/.test(RAW));
+  check('and it never writes to the live session it is handed — no assignment through `session.` or `.sets`',
+        !/\bsession\.[\w.]+\s*=[^=]/.test(LCODE) && !/\.sets\s*=[^=]/.test(LCODE) &&
+        !/\.(push|splice|pop|shift|unshift|sort|reverse)\(/.test(
+          (LCODE.match(/i\.session[^\n]*/g) || []).join('\n')));
 }
 
 /* ---------- report ---------- */

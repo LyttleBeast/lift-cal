@@ -86,10 +86,17 @@ writeFileSync(join(dir, 'coach-build.mjs'), src('coach-build.js')
   .replace("from './blocks.js'", 'from ' + real('blocks.js'))
   .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
   .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href)));
+/* coach-live.js, the in-session read (ship three), is staged the same way:
+   coach.js imports it too, and it takes the same session math through the stub. */
+writeFileSync(join(dir, 'coach-live.mjs'), src('coach-live.js')
+  .replace("from './exercises.js'", 'from ' + real('exercises.js'))
+  .replace("from './units.js'", 'from ' + real('units.js'))
+  .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href)));
 writeFileSync(join(dir, 'coach.mjs'), src('coach.js')
   .replace("from './exercises.js'", 'from ' + real('exercises.js'))
   .replace("from './units.js'", 'from ' + real('units.js'))
   .replace("from './coach-build.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-build.mjs')).href))
+  .replace("from './coach-live.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-live.mjs')).href))
   .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href)));
 const C = await import(pathToFileURL(join(dir, 'coach.mjs')).href);
 const U = await import(pathToFileURL(join(ROOT, 'units.js')).href);
@@ -741,6 +748,89 @@ section('G. the workout builder — sheet-only, and under the ban anyway');
   const pushy = notes.filter(x => PUSH.some(re => re.test(x.t)));
   check('no progression note names a next step — it says what the log shows and stops',
         notes.length > 0 && !pushy.length, list(pushy.map(x => x.t)));
+}
+
+/* ================= H. THE IN-SESSION READ ================= */
+section('H. the in-session read — unprompted under a bar, and under the ban with no exemption');
+{
+  /* The nudge under a finished exercise arrives without being asked for, in
+     the most sensitive place Coach speaks, so every line coach-live.js can
+     produce — the nudge, the answer and the why behind it — is held to the
+     card's rule. And to the health line coach-silence.mjs draws for every
+     sentence: no instruction about eating, no max attempt, nothing medical. */
+  const LCODE = decomment(src('coach-live.js'));
+  const lits = literals(LCODE).filter(t => /[a-z]{3}/i.test(t) && /\s/.test(t));
+  const srcBad = lits.map(t => ({ t, w: offence(t) })).filter(x => x.w);
+  check('no literal in coach-live.js carries a banned word (' + lits.length + ' read)',
+        lits.length >= 20 && !srcBad.length, list(srcBad.map(x => '“' + x.w + '” in: ' + x.t)));
+
+  /* The battery: twelve weeks of a chest-and-arms day, a back-and-arms day and
+     a leg day, with a warm-up on the bench and a bodyweight lift in the log,
+     and a spread of live sessions that between them reach all four answers —
+     next, another, switch, done by length and done by fatigue. Mirrored in
+     coach-live.mjs, which proves each answer is the RIGHT one; here the only
+     question is what the words and the numbers look like. */
+  const LLIB = {
+    bench:    { name: 'Barbell Bench Press',          group: 'chest', equipment: 'barbell' },
+    incline:  { name: 'Incline Dumbbell Bench Press', group: 'chest', equipment: 'dumbbell' },
+    fly:      { name: 'Cable Crossover',              group: 'chest', equipment: 'cable' },
+    dips:     { name: 'Chest Dip',                    group: 'chest', equipment: 'bodyweight' },
+    curl:     { name: 'Barbell Curl',                 group: 'arms',  equipment: 'barbell' },
+    pushdown: { name: 'Triceps Pushdown (Rope)',      group: 'arms',  equipment: 'cable' },
+    row:      { name: 'Barbell Row',                  group: 'back',  equipment: 'barbell' },
+    pulldown: { name: 'Lat Pulldown',                 group: 'back',  equipment: 'cable' },
+    squat:    { name: 'Back Squat (High Bar)',        group: 'legs',  equipment: 'barbell' },
+    rdl:      { name: 'Romanian Deadlift',            group: 'back',  equipment: 'barbell' }
+  };
+  const LLOAD = { bench: '185', incline: '65', fly: '40', dips: '0', curl: '75', pushdown: '50',
+                  row: '155', pulldown: '140', squat: '245', rdl: '205' };
+  const LREPS = { bench: 8, incline: 10, fly: 12, dips: 10, curl: 10, pushdown: 12, row: 8, pulldown: 10, squat: 5, rdl: 8 };
+  const lx = (id, n, warm) => ({ exId: id, name: LLIB[id].name, group: LLIB[id].group, equipment: LLIB[id].equipment,
+    sets: (warm ? [{ w: '95', r: '10', type: 'W', done: true }] : [])
+      .concat(Array.from({ length: n }, () => ({ w: LLOAD[id], r: String(LREPS[id]), type: 'N', done: true }))) });
+  const ls = (tag, ago, rows) => ({ id: tag + ago, startedAt: NOW - ago * DAY, _date: key(NOW - ago * DAY), exercises: rows });
+  const LHIST = [];
+  for (let k = 0; k < 10; k++) {
+    LHIST.push(ls('push', 3 + 7 * k, k === 4 || k === 7
+      ? [lx('bench', 4, true), lx('incline', 3), lx('dips', 3), lx('curl', 3)]
+      : [lx('bench', 4, true), lx('incline', 3), lx('fly', 3), lx('curl', 3), lx('pushdown', 3)]));
+    LHIST.push(ls('pull', 5 + 7 * k, [lx('row', 4), lx('pulldown', 3), lx('curl', 3)]));
+    LHIST.push(ls('legs', 1 + 7 * k, [lx('squat', 4), lx('rdl', 3)]));
+  }
+  const liveOf = rows => ({ id: 'wl', startedAt: NOW - 30 * 60 * 1000, exercises: rows.map(([id, sets]) => ({
+    exId: id, name: LLIB[id].name, group: LLIB[id].group, equipment: LLIB[id].equipment,
+    sets: sets.map(([w, r, type]) => ({ w: String(w), r: String(r), type: type || 'N', done: true })) })) });
+  const nx = (id, c) => Array.from({ length: c }, () => [LLOAD[id], LREPS[id]]);
+  const LIVES = [
+    ['next',     liveOf([['bench', nx('bench', 4)], ['incline', nx('incline', 3)]]), undefined],
+    ['another',  liveOf([['bench', nx('bench', 3)]]), undefined],
+    ['switch',   liveOf([['bench', nx('bench', 4)], ['incline', nx('incline', 3)], ['fly', nx('fly', 3)]]), undefined],
+    ['length',   liveOf([['bench', nx('bench', 4)], ['incline', nx('incline', 3)], ['fly', nx('fly', 3)],
+                         ['curl', nx('curl', 3)], ['pushdown', nx('pushdown', 3)]]), undefined],
+    ['fatigue',  liveOf([['bench', [[185, 8], [185, 8], [185, 6, 'F']]], ['incline', [[65, 10], [65, 10], [65, 7]]]]), undefined],
+    ['pull',     liveOf([['row', nx('row', 4)], ['pulldown', nx('pulldown', 3)]]), undefined],
+    ['hint',     liveOf([['bench', nx('bench', 3)], ['incline', nx('incline', 3)]]), { current: 0 }]
+  ];
+  const liveAll = u => LIVES.map(([name, s, opts]) => {
+    const a = C.coach(base({ u, sessions: sort(LHIST), lib: LLIB, hidden: [], live: { active: true } })).live(s, opts);
+    return { name, a };
+  });
+
+  const said = [];
+  ['lb', 'kg'].forEach(u => liveAll(u).forEach(({ name, a }) => {
+    if (a) [a.text, a.short].concat(a.why).forEach(t => said.push({ name: name + '/' + u, t }));
+  }));
+  const bad = said.map(x => ({ ...x, w: offence(x.t) })).filter(x => x.w);
+  check('nothing the read renders, in either unit, carries a banned word (' + said.length + ' lines)',
+        said.length >= 40 && !bad.length, list(bad.map(x => x.name + ' — “' + x.w + '” in: ' + x.t)));
+  const HEALTH = [/\beat (less|more|fewer)\b/i, /\bshould (eat|train|lift|rest|stop)\b/i,
+                  /\b(one[- ]rep max|test your max|go for a max|max attempt)\b/i, /\b(doctor|diagnos|injur|physio|pain|hurt)/i,
+                  /\b(recommended|healthy range|guideline|most people|average person)\b/i];
+  const health = said.filter(x => HEALTH.some(re => re.test(x.t)));
+  check('and none of it is an instruction about food, a max attempt, medicine or a population norm',
+        !health.length, list(health.map(x => x.t)));
+  check('the sweep reached all four answers',
+        ['next', 'another', 'switch', 'done'].every(k => liveAll('lb').some(x => x.a && x.a.kind === k)));
 }
 
 /* ---------- report ---------- */

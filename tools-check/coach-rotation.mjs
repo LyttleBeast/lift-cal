@@ -104,10 +104,17 @@ writeFileSync(join(dir, 'coach-build.mjs'), src('coach-build.js')
   .replace("from './blocks.js'", 'from ' + real('blocks.js'))
   .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
   .replace("from './analytics.js'", 'from ' + here('analytics.mjs')));
+/* coach-live.js, the in-session read (ship three), is staged the same way:
+   coach.js imports it too, and it takes the same session math through the stub. */
+writeFileSync(join(dir, 'coach-live.mjs'), src('coach-live.js')
+  .replace("from './exercises.js'", 'from ' + real('exercises.js'))
+  .replace("from './units.js'", 'from ' + real('units.js'))
+  .replace("from './analytics.js'", 'from ' + here('analytics.mjs')));
 writeFileSync(join(dir, 'coach.mjs'), src('coach.js')
   .replace("from './exercises.js'", 'from ' + real('exercises.js'))
   .replace("from './units.js'", 'from ' + real('units.js'))
   .replace("from './coach-build.js'", 'from ' + here('coach-build.mjs'))
+  .replace("from './coach-live.js'", 'from ' + here('coach-live.mjs'))
   .replace("from './analytics.js'", 'from ' + here('analytics.mjs')));
 const C = await import(pathToFileURL(join(dir, 'coach.mjs')).href);
 

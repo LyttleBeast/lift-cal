@@ -35,15 +35,16 @@
 // loadAll/allSessions are the impure half and are never touched. coach-data.js
 // is the impure gatherer and is the one file the native port rewrites.
 //
-// Imports units.js, exercises.js, the pure half of analytics.js, and
-// coach-build.js — the workout builder, which decides what goes into a
-// proposal and takes everything it knows about the log from here. Nothing
-// imports back.
+// Imports units.js, exercises.js, the pure half of analytics.js, coach-build.js
+// — the workout builder, which decides what goes into a proposal — and
+// coach-live.js, which reads a workout in progress. Both take everything they
+// know about the log from here. Nothing imports back.
 
 import { GROUPS, GROUP_ORDER } from './exercises.js';
 import { e1rm, isWorking, mergeSessionExercises, exerciseIndex } from './analytics.js';
 import { labelW, labelRate, unitW, fmtW } from './units.js';
 import { propose, liveRefusal } from './coach-build.js';
+import { liveRead } from './coach-live.js';
 
 const DAY = 864e5;
 
@@ -2058,6 +2059,25 @@ function builderInput(d) {
   };
 }
 
+/* Everything the in-session read is allowed to know about the log, and — as
+   with the builder — every piece of it is something this file already owns:
+   the twelve-week window and the recurring shapes, each defined once, here.
+   The session itself is the LIVE one the workout screen holds, handed in by
+   the caller; it is read and never written. `current` is the index of the
+   exercise in hand, when the caller knows it. */
+function liveInput(d, session, current) {
+  return {
+    now: d.now,
+    u: d.input.u === 'kg' ? 'kg' : 'lb',
+    session,
+    current: Number.isInteger(current) ? current : null,
+    sessions: d.inWindow(),
+    shapes: d.f('session.shapes') || [],
+    lib: d.lib,
+    hidden: Array.isArray(d.input.hidden) ? d.input.hidden : []
+  };
+}
+
 function toneOf(intent, d) {
   if (typeof intent.tone === 'function') {
     try { return intent.tone(d); } catch { return 'neutral'; }
@@ -2301,7 +2321,18 @@ export function coach(input) {
        neither, pays for neither. */
     build: opts => (d.f('log.confidence') === 'unknown' ? null : d.build(opts)),
     buildLive: () => (d.f('log.confidence') === 'unknown' || isMuted(d.input.settings, 'build')
-      ? null : d.buildLive())
+      ? null : d.buildLive()),
+    /* THE IN-SESSION READ (ship three): one answer of four kinds, or null —
+       coach-live.js decides which. Three gates in front of it, and all three
+       are the engine's rather than the screen's, so a caller cannot draw one
+       by forgetting to check: a log that has really been read (an unreadable
+       one silences everything, and an empty one has no habits to read); Pro,
+       because a basic account sees nothing new mid-session, not even a lock;
+       and a LIVE session — an edit of a past one is not a workout in
+       progress, and nothing is said over it. */
+    live: (session, opts) => (d.f('log.confidence') !== 'readable' || !pro ||
+      !session || typeof session !== 'object' || session._edit
+      ? null : liveRead(liveInput(d, session, opts && opts.current)))
   };
 }
 

@@ -218,9 +218,12 @@ async function rig({ data = {}, slow = [], fail = [] } = {}) {
     ['./exercises.js', real('exercises.js')], ['./analytics.js', ANALY],
     ['./units.js', real('units.js')], ['./blocks.js', real('blocks.js')],
     ['./coach-tags.js', real('coach-tags.js')]]));
+  const LIVE   = put('coach-live.mjs', swap(src('coach-live.js'), [
+    ['./exercises.js', real('exercises.js')], ['./analytics.js', ANALY],
+    ['./units.js', real('units.js')]]));
   const COACH  = put('coach.mjs', swap(src('coach.js'), [
     ['./exercises.js', real('exercises.js')], ['./analytics.js', ANALY],
-    ['./units.js', real('units.js')], ['./coach-build.js', BUILD]]));
+    ['./units.js', real('units.js')], ['./coach-build.js', BUILD], ['./coach-live.js', LIVE]]));
   const DATA_  = put('coach-data.mjs', swap(src('coach-data.js'), [
     ['./store.js', STORE], ['./exercises.js', real('exercises.js')],
     ['./picker.js', PICK], ['./tdee.js', TDEE], ['./insights.js', INSI],
