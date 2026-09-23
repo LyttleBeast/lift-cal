@@ -208,6 +208,11 @@ const CURRENT = () =>
    // the same reason as everything else here: the write being asserted about is
    // the one the app makes.
    lift('historyRows'), lift('foldSessionIntoHistory'), lift('trimHistory'),
+   // v46. runFinish counts the ticked sets collectFrom would leave out before
+   // it saves anything. Lifted rather than stubbed: it is pure, and on every
+   // session below it answers 0, which is what keeps these the same scenarios
+   // they were — tools-check/tick-targets.mjs is where the other answers live.
+   lift('unsavedTicks'),
    lift('finishWorkout'), lift('runFinish'), lift('saveEdit')].join('\n');
 
 /* The code as it stood before the fix, kept verbatim so the scenarios below

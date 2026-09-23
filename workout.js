@@ -1189,7 +1189,10 @@ function renderSet(ex, exIdx, s, i) {
   if (exIdx === coachExIdx(session) && i === 0 && showCoach(session, coachNone, coachTapped)) chk.classList.add('coach');
   chk.onclick = () => {
     coachTapped = true;
-    s.done = !s.done;
+    // Not a bare flip. A set carrying a target is filled from it as it is
+    // ticked, so the grey numbers become the numbers that are logged — the
+    // rule, and why, is at tickSet below.
+    Object.assign(s, tickSet(s));
     if (s.done) bump('setLogged');
     persistSession();
     const wasDone = s.done;
@@ -1371,6 +1374,54 @@ export function collectFrom(exercises) {
 
 function collectDone() { return collectFrom(session.exercises); }
 
+/* ---------- a tick ----------
+
+   THE RULE, decided 22 Sep 2026, and the native set-check handler builds to
+   the same words:
+
+     Ticking a set says "I did what it says". A box left empty on a set that
+     carries a target (tw / tr, from a routine or the builder) is filled from
+     that target as the set is ticked. A box he typed into is never
+     overwritten. Unticking clears nothing. A weight target of '' leaves the
+     weight empty, which collectFrom above records as '0' — a bodyweight set.
+
+   The handler used to flip `done` and nothing else. A set started from a
+   routine shows its targets as grey placeholder text, so ticking one without
+   typing left both boxes '' underneath — and collectFrom, which keeps a ticked
+   set only when it has reps, dropped it at Finish without a word. That has
+   been true of every routine-started workout since routines shipped; the
+   builder's "Start it" made it one tap away.
+
+   tw and tr are stored pounds-as-strings exactly as w and r are, so the copy
+   is direct and there is no units call — a conversion here would be the
+   second one. Pure, and HERE rather than in blocks.js (pinned, and about
+   grouping rather than sets) because it is the other half of collectFrom's
+   rule: what a tick means, beside what a tick records. The port copies both
+   from this one place, and tools-check/tick-targets.mjs drives the real one. */
+export function tickSet(s) {
+  const was = s || {};
+  if (was.done) return { ...was, done: false };
+  const blank = v => v == null || v === '';
+  const out = { ...was, done: true };
+  if (blank(was.w) && !blank(was.tw)) out.w = String(was.tw);
+  if (blank(was.r) && !blank(was.tr)) out.r = String(was.tr);
+  return out;
+}
+
+/* The ticked sets collectFrom is about to leave out: ticked, and no reps. It is
+   collectFrom's own test turned over, so the warning at Finish and the record
+   it warns about cannot disagree about which sets those are. After tickSet
+   there are two ways left to make one — a set with no reps and no rep target,
+   and a ticked set whose reps were cleared afterwards — and either is still a
+   set he tapped, so neither is dropped without a word. */
+export function unsavedTicks(exercises) {
+  let n = 0;
+  (exercises || []).forEach(ex => {
+    ((ex && ex.sets) || []).forEach(s => { if (s && s.done && s.r === '') n++; });
+  });
+  return n;
+}
+
 // Exported for tools-check/bodyweight-sets.mjs, which has to prove that a set
 // stored as w:'0' cannot inflate a volume. Nothing in the app imports it.
 export function computeVolume(done) {
@@ -1389,24 +1440,45 @@ export function computeVolume(done) {
 // the same answer however many times it runs.
 let finishing = false;
 
-async function finishWorkout() {
+// `anyway` is true only from the "Save anyway" button below. Finish itself is
+// wired straight to onclick and hands in a click event, which is not true.
+async function finishWorkout(anyway) {
   if (finishing) return;
   finishing = true;
-  try { await runFinish(); } finally { finishing = false; }
+  try { await runFinish(anyway === true); } finally { finishing = false; }
 }
 
-async function runFinish() {
+async function runFinish(anyway) {
   const done = collectDone();
+  // Ticked with no reps: collectFrom leaves them out, so they are counted here
+  // and said out loud before anything is saved. None of them is the ordinary
+  // case, and then every line below runs exactly as it always has.
+  const lost = unsavedTicks(session.exercises);
+  const lostLine = (lost === 1 ? '1 ticked set has' : lost + ' ticked sets have') +
+    ' no reps and won’t be saved.';
 
   if (!done.length) {
     confirmSheet({
       title: 'No completed sets',
-      body: 'There is nothing to save. Discard this workout?',
+      body: lost ? lostLine + ' There is nothing else to save. Discard this workout?'
+                 : 'There is nothing to save. Discard this workout?',
       confirmLabel: 'Discard',
+      ...(lost ? { cancelLabel: 'Go back' } : null),
       danger: true,
       onConfirm: () => {
         session = null; peek = false; LS.del('activeSession'); releaseWakeLock(); clearRest(); render();
       }
+    });
+    return;
+  }
+
+  if (lost && !anyway) {
+    confirmSheet({
+      title: 'Save this workout?',
+      body: lostLine,
+      confirmLabel: 'Save anyway',
+      cancelLabel: 'Go back',
+      onConfirm: () => finishWorkout(true)
     });
     return;
   }

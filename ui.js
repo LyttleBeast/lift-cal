@@ -178,7 +178,9 @@ export function fmtDuration(sec) {
 /* ---------- confirm ---------- */
 // A styled replacement for window.confirm(). Native confirm() is jarring on
 // iOS and cannot be styled; this reads as part of the app.
-export function confirmSheet({ title, body, confirmLabel = 'Confirm', danger = false, onConfirm }) {
+// `cancelLabel` is for the one sheet where "Cancel" would read as abandoning
+// something — Finish's warning about unsaved sets, where it means "Go back".
+export function confirmSheet({ title, body, confirmLabel = 'Confirm', cancelLabel = 'Cancel', danger = false, onConfirm }) {
   const { sh, close } = sheet();
   sh.appendChild(el('h2', null, title));
   if (body) sh.appendChild(noteEl(body));
@@ -188,7 +190,7 @@ export function confirmSheet({ title, body, confirmLabel = 'Confirm', danger = f
   go.onclick = () => { close(); onConfirm(); };
   sh.appendChild(go);
 
-  const cancel = el('button', 'btn btn-ghost btn-block', 'Cancel');
+  const cancel = el('button', 'btn btn-ghost btn-block', cancelLabel);
   cancel.style.marginTop = '8px';
   cancel.onclick = close;
   sh.appendChild(cancel);

@@ -602,9 +602,11 @@ check('two paths: the pre-fix writers really did disagree on a repeat',
         h.bench[0].sets.length === 2, JSON.stringify(h.bench[0].sets));
 }
 
+// Any parameter list: v46's `anyway` (the "Save anyway" re-entry from the
+// unsaved-sets sheet) comes back through this same guard, which is the point.
 check('idempotency: so finishWorkout cannot be re-entered',
       /\nlet finishing = false;/.test(WSRC) &&
-      /async function finishWorkout\(\) \{\n  if \(finishing\) return;\n  finishing = true;/.test(WSRC));
+      /async function finishWorkout\([^)]*\) \{\n  if \(finishing\) return;\n  finishing = true;/.test(WSRC));
 
 {
   const RECORD_SITE = 'await write(`workouts/${mk}/${dd}/${session.id}`, record);';
