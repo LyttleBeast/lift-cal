@@ -43,7 +43,7 @@
 import { GROUPS, GROUP_ORDER } from './exercises.js';
 import { e1rm, isWorking, mergeSessionExercises, exerciseIndex } from './analytics.js';
 import { labelW, labelRate, unitW, fmtW } from './units.js';
-import { propose, liveRefusal, buildMenu, BUILD_ASK } from './coach-build.js';
+import { propose, liveRefusal, buildMenu, swapTo, BUILD_ASK } from './coach-build.js';
 import { liveRead, LIVE_NONE } from './coach-live.js';
 
 const DAY = 864e5;
@@ -2413,6 +2413,10 @@ function factStore(input) {
     if (!buildIn) buildIn = builderInput(d);
     return liveRefusal(buildIn);
   };
+  d.swapTo = (opts, from, to) => {
+    if (!buildIn) buildIn = builderInput(d);
+    return swapTo(buildIn, opts, from, to);
+  };
   let menu = null;
   d.buildMenu = () => {
     if (!buildIn) buildIn = builderInput(d);
@@ -2684,6 +2688,13 @@ export function coach(input) {
 
   const you = view('you', []);
   const train = view('train', you.state === 'finding' ? [you.id] : []);
+  /* An answer that would say, word for word, what the sheet's opening bubble
+     already says is marked `repeats`. The sheet opens on the You card's
+     finding, and on Train "What should I train today?" is often answered by
+     that same finding — so it printed the same sentence twice, one above the
+     other. Marked here, decided here; the sheet shows the answer's follow-ups
+     under the opening bubble instead of printing it again. */
+  const withRepeat = a => (a && a.text && you && a.text === you.text ? { ...a, repeats: true } : a);
   const greet = pickGreeting(d, you.state === 'finding' ? you : null);
   const lead = leadQuestion(d, you.state === 'finding' ? you : null);
   const question = pendingQuestion(d);
@@ -2709,7 +2720,7 @@ export function coach(input) {
        mirror while saying in the same sheet that the log cannot be read is a
        mixture of confidences, and one of them is wrong. Silence is always an
        available answer. */
-    ask: id => (d.f('log.confidence') === 'unknown'
+    ask: id => withRepeat(d.f('log.confidence') === 'unknown'
       ? { ...renderIntent(INTENT_BY_ID.guard_log_unreadable, d, u), followups: [] }
       : ask(d, u, id)),
     /* The workout builder, behind the same silence. `build(opts)` is a
@@ -2727,6 +2738,10 @@ export function coach(input) {
        drawn by the sheet. Empty behind the same silences as build(). */
     buildMenu: () => (d.f('log.confidence') === 'unknown' || isMuted(d.input.settings, 'build')
       ? [] : d.buildMenu()),
+    /* "Something else…" under Swap one: the exercise he picked, as the next
+       opts, or the reason it cannot stand in (coach-build.js swapTo). */
+    swapTo: (opts, from, to) => (d.f('log.confidence') === 'unknown'
+      ? { opts: null, why: null } : d.swapTo(opts, from, to)),
     /* THE IN-SESSION READ (ship three): one answer of four kinds, or null —
        coach-live.js decides which. Four gates in front of it, and all four
        are the engine's rather than the screen's, so a caller cannot draw one

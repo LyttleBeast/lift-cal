@@ -169,13 +169,28 @@ export function frequentEmptyNote() {
 
 /* ================= PICKER ================= */
 // Multi-select. Hands back [{ id, name, group, equipment }, …].
-export function openPicker(onPick) {
+//
+// `opts`, all optional, and all of them Coach's "Something else…" under Swap
+// one (v46), which wants ONE exercise to stand in for another:
+//   filter   a muscle group to open on, as if its chip had been tapped — so the
+//            late Frequent counts never move it
+//   exclude  ids left out of every list — the exercises already on the
+//            workout being changed
+//   single   a tap picks and closes; there is nothing to confirm
+//   title    a line at the top saying what the pick is for
+// With none of them it is the picker it has always been.
+export function openPicker(onPick, opts = {}) {
   const { sh, close } = sheet();
+
+  const single  = opts.single === true;
+  const exclude = new Set(Array.isArray(opts.exclude) ? opts.exclude : []);
+  const start   = typeof opts.filter === 'string' && GROUPS[opts.filter] ? opts.filter : null;
+  if (typeof opts.title === 'string' && opts.title) sh.appendChild(el('div', 'eyebrow', opts.title));
 
   const selected = [];
   let counts  = historyCounts(history);
-  let filter  = frequentDefault(allExercises(), counts), q = '';
-  let touched = false;   // a chip has been tapped; stop choosing one for them
+  let filter  = start || frequentDefault(allExercises(), counts), q = '';
+  let touched = !!start;   // a chip has been tapped; stop choosing one for them
   let shown   = '';      // the chip and row order currently drawn
   // Ids that stay on the Frequent list at a count of zero. Once picked, never
   // unpicked: untick an exercise you have just created and the row vanishing
@@ -204,6 +219,8 @@ export function openPicker(onPick) {
   const custom = el('button', 'btn btn-ghost', 'New');
   custom.onclick = () => openCustomExercise(async x => {
     await addCustom(x);
+    // One pick wanted: the exercise just made is the pick.
+    if (single) { close(); onPick([x]); return; }
     selected.push(x);
     // Nothing made from in here has ever been logged, so on the default chip it
     // would be filtered straight back out — and this is the one flow somebody
@@ -216,7 +233,9 @@ export function openPicker(onPick) {
   addBtn.onclick = () => { if (selected.length) { close(); onPick(selected); } };
   const closeBtn = el('button', 'btn btn-ghost', 'Cancel');
   closeBtn.onclick = () => close();
-  foot.append(closeBtn, custom, addBtn);
+  // A single pick has nothing to confirm, so there is no Add button to wait on.
+  foot.append(closeBtn, custom);
+  if (!single) foot.appendChild(addBtn);
   sh.appendChild(foot);
 
   /* What the list holds right now, separately from drawing it — the background
@@ -225,6 +244,7 @@ export function openPicker(onPick) {
   function poolFor() {
     const byName = (a, b) => a.name.localeCompare(b.name);
     const matches = allExercises()
+      .filter(x => !exclude.has(x.id))
       .filter(x => !q || x.name.toLowerCase().includes(q));
     if (filter !== 'freq') {
       return matches.filter(x => filter === 'all' || x.group === filter).sort(byName);
@@ -257,6 +277,7 @@ export function openPicker(onPick) {
       b.appendChild(el('span', 'nm', x.name));
       b.appendChild(el('span', 'eq', x.equipment));
       b.onclick = () => {
+        if (single) { close(); onPick([x]); return; }
         const i = selected.findIndex(s => s.id === x.id);
         if (i >= 0) selected.splice(i, 1); else { selected.push(x); kept.add(x.id); }
         paint();

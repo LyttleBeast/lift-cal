@@ -320,6 +320,54 @@ function swapOptions(i, o, laid, e, seen) {
     });
 }
 
+/* "Something else…": the picker, for the exercise he wants that "Swap one" did
+   not list. What it opens on is decided here — the slot's own muscle group —
+   and so is what it must not offer: every exercise already on the list, and
+   every hidden one (web's picker leaves hidden ones out already; native's
+   library keeps them, so the list is handed over either way). */
+function otherFor(i, laid, e) {
+  const lib = i.lib || {};
+  const me = lib[e.from] || lib[e.exId] || {};
+  const exclude = [...new Set(laid.map(x => x.exId).concat(Array.isArray(i.hidden) ? i.hidden : []))];
+  return me.group ? { group: me.group, exclude } : null;
+}
+
+/* The exercise he picked, swapped in EXACTLY as a listed alternative is: the
+   same opts, so the same build — it brings its own last numbers or none, and
+   says which. Refused, with the reason, when it cannot stand in: hidden or not
+   in the library, already on the list, or across the line between cardio and
+   lifting, which a listed alternative never crosses either. Picking the
+   exercise the slot started with takes the swap off. */
+export function swapTo(input, opts, from, to) {
+  try {
+    const i = input || {};
+    const o = normOpts(opts);
+    if (typeof from !== 'string' || !from || typeof to !== 'string' || !to) return { opts: null, why: SWAP_WHY.gone };
+    const p = build(i, o, false);
+    const slot = p && p.exercises.find(e => e.from === from);
+    if (!slot) return { opts: null, why: SWAP_WHY.gone };
+    if (to === from) {
+      const swap = { ...o.swap };
+      delete swap[from];
+      return { opts: optsOut({ ...o, swap }), why: null };
+    }
+    if (standing(i, to) !== 'live') return { opts: null, why: SWAP_WHY.gone };
+    if (p.exercises.some(e => e.exId === to)) return { opts: null, why: SWAP_WHY.listed };
+    const lib = i.lib || {};
+    const was = lib[from] || {}, now = lib[to] || {};
+    if ((was.equipment === 'cardio') !== (now.equipment === 'cardio')) return { opts: null, why: SWAP_WHY.cardio };
+    return { opts: optsOut({ ...o, swap: { ...o.swap, [from]: to } }), why: null };
+  } catch {
+    return { opts: null, why: SWAP_WHY.gone };
+  }
+}
+
+export const SWAP_WHY = Object.freeze({
+  gone:   'That exercise is not in your library.',
+  listed: 'That exercise is already on this workout.',
+  cardio: 'A swap stays on its own side of the line between cardio and lifting.'
+});
+
 /* "Fewer exercises": the last isolation lift by coach-tags' `load`, and only
    when there is none, the last exercise. A custom exercise has no load, so it
    is never taken for an isolation lift — it goes only as the last one. */
@@ -590,7 +638,8 @@ function build(i, o, top) {
         slot: e.slot, exId: e.exId, from: e.from, name: e.name, group: e.group,
         block: e.block || null, swapped: e.swapped,
         line: setsLine(e.sets, u), note,
-        swaps: top ? swapOptions(i, o, laid, e, seen) : []
+        swaps: top ? swapOptions(i, o, laid, e, seen) : [],
+        other: top ? otherFor(i, laid, e) : null
       };
     }),
     placeholders, lastNumbers, record,

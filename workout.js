@@ -473,7 +473,12 @@ function renderCalendar() {
       if (hasActiveSession()) { toast('Finish your workout first'); return; }
       startWorkout(preset);
     },
-    save: record => saveSessionAsRoutine(record)
+    save: record => saveSessionAsRoutine(record),
+    /* "Something else…" under Swap one: the ordinary picker, opened on the
+       lift's group with what the workout already holds left out, one tap to
+       pick. coach-ui.js cannot import picker.js's sheet any more than it can
+       import this file, so the card hands it in beside start and save. */
+    pick: (spec, done) => openPicker(done, { filter: spec.group, exclude: spec.exclude, single: true, title: spec.title })
   }));
 
   // While a session is parked the Resume bar above the dock is the way back in,

@@ -1159,6 +1159,179 @@ section('I. v46 from the phone: the question first, "Build it" straight through,
   state.input = BASE;
 }
 
+/* ================= J. TWO MORE FROM THE PHONE ================= */
+section('J. an answer that repeats the opening is not printed twice; "Something else…" opens the picker');
+{
+  const NAMED = {
+    bench: { name: 'Bench', group: 'chest', equipment: 'barbell' }, row: { name: 'Row', group: 'back', equipment: 'barbell' },
+    squat: { name: 'Squat', group: 'legs', equipment: 'barbell' }, press: { name: 'Press', group: 'shoulders', equipment: 'barbell' },
+    curl: { name: 'Curl', group: 'arms', equipment: 'dumbbell' },
+    incline: { name: 'Incline Press', group: 'chest', equipment: 'dumbbell' },
+    lateral: { name: 'Lateral Raise', group: 'shoulders', equipment: 'dumbbell' },
+    flye: { name: 'Pec Deck', group: 'chest', equipment: 'machine' },
+    bike: { name: 'Bike', group: 'legs', equipment: 'cardio' }
+  };
+  const picks = [];
+  const trainOpts = { tight: true, live: false, start() {}, save() {},
+    pick: (spec, done) => picks.push({ spec, done }) };
+  const tap = (sh, label) => { const b = buttonsIn(sh).find(x => x.textContent === label); if (b) b.onclick(); return !!b; };
+  const boxes = sh => find(sh, 'coach-build').filter(b => b.parent);
+  const box0 = sh => boxes(sh)[0] || mkEl('div');
+  const namesIn = box => find(box, 'day-ex-name').map(n => n.textContent);
+  const coachTexts = sh => find(sh, 'coach-bub').filter(b => b.classList.contains('coach'))
+    .map(b => (find(b, 'coach-bub-t')[0] || {}).textContent);
+  const youTexts = sh => find(sh, 'coach-bub').filter(b => b.classList.contains('you')).map(b => textOf(b));
+  const SHAPE_Q = C.TRAIN_TOPICS.find(t => t.id === 'ask_shape').label;
+  const MAKE = C.TRAIN_TOPICS.find(t => t.id === 'ask_build').label;
+  state.pro = true; state.logKnown = true; state.ready = true;
+
+  /* ---- 8. the answer that IS the opening bubble ----
+     One recurring shape — the push day alone — so "What should I train
+     today?" is answered by the headline finding, which is also the You card's
+     finding the sheet opens on. */
+  const ONE = { ...BASE, lib: NAMED, libReady: true, hidden: [],
+    sessions: BASE.sessions.filter(x => x.id.endsWith('p')) };
+  state.input = ONE;
+  const e1 = engine(ONE);
+  check('the fixture: the sheet opens on the headline finding, and "What should I train today?" repeats it',
+        e1.opening.id === 'train_today_recommendation' && !!e1.ask('ask_shape').repeats, e1.opening.id);
+  let sh = open(UI, trainOpts).sh;
+  const openBub = find(sh, 'coach-bub').find(b => b.classList.contains('coach'));
+  tap(sh, SHAPE_Q);
+  check('tapped, the sentence is not printed twice — it is on the sheet once',
+        coachTexts(sh).filter(t => t === e1.opening.text).length === 1, JSON.stringify(coachTexts(sh)));
+  check('and the question is not printed as though it had a new answer', !youTexts(sh).includes(SHAPE_Q), list(youTexts(sh)));
+  const underOpening = chipsIn(openBub).map(b => b.textContent);
+  const wantFollow = e1.ask('ask_shape').followups.map(f => f.label);
+  check('its follow-ups hang under the opening bubble instead — "Build it" first',
+        underOpening.length > 0 && JSON.stringify(underOpening) === JSON.stringify(wantFollow) && underOpening[0] === 'Build it',
+        list(underOpening));
+  const inOpening = new Set(walk(openBub));
+  const bottom = chipsIn(sh).filter(b => !inOpening.has(b)).map(b => b.textContent);
+  check('the bottom row keeps the rest — not the question asked, not "Make me a workout" beside "Build it", nothing twice',
+        !bottom.includes(SHAPE_Q) && !bottom.includes(MAKE) && !bottom.some(l => underOpening.includes(l)),
+        list(bottom) + ' / under the opening: ' + list(underOpening));
+  tap(sh, 'Build it');
+  check('"Build it" there goes straight to the proposal', boxes(sh).length === 1 &&
+        coachTexts(sh).includes(e1.build({}).headline) && !chipsIn(openBub).length, coachTexts(sh).slice(-1)[0]);
+  // A question whose answer is NOT the opening is printed as it always was.
+  sh = open(UI, trainOpts).sh;
+  const other = C.TRAIN_TOPICS.find(t => t.id !== 'ask_shape' && t.id !== 'ask_build' &&
+    e1.topicsFor('train').some(x => x.id === t.id) && !e1.ask(t.id).repeats);
+  if (other) tap(sh, other.label);
+  check('a question with its own answer is still asked and answered in the thread',
+        !!other && youTexts(sh).includes(other.label) && coachTexts(sh).includes(e1.ask(other.id).text),
+        other ? other.label : 'no such question on the fixture');
+
+  /* ---- 9. "Something else…" ---- */
+  const BUILD = { ...BASE, lib: NAMED, libReady: true, hidden: [] };
+  state.input = BUILD;
+  const eng = engine(BUILD);
+  const p = eng.build({});
+  sh = open(UI, trainOpts).sh;
+  tap(sh, MAKE); tap(sh, 'Tell me what to train'); tap(sh, 'Change something'); tap(sh, 'Swap one');
+  const lift = p.exercises.find(e => e.exId === 'bench');
+  tap(sh, lift.name);
+  const altRow = chipsIn(box0(sh)).map(b => b.textContent);
+  check('the alternatives for a lift end with "Something else…"',
+        JSON.stringify(altRow) === JSON.stringify(lift.swaps.map(x => x.name).concat('Something else…')), list(altRow));
+  picks.length = 0;
+  tap(sh, 'Something else…');
+  check('which opens the picker the card handed in, on that lift’s group, with the workout’s own lifts left out',
+        picks.length === 1 && picks[0].spec.group === 'chest' &&
+        JSON.stringify(picks[0].spec.exclude) === JSON.stringify(lift.other.exclude) && /Bench/.test(picks[0].spec.title),
+        picks.length ? JSON.stringify(picks[0].spec) : 'not opened');
+  const row = { id: 'flye', ...NAMED.flye };
+  if (picks.length) picks[0].done([row]);
+  const next = eng.swapTo({}, lift.from, 'flye');
+  const want = next.opts ? eng.build(next.opts) : null;
+  check('picking one swaps it in exactly as a listed alternative — the engine’s own opts, the same proposal',
+        !!want && boxes(sh).length === 1 && JSON.stringify(namesIn(box0(sh))) === JSON.stringify(want.exercises.map(e => e.name)) &&
+        namesIn(box0(sh)).includes('Pec Deck') && !namesIn(box0(sh)).includes('Bench'), list(namesIn(box0(sh))));
+  check('and the thread says so, the way a listed swap is said', youTexts(sh).includes('Swap Bench for Pec Deck'), list(youTexts(sh)));
+
+  // A pick the engine refuses is said, with its reason, and changes nothing.
+  sh = open(UI, trainOpts).sh;
+  tap(sh, MAKE); tap(sh, 'Tell me what to train'); tap(sh, 'Change something'); tap(sh, 'Swap one'); tap(sh, 'Bench');
+  picks.length = 0; tap(sh, 'Something else…');
+  const before = namesIn(box0(sh));
+  if (picks.length) picks[0].done([{ id: 'bike', ...NAMED.bike }]);
+  check('cardio for a lift: refused in the thread with the engine’s reason, and the workout stays as it was',
+        coachTexts(sh).includes('Coach can’t swap that one in.') &&
+        find(sh, 'coach-bub-r').some(n => n.textContent === C.coach({ ...BUILD, tier: { pro: true } }).swapTo({}, 'bench', 'bike').why) &&
+        JSON.stringify(namesIn(box0(sh))) === JSON.stringify(before), list(coachTexts(sh).slice(-2)));
+
+  // A lift the engine found no alternative for is still offered, because the
+  // picker is always there.
+  const LONE = { ...BUILD, lib: Object.fromEntries(Object.entries(NAMED).filter(([k]) => k !== 'incline' && k !== 'flye')) };
+  state.input = LONE;
+  const pl = engine(LONE).build({});
+  const lone = pl.exercises.find(e => !e.swaps.length);
+  sh = open(UI, trainOpts).sh;
+  tap(sh, MAKE); tap(sh, 'Tell me what to train'); tap(sh, 'Change something'); tap(sh, 'Swap one');
+  check('a lift with no listed alternative is on Swap one’s list — "Something else…" is always somewhere to go',
+        !!lone && chipsIn(box0(sh)).some(b => b.textContent === lone.name), lone ? lone.name : 'every lift had one');
+  if (lone) tap(sh, lone.name);
+  check('and its row is "Something else…" alone', !!lone &&
+        JSON.stringify(chipsIn(box0(sh)).map(b => b.textContent)) === JSON.stringify(['Something else…']));
+  // Without a picker handed in, there is no "Something else…".
+  state.input = BUILD;
+  sh = open(UI, { tight: true, live: false, start() {}, save() {} }).sh;
+  tap(sh, MAKE); tap(sh, 'Tell me what to train'); tap(sh, 'Change something'); tap(sh, 'Swap one'); tap(sh, 'Bench');
+  check('a card that hands in no picker offers no "Something else…"', !chipsIn(box0(sh)).some(b => b.textContent === 'Something else…'));
+  const WS = src('workout.js');
+  check('the Train card hands in the ordinary picker: that group, those left out, one tap',
+        /pick: \(spec, done\) => openPicker\(done, \{ filter: spec\.group, exclude: spec\.exclude, single: true, title: spec\.title \}\)/.test(WS));
+  state.input = BASE;
+}
+
+/* ================= K. THE PICKER, AS "SOMETHING ELSE…" OPENS IT ================= */
+section('K. the real picker: opened on a group, the workout’s lifts and hidden ones out, one tap picks');
+{
+  /* picker.js, driven for real through this file's DOM shim: its store is a
+     stub whose one answer is a hidden list, so a hidden exercise is really
+     hidden, and the log it warms behind the sheet is empty. */
+  writeFileSync(join(dir, 'picker-store.mjs'), `
+export async function read(path, fallback) { return path === 'exercises/hidden' ? ['incline-dumbbell-bench-press'] : fallback; }
+export async function write() {}
+`);
+  writeFileSync(join(dir, 'usage-stub.mjs'), 'export function bump() {}\n');
+  writeFileSync(join(dir, 'picker.mjs'), src('picker.js')
+    .replace("from './store.js'", "from './picker-store.mjs'")
+    .replace("from './usage.js'", "from './usage-stub.mjs'")
+    .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href))
+    .replace("from './exercises.js'", 'from ' + real('exercises.js'))
+    .replace("from './ui.js'", 'from ' + real('ui.js')));
+  const P = await import(pathToFileURL(join(dir, 'picker.mjs')).href);
+  const { EXERCISES } = await import(real('exercises.js').slice(1, -1));
+  const byName = Object.fromEntries(EXERCISES.map(x => [x.name, x]));
+  await P.initPicker({});
+  body.children.length = 0;
+  const got = [];
+  P.openPicker(chosen => got.push(chosen), { filter: 'chest', exclude: ['barbell-bench-press'], single: true,
+    title: 'Swap Barbell Bench Press for…' });
+  const sh = body.children.find(x => x.classList.contains('sheet'));
+  const rows = find(sh, 'ex-item').map(b => (find(b, 'nm')[0] || {}).textContent);
+  check('it opens on the chest chip', find(sh, 'chip').some(c => c.textContent === 'Chest' && c.classList.contains('on')));
+  check('every row is a chest exercise', rows.length > 5 && rows.every(n => byName[n] && byName[n].group === 'chest'),
+        list(rows.filter(n => !byName[n] || byName[n].group !== 'chest')));
+  check('the lift on the workout is not among them, and neither is the hidden one',
+        !rows.includes('Barbell Bench Press') && !rows.includes(EXERCISES.find(x => x.id === 'incline-dumbbell-bench-press').name));
+  check('it says what the pick is for, and has no Add button to wait on',
+        textOf(sh).includes('Swap Barbell Bench Press for…') && !buttonsIn(sh).some(b => /^Add/.test(b.textContent)));
+  find(sh, 'ex-item')[0].onclick();
+  check('one tap picks: the sheet closes and hands back that one exercise',
+        !body.children.includes(sh) && got.length === 1 && got[0].length === 1 && got[0][0].name === rows[0], JSON.stringify(got));
+  // And with nothing asked of it, it is the picker it always was.
+  body.children.length = 0;
+  P.openPicker(() => {});
+  const plain = body.children.find(x => x.classList.contains('sheet'));
+  check('opened plainly, it is the ordinary picker — multi-select, with its Add button',
+        buttonsIn(plain).some(b => /^Add/.test(b.textContent)) &&
+        find(plain, 'ex-item').map(b => (find(b, 'nm')[0] || {}).textContent).includes('Barbell Bench Press'));
+  body.children.length = 0;
+}
+
 /* ---------- report ---------- */
 console.log('\nthe lock means something, and the sheet knows which card opened it\n');
 console.log(results.join('\n'));

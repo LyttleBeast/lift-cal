@@ -322,9 +322,30 @@ export function openCoachSheet(opts = {}) {
   function run(id, label) {
     asked.add(id);
     if (buttons) { buttons.remove(); buttons = null; }
-    bubble('you', label);
+    if (openingRow) { openingRow.remove(); openingRow = null; }
     let a;
     try { a = c.ask(id); } catch { a = null; }
+    /* The answer IS the opening bubble, word for word — the engine says so
+       (`repeats`). Printing it again under the question put the same sentence
+       on screen twice, one above the other. So nothing is printed: the
+       answer's own follow-ups ("Build it" and the rest) go under the opening
+       bubble, where the sentence they follow already is. */
+    if (a && a.repeats) {
+      const follow = offer(a.followups || []).filter(f => !asked.has(f.id));
+      if (follow.length) {
+        openingRow = el('div', 'coach-chips');
+        follow.forEach(item => {
+          const b = el('button', 'coach-chip', item.label);
+          b.onclick = () => run(item.id, item.label);
+          openingRow.appendChild(b);
+        });
+        openingBub.appendChild(openingRow);
+      }
+      showButtons(topics.filter(t => !asked.has(t.id) &&
+        !follow.some(f => f.id === t.id || f.stands === t.id)));
+      return;
+    }
+    bubble('you', label);
     if (!a) {
       bubble('coach', 'Coach can’t answer that one.', 'It only says things it can back with a number from your own log.');
     } else {
@@ -394,8 +415,10 @@ export function openCoachSheet(opts = {}) {
 
   // The opening bubble is already on screen when the sheet opens: it is the
   // same finding the card that opened it is showing, so the two cannot
-  // disagree in the half second between the tap and the paint.
-  bubble('coach', c.opening.text, c.opening.reason);
+  // disagree in the half second between the tap and the paint. Kept, because
+  // an answer that repeats it hangs its follow-ups here (`repeats`, above).
+  const openingBub = bubble('coach', c.opening.text, c.opening.reason);
+  let openingRow = null;
 
   /* A session is running, so there is no "Make me a workout" — starting one
      would replace it. The sheet says so in one line, and only where the
@@ -411,6 +434,30 @@ export function openCoachSheet(opts = {}) {
      never an interview: a tap is a new set of opts, the engine builds again
      from scratch, and the proposal on screen is replaced. The words on every
      button and chip come from proposalBlock() below; this is only the glue. */
+  /* "Something else…" under Swap one: the picker the Train card hands in,
+     opened on that exercise's group with what is already on the workout left
+     out (the engine's `other`), and one tap to pick. The pick is swapped in by
+     the engine exactly as a listed alternative is — c.swapTo gives the same
+     opts — or refused with the engine's reason. */
+  function pickOther(e) {
+    opts.pick({ ...e.other, title: 'Swap ' + e.name + ' for…' }, chosen => {
+      const x = Array.isArray(chosen) ? chosen[0] : null;
+      if (!x || !x.id) return;
+      // A custom exercise made from inside the picker is in the library now
+      // and was not when this sheet opened, so the engine is asked afresh.
+      try { c = coach(coachInput({ live: liveOf(opts) })); } catch {}
+      let r = null;
+      try { r = c.swapTo(buildOpts, e.from, x.id); } catch { r = null; }
+      const label = 'Swap ' + e.name + ' for ' + String(x.name || x.id);
+      if (r && r.opts) { adjust(r.opts, label, false); return; }
+      if (buttons) { buttons.remove(); buttons = null; }
+      bubble('you', label);
+      bubble('coach', SWAP_NONE, (r && r.why) || '');
+      showButtons(chipList);
+      scroll();
+    });
+  }
+
   function drawProposal(p) {
     if (buildBox) buildBox.remove();
     buildBox = proposalBlock(p, {
@@ -423,6 +470,8 @@ export function openCoachSheet(opts = {}) {
       // Saving leaves the sheet where it is: the routine sheet opens over it
       // and shows its own "Saved <name>" when it is done.
       save: typeof opts.save === 'function' ? record => opts.save(record) : null,
+      // Only a card that can open the picker offers "Something else…".
+      other: typeof opts.pick === 'function' ? pickOther : null,
       adjust
     });
     thread.appendChild(buildBox);
@@ -564,6 +613,8 @@ function proPanel() {
      Change something            the follow-ups; absent if there are none */
 const BUILD_NONE = 'Coach can’t build that one.';
 const BUILD_NONE_WHY = 'Nothing in your log fits it, and Coach would rather say so than guess.';
+const SWAP_NONE = 'Coach can’t swap that one in.';
+const SOMETHING_ELSE = 'Something else…';
 
 function proposalBlock(p, on) {
   const box = el('div', 'coach-build');
@@ -610,8 +661,13 @@ function proposalBlock(p, on) {
     });
     box.appendChild(row);
   };
+  /* A lift has somewhere to go when the engine listed an alternative — or,
+     when the card can open the picker, always: "Something else…" ends every
+     row of alternatives and opens the picker on that lift's group. */
+  const canPick = typeof on.other === 'function';
   const seen = new Set();
-  const swappable = p.exercises.filter(e => e.swaps.length && !seen.has(e.exId) && seen.add(e.exId));
+  const swappable = p.exercises.filter(e => (e.swaps.length || (canPick && e.other)) &&
+    !seen.has(e.exId) && seen.add(e.exId));
   const changes = [];
   if (p.focuses.length) {
     changes.push({ label: 'Train something else',
@@ -622,7 +678,8 @@ function proposalBlock(p, on) {
     changes.push({ label: 'Swap one',
       run: () => chips(swappable.map(e => ({ label: e.name,
         run: () => chips(e.swaps.map(x => ({ label: x.name,
-          run: () => on.adjust(x.opts, 'Swap ' + e.name + ' for ' + x.name, false) }))) }))) });
+          run: () => on.adjust(x.opts, 'Swap ' + e.name + ' for ' + x.name, false) }))
+          .concat(canPick && e.other ? [{ label: SOMETHING_ELSE, run: () => on.other(e) }] : [])) }))) });
   }
   if (changes.length) button('Change something', false, () => chips(changes));
 

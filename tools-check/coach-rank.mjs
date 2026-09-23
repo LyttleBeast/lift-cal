@@ -531,6 +531,32 @@ section('H. at most one question, and only one that changes a rule');
         [noDir, answered, withDir, waiting, muted].every(c => c.question === null || typeof c.question.id === 'string'));
 }
 
+/* ================= I. AN ANSWER THAT REPEATS THE OPENING ================= */
+section('I. an answer that would repeat the sheet’s opening bubble is marked, and only then');
+{
+  /* v46, from the phone: the sheet opens on the You card's finding, and a
+     question whose answer IS that finding printed the same sentence twice,
+     one above the other. The engine marks such an answer `repeats`; the sheet
+     prints nothing and hangs the answer's follow-ups under the opening bubble
+     (coach-surface.mjs J). Decided here, by the text itself, word for word. */
+  const c = on({});
+  const same = C.ROUTE_IDS.filter(id => c.ask(id).text === c.opening.text);
+  check('the fixture has a question answered by the opening bubble word for word',
+        same.length > 0, c.opening.id + ': ' + list(same));
+  const wrong = C.ROUTE_IDS.filter(id => !!c.ask(id).repeats !== (c.ask(id).text === c.opening.text));
+  check('every such answer is marked `repeats`, and no other answer is', !wrong.length, list(wrong));
+  const a = c.ask(same[0]);
+  check('the mark changes nothing else — the answer keeps its id, words and follow-ups',
+        a.id === c.opening.id && a.reason === c.opening.reason && Array.isArray(a.followups), a.id);
+  // Move the opening and the same answer stops being a repeat: the mark is
+  // about the sheet in front of him, not about the answer on its own.
+  const cat = (C.INTENTS.find(i => i.id === c.opening.id) || {}).category;
+  const moved = on({ settings: { ...BASE.settings, mute: { [cat]: true } } });
+  check('mute the opening’s category and the opening moves; the same answer is then not a repeat',
+        moved.opening.text !== c.opening.text && !moved.ask(same[0]).repeats,
+        moved.opening.id + ' / ' + moved.ask(same[0]).id);
+}
+
 /* ---------- report ---------- */
 console.log('\nthe ranking rule is total, and it is honest about what it dropped\n');
 console.log(results.join('\n'));

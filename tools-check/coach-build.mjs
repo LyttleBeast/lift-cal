@@ -663,6 +663,78 @@ section('K. the question "Make me a workout" asks, decided here — Coach’s pi
         !/Tell me what to train/.test(src('coach-ui.js')) && /c\.buildMenu\(\)/.test(src('coach-ui.js')));
 }
 
+/* ================= L. SOMETHING ELSE… ================= */
+section('L. "Something else…": any exercise he picks, swapped in exactly as a listed alternative is');
+{
+  /* v46, from the phone: Swap one lists five alternatives at most, and the one
+     he wanted was often not among them. "Something else…" opens the picker on
+     that lift's group; the pick comes back through swapTo(), which is pure and
+     decides whether it may stand in and with what opts. The sheet decides
+     nothing. */
+  check('swapTo and its reasons are exported from coach-build.js, and coach.js hands swapTo on',
+        typeof B.swapTo === 'function' && Object.isFrozen(B.SWAP_WHY) && typeof c.swapTo === 'function');
+
+  // For every listed alternative, the pick of the same exercise is the SAME
+  // opts — so it is the same build, byte for byte.
+  const listed = p.exercises.flatMap(e => e.swaps.map(x => ({ e, x })));
+  const differ = listed.filter(({ e, x }) => { const r = c.swapTo({}, e.from, x.exId); return !r.opts || !same(r.opts, x.opts); });
+  check('picking a listed alternative gives exactly the opts the listed chip gives (' + listed.length + ' of them)',
+        listed.length >= 5 && !differ.length, list(differ.map(({ e, x }) => e.name + ' -> ' + x.name)));
+
+  // One he could only have reached through the picker: same group, not listed,
+  // not on the list — here, a chest lift of another pattern.
+  const bench = p.exercises.find(e => e.exId === 'barbell-bench-press');
+  const offList = Object.keys(LIB).filter(id => LIB[id].group === 'chest' && LIB[id].equipment !== 'cardio' &&
+    !bench.other.exclude.includes(id) && !bench.swaps.some(x => x.exId === id));
+  const pickId = offList.find(id => tagsFor(id) && tagsFor(bench.exId) && tagsFor(id).pattern !== tagsFor(bench.exId).pattern);
+  const r = c.swapTo({}, bench.from, pickId);
+  const q = r.opts ? c.build(r.opts) : null;
+  check('a chest lift the list did not offer — ' + (LIB[pickId] || {}).name + ' — swaps in, in bench’s place',
+        !!q && q.exercises.some(e => e.exId === pickId && e.from === bench.from && e.swapped) &&
+        !q.exercises.some(e => e.exId === bench.exId), r.why || (q && q.key));
+  const inPlace = q && q.exercises.find(e => e.exId === pickId);
+  check('bringing its own numbers or none, and saying which — never bench’s',
+        !!inPlace && (/^Numbers from /.test(inPlace.note) || inPlace.note === 'Not in your log yet, so there are no numbers to show.') &&
+        !String(inPlace.line).includes('185'), inPlace && inPlace.note + ' / ' + inPlace.line);
+
+  // What it refuses, each with the engine's own reason.
+  const already = p.exercises.find(e => e.exId !== bench.exId).exId;
+  check('an exercise already on the workout: refused, "already on this workout"',
+        c.swapTo({}, bench.from, already).opts === null && c.swapTo({}, bench.from, already).why === B.SWAP_WHY.listed);
+  check('a hidden one: refused — whether the library leaves it out (web) or keeps it (native)',
+        c.swapTo({}, bench.from, HIDDEN[0]).opts === null &&
+        C.coach(base({ lib: { ...LIB, [HIDDEN[0]]: { name: 'Cable Crossover', group: 'chest', equipment: 'cable' } } }))
+          .swapTo({}, bench.from, HIDDEN[0]).opts === null);
+  const cardio = Object.keys(LIB).find(id => LIB[id].equipment === 'cardio');
+  check('cardio for a lift: refused — a swap stays on its own side of that line',
+        c.swapTo({}, bench.from, cardio).opts === null && c.swapTo({}, bench.from, cardio).why === B.SWAP_WHY.cardio, cardio);
+  check('something not in the library at all: refused', c.swapTo({}, bench.from, 'no-such-lift').opts === null);
+  check('a slot that is not on the workout: refused', c.swapTo({}, 'no-such-slot', pickId).opts === null);
+  check('picking the lift the slot started with takes the swap off',
+        same(c.swapTo(r.opts, bench.from, bench.from).opts, {}), JSON.stringify(c.swapTo(r.opts, bench.from, bench.from)));
+  const twice = c.swapTo(r.opts, bench.from, offList.find(id => id !== pickId));
+  check('and a second pick replaces the first, keeping every other change', !!twice.opts &&
+        Object.keys(twice.opts.swap).length === 1 && twice.opts.swap[bench.from] !== pickId);
+  check('a drop made before the pick survives it', (() => {
+    const f = c.swapTo(p.fewer, bench.from, pickId);
+    return !!f.opts && same(f.opts.drop, p.fewer.drop);
+  })());
+
+  // What the picker is opened on, decided here too.
+  check('every lift carries what the picker opens on: its own group, and what to leave out',
+        p.exercises.every(e => e.other && e.other.group === LIB[e.from].group &&
+          p.exercises.every(x => e.other.exclude.includes(x.exId)) && HIDDEN.every(h => e.other.exclude.includes(h))),
+        JSON.stringify(bench.other));
+  // After "Fewer", the lift that went is no longer on the workout, so the
+  // picker may offer it again — its exclude list follows what is on screen.
+  const fewerP = c.build(p.fewer);
+  const gone = (p.exercises.find(e => e.slot === p.fewer.drop[0]) || {}).exId;
+  check('a proposal rebuilt after "Fewer exercises" carries it too, and the lift that went can be picked again',
+        !!gone && fewerP.exercises.every(e => e.other && e.other.group === LIB[e.from].group &&
+          (fewerP.exercises.some(x => x.exId === gone) || !e.other.exclude.includes(gone))), gone);
+  check('same input, same answer', JSON.stringify(c.swapTo({}, bench.from, pickId)) === JSON.stringify(C.coach(FULL).swapTo({}, bench.from, pickId)));
+}
+
 /* ---------- report ---------- */
 console.log('\nCoach builds from the last time you did it\n');
 console.log(results.join('\n'));
