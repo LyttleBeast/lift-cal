@@ -235,6 +235,20 @@ h2 { font-size: 18px; }
   transition: border-color var(--fast) var(--ease);
 }
 .field input:focus, .field select:focus { border-color: var(--p-yellow); outline: none; }
+/* Weight → "Weighed earlier?" (weight.js). WebKit sizes a date-and-time
+   control from its formatted value rather than from `width`, so on a narrow
+   phone this box ran past the card's right edge — and iOS then shrank the
+   whole page to fit it, which is what squashed the Log button above it. The
+   box sits in its own block under the Log row, not beside it, so nothing here
+   touches Log: min-width: 0 and a max-width let it take the card's width, and
+   appearance: none is what makes iOS honour that width at all. The picker
+   still opens on tap. The value is pinned left, where iOS otherwise centres
+   it inside the box. Not seen on a phone from here — see COACH-REPORT §24. */
+.field input[type=datetime-local] {
+  display: block; min-width: 0; max-width: 100%;
+  -webkit-appearance: none; appearance: none;
+}
+.field input[type=datetime-local]::-webkit-date-and-time-value { text-align: left; }
 .auth-err { color: var(--p-red); font-size: 13px; min-height: 18px; }
 
 /* ============ CALENDAR — the signature ============ */
