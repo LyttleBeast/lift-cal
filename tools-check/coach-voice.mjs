@@ -717,6 +717,21 @@ section('G. the workout builder — sheet-only, and under the ban anyway');
         /A workout is running/.test(blob),
         said.length + ' lines');
 
+  /* And the sheet's own words for the proposal — the four buttons, the three
+     follow-ups, "Swap X for Y", and the line for a focus that cannot build —
+     which live in coach-ui.js rather than in a template. The section of that
+     file that draws the proposal is read and nothing else of it: the rest of
+     the sheet is ordinary sheet copy, exempt for the reason at the top. */
+  const UIS = src('coach-ui.js');
+  const from = UIS.indexOf('/* ================= THE PROPOSAL =================');
+  const to = UIS.indexOf('/* ================= THE SETTINGS SECTION');
+  const uiCopy = from !== -1 && to > from ? literals(decomment(UIS.slice(from, to))).filter(t => /[a-z]{3}/i.test(t) && /\s/.test(t)) : [];
+  const uiBad = uiCopy.map(t => ({ t, w: offence(t) })).filter(x => x.w);
+  check('the proposal’s own copy in coach-ui.js was found and read (' + uiCopy.length + ' strings)',
+        uiCopy.length >= 6 && ['Start it', 'Start with my last numbers', 'Save as routine', 'Change something']
+          .every(l => uiCopy.includes(l)), list(uiCopy));
+  check('and carries no banned word', !uiBad.length, list(uiBad.map(x => '“' + x.w + '” in: ' + x.t)));
+
   /* The nudge is a readout and never a push. A set taken to failure is SAID,
      not answered — no "try", no "go up", no next weight — which is the whole
      of what "progression is a nudge, never baked in" means in a sentence. */

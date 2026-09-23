@@ -454,8 +454,23 @@ function renderCalendar() {
 
      coach.js has already made sure this is not the finding the You card is
      showing, so opening one tab after the other reads as two things noticed
-     rather than one thing said twice. */
-  wrap.appendChild(coachCard({ tight: true, live: hasActiveSession() }));
+     rather than one thing said twice.
+
+     `start` and `save` are the workout builder's two ways out, handed in the
+     way openRoutines() below is handed startWorkout: coach-ui.js cannot import
+     this file, because this file imports it, and the edge back would close a
+     ring. So the dependency stays one-way and the card that can start a
+     workout is the only one that offers to build one. The builder never
+     proposes during a live session; the guard here is for the race it cannot
+     see, a session started elsewhere while the sheet was open. */
+  wrap.appendChild(coachCard({
+    tight: true, live: hasActiveSession(),
+    start: preset => {
+      if (hasActiveSession()) { toast('Finish your workout first'); return; }
+      startWorkout(preset);
+    },
+    save: record => saveSessionAsRoutine(record)
+  }));
 
   // While a session is parked the Resume bar above the dock is the way back in,
   // so a second button saying the same thing would just be noise.

@@ -17,9 +17,13 @@
 // state there is, which is also why closing and reopening it can never show
 // something the card contradicts.
 //
-// Imports coach.js, coach-data.js and ui.js. Nothing imports back.
+// Imports coach.js, coach-data.js, ui.js and exercises.js (for a group's
+// colour, nothing more). Nothing imports back — workout.js imports THIS file,
+// which is why starting a workout from the sheet is a function the Train card
+// hands in rather than an import here.
 
 import { el, sheet, noteEl, segmented, toast } from './ui.js';
+import { GROUPS } from './exercises.js';
 import { coach, CATEGORIES, QUESTIONS, PRO_ADDS } from './coach.js';
 import { coachInput, coachReady, coachLogKnown, rememberGreeting, coachSettings, coachSettingsKnown,
          setCategoryMuted, answerQuestion, markAsked, liveSessionOnDevice } from './coach-data.js';
@@ -281,6 +285,12 @@ export function openCoachSheet(opts = {}) {
   const asked = new Set();
   const topics = offer(c.topicsFor(surface));
   let buttons = null;
+  let chipList = [];
+  // The builder's state for this sitting: the opts the proposal on screen was
+  // built with, and the proposal's box. One proposal is live at a time — an
+  // adjustment replaces it rather than stacking a second set of buttons.
+  let buildOpts = {};
+  let buildBox = null;
 
   const scroll = () => { try { sh.scrollTop = sh.scrollHeight; } catch {} };
 
@@ -293,6 +303,7 @@ export function openCoachSheet(opts = {}) {
   }
 
   function showButtons(list) {
+    chipList = list;
     if (buttons) buttons.remove();
     buttons = el('div', 'coach-chips');
     list.forEach(item => {
@@ -314,6 +325,12 @@ export function openCoachSheet(opts = {}) {
       bubble('coach', 'Coach can’t answer that one.', 'It only says things it can back with a number from your own log.');
     } else {
       bubble('coach', a.text, a.reason);
+      // The builder's answer is a bubble AND the workout under it. Nothing is
+      // asked first: the default proposal is on screen the moment the chip is.
+      if (a.id === 'build_workout' && canBuild) {
+        const p = c.build(buildOpts);
+        if (p) drawProposal(p);
+      }
     }
     // Never offer the same question twice in one sitting, and always leave a
     // way back to this surface's own topics. A follow-up and a topic can be the
@@ -328,6 +345,55 @@ export function openCoachSheet(opts = {}) {
   // same finding the card that opened it is showing, so the two cannot
   // disagree in the half second between the tap and the paint.
   bubble('coach', c.opening.text, c.opening.reason);
+
+  /* A session is running, so there is no "Make me a workout" — starting one
+     would replace it. The sheet says so in one line, and only where the
+     builder would otherwise have been offered: on Train, on Pro, and with a
+     proposal the log could really build. */
+  if (canBuild && c.pro) {
+    let line = null;
+    try { line = c.buildLive(); } catch { line = null; }
+    if (line) bubble('coach', line);
+  }
+
+  /* THE WORKOUT, AND THE WAYS ON FROM IT. Every adjustment is a follow-up and
+     never an interview: a tap is a new set of opts, the engine builds again
+     from scratch, and the proposal on screen is replaced. The words on every
+     button and chip come from proposalBlock() below; this is only the glue. */
+  function drawProposal(p) {
+    if (buildBox) buildBox.remove();
+    buildBox = proposalBlock(p, {
+      start: preset => {
+        close();
+        // A copy. The live session is edited in place, set by set, and must
+        // share nothing with a proposal the engine is still holding.
+        opts.start(JSON.parse(JSON.stringify(preset)));
+      },
+      // Saving leaves the sheet where it is: the routine sheet opens over it
+      // and shows its own "Saved <name>" when it is done.
+      save: typeof opts.save === 'function' ? record => opts.save(record) : null,
+      adjust
+    });
+    thread.appendChild(buildBox);
+  }
+  function adjust(next, label, refocus) {
+    buildOpts = next;
+    if (buildBox) { buildBox.remove(); buildBox = null; }
+    if (buttons) { buttons.remove(); buttons = null; }
+    bubble('you', label);
+    let p = null;
+    try { p = c.build(next); } catch { p = null; }
+    if (!p) {
+      bubble('coach', BUILD_NONE, BUILD_NONE_WHY);
+    } else {
+      // A new focus is a new workout and gets its own first line; fewer and
+      // swap are the same workout, redrawn.
+      if (refocus) bubble('coach', p.headline, p.reason.join(' '));
+      drawProposal(p);
+    }
+    showButtons(chipList);
+    scroll();
+  }
 
   /* Coach's one question, if it has earned the right to ask one. Three gates
      have already been passed inside the engine — the category is not muted,
@@ -425,6 +491,91 @@ function proPanel() {
        needs to change when it does. */
 
   return b;
+}
+
+/* ================= THE PROPOSAL =================
+   What "Make me a workout" draws under its answer: his routine by his name if
+   he has one for this, then the exercises — name, the sets as he did them,
+   and one dim line of what the log shows — then what was left out and why,
+   then exactly four buttons. Built from the recap's own list (.day-ex) and
+   the workout screen's block label, because it is the same thing turned
+   forward: what he did, about to be done again.
+
+   Every string here is fenced by coach-voice.mjs section G, which reads this
+   section of the file and nothing else of it.
+
+     Start it                    the placeholders: his numbers as ghost text
+     Start with my last numbers  the boxes filled and nothing ticked — absent
+                                 after a layoff, when there is no such view
+     Save as routine             saveSessionAsRoutine(record), named for the
+                                 shape — absent if the card cannot save
+     Change something            the follow-ups; absent if there are none */
+const BUILD_NONE = 'Coach can’t build that one.';
+const BUILD_NONE_WHY = 'Nothing in your log fits it, and Coach would rather say so than guess.';
+
+function proposalBlock(p, on) {
+  const box = el('div', 'coach-build');
+  if (p.routineLine) box.appendChild(el('div', 'coach-build-note mine', p.routineLine));
+
+  let inBlock = null;
+  p.exercises.forEach(e => {
+    if (e.block && e.block !== inBlock) box.appendChild(el('div', 'wk-block-title', 'Block ' + e.block));
+    inBlock = e.block || null;
+    const row = el('div', 'day-ex');
+    const tag = el('i', 'day-ex-tag');
+    tag.style.background = (GROUPS[e.group] || {}).color || 'var(--dim)';
+    const body = el('div', 'day-ex-body');
+    body.appendChild(el('div', 'day-ex-name', e.name));
+    body.appendChild(el('div', 'day-ex-sets num', e.line));
+    if (e.note) body.appendChild(el('div', 'coach-build-w', e.note));
+    row.append(tag, body);
+    box.appendChild(row);
+  });
+  if (p.leftOutLine) box.appendChild(el('div', 'coach-build-note', p.leftOutLine));
+  if (p.layoffLine) box.appendChild(el('div', 'coach-build-note', p.layoffLine));
+
+  const acts = el('div', 'coach-build-acts');
+  const button = (label, primary, fn) => {
+    const b = el('button', 'btn ' + (primary ? 'btn-primary' : 'btn-ghost') + ' btn-block', label);
+    b.onclick = fn;
+    acts.appendChild(b);
+  };
+  button('Start it', true, () => on.start(p.placeholders));
+  if (p.lastNumbers) button('Start with my last numbers', false, () => on.start(p.lastNumbers));
+  if (on.save) button('Save as routine', false, () => on.save(p.record));
+
+  // The follow-ups, one row at a time inside the proposal, each chip either a
+  // new set of opts or the next row down. The engine has already decided which
+  // of these exist: every focus offered builds, every swap is a real lift.
+  let row = null;
+  const chips = items => {
+    if (row) row.remove();
+    row = el('div', 'coach-chips');
+    items.forEach(it => {
+      const b = el('button', 'coach-chip', it.label);
+      b.onclick = it.run;
+      row.appendChild(b);
+    });
+    box.appendChild(row);
+  };
+  const seen = new Set();
+  const swappable = p.exercises.filter(e => e.swaps.length && !seen.has(e.exId) && seen.add(e.exId));
+  const changes = [];
+  if (p.focuses.length) {
+    changes.push({ label: 'Train something else',
+      run: () => chips(p.focuses.map(f => ({ label: f.label, run: () => on.adjust(f.opts, f.label, true) }))) });
+  }
+  if (p.fewer) changes.push({ label: 'Fewer exercises', run: () => on.adjust(p.fewer, 'Fewer exercises', false) });
+  if (swappable.length) {
+    changes.push({ label: 'Swap one',
+      run: () => chips(swappable.map(e => ({ label: e.name,
+        run: () => chips(e.swaps.map(x => ({ label: x.name,
+          run: () => on.adjust(x.opts, 'Swap ' + e.name + ' for ' + x.name, false) }))) }))) });
+  }
+  if (changes.length) button('Change something', false, () => chips(changes));
+
+  box.appendChild(acts);
+  return box;
 }
 
 /* ================= THE SETTINGS SECTION =================

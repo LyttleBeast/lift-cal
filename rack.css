@@ -2075,6 +2075,22 @@ body.peeking .view.active { padding-bottom: 58px; }
 }
 .coach-chip:active { transform: scale(.96); border-color: var(--p-yellow); }
 
+/* ---------- the workout builder's proposal ----------
+   Drawn with the recap's own list (.day-ex) and the workout screen's block
+   label (.wk-block-title) rather than a new component, because it is the same
+   thing turned forward: what he did, about to be done again. What is new is
+   the dim line of what the log shows under an exercise, the two notes, and
+   the column the four buttons stand in. */
+.coach-build { display: flex; flex-direction: column; gap: 6px; padding: 2px 1px 0; }
+/* flex: none because the label brings `flex: 1` from the workout screen's
+   header row, where it fills the width; in this column it would be height. */
+.coach-build .wk-block-title { flex: none; margin-top: 6px; }
+.coach-build-note { font-size: 12px; line-height: 1.45; color: var(--steel); }
+.coach-build-note.mine { color: var(--chalk); font-variation-settings: 'wdth' 94, 'wght' 600; }
+.coach-build-w { font-size: 11px; line-height: 1.4; color: var(--dim); margin-top: 2px; }
+.coach-build-acts { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+.coach-build .coach-chips { margin-top: 4px; }
+
 /* ---------- the Coach switches ----------
    The app's first real switch. Everything binary before this was segmented(),
    and seven segmented pairs stacked in the settings sheet is a wall rather than

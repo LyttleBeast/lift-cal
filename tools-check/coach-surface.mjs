@@ -220,6 +220,7 @@ writeFileSync(join(dir, 'coach-data-stub.mjs'),
   IMPORTED.map(n => `export function ${n}(...a) { return globalThis.__coachData('${n}', a); }`).join('\n') + '\n');
 writeFileSync(join(dir, 'coach-ui.mjs'), UI_SRC
   .replace("from './ui.js'", 'from ' + real('ui.js'))
+  .replace("from './exercises.js'", 'from ' + real('exercises.js'))
   .replace("from './coach.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach.mjs')).href))
   .replace("from './coach-data.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-data-stub.mjs')).href)));
 
@@ -566,6 +567,197 @@ section('E. the builder’s bubble — offered where it can be kept, nowhere els
   const muted = open(UI, trainOpts).sh;
   check('switched off in Settings → Coach, it is gone', !builderIn(muted).length, list(labelsIn(muted)));
   state.input = BASE;
+}
+
+/* ================= F. THE PROPOSAL ON SCREEN ================= */
+section('F. the workout on the sheet, and the four ways out of it');
+{
+  /* The card the Train tab draws hands in startWorkout and
+     saveSessionAsRoutine; here they are recorders, so what each button hands
+     over can be compared with what the engine built. A library with a second
+     lift in two groups, so "Swap one" has somewhere to go, and names, as
+     coach-data.js now supplies them. */
+  const NAMED = {
+    bench: { name: 'Bench', group: 'chest', equipment: 'barbell' }, row: { name: 'Row', group: 'back', equipment: 'barbell' },
+    squat: { name: 'Squat', group: 'legs', equipment: 'barbell' }, press: { name: 'Press', group: 'shoulders', equipment: 'barbell' },
+    curl: { name: 'Curl', group: 'arms', equipment: 'dumbbell' },
+    incline: { name: 'Incline Press', group: 'chest', equipment: 'dumbbell' },
+    lateral: { name: 'Lateral Raise', group: 'shoulders', equipment: 'dumbbell' }
+  };
+  const BUILD = { ...BASE, lib: NAMED, libReady: true, hidden: [] };
+  const calls = [];
+  const trainOpts = { tight: true, live: false,
+    start: preset => calls.push(['start', preset]), save: record => calls.push(['save', record]) };
+  const MAKE = C.TRAIN_TOPICS.find(t => t.id === 'ask_build').label;
+  const FOUR = ['Start it', 'Start with my last numbers', 'Save as routine', 'Change something'];
+  const tap = (sh, label) => {
+    const b = buttonsIn(sh).find(x => x.textContent === label);
+    if (b) b.onclick();
+    return !!b;
+  };
+  const boxes = sh => find(sh, 'coach-build').filter(b => b.parent);
+  const actsIn = box => buttonsIn(box).filter(b => b.classList.contains('btn')).map(b => b.textContent);
+  const namesIn = box => find(box, 'day-ex-name').map(n => n.textContent);
+
+  state.input = BUILD; state.pro = true; state.logKnown = true; state.ready = true;
+  const eng = engine(BUILD);
+  const p = eng.build({});
+  check('the fixture builds, with every follow-up on offer', !!p && p.focuses.length > 0 && !!p.fewer &&
+        p.exercises.some(e => e.swaps.length), p ? p.key : 'null');
+
+  let sh = open(UI, trainOpts).sh;
+  tap(sh, MAKE);
+  let box = boxes(sh);
+  check('tapping "Make me a workout" draws the proposal at once — nothing is asked first',
+        box.length === 1, String(box.length));
+  box = box[0];
+  const said = find(sh, 'coach-bub').filter(b => b.classList.contains('coach')).pop();
+  check('under an answer that names the session it was built from',
+        !!said && (find(said, 'coach-bub-t')[0] || {}).textContent === p.headline, p.headline);
+  check('every exercise the engine built, in its order, under its own name',
+        JSON.stringify(namesIn(box)) === JSON.stringify(p.exercises.map(e => e.name)), list(namesIn(box)));
+  check('each with its sets exactly as the engine wrote them — the sheet invents no number',
+        JSON.stringify(find(box, 'day-ex-sets').map(n => n.textContent)) === JSON.stringify(p.exercises.map(e => e.line)),
+        list(find(box, 'day-ex-sets').map(n => n.textContent)));
+  check('then EXACTLY four buttons, in order', JSON.stringify(actsIn(box)) === JSON.stringify(FOUR), list(actsIn(box)));
+
+  // Start it.
+  calls.length = 0;
+  tap(sh, 'Start it');
+  check('"Start it" closes the sheet', !body.children.some(x => x.classList.contains('sheet')));
+  check('and hands startWorkout the placeholders — boxes empty, his numbers as ghost text',
+        calls.length === 1 && calls[0][0] === 'start' && JSON.stringify(calls[0][1]) === JSON.stringify(p.placeholders),
+        calls.length ? calls[0][0] : 'not called');
+  /* As a COPY. The live session is edited in place, set by set, so a preset
+     that shared objects with the proposal would carry the first session's
+     typing into the next Start from the same sheet. Proved the only way it can
+     be from out here: scribble on what was handed over, then start again from
+     the very same drawn proposal and see whether the scribble came back. */
+  if (calls.length === 1) calls[0][1].exercises[0].sets[0].w = 'SCRIBBLE';
+  tap(sh, 'Start it');
+  check('as a copy, so the live session shares nothing with the proposal it came from',
+        calls.length === 2 && calls[1][1].exercises[0].sets[0].w === '' &&
+        JSON.stringify(calls[1][1]) === JSON.stringify(p.placeholders),
+        calls.length === 2 ? calls[1][1].exercises[0].sets[0].w : String(calls.length));
+
+  // Start with my last numbers.
+  calls.length = 0;
+  sh = open(UI, trainOpts).sh; tap(sh, MAKE); tap(sh, 'Start with my last numbers');
+  check('"Start with my last numbers" hands over the filled view, and closes the sheet',
+        calls.length === 1 && JSON.stringify(calls[0][1]) === JSON.stringify(p.lastNumbers) &&
+        !body.children.some(x => x.classList.contains('sheet')));
+  check('with every set unticked', calls.length === 1 && calls[0][1].exercises.every(e => e.sets.every(x => x.done === false)));
+
+  // Save as routine.
+  calls.length = 0;
+  sh = open(UI, trainOpts).sh; tap(sh, MAKE); tap(sh, 'Save as routine');
+  check('"Save as routine" hands saveSessionAsRoutine the record, named for the shape',
+        calls.length === 1 && calls[0][0] === 'save' && JSON.stringify(calls[0][1]) === JSON.stringify(p.record) &&
+        calls[0][1].name === p.name, calls.length ? calls[0][1].name : 'not called');
+  check('and leaves the sheet where it is', body.children.some(x => x.classList.contains('sheet')));
+
+  // Change something.
+  sh = open(UI, trainOpts).sh; tap(sh, MAKE);
+  tap(sh, 'Change something');
+  const changeRow = chipsIn(boxes(sh)[0]).map(b => b.textContent);
+  check('"Change something" offers the three follow-ups the engine has', JSON.stringify(changeRow) ===
+        JSON.stringify(['Train something else', 'Fewer exercises', 'Swap one']), list(changeRow));
+
+  tap(sh, 'Fewer exercises');
+  const fewer = eng.build(p.fewer);
+  check('"Fewer exercises" re-runs the builder and redraws: one proposal, one fewer lift',
+        boxes(sh).length === 1 && namesIn(boxes(sh)[0]).length === p.exercises.length - 1 &&
+        JSON.stringify(namesIn(boxes(sh)[0])) === JSON.stringify(fewer.exercises.map(e => e.name)),
+        list(namesIn(boxes(sh)[0])));
+  check('with the four buttons again, on the new one', JSON.stringify(actsIn(boxes(sh)[0])) === JSON.stringify(FOUR));
+  check('and the tap is said in the thread, as a follow-up rather than a question',
+        find(sh, 'coach-bub').filter(b => b.classList.contains('you')).some(b => textOf(b) === 'Fewer exercises'));
+
+  sh = open(UI, trainOpts).sh; tap(sh, MAKE); tap(sh, 'Change something'); tap(sh, 'Swap one');
+  const swapRow = chipsIn(boxes(sh)[0]).map(b => b.textContent);
+  // One chip per lift: a lift repeated in a duplicated block swaps as one.
+  const swappable = p.exercises.filter((e, n) => e.swaps.length && p.exercises.findIndex(x => x.exId === e.exId) === n);
+  check('"Swap one" asks which lift, offering only the ones with somewhere to go',
+        JSON.stringify(swapRow) === JSON.stringify(swappable.map(e => e.name)), list(swapRow));
+  const target = swappable[0];
+  tap(sh, target.name);
+  const altRow = chipsIn(boxes(sh)[0]).map(b => b.textContent);
+  check('then offers its alternatives, the engine’s own, five at most',
+        JSON.stringify(altRow) === JSON.stringify(target.swaps.map(x => x.name)) && altRow.length <= 5, list(altRow));
+  tap(sh, target.swaps[0].name);
+  const swapped = eng.build(target.swaps[0].opts);
+  check('taking one redraws the workout with it in that lift’s place',
+        boxes(sh).length === 1 && JSON.stringify(namesIn(boxes(sh)[0])) === JSON.stringify(swapped.exercises.map(e => e.name)) &&
+        namesIn(boxes(sh)[0]).includes(target.swaps[0].name), list(namesIn(boxes(sh)[0])));
+  calls.length = 0;
+  tap(sh, 'Start it');
+  check('and what starts is the swapped workout, not the one before it',
+        calls.length === 1 && JSON.stringify(calls[0][1]) === JSON.stringify(swapped.placeholders));
+
+  sh = open(UI, trainOpts).sh; tap(sh, MAKE); tap(sh, 'Change something'); tap(sh, 'Train something else');
+  const focusRow = chipsIn(boxes(sh)[0]).map(b => b.textContent);
+  check('"Train something else" offers the engine’s other options, only those that build',
+        JSON.stringify(focusRow) === JSON.stringify(p.focuses.map(f => f.label)), list(focusRow));
+  tap(sh, p.focuses[0].label);
+  const other = eng.build(p.focuses[0].opts);
+  const heads = find(sh, 'coach-bub').filter(b => b.classList.contains('coach')).map(b => (find(b, 'coach-bub-t')[0] || {}).textContent);
+  check('and a new focus is a new workout, with its own first line naming its own session',
+        heads.includes(other.headline) && other.base.id !== p.base.id &&
+        JSON.stringify(namesIn(boxes(sh)[0])) === JSON.stringify(other.exercises.map(e => e.name)), other.headline);
+
+  /* The layoff: no filled view exists, so there is no button for it — three,
+     not four — and the line saying why is on the sheet. */
+  state.input = { ...BUILD, now: NOW + 30 * DAY };
+  const lay = engine(state.input).build({});
+  sh = open(UI, trainOpts).sh; tap(sh, MAKE);
+  check('after a layoff there is no "Start with my last numbers" at all',
+        !!lay && lay.lastNumbers === null && boxes(sh).length === 1 &&
+        JSON.stringify(actsIn(boxes(sh)[0])) === JSON.stringify(FOUR.filter(l => l !== 'Start with my last numbers')),
+        boxes(sh).length ? list(actsIn(boxes(sh)[0])) : 'no proposal');
+  check('and the sheet says how long it has been', !!lay && textOf(boxes(sh)[0]).includes(lay.layoffLine), lay && lay.layoffLine);
+
+  /* What is left out is said, once, on the sheet. */
+  state.input = { ...BUILD, hidden: ['press'], lib: Object.fromEntries(Object.entries(NAMED).filter(([k]) => k !== 'press')) };
+  const lo = engine(state.input).build({});
+  sh = open(UI, trainOpts).sh; tap(sh, MAKE);
+  check('a hidden lift is left out and the sheet says so',
+        !!lo && !!lo.leftOutLine && boxes(sh).length === 1 && textOf(boxes(sh)[0]).includes(lo.leftOutLine) &&
+        !namesIn(boxes(sh)[0]).includes('Press'), lo ? String(lo.leftOutLine) : 'no proposal');
+
+  /* A live session: one line, and only where the builder would have been. */
+  state.input = BUILD;
+  const liveSheet = open(UI, { ...trainOpts, live: true }).sh;
+  const liveLine = engine(BUILD).build({}) && C.coach({ ...BUILD, live: { active: true }, tier: { pro: true } }).buildLive();
+  check('during a live session the Train sheet says why there is no workout to build — in one line',
+        !!liveLine && find(liveSheet, 'coach-bub-t').filter(n => n.textContent === liveLine).length === 1, String(liveLine));
+  check('and draws no proposal and no builder chip', !boxes(liveSheet).length &&
+        !chipsIn(liveSheet).some(b => b.textContent === MAKE || b.textContent === 'Build it'));
+  state.pro = false;
+  check('a Basic account is not told about a builder it does not have',
+        !find(open(UI, { ...trainOpts, live: true }).sh, 'coach-bub-t').some(n => n.textContent === liveLine));
+  state.pro = true;
+  // The You card itself points at Train during a live session rather than
+  // opening a sheet, so the You-surface sheet is opened directly.
+  check('and the You sheet never says it', !find(openBare(UI, { live: true }), 'coach-bub-t').some(n => n.textContent === liveLine));
+  state.input = { ...BUILD, settings: { ...BUILD.settings, mute: { build: true } } };
+  check('nor does a sheet whose builder is switched off',
+        !find(open(UI, { ...trainOpts, live: true }).sh, 'coach-bub-t').some(n => n.textContent === liveLine));
+  state.input = BASE;
+
+  /* THE WIRING, read from the files that do it, because a DOM shim can only
+     drive the card it is handed. The builder is offered wherever a card hands
+     in `start`, so the whole of "on Train, not on You" rests on these lines —
+     and the whole of "no cycle" rests on coach-ui.js not reaching back. */
+  const W = src('workout.js'), Y = src('you.js');
+  const uiImports = [...UI_SRC.matchAll(/^import[^;]*from\s+'([^']+)'/gm)].map(m => m[1]);
+  check('coach-ui.js imports neither workout.js nor routines.js — the dependency stays one-way',
+        !uiImports.includes('./workout.js') && !uiImports.includes('./routines.js'), list(uiImports));
+  check('the Train card is handed startWorkout and saveSessionAsRoutine, the way Routines is',
+        /coachCard\(\{[\s\S]{0,200}start: preset =>[\s\S]{0,160}startWorkout\(preset\)[\s\S]{0,80}save: record => saveSessionAsRoutine\(record\)/.test(W));
+  check('and refuses to start over a session that is already running',
+        /start: preset => \{\s*if \(hasActiveSession\(\)\)/.test(W));
+  check('the You card is handed no start, so the You sheet never offers the builder',
+        /coachCard\(/.test(Y) && !/coachCard\(\{[^)]*\bstart\s*:/.test(Y));
 }
 
 /* ---------- report ---------- */

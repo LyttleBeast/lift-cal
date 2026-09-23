@@ -2287,10 +2287,13 @@ export function coach(input) {
        proposal or null — coach-build.js decides, this only refuses on an
        unreadable log, for the same reason the router does. `buildLive()` is
        the one line the sheet shows instead while a session is running, and
-       only when there would otherwise have been a proposal. Both are functions
-       so that a card paint, which asks for neither, pays for neither. */
+       only when there would otherwise have been a proposal — and not at all
+       when the account has switched the builder off, since it is the
+       builder's line. Both are functions so that a card paint, which asks for
+       neither, pays for neither. */
     build: opts => (d.f('log.confidence') === 'unknown' ? null : d.build(opts)),
-    buildLive: () => (d.f('log.confidence') === 'unknown' ? null : d.buildLive())
+    buildLive: () => (d.f('log.confidence') === 'unknown' || isMuted(d.input.settings, 'build')
+      ? null : d.buildLive())
   };
 }
 
