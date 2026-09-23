@@ -473,6 +473,63 @@ section('F. a calorie target under maintenance reads as a goal pointing down');
         w.goalDir === -1, 'goalDir ' + JSON.stringify(w.goalDir));
 }
 
+/* ================= G. A ROUTINE SAVED SINCE THE APP OPENED ================= */
+section('G. a routine saved from the builder is his routine at once, and costs no read');
+{
+  /* Coach reads `routines` once, in the boot wave, and v45 had nothing that
+     told it about one written afterwards — so "Save as routine" from the
+     builder left the next proposal for that shape saying nothing about it
+     until the app was reopened. routines.js now hands its list on whenever it
+     changes; workout.js passes it to noteCoachData. Driven through the real
+     coach-data.js, and counted: the whole point is that it reads nothing. */
+  const { D, probe } = await rig({ data: FULL });
+  await withTimeout(D.initCoachData(), 40 * LATENCY);
+  check('the boot read found no routines on this account', D.coachInput({}).routines.length === 0,
+        JSON.stringify(D.coachInput({}).routines));
+  const before = probe.paths().length;
+  const PUSH = { name: 'Push A', exercises: [{ exId: 'barbell-bench-press', group: 'chest', sets: [] }] };
+  D.noteCoachData({ routines: { r9: PUSH } });
+  const now = D.coachInput({}).routines;
+  check('handed the node, Coach has the routine at once — keyed id carried onto the list, as the boot read does it',
+        now.length === 1 && now[0].id === 'r9' && now[0].name === 'Push A' &&
+        JSON.stringify(now[0].exercises) === JSON.stringify(PUSH.exercises), JSON.stringify(now));
+  check('and not one read was issued to learn it', probe.paths().length === before,
+        list(probe.paths().slice(before)));
+  D.noteCoachData({ entries: {} });
+  check('a patch that does not mention routines leaves them alone', D.coachInput({}).routines.length === 1);
+  D.noteCoachData({ routines: {} });
+  check('and an empty node is a real answer — his last routine deleted — not a failed one',
+        D.coachInput({}).routines.length === 0);
+
+  /* The two ends of the wire, from the files that do it. routines.js's
+     persist() and tell() are lifted and run: a write that lands hands the list
+     on, and one the database refuses hands nothing on — Coach must not name a
+     routine that was never saved. */
+  const R = src('routines.js');
+  const liftR = name => {
+    const m = new RegExp('^function ' + name + '\\(', 'm').exec(R);
+    return m ? R.slice(m.index, R.indexOf('\n}\n', m.index) + 3) : null;
+  };
+  const tellSrc = liftR('tell');
+  const persistSrc = (R.match(/^function persist\(\)[^\n]*\n/m) || [''])[0];
+  check('routines.js has a tell() and a one-line persist() to drive', !!tellSrc && !!persistSrc, persistSrc.trim());
+  const heard = [];
+  const make = w => new Function('write', 'routines', 'onChanged', tellSrc + persistSrc + 'return persist;')(
+    w, { r1: { name: 'Legs' } }, list => heard.push(Object.keys(list)));
+  await make(async () => {})();
+  check('a write that lands hands the list on', heard.length === 1 && heard[0][0] === 'r1', JSON.stringify(heard));
+  let refused = false;
+  try { await make(async () => { throw new Error('PERMISSION_DENIED'); })(); } catch { refused = true; }
+  check('a write the database refuses hands nothing on, and still rejects to its caller',
+        refused && heard.length === 1, JSON.stringify(heard));
+  check('the watch hands on what it delivers from anywhere else — another device, or the write coming back',
+        /watch\('routines', val => \{ routines = val \|\| \{\}; tell\(\); \}\);/.test(R));
+  check('and routines.js imports nothing of Coach’s — the callback is handed in',
+        !/coach/.test((R.match(/^import[^;]*;/gm) || []).join('\n')));
+  check('workout.js is what wires the two together',
+        /await initRoutines\(list => noteCoachData\(\{ routines: list \}\)\);/.test(src('workout.js')));
+}
+
 /* ---------- report ---------- */
 console.log('\nCoach’s snapshot is one round trip deep, and it starts before anything else\n');
 console.log(results.join('\n'));

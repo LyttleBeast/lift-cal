@@ -202,7 +202,7 @@ async function load() {
     summaries = ds || {};
     entries   = we || {};
     stepDays  = sd || {};
-    routines  = rt ? Object.entries(rt).map(([id, r]) => ({ id, ...(r || {}) })) : [];
+    routines  = routineList(rt);
   }, () => {});
 
   await Promise.all([pLog, pSettings]);
@@ -212,6 +212,13 @@ async function load() {
   await Promise.all([pTargets, pRest]);
   ready = true;
   return ready;
+}
+
+// The routines node is keyed by id; Coach wants a list that carries the id.
+// One conversion, used by the boot read and by noteCoachData alike, so the two
+// cannot hand the engine different shapes of the same node.
+function routineList(rt) {
+  return rt && typeof rt === 'object' ? Object.entries(rt).map(([id, r]) => ({ id, ...(r || {}) })) : [];
 }
 
 /* The same flatten analytics.allSessions() does, and it has to stay the same:
@@ -409,7 +416,8 @@ export function noteCoachSessions(list) {
   return true;
 }
 
-/* The four small nodes, from a caller that has just re-read them.
+/* The small nodes, from a caller that has just re-read them — you.js hands in
+   four, and workout.js hands in `routines` whenever routines.js's list changes.
    `targetsSet` moves only in the direction that can be stated honestly: a
    non-null object out of read() can only have come from the server or from the
    mirror, and both mean the node exists. A null is ambiguous — read() folds
@@ -420,6 +428,10 @@ export function noteCoachData(patch) {
   if (p.entries   && typeof p.entries === 'object')   entries   = p.entries;
   if (p.summaries && typeof p.summaries === 'object') summaries = p.summaries;
   if (p.stepDays  && typeof p.stepDays === 'object')  stepDays  = p.stepDays;
+  // The routines node, from routines.js the moment it changes (workout.js hands
+  // it on). An empty object is a real answer here — his last routine deleted —
+  // and the list it makes is simply empty.
+  if (p.routines  && typeof p.routines === 'object')  routines  = routineList(p.routines);
   if (p.targets   && typeof p.targets === 'object') {
     targets = p.targets;
     if (Number.isFinite(p.targets.cal) && p.targets.cal > 0) targetsSet = true;

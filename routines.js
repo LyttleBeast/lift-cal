@@ -30,15 +30,31 @@ import { el, sheet, toast, noteEl, confirmSheet, swipeToDelete, fmtDate, setNum,
 import { wIn, fmtSetW, unitW, limW } from './units.js';
 
 let routines = {};
+// Handed in by workout.js, the way openRoutines is handed startWorkout, so this
+// file imports nothing of Coach's. See tell().
+let onChanged = null;
 
-export async function initRoutines() {
+export async function initRoutines(onChange) {
+  onChanged = typeof onChange === 'function' ? onChange : null;
   routines = (await read('routines', null)) || {};
   // Written whole, so a stale copy in memory would drop a routine added on
   // another device the next time this one saved.
-  watch('routines', val => { routines = val || {}; });
+  watch('routines', val => { routines = val || {}; tell(); });
 }
 
-function persist() { return write('routines', routines); }
+/* Coach names a session shape by his own routine for it, and it reads
+   `routines` once per app open — so a routine saved from the builder was not
+   "his routine for this" until the next launch. Every change to the list is
+   handed on from here instead: after one of this file's own writes, which
+   offline never reaches the watch, and whenever the watch delivers one from
+   anywhere else. It is the list this file already holds, so nothing is read to
+   do it, and a write the database refused hands nothing on. */
+function tell() {
+  if (!onChanged) return;
+  try { onChanged(routines); } catch {}
+}
+
+function persist() { return write('routines', routines).then(v => { tell(); return v; }); }
 
 function sorted() {
   return Object.values(routines)

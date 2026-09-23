@@ -21,7 +21,7 @@ import { openStats, isStatsOpen, renderStats, refresh as refreshStats } from './
 import { initPicker, allExercises, openPicker, openExerciseManager } from './picker.js';
 import { initRoutines, openRoutines, saveSessionAsRoutine } from './routines.js';
 import { coachCard } from './coach-ui.js';
-import { initCoachData, coachLogReady, refreshCoachSessions } from './coach-data.js';
+import { initCoachData, coachLogReady, refreshCoachSessions, noteCoachData } from './coach-data.js';
 import { bump } from './usage.js';
 import { wOut, wIn, fmtSetW, fmtSetLoad, fmtVol, volOut, unitW, limW } from './units.js';
 
@@ -80,7 +80,11 @@ export async function initWorkout() {
   // dedupe.
   history  = (await read('history', null)) || {};
   await initPicker(history);
-  await initRoutines();
+  /* Coach is handed the routines list every time it changes, so a routine
+     saved from the builder is named as his routine for that shape at once
+     rather than at the next app open. It is the list routines.js already
+     holds: no read, the same bargain you.js strikes with noteCoachData. */
+  await initRoutines(list => noteCoachData({ routines: list }));
 
   const saved = LS.get('activeSession', null);
   if (saved) session = saved;
