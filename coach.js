@@ -43,7 +43,7 @@
 import { GROUPS, GROUP_ORDER } from './exercises.js';
 import { e1rm, isWorking, mergeSessionExercises, exerciseIndex } from './analytics.js';
 import { labelW, labelRate, unitW, fmtW } from './units.js';
-import { propose, liveRefusal } from './coach-build.js';
+import { propose, liveRefusal, buildMenu, BUILD_ASK } from './coach-build.js';
 import { liveRead, LIVE_NONE } from './coach-live.js';
 
 const DAY = 864e5;
@@ -178,6 +178,12 @@ export const CATEGORIES = Object.freeze([
      existing finding: the builder is a selector, it never competes for a card,
      and every category that does keeps its order relative to the others. */
   { id: 'build',       label: 'Workout builder',     mutable: true,  note: 'Offering to put a workout together from your log.' },
+  /* Ship three's in-session read: the chip in a live workout's header row and
+     the one quiet line under a finished exercise. On unless switched off, like
+     every category but Patterns. After the builder because it is the other
+     thing Coach does with a workout, and it moves no finding's rank: nothing in
+     it competes for a card. */
+  { id: 'live',        label: 'In the gym',          mutable: true,  note: 'During a workout: the Coach chip, and one quiet line under a finished exercise.' },
   { id: 'fuel',        label: 'Food',                mutable: true,  note: 'Calories and macros against your own targets.' },
   { id: 'weight',      label: 'Weight',              mutable: true,  note: 'Rate of change, and days since a weigh-in.' },
   { id: 'steps',       label: 'Steps',               mutable: true,  note: 'Today against your own trailing average.' },
@@ -1564,7 +1570,10 @@ export const INTENTS = Object.freeze([
     response: 'resp_question'
   },
   {
-    /* THE WORKOUT BUILDER. A selector: it picks something rather than saying
+    /* THE WORKOUT BUILDER — the answer to "Build it", which comes after an
+       answer that has already named what to train, so it goes straight to the
+       proposal (v46; "Make me a workout" asks first, build_menu below). A
+       selector: it picks something rather than saying
        something, so it never competes for a card and is never counted in "N
        more with Pro". What it picks is coach-build.js's to decide; what it
        takes from here is the log, read the way every other rule reads it (see
@@ -1578,6 +1587,33 @@ export const INTENTS = Object.freeze([
     minData: d => !isMuted(d.input.settings, 'build'),
     when: d => d.build({}) != null,
     response: 'resp_build'
+  },
+  {
+    /* "Make me a workout" ASKS FIRST: what does he want to train? The answer
+       is the question, and the chips under it are coach-build.js's buildMenu()
+       — Coach's own pick first, then his shapes, then the six groups, each
+       only if it builds. "Build it", which follows an answer that has already
+       named what to train, skips the question: that is build_workout above.
+       Offered under exactly the builder's own conditions, so the two can never
+       disagree about whether there is a workout to be had. */
+    id: 'build_menu', kind: 'selector', priorityBand: 5, severity: 1,
+    category: 'build', tier: 'pro', surfaces: ['sheet'],
+    factsNeeded: ['session.shapeOverdue', 'session.windowCount'], supersedes: [],
+    minData: d => !isMuted(d.input.settings, 'build'),
+    when: d => d.build({}) != null && d.buildMenu().length > 0,
+    response: 'resp_build_menu'
+  },
+  {
+    /* THE IN-SESSION READ, registered so its switch is a category like any
+       other and so the Pro panel names it. It is never answered through the
+       router — it needs the live session, which only the caller has — so its
+       condition is never true here; c.live() is the way in, and it reads the
+       same switch. */
+    id: 'live_read', kind: 'selector', priorityBand: 5, severity: 1,
+    category: 'live', tier: 'pro', surfaces: [],
+    factsNeeded: ['live.active'], supersedes: [],
+    minData: d => !isMuted(d.input.settings, 'live'), when: () => false,
+    response: 'resp_live'
   },
   {
     /* PATTERNS IN YOUR DATA. Sheet-only and answer-only: it reaches no card,
@@ -1961,6 +1997,13 @@ export const RESPONSES = Object.freeze({
     text: d => { const p = d.build({}); return p ? p.headline : ''; },
     reason: d => { const p = d.build({}); return p ? p.reason.join(' ') : ''; }
   },
+  // The question itself; the choices are buildMenu()'s, drawn under it.
+  resp_build_menu: {
+    text: () => BUILD_ASK,
+    reason: () => 'Every choice here is built from a session in your log.'
+  },
+  // Never rendered through the router — see live_read.
+  resp_live:     { text: () => '' },
   resp_question: {
     text: d => {
       const q = QUESTION_BY_ID[d.askQuestionId || ''];
@@ -2191,16 +2234,19 @@ export const PATTERN_TOPIC = Object.freeze({ id: 'ask_patterns', label: 'Pattern
 
 /* Train's set, and every id in it is one the router already answers, so
    nothing here can offer a bubble with no rule behind it. Training-first and in
-   the order somebody standing in a gym would want them: a workout, what to
-   train, what has waited longest, how the week is going.
+   the order somebody standing in a gym would want them: what to train, a
+   workout, what has waited longest, how the week is going.
 
-   "Make me a workout" is first because it is the one that ends in a session.
-   It is the builder, and like every other bubble here it is offered only when
-   its route answers — which for the builder means a proposal really exists,
-   so the chip that says it is never a chip that cannot do it. */
+   "What should I train today?" is first and "Make me a workout" second — the
+   order Micah asked for after walking the builder (v46). The question is the
+   one most people come in with, and its answer offers "Build it" straight
+   away; "Make me a workout" asks what to train and builds from the choice.
+   Like every other bubble here the builder is offered only when its route
+   answers — a proposal really exists — so the chip that says it is never a
+   chip that cannot do it. */
 export const TRAIN_TOPICS = Object.freeze([
-  { id: 'ask_build',   label: 'Make me a workout',          category: 'build' },
   { id: 'ask_shape',   label: 'What should I train today?', category: 'recency' },
+  { id: 'ask_build',   label: 'Make me a workout',          category: 'build' },
   { id: 'ask_overdue', label: 'What’s waited longest?',     category: 'recency' },
   { id: 'ask_volume',  label: 'How’s my week going?',       category: 'volume' }
 ]);
@@ -2218,7 +2264,8 @@ const ROUTES = Object.freeze({
 
   ask_overdue:  ['group_overdue'],
   ask_shape:    ['session_shape_most_overdue', 'train_today_recommendation'],
-  ask_build:    ['build_workout'],
+  ask_build:    ['build_menu'],
+  ask_build_now: ['build_workout'],
   ask_stall:    ['stalled_lift', 'pr_proximity'],
   ask_records:  ['recent_pr', 'pr_proximity'],
   ask_volume:   ['group_under_weekly_normal', 'weekly_sessions_vs_trailing'],
@@ -2243,7 +2290,7 @@ const FOLLOWUPS = Object.freeze({
   topic_weight: ['ask_rate', 'ask_weighin', 'ask_steps'],
   topic_steps:  ['ask_rate', 'ask_weighin'],
   ask_overdue:  ['ask_shape', 'ask_volume'],
-  ask_shape:    ['ask_build', 'ask_overdue', 'ask_rest'],
+  ask_shape:    ['ask_build_now', 'ask_overdue', 'ask_rest'],
   ask_stall:    ['ask_records', 'ask_volume'],
   ask_records:  ['ask_stall', 'ask_overdue'],
   ask_volume:   ['ask_overdue', 'ask_rest'],
@@ -2254,9 +2301,11 @@ const FOLLOWUPS = Object.freeze({
   ask_rate:     ['ask_weighin', 'ask_steps'],
   ask_weighin:  ['ask_rate', 'ask_steps'],
   ask_steps:    ['ask_rate', 'ask_weighin'],
-  // Nothing: the proposal carries its own four ways on, and a row of chips
-  // under it would be a fifth, sixth and seventh.
+  // Nothing: the question's chips are the way on from "Make me a workout",
+  // and the proposal carries its own four ways on from "Build it" — a row of
+  // chips under either would be one too many.
   ask_build:    [],
+  ask_build_now: [],
   // Nothing: the answer is already every pattern that clears its bar.
   ask_patterns: [],
   injury:       []
@@ -2268,8 +2317,14 @@ const FOLLOWUPS = Object.freeze({
    "Build it" whether it came up under "How's my training?" or "What should I
    train today?". Filtered like every other follow-up: no proposal, no chip. */
 const FOLLOWUPS_AFTER = Object.freeze({
-  train_today_recommendation: ['ask_build']
+  train_today_recommendation: ['ask_build_now']
 });
+
+/* A follow-up that stands for a topic: while "Build it" is offered, "Make me a
+   workout" is not drawn beside it. They are two routes now — one asks what to
+   train, the other already knows — but side by side they are two chips for
+   one thing, and the sheet has never drawn that. */
+const STANDS_FOR = Object.freeze({ ask_build_now: 'ask_build' });
 
 /* Every id the router answers, exported so that a verifier can drive all of
    them and so that ship three's text matcher has one list to map a sentence
@@ -2277,7 +2332,8 @@ const FOLLOWUPS_AFTER = Object.freeze({
 export const ROUTE_IDS = Object.freeze(Object.keys(ROUTES));
 
 const ASK_LABELS = Object.freeze({
-  ask_build:    'Build it',
+  ask_build:    'Make me a workout',
+  ask_build_now: 'Build it',
   ask_overdue:  'What’s overdue?',
   ask_shape:    'Which session is due?',
   ask_stall:    'Anything stalled?',
@@ -2356,6 +2412,12 @@ function factStore(input) {
   d.buildLive = () => {
     if (!buildIn) buildIn = builderInput(d);
     return liveRefusal(buildIn);
+  };
+  let menu = null;
+  d.buildMenu = () => {
+    if (!buildIn) buildIn = builderInput(d);
+    if (!menu) menu = buildMenu(buildIn);
+    return menu;
   };
 
   return d;
@@ -2661,15 +2723,20 @@ export function coach(input) {
     build: opts => (d.f('log.confidence') === 'unknown' ? null : d.build(opts)),
     buildLive: () => (d.f('log.confidence') === 'unknown' || isMuted(d.input.settings, 'build')
       ? null : d.buildLive()),
+    /* The chips under "What do you want to train?" — decided in coach-build.js,
+       drawn by the sheet. Empty behind the same silences as build(). */
+    buildMenu: () => (d.f('log.confidence') === 'unknown' || isMuted(d.input.settings, 'build')
+      ? [] : d.buildMenu()),
     /* THE IN-SESSION READ (ship three): one answer of four kinds, or null —
-       coach-live.js decides which. Three gates in front of it, and all three
+       coach-live.js decides which. Four gates in front of it, and all four
        are the engine's rather than the screen's, so a caller cannot draw one
        by forgetting to check: a log that has really been read (an unreadable
        one silences everything, and an empty one has no habits to read); Pro,
        because a basic account sees nothing new mid-session, not even a lock;
-       and a LIVE session — an edit of a past one is not a workout in
-       progress, and nothing is said over it. */
+       the "In the gym" switch; and a LIVE session — an edit of a past one is
+       not a workout in progress, and nothing is said over it. */
     live: (session, opts) => (d.f('log.confidence') !== 'readable' || !pro ||
+      isMuted(d.input.settings, 'live') ||
       !session || typeof session !== 'object' || session._edit
       ? null : liveRead(liveInput(d, session, opts && opts.current)))
   };
@@ -2720,7 +2787,8 @@ function nothingFor(id) {
 function followupsFor(d, u, id, answeredBy) {
   const list = [...new Set((FOLLOWUPS_AFTER[answeredBy] || []).concat(FOLLOWUPS[id] || []))];
   return list.filter(next => answerable(d, next))
-             .map(next => ({ id: next, label: ASK_LABELS[next] || next }));
+             .map(next => ({ id: next, label: ASK_LABELS[next] || next,
+                             ...(STANDS_FOR[next] ? { stands: STANDS_FOR[next] } : null) }));
 }
 
 /* ---------- what settings/coach looks like ----------

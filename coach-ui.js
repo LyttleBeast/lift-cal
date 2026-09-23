@@ -281,7 +281,10 @@ export function openCoachSheet(opts = {}) {
      all. A proposal whose Start button can do nothing is worse than no
      proposal. */
   const canBuild = typeof opts.start === 'function';
-  const offer = list => (canBuild ? list : list.filter(x => x.id !== 'ask_build'));
+  // Both of the builder's doors: "Make me a workout" (asks first) and "Build
+  // it" (already knows what to train).
+  const BUILDER = ['ask_build', 'ask_build_now'];
+  const offer = list => (canBuild ? list : list.filter(x => !BUILDER.includes(x.id)));
 
   const asked = new Set();
   const topics = offer(c.topicsFor(surface));
@@ -329,19 +332,63 @@ export function openCoachSheet(opts = {}) {
       // An answer that says more than one thing — Patterns says every check
       // that clears — follows its first bubble with the rest, one each.
       (a.more || []).forEach(m => bubble('coach', m.text, m.reason));
-      // The builder's answer is a bubble AND the workout under it. Nothing is
-      // asked first: the default proposal is on screen the moment the chip is.
+      /* "Make me a workout" asks what to train, and the choices are the
+         engine's (buildMenu). They are the only way on from the question, so
+         they stand where the row of topics would, and the topics come back
+         once a choice has been made. */
+      if (a.id === 'build_menu' && canBuild) {
+        const menu = c.buildMenu();
+        if (menu.length) {
+          showMenu(menu);
+          scroll();
+          return;
+        }
+      }
+      // "Build it": the answer before it has already named what to train, so
+      // the workout for that focus — Coach's own — is on screen at once, with
+      // no question asked.
       if (a.id === 'build_workout' && canBuild) {
+        buildOpts = {};
         const p = c.build(buildOpts);
         if (p) drawProposal(p);
       }
     }
     // Never offer the same question twice in one sitting, and always leave a
-    // way back to this surface's own topics. A follow-up and a topic can be the
-    // same route under two labels — "Build it" is "Make me a workout" — so a
-    // topic already offered as a follow-up is not offered twice.
+    // way back to this surface's own topics. A follow-up can stand for a topic
+    // — "Build it" for "Make me a workout" — and a topic offered that way, or
+    // as the same id, is not offered twice.
     const next = offer((a && a.followups) || []).filter(f => !asked.has(f.id));
-    showButtons(next.concat(topics.filter(t => !asked.has(t.id) && !next.some(f => f.id === t.id))));
+    showButtons(next.concat(topics.filter(t => !asked.has(t.id) &&
+      !next.some(f => f.id === t.id || f.stands === t.id))));
+    scroll();
+  }
+
+  /* The choices under "What do you want to train?". Picking one says it in the
+     thread, then shows that focus's workout exactly as "Build it" would: its
+     first line, its reason, the proposal and its four buttons. */
+  function showMenu(menu) {
+    if (buttons) buttons.remove();
+    buttons = el('div', 'coach-chips');
+    menu.forEach(item => {
+      const b = el('button', 'coach-chip', item.label);
+      b.onclick = () => pick(item);
+      buttons.appendChild(b);
+    });
+    thread.appendChild(buttons);
+  }
+  function pick(item) {
+    if (buttons) { buttons.remove(); buttons = null; }
+    bubble('you', item.label);
+    buildOpts = item.opts || {};
+    let p = null;
+    try { p = c.build(buildOpts); } catch { p = null; }
+    if (!p) {
+      bubble('coach', BUILD_NONE, BUILD_NONE_WHY);
+    } else {
+      bubble('coach', p.headline, p.reason.join(' '));
+      drawProposal(p);
+    }
+    showButtons(topics.filter(t => !asked.has(t.id)));
     scroll();
   }
 
@@ -498,7 +545,8 @@ function proPanel() {
 }
 
 /* ================= THE PROPOSAL =================
-   What "Make me a workout" draws under its answer: his routine by his name if
+   What the builder draws under a chosen focus — a pick from "What do you want
+   to train?", or "Build it" — his routine by his name if
    he has one for this, then the exercises — name, the sets as he did them,
    and one dim line of what the log shows — then what was left out and why,
    then exactly four buttons. Built from the recap's own list (.day-ex) and
@@ -698,6 +746,8 @@ export function coachAnswerRows(host, onChange) {
      BASIC SEES NOTHING NEW. No chip, no line, no lock and no teaser —
      nobody is sold anything under a bar. And an EDIT of a past session is
      not a workout in progress: nothing appears over one.
+     AND IT CAN BE SWITCHED OFF: Settings → Coach → In the gym (`mute.live`,
+     absent means on). Off, there is no chip and no line — the same as Basic.
 
    What to say is coach-live.js's, through coach.js's c.live(); the gates on it
    are the engine's too. This file decides only where and when it is drawn. */
@@ -711,6 +761,8 @@ export function liveChip(opts = {}) {
   let pro = false;
   try { pro = coachPro() === true; } catch { pro = false; }
   if (!pro) return null;
+  // Switched off in Settings → Coach → In the gym: no chip, the same as Basic.
+  if (isMuted(coachSettings(), 'live')) return null;
   const b = el('button', 'wk-coach');
   b.setAttribute('aria-label', 'Ask Coach what to do next');
   const mark = el('span', 'coach-mark');
@@ -836,6 +888,8 @@ export function dismissNudge(state) {
    what keeps the height, and the rows under it, exactly where they were. */
 export function nudgeLine(session, exIdx, on = {}) {
   if (!session || session._edit) return null;
+  // Switched off mid-session, a line already up goes with the switch.
+  if (isMuted(coachSettings(), 'live')) return null;
   const st = nudgeState(session._coach);
   if (!st.nudge || st.nudge.key !== nudgeKey(session, exIdx)) return null;
   const line = el('div', 'swipe-hint coach-nudge');

@@ -357,6 +357,42 @@ function focusOptions(i, focus, base) {
 const baseId = s => String((s.session && s.session.id) || s.startedAt);
 
 /* ================================================================
+   WHAT TO TRAIN — the question "Make me a workout" asks first
+   ================================================================
+   "Make me a workout" asks before it builds, and these are the answers it
+   offers, decided here and nowhere else — the sheet only draws them. First
+   Coach's own pick: the DEFAULT focus, which is the shape session.shapeOverdue
+   names — the same focus the answer to "What should I train today?" is about,
+   so "Tell me what to train" and "Build it" build the same workout. Then his
+   recurring shapes, named by the rule every other sentence uses (his routine's
+   name when he has one), then the six groups in their usual order.
+
+   EACH ONE ONLY IF propose() REALLY ANSWERS IT. A chip that opens on "Coach
+   can't build that one" is worse than one fewer chip. Nothing is merged away:
+   a shape's chip and a group's can build from the same session, and each is
+   still the answer to its own question. */
+export const BUILD_ASK = 'What do you want to train?';
+export const BUILD_PICK = 'Tell me what to train';
+
+export function buildMenu(input) {
+  try {
+    const i = input || {};
+    const out = [];
+    const offer = (id, label, opts) => {
+      if (build(i, normOpts(opts), false)) out.push({ id, label, opts });
+    };
+    offer('pick', BUILD_PICK, {});
+    (Array.isArray(i.shapes) ? i.shapes : []).forEach(sh => {
+      if (sh && sh.key) offer('shape:' + sh.key, cap(String(sh.name || '')), { focus: 'shape:' + sh.key });
+    });
+    GROUP_ORDER.forEach(g => offer('group:' + g, GROUPS[g].label, { focus: 'group:' + g }));
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+/* ================================================================
    THE PROPOSAL
    ================================================================ */
 

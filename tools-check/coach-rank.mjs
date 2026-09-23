@@ -401,13 +401,26 @@ section('G2. the topic set belongs to the surface that opened the sheet');
      is a proposal behind it, and never otherwise. */
   const built = on({ libReady: true, hidden: [] });
   const offers = x => x.topicsFor('train').some(t => t.id === 'ask_build');
-  check('"Make me a workout" is first in Train’s own table',
-        C.TRAIN_TOPICS[0] && C.TRAIN_TOPICS[0].id === 'ask_build', list(C.TRAIN_TOPICS.map(t => t.id)));
-  check('offered, first, when the log builds a proposal',
-        !!built.build({}) && built.topicsFor('train')[0].id === 'ask_build', list(built.topicsFor('train').map(t => t.id)));
-  check('and its answer is that proposal’s own first line',
-        built.ask('ask_build').id === 'build_workout' && built.ask('ask_build').text === built.build({}).headline,
-        built.ask('ask_build').text);
+  /* v46, from walking the builder: "What should I train today?" leads and
+     "Make me a workout" follows it, and "Make me a workout" ASKS what to train
+     before it builds. "Build it" — after an answer that already named it —
+     does not ask. */
+  check('"What should I train today?" is first in Train’s own table, "Make me a workout" second',
+        C.TRAIN_TOPICS[0] && C.TRAIN_TOPICS[0].id === 'ask_shape' &&
+        C.TRAIN_TOPICS[1] && C.TRAIN_TOPICS[1].id === 'ask_build', list(C.TRAIN_TOPICS.map(t => t.id)));
+  check('offered, second, when the log builds a proposal',
+        !!built.build({}) && built.topicsFor('train')[0].id === 'ask_shape' &&
+        built.topicsFor('train')[1].id === 'ask_build', list(built.topicsFor('train').map(t => t.id)));
+  const asks = built.ask('ask_build');
+  check('and its answer is a question — what to train — with the choices under it',
+        asks.id === 'build_menu' && asks.text === 'What do you want to train?' && built.buildMenu().length > 0,
+        asks.id + ': ' + asks.text);
+  check('whose first choice is Coach’s own, the proposal "Build it" makes',
+        built.buildMenu()[0].label === 'Tell me what to train' &&
+        JSON.stringify(built.build(built.buildMenu()[0].opts)) === JSON.stringify(built.build({})));
+  const now = built.ask('ask_build_now');
+  check('"Build it" asks nothing: its answer is the proposal’s own first line',
+        now.id === 'build_workout' && now.text === built.build({}).headline, now.text);
   check('NOT offered while the library is unread — no proposal, no bubble',
         full.build({}) === null && !offers(full), list(trainSet));
   check('not offered during a live session',
@@ -428,15 +441,17 @@ section('G2. the topic set belongs to the surface that opened the sheet');
   /* "Build it", after the two answers that name what to train. */
   const fu = (x, id) => x.ask(id).followups.map(f => f.id);
   check('the answer to "What should I train today?" offers "Build it" when a proposal exists',
-        fu(built, 'ask_shape').includes('ask_build') && !fu(full, 'ask_shape').includes('ask_build'),
+        fu(built, 'ask_shape').includes('ask_build_now') && !fu(full, 'ask_shape').includes('ask_build_now'),
         list(fu(built, 'ask_shape')));
-  check('and labels it so', (built.ask('ask_shape').followups.find(f => f.id === 'ask_build') || {}).label === 'Build it');
-  check('and not when the builder is switched off', !fu(off, 'ask_shape').includes('ask_build'));
+  const bi = built.ask('ask_shape').followups.find(f => f.id === 'ask_build_now') || {};
+  check('and labels it so, standing for "Make me a workout" so the two are never drawn side by side',
+        bi.label === 'Build it' && bi.stands === 'ask_build', JSON.stringify(bi));
+  check('and not when the builder is switched off', !fu(off, 'ask_shape').includes('ask_build_now'));
   // Reached through "How's my training?" rather than through ask_shape, whose
   // own list already carries it — so this is FOLLOWUPS_AFTER doing the work.
   const today = built.ask('topic_train');
   check('train_today_recommendation offers it too, whichever button reached it',
-        today.id === 'train_today_recommendation' && today.followups.some(f => f.id === 'ask_build'),
+        today.id === 'train_today_recommendation' && today.followups.some(f => f.id === 'ask_build_now'),
         today.id + ': ' + list(today.followups.map(f => f.id)));
 
   // A log too thin for any of the promotions falls back rather than showing an

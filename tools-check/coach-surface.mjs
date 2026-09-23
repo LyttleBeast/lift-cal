@@ -529,8 +529,9 @@ section('E. the builder’s bubble — offered where it can be kept, nowhere els
   state.input = BUILD; state.pro = true; state.logKnown = true; state.ready = true;
   check('the fixture really builds a proposal', !!engine(BUILD).build({}));
   const pro = open(UI, trainOpts).sh;
-  check('present on Train, for Pro, with a log that builds — and it is the first bubble',
-        labelsIn(pro)[0] === MAKE, list(labelsIn(pro)));
+  const SHAPE_Q = C.TRAIN_TOPICS.find(t => t.id === 'ask_shape').label;
+  check('present on Train, for Pro, with a log that builds — the second bubble, after "What should I train today?"',
+        labelsIn(pro)[0] === SHAPE_Q && labelsIn(pro)[1] === MAKE, list(labelsIn(pro)));
 
   state.pro = false;
   const basic = open(UI, trainOpts).sh;
@@ -554,7 +555,7 @@ section('E. the builder’s bubble — offered where it can be kept, nowhere els
   // Tapped through, too: the engine offers "Build it" after the answer that
   // names what to train, and the You sheet must not pass it on.
   const eng = engine(BUILD);
-  const viaTopic = eng.ask('topic_train').followups.some(f => f.id === 'ask_build');
+  const viaTopic = eng.ask('topic_train').followups.some(f => f.id === 'ask_build' || f.id === 'ask_build_now');
   const chip = chipsIn(you).find(b => b.textContent === C.TOPICS.find(t => t.id === 'topic_train').label);
   if (chip) chip.onclick();
   check('including as a follow-up the engine would otherwise offer there',
@@ -598,13 +599,20 @@ section('F. the workout on the sheet, and the four ways out of it');
   const trainOpts = { tight: true, live: false,
     start: preset => calls.push(['start', preset]), save: record => calls.push(['save', record]) };
   const MAKE = C.TRAIN_TOPICS.find(t => t.id === 'ask_build').label;
+  const PICK = 'Tell me what to train';
   const FOUR = ['Start it', 'Start with my last numbers', 'Save as routine', 'Change something'];
   const tap = (sh, label) => {
     const b = buttonsIn(sh).find(x => x.textContent === label);
     if (b) b.onclick();
     return !!b;
   };
+  // "Make me a workout" asks what to train first (v46); Coach's own pick is
+  // the default proposal, which is what every check below is about.
+  const toProposal = sh => tap(sh, MAKE) && tap(sh, PICK);
   const boxes = sh => find(sh, 'coach-build').filter(b => b.parent);
+  // The drawn proposal, or an empty stand-in, so a flow that never reached one
+  // fails the checks that follow with a reason instead of killing the file.
+  const box0 = sh => boxes(sh)[0] || mkEl('div');
   const actsIn = box => buttonsIn(box).filter(b => b.classList.contains('btn')).map(b => b.textContent);
   const namesIn = box => find(box, 'day-ex-name').map(n => n.textContent);
 
@@ -616,10 +624,19 @@ section('F. the workout on the sheet, and the four ways out of it');
 
   let sh = open(UI, trainOpts).sh;
   tap(sh, MAKE);
+  const asked = find(sh, 'coach-bub').filter(b => b.classList.contains('coach')).pop();
+  check('tapping "Make me a workout" asks what to train first — no proposal yet',
+        !boxes(sh).length && !!asked && (find(asked, 'coach-bub-t')[0] || {}).textContent === 'What do you want to train?',
+        asked ? (find(asked, 'coach-bub-t')[0] || {}).textContent : 'no answer');
+  check('under it, exactly the engine’s choices, Coach’s own first — and nothing else to tap but Close',
+        JSON.stringify(chipsIn(sh).map(b => b.textContent)) === JSON.stringify(eng.buildMenu().map(m => m.label)) &&
+        chipsIn(sh)[0].textContent === PICK, list(chipsIn(sh).map(b => b.textContent)));
+  tap(sh, PICK);
   let box = boxes(sh);
-  check('tapping "Make me a workout" draws the proposal at once — nothing is asked first',
-        box.length === 1, String(box.length));
-  box = box[0];
+  check('"Tell me what to train" draws the proposal', box.length === 1, String(box.length));
+  // An empty stand-in when there is none, so the checks below fail with a
+  // reason rather than the file dying on the first of them.
+  box = box[0] || mkEl('div');
   const said = find(sh, 'coach-bub').filter(b => b.classList.contains('coach')).pop();
   check('under an answer that names the session it was built from',
         !!said && (find(said, 'coach-bub-t')[0] || {}).textContent === p.headline, p.headline);
@@ -651,7 +668,7 @@ section('F. the workout on the sheet, and the four ways out of it');
 
   // Start with my last numbers.
   calls.length = 0;
-  sh = open(UI, trainOpts).sh; tap(sh, MAKE); tap(sh, 'Start with my last numbers');
+  sh = open(UI, trainOpts).sh; toProposal(sh); tap(sh, 'Start with my last numbers');
   check('"Start with my last numbers" hands over the filled view, and closes the sheet',
         calls.length === 1 && JSON.stringify(calls[0][1]) === JSON.stringify(p.lastNumbers) &&
         !body.children.some(x => x.classList.contains('sheet')));
@@ -659,52 +676,52 @@ section('F. the workout on the sheet, and the four ways out of it');
 
   // Save as routine.
   calls.length = 0;
-  sh = open(UI, trainOpts).sh; tap(sh, MAKE); tap(sh, 'Save as routine');
+  sh = open(UI, trainOpts).sh; toProposal(sh); tap(sh, 'Save as routine');
   check('"Save as routine" hands saveSessionAsRoutine the record, named for the shape',
         calls.length === 1 && calls[0][0] === 'save' && JSON.stringify(calls[0][1]) === JSON.stringify(p.record) &&
         calls[0][1].name === p.name, calls.length ? calls[0][1].name : 'not called');
   check('and leaves the sheet where it is', body.children.some(x => x.classList.contains('sheet')));
 
   // Change something.
-  sh = open(UI, trainOpts).sh; tap(sh, MAKE);
+  sh = open(UI, trainOpts).sh; toProposal(sh);
   tap(sh, 'Change something');
-  const changeRow = chipsIn(boxes(sh)[0]).map(b => b.textContent);
+  const changeRow = chipsIn(box0(sh)).map(b => b.textContent);
   check('"Change something" offers the three follow-ups the engine has', JSON.stringify(changeRow) ===
         JSON.stringify(['Train something else', 'Fewer exercises', 'Swap one']), list(changeRow));
 
   tap(sh, 'Fewer exercises');
   const fewer = eng.build(p.fewer);
   check('"Fewer exercises" re-runs the builder and redraws: one proposal, one fewer lift',
-        boxes(sh).length === 1 && namesIn(boxes(sh)[0]).length === p.exercises.length - 1 &&
-        JSON.stringify(namesIn(boxes(sh)[0])) === JSON.stringify(fewer.exercises.map(e => e.name)),
-        list(namesIn(boxes(sh)[0])));
-  check('with the four buttons again, on the new one', JSON.stringify(actsIn(boxes(sh)[0])) === JSON.stringify(FOUR));
+        boxes(sh).length === 1 && namesIn(box0(sh)).length === p.exercises.length - 1 &&
+        JSON.stringify(namesIn(box0(sh))) === JSON.stringify(fewer.exercises.map(e => e.name)),
+        list(namesIn(box0(sh))));
+  check('with the four buttons again, on the new one', JSON.stringify(actsIn(box0(sh))) === JSON.stringify(FOUR));
   check('and the tap is said in the thread, as a follow-up rather than a question',
         find(sh, 'coach-bub').filter(b => b.classList.contains('you')).some(b => textOf(b) === 'Fewer exercises'));
 
-  sh = open(UI, trainOpts).sh; tap(sh, MAKE); tap(sh, 'Change something'); tap(sh, 'Swap one');
-  const swapRow = chipsIn(boxes(sh)[0]).map(b => b.textContent);
+  sh = open(UI, trainOpts).sh; toProposal(sh); tap(sh, 'Change something'); tap(sh, 'Swap one');
+  const swapRow = chipsIn(box0(sh)).map(b => b.textContent);
   // One chip per lift: a lift repeated in a duplicated block swaps as one.
   const swappable = p.exercises.filter((e, n) => e.swaps.length && p.exercises.findIndex(x => x.exId === e.exId) === n);
   check('"Swap one" asks which lift, offering only the ones with somewhere to go',
         JSON.stringify(swapRow) === JSON.stringify(swappable.map(e => e.name)), list(swapRow));
   const target = swappable[0];
   tap(sh, target.name);
-  const altRow = chipsIn(boxes(sh)[0]).map(b => b.textContent);
+  const altRow = chipsIn(box0(sh)).map(b => b.textContent);
   check('then offers its alternatives, the engine’s own, five at most',
         JSON.stringify(altRow) === JSON.stringify(target.swaps.map(x => x.name)) && altRow.length <= 5, list(altRow));
   tap(sh, target.swaps[0].name);
   const swapped = eng.build(target.swaps[0].opts);
   check('taking one redraws the workout with it in that lift’s place',
-        boxes(sh).length === 1 && JSON.stringify(namesIn(boxes(sh)[0])) === JSON.stringify(swapped.exercises.map(e => e.name)) &&
-        namesIn(boxes(sh)[0]).includes(target.swaps[0].name), list(namesIn(boxes(sh)[0])));
+        boxes(sh).length === 1 && JSON.stringify(namesIn(box0(sh))) === JSON.stringify(swapped.exercises.map(e => e.name)) &&
+        namesIn(box0(sh)).includes(target.swaps[0].name), list(namesIn(box0(sh))));
   calls.length = 0;
   tap(sh, 'Start it');
   check('and what starts is the swapped workout, not the one before it',
         calls.length === 1 && JSON.stringify(calls[0][1]) === JSON.stringify(swapped.placeholders));
 
-  sh = open(UI, trainOpts).sh; tap(sh, MAKE); tap(sh, 'Change something'); tap(sh, 'Train something else');
-  const focusRow = chipsIn(boxes(sh)[0]).map(b => b.textContent);
+  sh = open(UI, trainOpts).sh; toProposal(sh); tap(sh, 'Change something'); tap(sh, 'Train something else');
+  const focusRow = chipsIn(box0(sh)).map(b => b.textContent);
   check('"Train something else" offers the engine’s other options, only those that build',
         JSON.stringify(focusRow) === JSON.stringify(p.focuses.map(f => f.label)), list(focusRow));
   tap(sh, p.focuses[0].label);
@@ -712,26 +729,26 @@ section('F. the workout on the sheet, and the four ways out of it');
   const heads = find(sh, 'coach-bub').filter(b => b.classList.contains('coach')).map(b => (find(b, 'coach-bub-t')[0] || {}).textContent);
   check('and a new focus is a new workout, with its own first line naming its own session',
         heads.includes(other.headline) && other.base.id !== p.base.id &&
-        JSON.stringify(namesIn(boxes(sh)[0])) === JSON.stringify(other.exercises.map(e => e.name)), other.headline);
+        JSON.stringify(namesIn(box0(sh))) === JSON.stringify(other.exercises.map(e => e.name)), other.headline);
 
   /* The layoff: no filled view exists, so there is no button for it — three,
      not four — and the line saying why is on the sheet. */
   state.input = { ...BUILD, now: NOW + 30 * DAY };
   const lay = engine(state.input).build({});
-  sh = open(UI, trainOpts).sh; tap(sh, MAKE);
+  sh = open(UI, trainOpts).sh; toProposal(sh);
   check('after a layoff there is no "Start with my last numbers" at all',
         !!lay && lay.lastNumbers === null && boxes(sh).length === 1 &&
-        JSON.stringify(actsIn(boxes(sh)[0])) === JSON.stringify(FOUR.filter(l => l !== 'Start with my last numbers')),
-        boxes(sh).length ? list(actsIn(boxes(sh)[0])) : 'no proposal');
-  check('and the sheet says how long it has been', !!lay && textOf(boxes(sh)[0]).includes(lay.layoffLine), lay && lay.layoffLine);
+        JSON.stringify(actsIn(box0(sh))) === JSON.stringify(FOUR.filter(l => l !== 'Start with my last numbers')),
+        boxes(sh).length ? list(actsIn(box0(sh))) : 'no proposal');
+  check('and the sheet says how long it has been', !!lay && textOf(box0(sh)).includes(lay.layoffLine), lay && lay.layoffLine);
 
   /* What is left out is said, once, on the sheet. */
   state.input = { ...BUILD, hidden: ['press'], lib: Object.fromEntries(Object.entries(NAMED).filter(([k]) => k !== 'press')) };
   const lo = engine(state.input).build({});
-  sh = open(UI, trainOpts).sh; tap(sh, MAKE);
+  sh = open(UI, trainOpts).sh; toProposal(sh);
   check('a hidden lift is left out and the sheet says so',
-        !!lo && !!lo.leftOutLine && boxes(sh).length === 1 && textOf(boxes(sh)[0]).includes(lo.leftOutLine) &&
-        !namesIn(boxes(sh)[0]).includes('Press'), lo ? String(lo.leftOutLine) : 'no proposal');
+        !!lo && !!lo.leftOutLine && boxes(sh).length === 1 && textOf(box0(sh)).includes(lo.leftOutLine) &&
+        !namesIn(box0(sh)).includes('Press'), lo ? String(lo.leftOutLine) : 'no proposal');
 
   /* A live session: one line, and only where the builder would have been. */
   state.input = BUILD;
@@ -1049,6 +1066,96 @@ section('H. Patterns: a switch that starts off, and a bubble only when it is on 
   check('Basic, on: no bubble, and the Pro panel names it among what Pro adds',
         !chipsIn(basic).some(b => b.textContent === LABEL) && textOf(basic).includes(cat.label));
   state.pro = true;
+  state.input = BASE;
+}
+
+/* ================= I. AFTER WALKING THE BUILDER ================= */
+section('I. v46 from the phone: the question first, "Build it" straight through, and a switch for the gym');
+{
+  const NAMED = {
+    bench: { name: 'Bench', group: 'chest', equipment: 'barbell' }, row: { name: 'Row', group: 'back', equipment: 'barbell' },
+    squat: { name: 'Squat', group: 'legs', equipment: 'barbell' }, press: { name: 'Press', group: 'shoulders', equipment: 'barbell' },
+    curl: { name: 'Curl', group: 'arms', equipment: 'dumbbell' },
+    incline: { name: 'Incline Press', group: 'chest', equipment: 'dumbbell' },
+    lateral: { name: 'Lateral Raise', group: 'shoulders', equipment: 'dumbbell' }
+  };
+  const BUILD = { ...BASE, lib: NAMED, libReady: true, hidden: [] };
+  const trainOpts = { tight: true, live: false, start() {}, save() {} };
+  const MAKE = C.TRAIN_TOPICS.find(t => t.id === 'ask_build').label;
+  const SHAPE_Q = C.TRAIN_TOPICS.find(t => t.id === 'ask_shape').label;
+  const tap = (sh, label) => { const b = buttonsIn(sh).find(x => x.textContent === label); if (b) b.onclick(); return !!b; };
+  const boxes = sh => find(sh, 'coach-build').filter(b => b.parent);
+  const box0 = sh => boxes(sh)[0] || mkEl('div');
+  const namesIn = box => find(box, 'day-ex-name').map(n => n.textContent);
+  const lastCoach = sh => { const b = find(sh, 'coach-bub').filter(x => x.classList.contains('coach')).pop();
+                            return b ? (find(b, 'coach-bub-t')[0] || {}).textContent : ''; };
+  state.input = BUILD; state.pro = true; state.logKnown = true; state.ready = true;
+  const eng = engine(BUILD);
+  const menu = eng.buildMenu();
+  const shapes = menu.filter(m => m.id.startsWith('shape:')), groups = menu.filter(m => m.id.startsWith('group:'));
+  check('the fixture’s menu has Coach’s pick, at least one shape and at least one group',
+        menu[0] && menu[0].id === 'pick' && shapes.length > 0 && groups.length > 0, list(menu.map(m => m.label)));
+  check('in that order: the pick, then the shapes, then the groups',
+        JSON.stringify(menu.map(m => m.id.split(':')[0])) ===
+        JSON.stringify(['pick'].concat(shapes.map(() => 'shape'), groups.map(() => 'group'))));
+
+  // Picking a shape, and picking a group: each is that focus's workout, drawn
+  // as "Build it" would draw it, and the topics come back afterwards.
+  [shapes[shapes.length - 1], groups[0]].forEach(item => {
+    const sh = open(UI, trainOpts).sh;
+    tap(sh, MAKE); tap(sh, item.label);
+    const p = eng.build(item.opts);
+    check('picking "' + item.label + '" shows that focus’s proposal — its first line and its exercises',
+          !!p && lastCoach(sh) === p.headline && boxes(sh).length === 1 &&
+          JSON.stringify(namesIn(box0(sh))) === JSON.stringify(p.exercises.map(e => e.name)), lastCoach(sh));
+    check('and "' + item.label + '" is said in the thread, with the Train questions back underneath',
+          find(sh, 'coach-bub').some(b => b.classList.contains('you') && textOf(b) === item.label) &&
+          chipsIn(sh).some(b => b.textContent === SHAPE_Q) && !chipsIn(sh).some(b => b.textContent === MAKE),
+          list(chipsIn(sh).map(b => b.textContent)));
+  });
+
+  // "Build it" after "What should I train today?": no question, the proposal.
+  const sh = open(UI, trainOpts).sh;
+  tap(sh, SHAPE_Q);
+  check('after "What should I train today?" the row offers "Build it" and not "Make me a workout" beside it',
+        chipsIn(sh).some(b => b.textContent === 'Build it') && !chipsIn(sh).some(b => b.textContent === MAKE),
+        list(chipsIn(sh).map(b => b.textContent)));
+  tap(sh, 'Build it');
+  check('"Build it" goes straight to the proposal for that focus — no question, no choices',
+        boxes(sh).length === 1 && lastCoach(sh) === eng.build({}).headline &&
+        !find(sh, 'coach-bub-t').some(n => n.textContent === 'What do you want to train?') &&
+        !chipsIn(sh).some(b => b.textContent === 'Tell me what to train'), lastCoach(sh));
+
+  /* ---- the switch for the in-session read ---- */
+  const cat = C.CATEGORIES.find(c => c.id === 'live');
+  const host = mkEl('div');
+  UI.coachToggleRows(host);
+  const sw = buttonsIn(host).find(b => b.getAttribute('aria-label') === (cat && cat.label));
+  check('Settings → Coach has an "In the gym" switch, and it starts ON — absent means on',
+        !!cat && cat.mutable === true && !cat.optIn && !!sw && sw.getAttribute('aria-checked') === 'true');
+  state.calls.length = 0;
+  sw.onclick();
+  await new Promise(r => setTimeout(r, 0));
+  check('tapped, it writes mute.live through the one settings writer',
+        JSON.stringify(state.calls.filter(c => c[0] === 'setCategoryMuted')) === JSON.stringify([['setCategoryMuted', 'live', true]]),
+        JSON.stringify(state.calls));
+  check('and the Pro panel names it among what Pro adds', C.PRO_ADDS.some(a => a.id === 'live'));
+
+  // Switched off: no chip, no line — and the engine itself says nothing.
+  const W = { bench: '185', incline: '65' };
+  const liveS = { id: 'wl', startedAt: NOW - 1800000, exercises: [
+    { exId: 'bench', name: 'Bench', group: 'chest', equipment: 'barbell',
+      sets: Array.from({ length: 3 }, () => ({ w: W.bench, r: '5', type: 'N', done: true })) }] };
+  const OFF = { ...BUILD, settings: { ...BUILD.settings, mute: { live: true } } };
+  state.input = OFF;
+  check('switched off: no chip in the header row', UI.liveChip({ session: liveS, add() {} }) === null);
+  check('no line under a finished exercise, even one left up from before the switch',
+        UI.noteLiveTick(liveS, 0, 2).nudge === null &&
+        UI.nudgeLine({ ...liveS, _coach: { shown: ['bench#0'], nudge: { key: 'bench#0', kind: 'another', short: 'x' } } }, 0, {}) === null);
+  check('and the engine answers nothing when asked — the gate is the engine’s, not only the screen’s',
+        C.coach({ ...OFF, live: { active: true }, tier: { pro: true } }).live(liveS) === null);
+  state.input = BUILD;
+  check('switched back on (the key absent), the chip returns', !!UI.liveChip({ session: liveS, add() {} }));
   state.input = BASE;
 }
 

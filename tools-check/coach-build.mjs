@@ -78,7 +78,7 @@ writeFileSync(join(dir, 'coach.mjs'), src('coach.js')
 
 const C = await import(pathToFileURL(join(dir, 'coach.mjs')).href);
 const B = await import(pathToFileURL(join(dir, 'coach-build.mjs')).href);
-const { EXERCISES } = await import(pathToFileURL(join(ROOT, 'exercises.js')).href);
+const { EXERCISES, GROUPS } = await import(pathToFileURL(join(ROOT, 'exercises.js')).href);
 const { tagsFor } = await import(pathToFileURL(join(ROOT, 'coach-tags.js')).href);
 const U = await import(pathToFileURL(join(ROOT, 'units.js')).href);
 const { fmtDateFull } = await import(pathToFileURL(join(ROOT, 'ui.js')).href);
@@ -597,6 +597,70 @@ section('J. same input, same output — byte for byte');
   check('and the sheet reads in kilos, through units.js',
         benchKg.includes(U.fmtSetLoad('185', 'kg') + ' kg') && !/\blb\b/.test(benchKg) && /\blb\b/.test(benchLb),
         benchLb + ' // ' + benchKg);
+}
+
+/* ================= K. WHAT DO YOU WANT TO TRAIN? ================= */
+section('K. the question "Make me a workout" asks, decided here — Coach’s pick, his shapes, the six groups');
+{
+  /* v46, from walking the builder: "Make me a workout" asks before it builds,
+     and "Build it" does not. The choices are coach-build.js's buildMenu(),
+     handed to the sheet by coach.js; the sheet draws them and decides nothing.
+     So everything a choice can be is fenced here, in the pure layer. */
+  const menu = c.buildMenu();
+  const ids = menu.map(m => m.id);
+  check('buildMenu is exported from coach-build.js with its two words, and coach.js hands it on',
+        typeof B.buildMenu === 'function' && B.BUILD_ASK === 'What do you want to train?' &&
+        B.BUILD_PICK === 'Tell me what to train' && typeof c.buildMenu === 'function');
+  check('Coach’s own pick is first, and it is the default proposal — the one "Build it" makes',
+        menu[0] && menu[0].id === 'pick' && menu[0].label === B.BUILD_PICK && same(menu[0].opts, {}) &&
+        same(c.build(menu[0].opts), p), menu[0] && menu[0].label);
+  const shapeAnswer = c.ask('ask_shape');
+  check('and it is the focus the answer to "What should I train today?" is about',
+        !!p && shapeAnswer.text.toLowerCase().includes(p.focus.label.toLowerCase()), shapeAnswer.text + ' / ' + (p && p.focus.label));
+
+  const shapes = menu.filter(m => m.id.startsWith('shape:'));
+  const groups = menu.filter(m => m.id.startsWith('group:'));
+  check('then his shapes, then the groups — nothing else, and in that order',
+        JSON.stringify(ids) === JSON.stringify(['pick'].concat(shapes.map(m => m.id), groups.map(m => m.id))), list(ids));
+  check('every shape is named by the rule every sentence uses — the proposal for it calls itself the same',
+        shapes.length > 0 && shapes.every(m => { const q = c.build(m.opts); return q && q.focus.label === m.label; }),
+        list(shapes.map(m => m.label)));
+  check('the shape the default is built from is on the list, and so is every other shape "Train something else" offers',
+        shapes.some(m => m.opts.focus === p.focus.id) &&
+        p.focuses.filter(f => f.opts.focus.startsWith('shape:')).every(f => shapes.some(m => m.opts.focus === f.opts.focus)),
+        list(p.focuses.map(f => f.label)));
+  const GROUPS6 = ['chest', 'back', 'legs', 'shoulders', 'arms', 'core'];
+  const buildable = GROUPS6.filter(g => c.build({ focus: 'group:' + g }));
+  check('the groups are exactly the six that propose() can answer, in the usual order, by their labels',
+        JSON.stringify(groups.map(m => m.opts.focus)) === JSON.stringify(buildable.map(g => 'group:' + g)) &&
+        groups.every(m => m.label === GROUPS[m.opts.focus.slice(6)].label),
+        list(groups.map(m => m.label)) + ' vs ' + list(buildable));
+  check('and at least one group is left out here because nothing builds it — the filter is real',
+        buildable.length < GROUPS6.length, list(buildable));
+  check('every chip on the menu builds — none opens on "Coach can’t build that one"',
+        menu.every(m => !!c.build(m.opts)), list(menu.filter(m => !c.build(m.opts)).map(m => m.label)));
+
+  // Silent where the builder is.
+  check('no choices during a live session, before the library is read, or on an unreadable log',
+        C.coach(base({ live: { active: true } })).buildMenu().length === 0 &&
+        C.coach(base({ libReady: false })).buildMenu().length === 0 &&
+        C.coach(base({ log: 'unknown' })).buildMenu().length === 0);
+  check('and none when the builder is switched off',
+        C.coach(base({ settings: { v: 1, mute: { build: true }, answers: {}, asked: {} } })).buildMenu().length === 0);
+  // On a thin log the default does not build, so "Make me a workout" is not
+  // offered at all — the question is never asked with nothing to answer it.
+  const thin = C.coach(base({ sessions: LOG.slice(-5) }));
+  check('a thin log: "Make me a workout" is not offered, so its question is never asked',
+        thin.build({}) === null && !thin.topicsFor('train').some(t => t.id === 'ask_build'));
+
+  // The two doors: one asks, one does not.
+  check('"Make me a workout" answers with the question', c.ask('ask_build').id === 'build_menu' &&
+        c.ask('ask_build').text === B.BUILD_ASK, c.ask('ask_build').text);
+  check('"Build it" answers with the proposal’s first line — no question', c.ask('ask_build_now').id === 'build_workout' &&
+        c.ask('ask_build_now').text === p.headline, c.ask('ask_build_now').text);
+  check('same log, same menu — byte for byte', JSON.stringify(C.coach(FULL).buildMenu()) === JSON.stringify(menu));
+  check('coach-ui.js draws the menu it is handed and writes none of its words',
+        !/Tell me what to train/.test(src('coach-ui.js')) && /c\.buildMenu\(\)/.test(src('coach-ui.js')));
 }
 
 /* ---------- report ---------- */

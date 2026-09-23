@@ -330,6 +330,8 @@ section('D. thin history, and every gate, is silence');
   check('an empty log: nothing', read(s, { sessions: [], log: 'empty' }) === null);
   check('an unreadable log: nothing', read(s, { log: 'unknown' }) === null);
   check('a basic account: nothing — not a lock, not a teaser', read(s, { tier: { pro: false } }) === null);
+  check('"In the gym" switched off in Settings → Coach: nothing',
+        read(s, { settings: { v: 1, mute: { live: true }, answers: {}, asked: {} } }) === null && !!read(s));
   check('an edit of a past session: nothing', read({ ...s, _edit: { mk: '2026-09', dd: '01' } }) === null);
   check('a session with nothing ticked yet: nothing',
         read(live([['bench', [[185, 8, 'N', false], [185, 8, 'N', false]]]])) === null);
