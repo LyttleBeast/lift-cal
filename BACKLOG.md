@@ -6,8 +6,9 @@ a record of eight shipped features with a handful of live items buried in it.
 Two things this file is not. It is not a design document — where a shape was
 already decided, the decision stays where it was written and this only points at
 it. And it is not a port brief: `NEXT-NATIVE.md`, `NEXT-NATIVE-UNITS.md`,
-`NEXT-NATIVE-V40.md`, `NEXT-NATIVE-V41.md` and `NEXT-NATIVE-V42.md` are the
-instructions for copying work into `~/dev/rack-mobile`, and they stay. What is below is the list of
+`NEXT-NATIVE-V40.md`, `NEXT-NATIVE-V41.md`, `NEXT-NATIVE-V42.md`,
+`NEXT-NATIVE-V43.md` and `NEXT-NATIVE-V45.md` are the instructions for copying
+work into `~/dev/rack-mobile`, and they stay. What is below is the list of
 things nobody has done yet.
 
 Read [AGENTS.md](AGENTS.md) for what exists and [CLAUDE.md](CLAUDE.md) for how
@@ -113,7 +114,14 @@ twice. `AGENTS.md` (`steps/{date}`) says the same thing.
 
 ## The native port
 
-`~/dev/rack-mobile`. Four briefs, each still partly open:
+`~/dev/rack-mobile`. Four briefs, each still partly open, plus Coach's:
+
+- **`NEXT-NATIVE-V45.md`** — the workout builder, all of it open. At `13f6b80`
+  native has Coach (`src/pure/coach.js`, `src/ui/coach/`) and no
+  `src/pure/coach-build.js`. Read it with `NEXT-NATIVE-V42.md` and
+  `NEXT-NATIVE-V43.md`, which are still the Coach port documents. Its one trap:
+  native's `startWorkout` mints no React keys, and the builder's presets carry
+  none (§4.1 there).
 
 - **`NEXT-NATIVE-V41.md`** — the newest, and all of it is open at `695d996`:
   every one of v41's six phases was checked against that tree and none of them
@@ -177,12 +185,57 @@ Carried from `NEXT-NATIVE.md` §7 so it survives that file. Do not "fix" these:
 
 ---
 
+## What v45 left open in its own work
+
+v45 is Coach ship two — the workout builder, "Make me a workout" on Train — plus
+four small ones (4a–4d). Everything below is written up in `COACH-REPORT.md`
+§23–§29.
+
+- **Nothing in this ship has been seen on a screen.** The proposal block, the
+  Weighed-at box (4c) and the recap gap (4d) are CSS reasoned from the source
+  and driven through a DOM shim with no box model. 4c in particular rests on a
+  mechanism — WebKit sizing a `datetime-local` control from its value, then iOS
+  shrinking the page to fit the overflow — that could not be reproduced here.
+  If the box is still past the card's edge on a phone, doubt that mechanism
+  first (`COACH-REPORT.md` §26.2).
+- **A routine saved from the builder is not named by the builder until the next
+  app open.** Coach reads `routines` once per open and nothing tells it about a
+  routine written since, so "You have a routine for this" waits for a relaunch.
+  The fix is the cheap kind `noteCoachData()` already is: hand Coach the list
+  routines.js has just written.
+- **A group focus ("Legs" under Train something else) builds the WHOLE base
+  session**, not that group's exercises alone — by decision, because the brief
+  names the session and a filtered one is a session he never did. If that reads
+  wrong in use, filtering it is a small, isolated change in `coach-build.js`.
+- **"Swap one" ranks his logged lifts by recency, then the rest in library
+  order.** Nothing prefers a flat press for a flat press or the same equipment;
+  the pattern tag is the whole of the similarity it knows. Angle and equipment
+  are both available if that turns out to matter.
+- **`libReady` means the picker has RUN its reads, not that they succeeded.**
+  picker.js reads through `read()`, which folds "absent" into "unreachable", so
+  on a first launch offline on a new device with no mirror his custom exercises
+  would look deleted. The builder then leaves them out and says "not in your
+  library" — true from that device, and said rather than silent — but it is
+  still a proposal missing his lifts. Closing it means the picker distinguishing
+  a failed read, which is its own change.
+- **Nothing counts builder use.** A usage event would be a new stored key, which
+  this ship was told to add none of. `workoutStart` counts every start, so the
+  admin panel sees starts and not whether the builder made them.
+- **"Save as routine" can save a second routine for a shape that already has
+  one** — the name box opens on his routine's name when the shape is named by
+  it. Visible, harmless, and his to delete.
+- **The proposal sits in the 92dvh sheet** and a long one — ten exercises and a
+  row of swap chips — scrolls. Like v43's note on the sheet height, not known to
+  be wrong, known to be unseen.
+
 ## What v44 left open in its own work
 
 v44 is the stale-asset fix — the service worker's network leg revalidates now,
 so a ship reaches the phone instead of being re-cached one build behind — plus a
-second pass over the greeting rotation. One cost it took on purpose, one
-verifier it did not write, and one case the fix deliberately does not reach.
+second pass over the greeting rotation. One cost it took on purpose, and one
+case the fix deliberately does not reach. (Two more were closed by v45: the
+`CACHE`/`VERSION` verifier is `tools-check/version-match.mjs`, and `g_in_a_row`
+says "in seven days" now.)
 
 - **`index.html` is still served from the browser's HTTP cache for up to ten
   minutes after a ship.** The revalidating leg is same-origin and
@@ -196,12 +249,6 @@ verifier it did not write, and one case the fix deliberately does not reach.
   where `index.html` itself changed. Closing it starts with establishing what
   current iOS Safari actually does with a navigate-mode Request and a non-empty
   init, which is not a thing to guess at with a blank screen on the other side.
-- **Nothing in `tools-check/` asserts that `sw.js`'s `CACHE` and `usage.js`'s
-  `VERSION` are the same string.** `CLAUDE.md` makes it a hard rule and it is
-  checked by hand, which is the kind of rule that holds until the one session
-  that forgets — and the failure is the silent one, an account reporting a build
-  it is not running. It is a two-line verifier and no rule would need copying
-  into it: it reads both files and compares.
 - **The card pins its greeting before food, weight and steps have landed, so
   the rotation fix reaches it only when two LOG-gated lines qualify.**
   `coach-ui.js` pins at the `logKnown` paint, which `coach-data.js` reaches
@@ -221,13 +268,6 @@ verifier it did not write, and one case the fix deliberately does not reach.
   work offline on an iPhone, where it is the only scanner there is. Fixable by
   adding `crossorigin` to the script tag — jsDelivr does send the header — but
   that is a change to the food path and wants testing on a real phone.
-- **`g_in_a_row` prints a rolling-seven-day count under a calendar word.**
-  *"3 sessions this week."* counts the last seven days, so on a Tuesday it can
-  be reporting three sessions that all happened last week. It was always like
-  that; v44 made the card open with it about three times as often, which is how
-  it got noticed. The house law is that a wrong number is worse than no number,
-  and this is a right number under a wrong word — either the text says "in the
-  last seven days" or the fact becomes a calendar-week count.
 - **An account where only one data-aware greeting line passes its gates still
   opens with a generic line roughly seven opens in eight.** That is not a bug —
   one line cannot rotate against itself, and saying it twice running is the
@@ -324,10 +364,6 @@ wanders into a neighbouring bug has scope-crept — and all of it is here.
   `analytics.js` a tree it has already been given — `loadAll()` would take one —
   but that is an edit to the file every training screen depends on and was not
   worth making blind. Until then, one extra whole-tree GET per app open.
-- **`coach-tags.js` is inert.** 231 exercises tagged on four closed dimensions,
-  fully verified, and nothing reads it. Ship two — the workout builder — is what
-  consumes it, and it was built now so that ship starts without a preparation
-  run.
 - **`log.confidence === 'empty'` does not cross-check the `history` index.** The
   brief asked for `readExact` resolving null/`{}` **and** an empty history
   index; only the first half is implemented, because the second costs a whole

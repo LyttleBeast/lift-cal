@@ -1205,3 +1205,298 @@ previous build while reporting the new one**, and a walkthrough is what somebody
 does in the first ten minutes after a deploy. Anything in the reports above that
 was "confirmed live" shortly after one was confirmed against an unknown build.
 An hour later and it was fine. Nobody wrote down which.
+
+---
+---
+
+# COACH — ship two, the workout builder (rack-v45)
+
+A fourth run, in `~/dev/ship-v45` (a fenced clone at rack-v44, `8a61c02`),
+against `~/dev/SHIP-V45-PROMPT.md`, with `COACH-PROMPT.md` §1, §2, §3, §5 and §6
+still binding. Everything above this line is unchanged; where this section
+contradicts it, it says so rather than editing it.
+
+Ship one taught Coach to read. This ship teaches it to build: *"what should I
+train today"* becomes a workout he can start in one tap, made out of his own
+log. Phases 1–4 shipped. Nothing in scope was dropped.
+
+Verifiers at the start: **23**, all exit 0 under both `TZ=America/New_York` and
+`TZ=UTC`. At the end: **25**, all exit 0 under both.
+
+---
+
+## 23. WHAT IS NOT DONE, AND WHAT NOBODY HAS SEEN
+
+1. **No layout in this ship has been seen on a screen.** Not the proposal block,
+   not the Weighed-at box (4c), not the recap gap (4d). §15's lesson stands:
+   the verifiers drive `coach-ui.js` through a DOM shim with no box model and
+   `rack.css` never loaded, so every one of them can prove what is ON the sheet
+   and none can prove how it LOOKS. 4c in particular is a mechanism I reasoned
+   my way to (§26.2) and could not reproduce. All three are first on the
+   walkthrough for that reason.
+2. **A routine saved from the builder is not offered by name until the next
+   app open.** Coach reads `routines` once per open (`coach-data.js`), and
+   nothing tells it about a routine written later. The next proposal for that
+   shape still works; it just does not yet say "You have a routine for this". In
+   BACKLOG.md.
+3. **The builder is on Train and nowhere else**, by decision — §25.9.
+4. **Nothing counts builder use.** A usage event would be a new stored key, and
+   this ship was told to add none. `workoutStart` still counts every start,
+   builder or not, so the admin panel can see starts and not where they came
+   from. In BACKLOG.md.
+
+---
+
+## 24. WHAT GOT BUILT
+
+```
+coach-build.js    564 lines   NEW, PURE. propose(input, opts) and liveRefusal(input).
+                              Native: src/pure/coach-build.js, verbatim.
+coach.js        2,390 lines   was 2,254. builderInput(), d.build(), shapeRoutine(),
+                              the `build` category, build_workout, ask_build,
+                              FOLLOWUPS_AFTER, PRO_ADDS counting selectors, five
+                              sentences reworded (4a)
+coach-ui.js                   the builder offered only with a `start` callback,
+                              chip dedupe, proposalBlock() and its glue, the live line
+coach-data.js                 lib gains `name`; input gains `hidden` and `libReady`
+picker.js                     hiddenIds(), libraryReady()
+workout.js                    the Train card hands in start and save
+rack.css                      the proposal (six rules), 4c, 4d
+```
+
+| verifier | at `8a61c02` | at rack-v45 | |
+|---|---|---|---|
+| `coach-build.mjs` | — | 94 | new |
+| `version-match.mjs` | — | 1 | new (4b) |
+| `coach-surface.mjs` | 35 | 82 | sections E and F |
+| `coach-units.mjs` | 47 | 69 | section G, and C's calendar-word check |
+| `coach-pure.mjs` | 57 | 74 | section F |
+| `coach-rank.mjs` | 65 | 77 | G2's builder rules |
+| `coach-voice.mjs` | 42 | 49 | section G |
+| `units.mjs` | 128 | 128 | one check reworded: nine display sites |
+
+Every verifier that stages `coach.js` now stages `coach-build.js` too — nine
+files, a few lines each — because `coach.js` imports it and a staged copy in a
+temp directory cannot resolve `./coach-build.js` otherwise.
+
+`database.rules.json` is byte-identical to rack-v44. No pinned file moved
+(`NEXT-NATIVE-V45.md` has the hashes). `coach-tags.js` was not touched: the
+builder reads it and no tag turned out to be wrong.
+
+---
+
+## 25. THE DECISIONS THE BRIEF LEFT TO ME, AND WHAT I DID
+
+The brief made the big ones and said not to re-litigate them; none was. These
+are the ones it did not make.
+
+1. **What "merges into the focus shape" means.** The shape's own cluster —
+   `members`, the signature keys `coach.js` merged into it — rather than
+   re-running the symmetric-difference test in the builder. Re-running it
+   would be a second definition of §3.3, and a session one group away from two
+   representatives would be claimed by whichever copy ran.
+2. **The default focus is `session.shapeOverdue` whatever its ratio.** The
+   headline finding needs a ratio of 1.4 to fire; the builder does not wait for
+   anything to be overdue. It needs the headline's min-data gate — called as
+   `train_today_recommendation.minData`, not restated — and a shape.
+3. **A group focus builds the whole base session**, not just that group's
+   exercises. The brief names the session; filtering it would put a session he
+   never did in front of him. The reason line says which session and why, and
+   "Swap one" and "Fewer exercises" are one tap away. If "Legs" reading as a
+   whole-body day turns out wrong in use, filtering is a small change; it is in
+   BACKLOG.md.
+4. **The headline is not the brief's example sentence.** *"the last time you
+   trained chest and arms"* can be false: a later session outside the cluster —
+   a whole-body day, say — can have trained both. It reads *"your most recent
+   chest and arms day"*, which is true by construction. For a group: *"the most
+   recent with two or more working sets for legs"*, which states the rule it
+   was chosen by rather than claiming "the last time you trained legs" over a
+   one-set session that came later.
+5. **Dates read "Tue, Sep 16", not "Tue 16 Sep".** The app prints a session's
+   date with `fmtDateFull` everywhere else; the brief's example did not. The
+   builder spells the names out rather than asking `Intl`, and works the
+   weekday out in UTC from the date key, so it names the day the session was
+   filed under in every zone — checked against `fmtDateFull` itself in both.
+6. **Drops are positions; swaps are exIds.** A drop recorded as a count would
+   be re-derived after a swap and could remove a different lift from the one he
+   watched go: compound A, isolation B, compound C — "Fewer" drops B; swap C for
+   an isolation lift, and a count re-derived from scratch drops the new lift and
+   brings B back. A position cannot move. A swap keyed by exId swaps a
+   duplicated block's repeats as one thing. `coach-build.mjs` H checks a swap
+   after a drop keeps exactly the drop that was made.
+7. **A swapped-in lift brings its own numbers or none.** Its last session's
+   sets, with a note naming that session; never logged, the replaced lift's set
+   count and types and nothing in them. Carrying the replaced lift's numbers
+   across would be a weight he lifted on something else.
+8. **Swaps never cross the cardio line.** The pattern tag separates a lift from
+   cardio for built-ins, but a custom exercise has no tag and swaps "within its
+   group", and legs holds both squats and a treadmill.
+9. **The builder is Train-only.** It needs a way to start what it builds, and
+   the You card has none: `you.js` must not import `workout.js` (the README's
+   invariant, and §3.10's bug when it was broken). So the sheet offers the
+   builder only when the card that opened it hands in a `start` — which makes
+   "on Train, not on You" a property of the wiring. The follow-up "Build it"
+   is filtered the same way on the You sheet, where the engine would otherwise
+   offer it after "How's my training?".
+10. **"You have a routine for this: Push A." is a line, not a button.** The brief
+    fixed the buttons at exactly four. It is the first thing in the proposal.
+11. **The live-session line** — *"A workout is running. Coach builds the next one
+    once it is saved or discarded."* — sits under the Train sheet's opening
+    bubble, only on Pro, only when a proposal would otherwise exist, and not
+    when the builder is switched off.
+12. **`lastNumbers` carries `tw`/`tr` as well as `w`/`r`.** Clear a box and his
+    last number is still there as ghost text. `collectFrom` strips both.
+13. **`libReady`.** Not in the brief, and the most important refusal in the
+    module after the layoff. Before the picker has read its three nodes the
+    library is the built-ins alone and his custom exercise looks exactly like a
+    deleted one — the builder would drop it and say it was gone. So there is no
+    proposal until the library has been read. On web the Train card is only
+    drawn after `initPicker()`, so this never bites there; the You tab starts
+    earlier, and native's boot order is its own.
+14. **The left-out wording is "not in your library"**, never "deleted": true
+    whether the exercise was deleted or this device could not read the custom
+    list, which `read()` cannot tell apart.
+
+---
+
+## 26. WHERE THE BRIEF WAS WRONG ABOUT THE CODE
+
+### 26.1 `PRO_ADDS` would not have picked the builder up by itself
+
+> *the "what Pro adds" panel picks the new category up by itself because
+> PRO_ADDS is derived from the intent table — prove it does rather than editing
+> the panel.*
+
+It did not. `PRO_ADDS` filtered on `i.kind === 'finding'`, and the brief itself
+made the builder a `selector`. Built as specified, the largest thing Pro adds
+would have been missing from the list of what Pro adds. The panel is untouched;
+the derivation in `coach.js` now counts selectors as well, and
+`coach-surface.mjs` proves the drawn panel names "Workout builder" — and goes red
+when the derivation is put back.
+
+### 26.2 4c: the Weighed-at box is not in a flex row with Log
+
+> *a `datetime-local` input in a flex row needs `min-width: 0` and a width it can
+> shrink to*
+
+`weight.js` puts the box in its own `.field` block under the `.qty-row` that
+holds the weight box and Log; the Log button's inline `flex: 0 0 auto` already
+stops flexbox shrinking it. No flex rule can squash Log from there. What fits
+the symptom is WebKit sizing a date-and-time control from its formatted value
+and ignoring `width`: the box overflows the card, and iOS shrinks the whole page
+to fit the overflow — which squashes everything, Log included. The rule added
+(`.field input[type=datetime-local]`) gives the box `min-width: 0`, a
+`max-width` and `appearance: none`, which is what makes iOS honour the width;
+nothing about Log changed. **I could not see it**, and if the walkthrough shows
+the box still past the edge, the mechanism above is the thing to doubt first.
+
+### 26.3 "in the last seven days" is seven words in a five-word pool
+
+4a's decision was the words *"in the last seven days"*. `g_in_a_row` is a
+greeting, and greetings are capped at five words (`COACH-PROMPT.md` §9, fenced
+by `coach-units.mjs` E). It reads *"3 sessions in seven days."* — the same fact,
+counted and named the same way, in five.
+
+### 26.4 "The answers to … `train_today_recommendation` gain a follow-up"
+
+Follow-ups were keyed by the BUTTON pressed, not by the intent that answered.
+`train_today_recommendation` answers `topic_train` as well as `ask_shape`, and
+adding "Build it" to `topic_train`'s list would have put it after every training
+answer. `FOLLOWUPS_AFTER` is keyed on the answering intent, so "Build it"
+follows that one answer whichever button reached it, and nothing else.
+
+### 26.5 `toSession` is not exported
+
+"Round-trips through routines.js `toSession`'s shape" could not import it.
+`coach-build.mjs` lifts `toSession`, `blankRoutine` and `saveSessionAsRoutine`
+out of `routines.js` by text, the way `month-erasure.mjs` lifts `workout.js`,
+and runs them — so the round trip is tested against the function the app
+calls, and "Save as routine, then start it" is proved to be "Start it".
+
+### 26.6 `coach-data.js`'s own comment was wrong
+
+It said a hidden exercise "is deliberately still in here". It never was —
+`allExercises()` filters hidden ones — and native's port had already noticed
+("Web's code cannot do what its comment says"). The comment is corrected; the
+behaviour did not change, and the builder takes the hidden list separately.
+
+---
+
+## 27. WHAT CAUGHT THE VERIFIERS
+
+Every new check was mutation-tested: the thing it fences was broken by hand and
+the file run.
+
+| phase | mutations | turned red |
+|---|---|---|
+| 1 — `coach-build.js` | base = oldest session; layoff discounted; sets arrive ticked; hidden ignored; libReady ignored; fewer always drops the last; swaps ignore pattern; left-out unnamed | 8 of 8 |
+| 2 — engine and gate | no `FOLLOWUPS_AFTER`; `PRO_ADDS` findings-only; mute ignored; offered without a proposal; no `start` gate; no chip dedupe | 6 of 6 |
+| 3 — the proposal on screen | Start does not close; preset uncopied; last-numbers button always drawn; both removals gone; Start hands over lastNumbers; live line everywhere; Train card not handed save | 7 of 7, after two fixes below |
+| 4a | the old copy, run against the new checks | 2 of 2 |
+| 4b | `usage.js` set one version ahead | red |
+
+Three things the mutations and the new sections found in the fences themselves,
+which is the part of this worth keeping:
+
+1. **`coach-surface.mjs`'s stub had never modelled a live session.** It spread
+   the card's `{ live: true }` straight into the snapshot, and the engine reads
+   `live.active` — so every "live" sheet it ever drew was a sheet with no session.
+   Nothing noticed because no check opened one until the builder needed to. The
+   stub mirrors `coach-data.js`'s contract now.
+2. **My first "the preset is a copy" check was vacuous.** It compared the
+   object handed to `start` against a proposal from a DIFFERENT engine instance,
+   which can never be the same object — so it passed with the copy removed. It
+   now scribbles on the handed-over preset and starts again from the same drawn
+   proposal; the mutation goes red on `SCRIBBLE`.
+3. **One mutation was of a doubled guard** — `adjust()` and `drawProposal()`
+   both remove the old proposal — so removing one changed nothing. Removing both
+   turns four checks red. Not a blind check; noted so nobody "fixes" the double.
+
+And two fixture bugs in my own first draft of `coach-build.mjs`, both mine and
+neither the engine's: a "thin" log that held seven sessions (the gate is six),
+and a numbers floor of "more than twenty" on a layoff proposal whose base was a
+pull day carrying exactly twenty.
+
+One pre-existing defect went with the dedupe. After "What should I train
+today?" on Train, "What's overdue?" (a follow-up) and "What's waited longest?"
+(a topic) were the SAME route drawn as two chips. The builder would have added
+a third pair — "Build it" beside "Make me a workout" — so the sheet no longer
+draws a topic that is already offered as a follow-up.
+
+---
+
+## 28. `rack-mobile` WAS READ THIS TIME
+
+v42 to v44 were fenced and read nothing of the native tree. This ship read it,
+read-only, at `13f6b80`, for three reasons the brief gave it: 4c and 4d's
+native halves, and the native destination of every surface change. What it
+found that a port would otherwise meet blind:
+
+- **Native's `startWorkout(preset)` mints no React keys.** `toSession()` mints
+  `_k` on routine starts and `withKeys()` only on restore, so a builder preset
+  handed straight in renders every exercise card `key={undefined}`. The fix
+  belongs in native's Train card, never in `coach-build.js`. It is
+  `NEXT-NATIVE-V45.md` §4.1 and its "one thing".
+- Native's `libIndex()` includes hidden exercises (web's does not). The builder
+  checks the hidden list first, so both conventions work — provided `hidden` is
+  passed.
+- 4c does not exist on native (an inline `DateTimePicker`, not in Log's row);
+  4d does not either (`StatRow` already has `marginBottom: m14`).
+
+---
+
+## 29. IF THE NEXT RUN READS ONE THING
+
+The builder's arithmetic is the easy half. What makes it safe is three
+refusals, and each one exists because the natural implementation gives a
+confident wrong answer:
+
+- **the layoff** — the natural thing is a percentage off, which is a weight he
+  never lifted;
+- **`libReady`** — the natural thing is to trust the library you have, which
+  before the picker loads calls his own exercise deleted;
+- **the live session** — the natural thing is to start what was asked for,
+  which replaces the workout he is in the middle of.
+
+Keep all three when the builder grows. And before trusting anything in this
+section about how the proposal looks: nobody has seen it yet.

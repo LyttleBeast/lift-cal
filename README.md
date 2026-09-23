@@ -96,7 +96,8 @@ node in the database. See *Access* below for what replaced them, and why.
 | `you.js` | You tab — the screen the app opens on. Read-only; every number is re-derived |
 | `insights.js` | What Rack makes of the data — wins, slips, insights, the weekly review, the goal pace. Pure functions over what `you.js` loaded |
 | `coach.js` | **Coach's engine.** Facts, intents, responses, router — four tables and a sort. Pure: no clock, no DOM, no reads, no module state. Copied into the native tree verbatim |
-| `coach-tags.js` | Movement pattern, angle, load and side for every built-in exercise. A sidecar keyed on `exercises.js`'s ids, so a tagging mistake can never reach the picker. Pure; imports nothing |
+| `coach-build.js` | **The workout builder** — "Make me a workout" on Train. Turns the shape that has waited longest into a workout made out of his own log: the most recent such session, its exercises, blocks and logged numbers, never an invented weight. Pure, and copied into the native tree verbatim like `coach.js` |
+| `coach-tags.js` | Movement pattern, angle, load and side for every built-in exercise. A sidecar keyed on `exercises.js`'s ids, so a tagging mistake can never reach the picker. Pure; imports nothing. The builder reads it: pattern for "Swap one", load for "Fewer exercises" |
 | `coach-data.js` | The impure half — the one file the native port rewrites. Reads once per app open and never on a paint |
 | `coach-ui.js` | Coach's card, the COACH ME sheet, and the Settings switches |
 | `settings.js` | The settings hub behind the You gear, and the profile editor |
@@ -137,6 +138,7 @@ Import direction is strictly one-way, no cycles:
 
 ```
 app.js → you.js       → coach-ui.js  → coach.js   → analytics.js ──→ ui.js
+                                                 → coach-build.js → blocks.js  coach-tags.js
                                     → coach-data.js → picker.js
                                                     → tdee.js  insights.js
                                                     → access.js → store.js
@@ -188,12 +190,22 @@ close a loop, and `bump()` is one line at a call site that already has real work
 to do.
 
 `coach.js` is at the bottom of the graph with `units.js` and `blocks.js`: it
-imports `exercises.js`, `units.js` and the SESSION MATH from `analytics.js`
-(`e1rm`, `isWorking`, `mergeSessionExercises`, `exerciseIndex`) and nothing
-else — never `loadAll`/`allSessions`, which are that file's impure half. It
-holds no state and takes its clock as an argument, so two renders inside one
-app open cannot disagree about which greeting is showing.
+imports `exercises.js`, `units.js`, `coach-build.js` and the SESSION MATH from
+`analytics.js` (`e1rm`, `isWorking`, `mergeSessionExercises`, `exerciseIndex`)
+and nothing else — never `loadAll`/`allSessions`, which are that file's impure
+half. It holds no state and takes its clock as an argument, so two renders
+inside one app open cannot disagree about which greeting is showing.
 `tools-check/coach-pure.mjs` is the fence around all of that.
+
+`coach-build.js` sits under it and never imports it back. It derives nothing
+about the log on its own — the recurring shapes, the window, the gate and the
+layoff are `coach.js`'s facts, handed over by `builderInput()` — and it decides
+everything that goes into a proposal. It writes nothing either: the sheet's
+four buttons end in `startWorkout(preset)` and `saveSessionAsRoutine(record)`,
+which the Train card hands to `coach-ui.js` as callbacks, the way it hands
+`startWorkout` to Routines, because `coach-ui.js` cannot import `workout.js`
+without closing a ring. The You card hands in neither, so the builder is on
+Train alone.
 
 `coach-data.js` is the only half that reads. It does the gathering once per app
 open and hands `coach.js` a plain object, which is what lets a card sit at the
@@ -478,9 +490,11 @@ Three related promises:
   guideline. Where it quotes a comparison it names the denominator out loud:
   *2 sessions in the last 7 days, against 3.5 a week across the four weeks
   before.*
-- **A readout, not an instruction.** *Fat is 38% of your calories this week,
-  against the 30% your targets work out to* — never "eat less fat". It does not
-  do injuries or pain, and it says so if it is asked.
+- **A readout, not an instruction.** *Fat is 38% of your calories over the
+  last seven full days, against the 30% your targets work out to* — never "eat
+  less fat". It does not do injuries or pain, and it says so if it is asked.
+  And a rolling window is never given a calendar word: "this week" over the last
+  seven days is a right number under a wrong word.
 - **Every sentence prints its weight through `units.js`**, and no sentence in it
   names a rounding or a step size. "Round it up to the nearest 5" is a false
   sentence on a metric account, and no conversion fixes that — only a different
@@ -493,8 +507,8 @@ The muscle-group vocabulary is `exercises.js`'s six — chest, back, legs,
 shoulders, arms, core — and that is a hard ceiling. There is no biceps/triceps
 split and no quads/hamstrings split, so *you're behind on chest* is computable
 and *you never train hamstrings* is not. `coach-tags.js` is the sidecar that
-will one day make movement pattern computable too; it is built and verified and
-nothing reads it yet.
+makes movement pattern computable: the workout builder reads it to swap a press
+for a press and to take an isolation lift out first.
 
 A **recurring session shape** is derived over the last 84 days: the set of
 primary groups in a session with two or more working sets, cardio excluded,
@@ -507,6 +521,28 @@ wins.
 Nothing derives from `session.groups` on the stored record: `workout.js` builds
 that array from sets filtered on `done`, not on `isWorking`, so it counts
 warm-ups. Every group Coach names is derived fresh from the sets.
+
+### Make me a workout
+
+On Train, and on Pro, the first bubble in the sheet. It builds the session that
+has waited longest out of your own log: the most recent session of that shape,
+its exercises in the order you did them, your lifting blocks, and the numbers
+you actually lifted — never a weight you did not. It says which session it was
+built from, offers your own routine for that shape by your name if you have one,
+and says what it left out (an exercise you hid, one no longer in your library)
+rather than quietly substituting. Then four buttons: **Start it** (your numbers
+as ghost text), **Start with my last numbers** (filled in, nothing ticked),
+**Save as routine**, and **Change something** — train something else, fewer
+exercises, or swap one for another of yours in the same group and movement.
+
+Three refusals, each where the obvious answer would be a confident wrong one:
+after a layoff there are no pre-filled numbers, only targets, and it says how
+long it has been — never a percentage off; before your exercise library has
+loaded there is no proposal, because a custom exercise would look deleted; and
+during a live session there is none either, because starting one would replace
+it. `coach-build.js` decides all of it and writes nothing: the buttons end in
+the same `startWorkout` and `saveSessionAsRoutine` a routine and a finished
+session already use. `tools-check/coach-build.mjs` is its fence.
 
 ### Three states it will not be talked out of
 
