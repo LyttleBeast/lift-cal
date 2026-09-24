@@ -180,7 +180,15 @@ const IMPL = {
   // v49: the card's earned line, the aim, and the lift target.
   rememberHype:       id => { state.calls.push(['rememberHype', id]); },
   setAim:             v => { state.calls.push(['setAim', v]); return Promise.resolve(true); },
-  setGoalLift:        v => { state.calls.push(['setGoalLift', v]); return Promise.resolve(true); },
+  /* v53: the stub stores what it is sent, as the real patch does, so "Saved"
+     can be checked against what is stored. `goalWrite` models the two ways a
+     save goes wrong: 'fail' (the write refused) and 'drop' (a write that
+     succeeds without the key — the shape of the 2,001 lb bug). */
+  setGoalLift:        v => { state.calls.push(['setGoalLift', v]);
+                             if (state.goalWrite === 'fail') return Promise.resolve(false);
+                             const g = state.goalWrite === 'drop' ? undefined : (v || undefined);
+                             state.input = { ...state.input, settings: { ...state.input.settings, goalLift: g } };
+                             return Promise.resolve(true); },
   setCategoryMuted:   (id, m) => { state.calls.push(['setCategoryMuted', id, m]); return Promise.resolve(true); },
   answerQuestion:     (id, v) => { state.calls.push(['answerQuestion', id, v]); return Promise.resolve(true); },
   markAsked:          id => { state.calls.push(['markAsked', id]); return Promise.resolve(true); },
@@ -283,6 +291,8 @@ writeFileSync(join(dir, 'coach-data-stub.mjs'),
   IMPORTED.map(n => `export function ${n}(...a) { return globalThis.__coachData('${n}', a); }`).join('\n') + '\n');
 writeFileSync(join(dir, 'coach-ui.mjs'), UI_SRC
   .replace("from './ui.js'", 'from ' + real('ui.js'))
+  // v53: the Lift target Save validates through coach-goal.js before it writes.
+  .replace("from './coach-goal.js'", 'from ' + real('coach-goal.js'))
   // v49: the Lift target row converts its box through units.js.
   .replace("from './units.js'", 'from ' + real('units.js'))
   .replace("from './exercises.js'", 'from ' + real('exercises.js'))
@@ -290,6 +300,9 @@ writeFileSync(join(dir, 'coach-ui.mjs'), UI_SRC
   .replace("from './coach-data.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-data-stub.mjs')).href)));
 
 const C = await import(pathToFileURL(join(dir, 'coach.mjs')).href);
+// v53: the limit the Lift target toast prints, read from the real modules.
+const { limW: limWOf } = await import(real('units.js').slice(1, -1));
+const { GOAL_LB_MAX: GOAL_MAX } = await import(real('coach-goal.js').slice(1, -1));
 const UI_URL = pathToFileURL(join(dir, 'coach-ui.mjs')).href;
 /* coach-ui.js pins the greeting in module state for the length of an app open,
    which is the point of section D — so an "open" here is a fresh instance of
@@ -1676,6 +1689,52 @@ section('M. v49 — the card encourages and the sheet opens on the finding; "Mor
   tap(has, 'Clear lift target');
   check('with a target set, Clear writes it away — null, and nothing else',
         state.calls.some(c => c[0] === 'setGoalLift' && c[1] === null), JSON.stringify(state.calls));
+
+  /* v53, fix 3.1: over GOAL_LB_MAX was a write without the key — "Saved", and
+     the old target gone. Now nothing is written, the old target stays, and the
+     toast names the limit in his unit; "Saved" only when the stored target is
+     the one sent. */
+  const OLD = { exId: 'bench', lb: 315, reps: 1, at: NOW - 30 * DAY };
+  const toastNow = () => (body.children.find(x => x.classList.contains('toast')) || {}).textContent || '';
+  const trySave = async (u, weight, how) => {
+    await new Promise(r => setTimeout(r, 0));    // the Clear above toasts late; let it land first
+    state.input = { ...EARN, u, settings: { ...EARN.settings, goalLift: OLD } };
+    state.goalWrite = how || null; state.calls.length = 0;
+    body.children.length = 0;
+    const h = mkEl('div');
+    U2.coachAnswerRows(h, () => {});
+    const s_ = walk(h).find(n => n.tag === 'select'), i_ = walk(h).filter(n => n.tag === 'input');
+    s_.value = 'bench'; i_[0].value = String(weight); i_[1].value = '1';
+    tap(h, 'Save lift target');
+    await new Promise(r => setTimeout(r, 0));
+    const r = { wrote: state.calls.filter(c => c[0] === 'setGoalLift'), toast: toastNow(), kept: state.input.settings.goalLift };
+    state.goalWrite = null;
+    return r;
+  };
+  const lb2001 = await trySave('lb', 2001);
+  check('2,001 lb: nothing written, the old target intact, and the toast names the limit in pounds',
+        lb2001.wrote.length === 0 && J_(lb2001.kept) === J_(OLD) && lb2001.toast === 'Coach takes lift targets up to 2,000 lb.',
+        J_(lb2001));
+  const kgLimit = limWOf([0, GOAL_MAX], 'kg')[1];
+  const kgOver = await trySave('kg', 908);
+  check('908 kg: nothing written, the old target intact, and the toast names the limit in kilos — limW, rounded inward',
+        kgOver.wrote.length === 0 && J_(kgOver.kept) === J_(OLD) && kgOver.toast === 'Coach takes lift targets up to ' + kgLimit + ' kg.',
+        J_(kgOver));
+  const kgAt = await trySave('kg', kgLimit);
+  check('and the number that toast shows is one Coach accepts: ' + kgLimit + ' kg saves',
+        kgAt.wrote.length === 1 && kgAt.wrote[0][1].lb <= GOAL_MAX && kgAt.toast === 'Saved' && J_(kgAt.kept) === J_(kgAt.wrote[0][1]),
+        J_(kgAt));
+  const lb2000 = await trySave('lb', 2000);
+  check('2,000 lb: saved, and "Saved" only once the stored target is the one sent',
+        lb2000.wrote.length === 1 && lb2000.wrote[0][1].lb === 2000 && lb2000.toast === 'Saved' && J_(lb2000.kept) === J_(lb2000.wrote[0][1]),
+        J_(lb2000));
+  const failed = await trySave('lb', 350, 'fail');
+  check('a failed write: "Couldn’t save that", and the old target intact',
+        failed.toast === 'Couldn’t save that' && J_(failed.kept) === J_(OLD), J_(failed));
+  const dropped = await trySave('lb', 350, 'drop');
+  check('a write that lands without the target: "Couldn’t save that", never "Saved"',
+        dropped.toast === 'Couldn’t save that', J_(dropped));
+  body.children.length = 0;
   const answeredCheck = mkEl('div');
   state.input = { ...EARN, settings: { ...EARN.settings, answers: { ...EARN.settings.answers, q_goal_check_weight: 'temp', q_goal_direction: 'down' } } };
   U2.coachAnswerRows(answeredCheck, () => {});

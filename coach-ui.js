@@ -29,7 +29,8 @@ import { coach, CATEGORIES, QUESTIONS, PRO_ADDS, LIVE_NONE, isMuted, TOPICS_SHOW
 import { coachInput, coachReady, coachLogKnown, rememberGreeting, rememberHype, coachSettings, coachSettingsKnown,
          setCategoryMuted, answerQuestion, markAsked, liveSessionOnDevice, coachPro, setAim, setGoalLift,
          markSession, loadFuel, fuelNeedsRead } from './coach-data.js';
-import { wIn, fmtW, unitW } from './units.js';
+import { wIn, fmtW, unitW, limW } from './units.js';
+import { normGoalLift, GOAL_LB_MAX } from './coach-goal.js';
 
 /* The two marks. Inline rather than in a sprite because there are two of them
    and the app has no icon system — the gear on You is written out the same way. */
@@ -1066,8 +1067,23 @@ function liftTargetRow(host, onChange) {
   saveBtn.onclick = () => {
     const exId = sel.value, lbs = parseFloat(w.value), reps = parseInt(r.value, 10);
     if (!exId || !(lbs > 0) || !(reps >= 1 && reps <= 20)) { toast('Pick a lift, a weight and 1 to 20 reps'); return; }
-    setGoalLift({ exId, lb: wIn(lbs, u), reps, at: Date.now() })
-      .then(ok => { toast(ok === false ? 'Couldn’t save that' : 'Saved'); if (ok !== false && onChange) onChange(); })
+    /* v53: validated BEFORE the write. normSettings() drops a goalLift that
+       normGoalLift() refuses, so 2,001 lb used to be a patch without the key —
+       a write that succeeded, said "Saved", and took the old target with it.
+       The limit is limW's, rounded inward, so the number shown is one the
+       check accepts (labelW rounds outward: 907.2 kg is itself refused). */
+    const lb = wIn(lbs, u);
+    if (lb > GOAL_LB_MAX) { toast('Coach takes lift targets up to ' + limW([0, GOAL_LB_MAX], u)[1].toLocaleString() + ' ' + unitW(u) + '.'); return; }
+    const sent = normGoalLift({ exId, lb, reps, at: Date.now() });
+    if (!sent) { toast('Couldn’t save that'); return; }
+    // "Saved" only when what is stored is what was sent.
+    const same = g => !!g && g.exId === sent.exId && g.lb === sent.lb && g.reps === sent.reps && g.at === sent.at;
+    setGoalLift(sent)
+      .then(ok => {
+        const kept = ok !== false && same(coachSettings().goalLift);
+        toast(kept ? 'Saved' : 'Couldn’t save that');
+        if (kept && onChange) onChange();
+      })
       .catch(() => toast('Couldn’t save that'));
   };
   f.appendChild(saveBtn);
