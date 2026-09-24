@@ -41,8 +41,9 @@
 // know about the log from here. And coach-goal.js, whose aims and energy
 // context the goal's facts read (the targets themselves are coach-prog.js's,
 // reached through the builder). And (v52) coach-ready.js, the rest read and
-// readiness — the training half of stage four, food-blind by construction.
-// Nothing imports back.
+// readiness — the training half of stage four, food-blind by construction —
+// and coach-fuel.js, "Am I fueled?" and the food rows, the food half. The two
+// never see each other: their rows are merged here. Nothing imports back.
 
 import { GROUPS, GROUP_ORDER } from './exercises.js';
 import { e1rm, isWorking, mergeSessionExercises, exerciseIndex } from './analytics.js';
@@ -54,6 +55,7 @@ import { readLift, lighterWeek, recordDay, liftsMoving, prepare, targetsReplay, 
          liftTrend, goalLiftRead, bigThree, focusRead, groupDaysAt } from './coach-overlap.js';
 import { restRead, usualRun, replay, readinessRows, readinessHas, readinessAnswer, readinessHeavy, sessionRows,
          mergeRows, groupLine, restAnswer, lighterAnswer, groupAnswer, REST_REASON } from './coach-ready.js';
+import { fueledRead, fuelAnswer, fedUnloggedAnswer, fedNoneAnswer, fuelRow, sessionFoodRows, fuelDates } from './coach-fuel.js';
 
 const DAY = 864e5;
 
@@ -1111,7 +1113,13 @@ export const FACTS = Object.freeze([
     /* Readiness: the training rows (coach-ready.js), or null with the
        Readiness switch off. Sheet only — built while its answer renders. */
     id: 'session.readiness', unit: null, requires: [],
-    compute: d => (isMuted(d.input.settings, 'readiness') ? null : readinessRows(d.ready(), d.now)),
+    // v52, Phase B: and the fuel row, with the Food switch on (coach-fuel.js
+    // — the training rows never see it, and never move with it).
+    compute: d => {
+      if (isMuted(d.input.settings, 'readiness')) return null;
+      const food = fuelOpen(d) ? fuelRow(d.fuelIn(), d.now) : null;
+      return readinessRows(d.ready(), d.now).concat(food ? [food] : []);
+    },
     because: () => 'your log against your own normal today'
   },
   {
@@ -1120,8 +1128,12 @@ export const FACTS = Object.freeze([
        Sheet only. */
     id: 'session.diffs', unit: null, requires: ['session.latest'],
     compute: d => {
-      const all = sessionRows(d.ready(), d.f('session.latest'));
-      return { measured: all.length, rows: mergeRows(all) };
+      const s = d.f('session.latest');
+      const all = sessionRows(d.ready(), s);
+      // v52, Phase B: and the food rows, with the Food switch on — merged,
+      // training first, and three kept across the two.
+      const food = fuelOpen(d) ? sessionFoodRows(d.fuelIn(), s, d.now) : [];
+      return { measured: all.length + food.length, rows: mergeRows(all, food) };
     },
     because: () => 'each against your own sessions in the twelve weeks before it'
   },
@@ -1131,6 +1143,25 @@ export const FACTS = Object.freeze([
     id: 'session.replay', unit: null, requires: [],
     compute: d => replay(d.ready(), d.now),
     because: () => 'each of the last twelve weeks’ mornings, read the way Coach reads today'
+  },
+
+  /* ---------- stage four, the food half (v52, Phase B): coach-fuel.js ---------- */
+  {
+    // How he says he logs food — his answer to q_log_timing, or null.
+    id: 'coach.logTiming', unit: null, requires: [],
+    compute: d => { const a = ((d.input.settings && d.input.settings.answers) || {}).q_log_timing;
+                    return a === 'live' || a === 'later' ? a : null; },
+    because: v => (v === 'live' ? 'you told Coach you log food as you go' : 'you told Coach you log food later in the day'),
+    usesAnswers: ['q_log_timing']
+  },
+  {
+    /* "Am I fueled?": coach-fuel.js's read of his food against his own
+       normal — Pro, the Food switch on, a readable log — or null. Sheet only:
+       it reads the food log days coach-data.js's loadFuel() has read, which
+       happens on an ask and never on a paint. */
+    id: 'fuel.read', unit: null, requires: [],
+    compute: d => (fuelOpen(d) ? fueledRead(d.fuelIn(), d.now) : null),
+    because: () => 'your food log against your own normal, going by when you logged it'
   },
 
   /* ---------- fuel ----------
@@ -1992,6 +2023,24 @@ export const QUESTIONS = Object.freeze([
     ack: 'Noted. Coach won’t ask about that again for a while.',
     stale: (answer, askedAt, d) => checkStale(answer, askedAt, d),
     when: d => goalCheckOpen(d) && (d.f('coach.goalChecks') || {}).targets === true
+  },
+  /* v52. How he logs food — asked under "Am I fueled?" (where: 'fuel'), once,
+     when his entries look batch-logged and he has not said. It is a
+     preference, not a daily state, so it is kept; and it is its own fact, so
+     the registry can drive it. As I go: the hour's reads come on; Later: the
+     day's totals alone. */
+  {
+    id: 'q_log_timing',
+    text: 'Do you usually log food as you go, or later in the day?',
+    options: Object.freeze([
+      { value: 'live',  label: 'As I go' },
+      { value: 'later', label: 'Later' }
+    ]),
+    changes: Object.freeze(['fuel_fueled']),
+    fact: 'coach.logTiming',
+    where: 'fuel',
+    ack: 'Noted. Coach reads your food by the hour when you log as you go, and by the day when you log later.',
+    when: d => { const r = d.f('fuel.read'); return !!r && !!r.a && r.a.detected === 'batch' && d.f('coach.logTiming') == null; }
   }
 ]);
 
@@ -2421,6 +2470,46 @@ export const INTENTS = Object.freeze([
     minData: d => !isMuted(d.input.settings, 'readiness'),
     when: d => readinessHas(d.ready(), d.now) >= 3,
     response: 'resp_readiness'
+  },
+  /* ---------- v52, Phase B: "Am I fueled?" ----------
+     Pro, the Food switch on, a readable log. Their conditions split on what
+     is already in memory — five or more days with food in the four weeks,
+     and whether today's summary shows any — and NEVER on the read itself:
+     the sheet asks them as it opens, before any food log has been read. */
+  {
+    id: 'fuel_empty', kind: 'selector', priorityBand: 5, severity: 1,
+    category: 'fuel', tier: 'pro', surfaces: ['sheet'],
+    factsNeeded: ['fuel.read'], supersedes: [],
+    minData: d => fuelOpen(d),
+    when: d => fuelEmptyToday(d),
+    response: 'resp_fuel_empty'
+  },
+  {
+    // Every other state — too few days to say (thin) included.
+    id: 'fuel_fueled', kind: 'selector', priorityBand: 5, severity: 1,
+    category: 'fuel', tier: 'pro', surfaces: ['sheet'],
+    factsNeeded: ['fuel.read'], supersedes: [],
+    minData: d => fuelOpen(d),
+    when: d => !fuelEmptyToday(d),
+    response: 'resp_fuel_fueled'
+  },
+  {
+    // "I ate, it's not logged" — the follow-up to "Nothing logged today yet."
+    id: 'fuel_fed_unlogged', kind: 'selector', priorityBand: 5, severity: 1,
+    category: 'fuel', tier: 'pro', surfaces: ['sheet'],
+    factsNeeded: ['fuel.read'], supersedes: [],
+    minData: d => fuelOpen(d),
+    when: d => fuelEmptyToday(d),
+    response: 'resp_fed_unlogged'
+  },
+  {
+    // "I haven't eaten" — used for this answer and dropped: nothing stored.
+    id: 'fuel_fed_none', kind: 'selector', priorityBand: 5, severity: 1,
+    category: 'fuel', tier: 'pro', surfaces: ['sheet'],
+    factsNeeded: ['fuel.read'], supersedes: [],
+    minData: d => fuelOpen(d),
+    when: d => fuelEmptyToday(d),
+    response: 'resp_fed_none'
   },
   {
     /* THE IN-SESSION READ, registered so its switch is a category like any
@@ -2869,6 +2958,29 @@ export const RESPONSES = Object.freeze({
     reason: d => (readyLines(d) || {}).reason || '',
     more: d => (readyLines(d) || {}).more || []
   },
+  /* v52, Phase B. Every sentence is coach-fuel.js's; the two intents that
+     answer "Am I fueled?" say whatever the read's own state is — the split
+     between them is only which chips follow. */
+  resp_fuel_empty: {
+    text: d => fuelLines(d).text,
+    reason: d => fuelLines(d).reason,
+    more: d => fuelLines(d).more
+  },
+  resp_fuel_fueled: {
+    text: d => fuelLines(d).text,
+    reason: d => fuelLines(d).reason,
+    more: d => fuelLines(d).more
+  },
+  resp_fed_unlogged: {
+    text: d => fedUnloggedAnswer(d.fuelIn(), d.f('fuel.read')).text,
+    reason: d => fedUnloggedAnswer(d.fuelIn(), d.f('fuel.read')).reason,
+    more: d => fedUnloggedAnswer(d.fuelIn(), d.f('fuel.read')).more
+  },
+  resp_fed_none: {
+    text: d => fedNoneAnswer(d.fuelIn(), d.f('fuel.read')).text,
+    reason: d => fedNoneAnswer(d.fuelIn(), d.f('fuel.read')).reason,
+    more: d => fedNoneAnswer(d.fuelIn(), d.f('fuel.read')).more
+  },
 
   /* v49, stage three. The per-lift sentences are coach-overlap.js's, through
      units.js; what is composed here names no weight of its own but through
@@ -2897,6 +3009,8 @@ export const RESPONSES = Object.freeze({
         out.push({ text: 'What was different in your log:', reason: 'Each against your own sessions in the twelve weeks before it, whichever way it went.' });
         diffs.rows.forEach(r => out.push({ text: r.text, reason: '' }));
         out.push({ text: 'These are differences, not causes.', reason: 'Coach lists what was different, either way, and never says why.' });
+        const t2 = compareLink(d, diffs.rows);
+        if (t2) out.push({ text: t2, reason: 'One of Patterns’ own comparisons, from your log, with both counts.' });
       } else if (diffs && diffs.measured) {
         out.push({ text: 'Nothing in your log was off your normal.', reason: 'Each against your own sessions in the twelve weeks before it.' });
       }
@@ -3114,6 +3228,25 @@ function restLines(d) {
 }
 function readyLines(d) {
   return d.once('ans:ready', () => readinessAnswer(d.f('session.readiness') || []));
+}
+function fuelLines(d) {
+  return d.once('ans:fuel', () => fuelAnswer(d.fuelIn(), d.f('fuel.read')));
+}
+/* v52, Phase B: the one link from his own log under "How did today compare?"
+   — Patterns on — the first of four Patterns comparisons that is there,
+   whose row was listed for this session (food before it, its start, its
+   rest), and whose lift the session trained. Worded as Patterns words it. */
+function compareLink(d, rows) {
+  if (isMuted(d.input.settings, 'patterns')) return null;
+  const s = d.f('session.latest'), L = d.pLift();
+  const lines = patternLines(d);
+  if (!s || !L) return null;
+  const trained = mergeSessionExercises((s.session && s.session.exercises) || []).some(e => e && e.exId === L.exId);
+  if (!trained) return null;
+  const ids = new Set(rows.map(r => r.id));
+  const order = [['lift.fedBeforeTop', 'before'], ['lift.caloriesBeforeTop', 'before'], ['lift.morningTop', 'start'], ['lift.restGapTop', 'rest']];
+  const hit = order.find(([fact, rowId]) => lines[fact] && ids.has(rowId));
+  return hit ? lines[hit[0]] : null;
 }
 function skippedMore(d) {
   const r = d.f('session.rest');
@@ -3533,6 +3666,8 @@ export const TRAIN_TOPICS = Object.freeze([
   { id: 'ask_shape',   label: 'What should I train today?', category: 'recency' },
   { id: 'ask_build',   label: 'Make me a workout',          category: 'build' },
   { id: 'ask_targets', label: 'What should I lift today?',  category: 'targets' },
+  // v52, Phase B: "Am I fueled?", before a workout, after what to lift.
+  { id: 'ask_fueled',  label: 'Am I fueled?',               category: 'fuel' },
   // v49: stage two's three, each offered only when it has an answer. v52:
   // "Should I rest or go lighter?" — the same route id, so native's matcher
   // keeps one — moves ahead of the record, because it is the question asked
@@ -3606,6 +3741,10 @@ const ROUTES = Object.freeze({
   ask_lifts:    ['lift_status'],
   ask_record_day: ['record_day'],
   ask_lighter:  ['rest_day', 'lighter_week', 'readiness'],
+  // v52, Phase B: the empty day first — its answer carries the two chips.
+  ask_fueled:       ['fuel_empty', 'fuel_fueled'],
+  ask_fed_unlogged: ['fuel_fed_unlogged'],
+  ask_fed_none:     ['fuel_fed_none'],
   ask_compare:  ['session_compare'],
   ask_next:     ['next_targets'],
   ask_goal:     ['goal_pace'],
@@ -3650,6 +3789,9 @@ const FOLLOWUPS = Object.freeze({
   ask_build:    [],
   ask_build_now: [],
   ask_build_anyway: [],
+  ask_fueled:       [],
+  ask_fed_unlogged: ['ask_lighter', 'ask_shape'],
+  ask_fed_none:     ['ask_lighter', 'ask_shape'],
   // The workout the targets are on, one tap away.
   ask_targets:  ['ask_build_now'],
   ask_lifts:    ['ask_record_day', 'ask_targets', 'ask_lighter'],
@@ -3675,7 +3817,11 @@ const FOLLOWUPS_AFTER = Object.freeze({
   // unrecovered shape. After a lighter one it builds the pick.
   rest_day:    ['ask_build_now', 'ask_build_anyway'],
   group_ready: ['ask_build_now'],
-  readiness:   ['ask_shape', 'ask_build']
+  readiness:   ['ask_shape', 'ask_build'],
+  // v52, Phase B. The empty day's two chips are offered only when the read
+  // itself says the day is empty (followupsFor()).
+  fuel_empty:  ['ask_fed_unlogged', 'ask_fed_none'],
+  fuel_fueled: ['ask_lighter', 'ask_shape']
 });
 
 /* A follow-up that stands for a topic: while "Build it" is offered, "Make me a
@@ -3697,6 +3843,10 @@ const ASK_LABELS = Object.freeze({
   ask_record_day: 'Good day for a record?',
   ask_lighter:  'Should I rest or go lighter?',
   ask_build_anyway: 'Train anyway',
+  ask_fueled:   'Am I fueled?',
+  // His voice, like every chip: "I haven’t eaten" is his to say.
+  ask_fed_unlogged: 'I ate, it’s not logged',
+  ask_fed_none: 'I haven’t eaten',
   ask_compare:  'How did today compare?',
   ask_next:     'What’s next time?',
   ask_goal:     'How am I tracking toward my goal?',
@@ -3828,6 +3978,9 @@ function factStore(input) {
   // Each marked lift's mark, for the builder, which reads the whole log.
   d.markByLift = () => d.once('markByLift', () =>
     Object.fromEntries(d.overlap().lifts.filter(l => l.mark).map(l => [l.exId, l.mark])));
+  // v52, Phase B: coach-fuel.js's input, once per call — sheet only.
+  let fuelIn = null;
+  d.fuelIn = () => fuelIn || (fuelIn = fuelOf(d));
 
   return d;
 }
@@ -3846,6 +3999,52 @@ function readyOf(d) {
     overdue: d.overdue(),
     marked: new Set(d.marks().keys())
   };
+}
+
+/* Everything coach-fuel.js is allowed to know, and every piece of it is this
+   file's: the day summaries and the food log days coach-data.js has read
+   (nothing else — a day not read is absent, never empty), the sessions, the
+   weigh-ins, his aim and when he set it, how he says he logs, the energy
+   context and his stated direction — and, with Patterns on, the two Patterns
+   lines "Am I fueled?" may quote, worded exactly as Patterns words them. */
+function fuelOf(d) {
+  const s = d.input.settings || {};
+  const log = d.input.foodLog && typeof d.input.foodLog === 'object' ? d.input.foodLog : {};
+  const lines = isMuted(s, 'patterns') ? null : patternLines(d);
+  return {
+    now: d.now,
+    u: d.input.u === 'kg' ? 'kg' : 'lb',
+    summaries: d.input.summaries || {},
+    foodLog: log,
+    sessions: d.all(),
+    weighIns: Array.isArray(d.input.weighIns) ? d.input.weighIns : [],
+    aim: d.f('coach.aim'),
+    aimSetAt: Number.isFinite((s.asked || {}).q_goal_aim) ? s.asked.q_goal_aim : null,
+    logTiming: d.f('coach.logTiming'),
+    goalDir: d.f('weight.goalDir'),
+    rateWk: d.f('weight.rateWk'),
+    energy: d.f('weight.energy'),
+    patterns: lines ? { fedBeforeTop: lines['lift.fedBeforeTop'] || null, caloriesBeforeTop: lines['lift.caloriesBeforeTop'] || null,
+                        morningTop: lines['lift.morningTop'] || null, restGapTop: lines['lift.restGapTop'] || null } : null
+  };
+}
+// Patterns' own sentences, by fact id — so a quote of one is its words.
+function patternLines(d) {
+  return d.once('patternLines', () => Object.fromEntries(
+    RESPONSES.resp_patterns.lines(d, d.input.u === 'kg' ? 'kg' : 'lb').map(l => [l.id, l.text])));
+}
+// Pro, the Food switch on, and a log Coach could read: the food half's gate.
+function fuelOpen(d) {
+  return d.f('meta.tierPro') === true && !isMuted(d.input.settings, 'fuel') && d.f('log.confidence') === 'readable';
+}
+/* "Nothing logged today yet", from what is in memory alone: five days or
+   more with food in the four weeks before today, and nothing in today's
+   summary. The sheet asks this as it opens, before any food log is read. */
+function fuelEmptyToday(d) {
+  const sums = d.input.summaries || {};
+  const recent = keysBack(d.now - DAY, 28).filter(k => sums[k] && sums[k].cal > 0).length;
+  const t = sums[dayKey(d.now)];
+  return recent >= 5 && !(t && t.cal > 0);
 }
 
 // The rest read says rest or lighter.
@@ -3924,10 +4123,18 @@ export function overlapInput(input) {
 }
 
 /* v52: the same for coach-ready.js — tools-check/coach-ready.mjs drives its
-   battery with exactly what this file hands it. Pure. */
+   battery with exactly what this file hands it — and for coach-fuel.js.
+   Pure. */
 export function readyInput(input) {
   try {
     return factStore(input || {}).ready();
+  } catch {
+    return null;
+  }
+}
+export function fuelInput(input) {
+  try {
+    return factStore(input || {}).fuelIn();
   } catch {
     return null;
   }
@@ -4399,7 +4606,7 @@ function ask(d, u, id) {
     // The targets answer carries the goal question it refines, and (v49) the
     // goal answer carries the focus question — these two routes only.
     if (v) {
-      const where = v.id === 'lift_targets' ? 'targets' : v.id === 'goal_pace' ? 'goal' : null;
+      const where = v.id === 'lift_targets' ? 'targets' : v.id === 'goal_pace' ? 'goal' : v.id === 'fuel_fueled' ? 'fuel' : null;
       return { ...v, followups: followupsFor(d, u, id, v.id),
                ...(where ? { question: questionView(questionUnder(d, where), d, u) } : null),
                ...(v.id === 'session_compare' ? markView(d) : null) };
@@ -4436,6 +4643,12 @@ function followupsFor(d, u, id, answeredBy) {
   if (answeredBy === 'rest_day') {
     const r = d.f('session.rest');
     if (!r || !r.pick) list = list.filter(x => x !== 'ask_build_now');
+  }
+  // v52: "I ate, it’s not logged" and "I haven’t eaten" follow only an empty
+  // day — the read's own state, not the summary's guess at it.
+  if (answeredBy === 'fuel_empty') {
+    const r = d.f('fuel.read');
+    if (!r || r.state !== 'empty') list = list.filter(x => x !== 'ask_fed_unlogged' && x !== 'ask_fed_none');
   }
   return list.filter(next => answerable(d, next))
              .map(next => ({ id: next, label: ASK_LABELS[next] || next,
@@ -4537,6 +4750,24 @@ export function isMuted(settings, categoryId) {
   if (!c || !c.mutable) return false;
   if (c.optIn) return !(settings && settings.on && settings.on[categoryId] === true);
   return !!(settings && settings.mute && settings.mute[categoryId] === true);
+}
+
+/* v52, Phase B: THE ROUTES THAT READ THE FOOD LOG, for the sheet, which
+   awaits coach-data.js's loadFuel() before it answers one of them — and never
+   before anything else. */
+export const FUEL_ROUTES = Object.freeze(['ask_fueled', 'ask_fed_unlogged', 'ask_fed_none', 'ask_lighter', 'ask_compare']);
+
+/* Which days' food logs "Am I fueled?" needs — coach-fuel.js's fuelDates(),
+   and nothing at all unless the account is Pro, the Food switch is on and the
+   log is readable. Pure, like patternFoodDays() below: the gatherer reads
+   what this asks for and nothing more. */
+export function fuelDays(input) {
+  try {
+    const d = factStore(input || {});
+    return fuelOpen(d) ? fuelDates(d.fuelIn(), d.now) : [];
+  } catch {
+    return [];
+  }
 }
 
 /* Which days' food logs the first pattern needs: the days of the sessions it

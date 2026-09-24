@@ -68,6 +68,14 @@ writeFileSync(join(dir, 'coach-overlap.mjs'), src('coach-overlap.js')
   .replace("from './exercises.js'", 'from ' + real('exercises.js'))
   .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
   .replace("from './analytics.js'", 'from ' + at('analytics.mjs')));
+// v52: coach-fuel.js, staged the same way (the staging edit the brief allows everywhere).
+writeFileSync(join(dir, 'coach-fuel.mjs'), src('coach-fuel.js')
+  .replace("from './coach-prog.js'", 'from ' + at('coach-prog.mjs'))
+  .replace("from './coach-goal.js'", 'from ' + real('coach-goal.js'))
+  .replace("from './units.js'", 'from ' + real('units.js'))
+  .replace("from './exercises.js'", 'from ' + real('exercises.js'))
+  .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
+  .replace("from './analytics.js'", 'from ' + at('analytics.mjs')));
 // v52: coach-ready.js, staged the same way (the staging edit the brief allows everywhere).
 writeFileSync(join(dir, 'coach-ready.mjs'), src('coach-ready.js')
   .replace("from './coach-prog.js'", 'from ' + at('coach-prog.mjs'))
@@ -96,6 +104,7 @@ writeFileSync(join(dir, 'coach.mjs'), src('coach.js')
   .replace("from './coach-live.js'", 'from ' + at('coach-live.mjs'))
   .replace("from './coach-goal.js'", 'from ' + real('coach-goal.js'))
   .replace("from './coach-overlap.js'", 'from ' + at('coach-overlap.mjs'))
+  .replace("from './coach-fuel.js'", 'from ' + at('coach-fuel.mjs'))
   .replace("from './coach-ready.js'", 'from ' + at('coach-ready.mjs'))
   .replace("from './analytics.js'", 'from ' + at('analytics.mjs')));
 const C = await import(pathToFileURL(join(dir, 'coach.mjs')).href);
@@ -459,29 +468,49 @@ section('F. v52 — the recovery line at his usual run, the rest bias, and a car
     'import * as R from ' + at('coach-ready.mjs') + ';\nexport const calls = {};\n' +
     fnNames.map(n => 'export function ' + n + '(...a) { calls.' + n + ' = (calls.' + n + ' || 0) + 1; return R.' + n + '(...a); }').join('\n') + '\n' +
     Object.keys(R).filter(k => typeof R[k] !== 'function').map(k => 'export const ' + k + ' = R.' + k + ';').join('\n') + '\n');
+  // And coach-fuel.js (Phase B), behind a proxy of its own: a paint may call
+  // nothing in it at all.
+  const FU = await import(JSON.parse(at('coach-fuel.mjs')));
+  const fuNames = Object.keys(FU).filter(k => typeof FU[k] === 'function');
+  writeFileSync(join(dir, 'coach-fuel-spy.mjs'),
+    'import * as F from ' + at('coach-fuel.mjs') + ';\nexport const calls = {};\n' +
+    fuNames.map(n => 'export function ' + n + '(...a) { calls.' + n + ' = (calls.' + n + ' || 0) + 1; return F.' + n + '(...a); }').join('\n') + '\n' +
+    Object.keys(FU).filter(k => typeof FU[k] !== 'function').map(k => 'export const ' + k + ' = F.' + k + ';').join('\n') + '\n');
   writeFileSync(join(dir, 'coach-spied.mjs'), readFileSync(join(dir, 'coach.mjs'), 'utf8')
-    .replace("from " + at('coach-ready.mjs'), "from " + at('coach-ready-spy.mjs')));
+    .replace("from " + at('coach-ready.mjs'), "from " + at('coach-ready-spy.mjs'))
+    .replace("from " + at('coach-fuel.mjs'), "from " + at('coach-fuel-spy.mjs')));
   const SPY = await import(JSON.parse(at('coach-ready-spy.mjs')));
+  const FSPY = await import(JSON.parse(at('coach-fuel-spy.mjs')));
   const CS = await import(JSON.parse(at('coach-spied.mjs')));
   const PAINT_OK = ['restRead', 'usualRun'];
   const logs = Object.values(CASES).flat().concat([restLog, input({ sessions: sortS(lwLog()) }), runLog(4)]);
   const bad = [];
   let restReads = 0;
-  logs.forEach((lg, k) => ['lb', 'kg'].forEach(u => [true, false].forEach(pro => {
+  const fuelBad = [];
+  // With food in memory too — summaries every day, and a day's log read.
+  const fed = x => ({ ...x, summaries: Object.fromEntries(Array.from({ length: 30 }, (_, k) => [key(NOW - k * DAY), { cal: 2300, p: 150, c: 250, f: 70 }])),
+                      foodLog: { [key(NOW)]: [{ t: NOW - 3600e3, cal: 600, p: 30, c: 70 }] } });
+  logs.concat(logs.map(fed)).forEach((lg, k) => ['lb', 'kg'].forEach(u => [true, false].forEach(pro => {
     Object.keys(SPY.calls).forEach(x => { delete SPY.calls[x]; });
+    Object.keys(FSPY.calls).forEach(x => { delete FSPY.calls[x]; });
     const c = CS.coach({ ...lg, u, tier: { pro } });
     // what a card paint draws: both cards, the greeting, the lead question, the teaser
     void [c.card.you.text, c.card.train.text, c.greet && c.greet.text, c.lead && c.lead.id, c.teaser && c.teaser.text];
     restReads += SPY.calls.restRead || 0;
     const extra = Object.keys(SPY.calls).filter(x => !PAINT_OK.includes(x));
     if (extra.length) bad.push('log ' + k + ' ' + u + (pro ? ' pro' : ' basic') + ': ' + extra.join(', '));
+    if (Object.keys(FSPY.calls).length) fuelBad.push('log ' + k + ' ' + u + ': ' + Object.keys(FSPY.calls).join(', '));
   })));
-  check('a card paint calls nothing in coach-ready.js but restRead and usualRun (' + logs.length * 4 + ' paints)', !bad.length, list(bad));
+  check('a card paint calls nothing in coach-ready.js but restRead and usualRun (' + logs.length * 8 + ' paints)', !bad.length, list(bad));
+  check('and nothing in coach-fuel.js at all — with food in memory or without', !fuelBad.length, list(fuelBad));
   check('and the spy is really watching: the paints did call restRead (' + restReads + ')', restReads > 0);
   Object.keys(SPY.calls).forEach(x => { delete SPY.calls[x]; });
   const cc = CS.coach(restLog);
   cc.ask('ask_lighter');
   check('while an answer does reach past them — the replay, on a rest answer', (SPY.calls.replay || 0) > 0, JSON.stringify(SPY.calls));
+  Object.keys(FSPY.calls).forEach(x => { delete FSPY.calls[x]; });
+  CS.coach(fed(restLog)).ask('ask_fueled');
+  check('and "Am I fueled?" does reach coach-fuel.js — the spy is watching the right module', (FSPY.calls.fueledRead || 0) > 0, JSON.stringify(FSPY.calls));
 }
 
 console.log('\nthe card only says what he has earned\n');

@@ -561,7 +561,7 @@ function recently(read, gs) {
    replay's result, handed in by coach.js, which resolves it only here. */
 export function restAnswer(read, rp) {
   const r = read, gs = r.notReady;
-  const were = gs.length > 1 ? 'were all' : 'was';
+  const were = gs.length > 2 ? 'were all' : gs.length === 2 ? 'were both' : 'was';
   const streak = r.streakNow >= 2 && r.usualRun != null
     ? ', and you’ve trained ' + r.streakNow + ' days straight (your usual longest run is ' + r.usualRun + ')' : '';
   const more = [];

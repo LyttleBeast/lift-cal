@@ -69,6 +69,14 @@ writeFileSync(join(dir, 'coach-overlap.mjs'), src('coach-overlap.js')
   .replace("from './exercises.js'", 'from ' + real('exercises.js'))
   .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
   .replace("from './analytics.js'", 'from ' + at('analytics.mjs')));
+// v52: coach-fuel.js, staged the same way (the staging edit the brief allows everywhere).
+writeFileSync(join(dir, 'coach-fuel.mjs'), src('coach-fuel.js')
+  .replace("from './coach-prog.js'", 'from ' + at('coach-prog.mjs'))
+  .replace("from './coach-goal.js'", 'from ' + real('coach-goal.js'))
+  .replace("from './units.js'", 'from ' + real('units.js'))
+  .replace("from './exercises.js'", 'from ' + real('exercises.js'))
+  .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
+  .replace("from './analytics.js'", 'from ' + at('analytics.mjs')));
 // v52: coach-ready.js, staged the same way (the staging edit the brief allows everywhere).
 writeFileSync(join(dir, 'coach-ready.mjs'), src('coach-ready.js')
   .replace("from './coach-prog.js'", 'from ' + at('coach-prog.mjs'))
@@ -97,6 +105,7 @@ writeFileSync(join(dir, 'coach.mjs'), src('coach.js')
   .replace("from './coach-live.js'", 'from ' + at('coach-live.mjs'))
   .replace("from './coach-goal.js'", 'from ' + real('coach-goal.js'))
   .replace("from './coach-overlap.js'", 'from ' + at('coach-overlap.mjs'))
+  .replace("from './coach-fuel.js'", 'from ' + at('coach-fuel.mjs'))
   .replace("from './coach-ready.js'", 'from ' + at('coach-ready.mjs'))
   .replace("from './analytics.js'", 'from ' + at('analytics.mjs')));
 const C = await import(pathToFileURL(join(dir, 'coach.mjs')).href);

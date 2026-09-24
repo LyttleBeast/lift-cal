@@ -25,10 +25,10 @@
 
 import { el, sheet, noteEl, segmented, toast } from './ui.js';
 import { GROUPS } from './exercises.js';
-import { coach, CATEGORIES, QUESTIONS, PRO_ADDS, LIVE_NONE, isMuted, TOPICS_SHOWN, MARK_ASK } from './coach.js';
+import { coach, CATEGORIES, QUESTIONS, PRO_ADDS, LIVE_NONE, isMuted, TOPICS_SHOWN, MARK_ASK, FUEL_ROUTES } from './coach.js';
 import { coachInput, coachReady, coachLogKnown, rememberGreeting, rememberHype, coachSettings, coachSettingsKnown,
          setCategoryMuted, answerQuestion, markAsked, liveSessionOnDevice, coachPro, setAim, setGoalLift,
-         markSession } from './coach-data.js';
+         markSession, loadFuel, fuelNeedsRead } from './coach-data.js';
 import { wIn, fmtW, unitW } from './units.js';
 
 /* The two marks. Inline rather than in a sprite because there are two of them
@@ -338,7 +338,34 @@ export function openCoachSheet(opts = {}) {
     else buttons = null;
   }
 
+  /* v52: "AM I FUELED?" READS FIRST. A route that reads the food log waits
+     for coach-data.js's loadFuel() — four seconds at most — and is answered by
+     the engine asked afresh with what it read; on a timeout, with what it
+     has. One quiet bubble says so while it reads, and gives way to the
+     answer; with nothing to read there is no bubble and no wait. */
+  const FUEL_WAIT_MS = 4000;
+  const READING = 'Reading your food log…';
   function run(id, label) {
+    let need = false;
+    try { need = c.pro && FUEL_ROUTES.includes(id) && fuelNeedsRead(); } catch { need = false; }
+    if (!need) { runNow(id, label, false); return; }
+    if (buttons) { buttons.remove(); buttons = null; }
+    if (openingRow) { openingRow.remove(); openingRow = null; }
+    bubble('you', label);
+    const wait = bubble('coach', READING);
+    scroll();
+    let timer = null;
+    Promise.race([loadFuel(), new Promise(res => { timer = setTimeout(() => res(false), FUEL_WAIT_MS); })])
+      .catch(() => false)
+      .then(() => {
+        clearTimeout(timer);
+        wait.remove();
+        try { c = coach(coachInput({ live: liveOf(opts) })); } catch {}
+        runNow(id, label, true);
+      });
+  }
+
+  function runNow(id, label, said) {
     asked.add(id);
     if (buttons) { buttons.remove(); buttons = null; }
     if (openingRow) { openingRow.remove(); openingRow = null; }
@@ -367,7 +394,7 @@ export function openCoachSheet(opts = {}) {
         !follow.some(f => f.id === t.id || f.stands === t.id)));
       return;
     }
-    bubble('you', label);
+    if (!said) bubble('you', label);
     if (!a) {
       bubble('coach', 'Coach can’t answer that one.', 'It only says things it can back with a number from your own log.');
     } else {

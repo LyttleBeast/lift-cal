@@ -185,7 +185,7 @@ let rigN = 0;
 /* A whole module graph per rig, because module state is the subject: `ready`,
    `logKnown` and the rotation counter are all set once and a second import of
    the same URL would hand back the first rig's finished snapshot. */
-async function rig({ data = {}, slow = [], fail = [] } = {}) {
+async function rig({ data = {}, slow = [], fail = [], pro = false } = {}) {
   const dir = join(TMP, 'r' + (++rigN));
   mkdirSync(dir);
   const put  = (f, body) => { writeFileSync(join(dir, f), body); return JSON.stringify(pathToFileURL(join(dir, f)).href); };
@@ -211,7 +211,10 @@ async function rig({ data = {}, slow = [], fail = [] } = {}) {
   const PICK   = put('picker.mjs', swap(src('picker.js'), [
     ['./exercises.js', real('exercises.js')], ['./store.js', STORE],
     ['./analytics.js', ANALY], ['./usage.js', USAGE], ['./ui.js', real('ui.js')]]));
-  const ACCESS = put('access.mjs', swap(src('access.js'), [
+  /* v52: a Pro rig for the loadFuel spy (section H) — access.js's
+     capabilities() answering Pro, and nothing else about the graph moved. */
+  const ACCESS = pro ? put('access-pro.mjs', 'export function capabilities() { return { features: { advanced: true } }; }\n')
+                     : put('access.mjs', swap(src('access.js'), [
     ['./store.js', STORE], ['./firebase-config.js', real('firebase-config.js')],
     ['./accounts.js', real('accounts.js')], ['./ui.js', real('ui.js')]]));
   // v48's targets: coach-build.js imports coach-prog.js, which takes the same
@@ -235,11 +238,13 @@ async function rig({ data = {}, slow = [], fail = [] } = {}) {
   const READY  = put('coach-ready.mjs', swap(src('coach-ready.js'), [
     ['./coach-prog.js', PROG], ['./coach-overlap.js', OVER], ['./coach-goal.js', real('coach-goal.js')],
     ['./coach-live.js', LIVE], ['./units.js', real('units.js')], ['./exercises.js', real('exercises.js')]]));
+  const FUEL   = put('coach-fuel.mjs', swap(src('coach-fuel.js'), [
+    ['./coach-goal.js', real('coach-goal.js')], ['./units.js', real('units.js')]]));
   const COACH  = put('coach.mjs', swap(src('coach.js'), [
     ['./exercises.js', real('exercises.js')], ['./analytics.js', ANALY],
     ['./units.js', real('units.js')], ['./coach-build.js', BUILD], ['./coach-live.js', LIVE],
     ['./coach-goal.js', real('coach-goal.js')], ['./coach-prog.js', PROG], ['./coach-overlap.js', OVER],
-    ['./coach-ready.js', READY]]));
+    ['./coach-ready.js', READY], ['./coach-fuel.js', FUEL]]));
   const DATA_  = put('coach-data.mjs', swap(src('coach-data.js'), [
     ['./store.js', STORE], ['./exercises.js', real('exercises.js')],
     ['./picker.js', PICK], ['./tdee.js', TDEE], ['./insights.js', INSI],
@@ -547,6 +552,65 @@ section('G. a routine saved from the builder is his routine at once, and costs n
         !/coach/.test((R.match(/^import[^;]*;/gm) || []).join('\n')));
   check('workout.js is what wires the two together',
         /await initRoutines\(list => noteCoachData\(\{ routines: list \}\)\);/.test(src('workout.js')));
+}
+
+/* ================= H. v52 — THE FOOD LOG IS READ ON AN ASK, NEVER AT BOOT ================= */
+section('H. v52 — "Am I fueled?" reads the food log on an ask: none at boot or on a paint, fifteen at most, one after a change');
+{
+  /* The spy is the store stub's own log of paths, filtered to the food log:
+     loadPatternFood() reads the same nodes, but only for Patterns, which is
+     off here — so every food/log read below is loadFuel()'s. */
+  const dk = ms => key(ms).join('-');
+  const tree = {}, sums = {}, logs = {};
+  for (let i = 1; i <= 26; i++) {
+    const t = NOW - i * DAY;
+    sums[dk(t)] = { cal: 2400 + (i % 5) * 50, p: 150, c: 260, f: 70 };
+    if (i % 2) {
+      const [mk, dd] = key(t);
+      tree[mk] = tree[mk] || {};
+      tree[mk][dd] = { ['q' + i]: { id: 'q' + i, startedAt: t, exercises: [{ exId: 'barbell-bench-press', name: 'Bench', group: 'chest',
+        equipment: 'barbell', sets: [{ w: '185', r: '5', type: 'N', done: true }] }] } };
+      logs['food/log/' + dk(t)] = { e1: { id: 'e1', t: t - 5 * 3600e3, cal: 800, p: 40, c: 90 }, e2: { id: 'e2', t: t - 3600e3, cal: 700, p: 40, c: 80 } };
+    }
+  }
+  sums[dk(NOW)] = { cal: 600, p: 30, c: 70, f: 20 };
+  logs['food/log/' + dk(NOW)] = { e1: { id: 'e1', t: NOW - 3600e3, cal: 600, p: 30, c: 70 } };
+  const data = settingsNode => ({ workouts: tree, 'food/daySummaries': sums, 'settings/coach': settingsNode, ...logs });
+  const food = probe => probe.paths().filter(p => p.startsWith('food/log/'));
+  const { D, probe } = await rig({ data: data({ v: 1, mute: {}, answers: {}, asked: {} }), pro: true });
+  await withTimeout(D.initCoachData(), 20 * LATENCY);
+  const atBoot = food(probe).length;
+  for (let k = 0; k < 5; k++) D.coachInput({});
+  check('none at boot, and none on five paints after it', atBoot === 0 && food(probe).length === 0, list(food(probe)));
+  check('and the sheet knows there is something to read before it asks', D.fuelNeedsRead() === true);
+  await withTimeout(D.loadFuel(), 20 * LATENCY);
+  const first = food(probe).length;
+  check('the first "Am I fueled?" of the open reads at most fifteen days — today, the latest session, the latest complete training days (' + first + ')',
+        first > 2 && first <= 15, list(food(probe)));
+  check('in one wave: every one of them went out together', new Set(probe.reads().filter(r => r.path.startsWith('food/log/')).map(r => r.wave)).size === 1);
+  const inp = D.coachInput({});
+  check('and coachInput() hands over what it read, and only that', Object.keys(inp.foodLog).length === first &&
+        Array.isArray(inp.foodLog[dk(NOW)]) && inp.foodLog[dk(NOW)][0].cal === 600, JSON.stringify(Object.keys(inp.foodLog)));
+  await withTimeout(D.loadFuel(), 20 * LATENCY);
+  check('a second ask with nothing changed reads nothing', food(probe).length === first && D.fuelNeedsRead() === false, String(food(probe).length - first));
+  D.noteCoachData({ summaries: { ...sums, [dk(NOW)]: { cal: 1100, p: 60, c: 130, f: 40 } } });
+  check('today’s summary moves (a food logged), and there is one thing to read', D.fuelNeedsRead() === true);
+  await withTimeout(D.loadFuel(), 20 * LATENCY);
+  check('one read — today again — and nothing else', food(probe).length === first + 1 && food(probe)[first] === 'food/log/' + dk(NOW),
+        list(food(probe).slice(first)));
+  // Basic, and Food switched off: nothing, at all.
+  const basic = await rig({ data: data({ v: 1, mute: {}, answers: {}, asked: {} }) });
+  await withTimeout(basic.D.initCoachData(), 20 * LATENCY);
+  await withTimeout(basic.D.loadFuel(), 20 * LATENCY);
+  check('a Basic account reads no food log', food(basic.probe).length === 0 && basic.D.fuelNeedsRead() === false, list(food(basic.probe)));
+  const muted = await rig({ data: data({ v: 1, mute: { fuel: true }, answers: {}, asked: {} }), pro: true });
+  await withTimeout(muted.D.initCoachData(), 20 * LATENCY);
+  await withTimeout(muted.D.loadFuel(), 20 * LATENCY);
+  check('and with Food switched off, none either', food(muted.probe).length === 0 && muted.D.fuelNeedsRead() === false, list(food(muted.probe)));
+  const unread = await rig({ data: { ...data({ v: 1, mute: {}, answers: {}, asked: {} }) }, fail: ['workouts'], pro: true });
+  await withTimeout(unread.D.initCoachData(), 20 * LATENCY);
+  await withTimeout(unread.D.loadFuel(), 20 * LATENCY);
+  check('nor on a log that could not be read', food(unread.probe).length === 0, list(food(unread.probe)));
 }
 
 /* ---------- report ---------- */

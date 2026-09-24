@@ -61,6 +61,14 @@ writeFileSync(join(dir, 'coach-overlap.mjs'), src('coach-overlap.js')
   .replace("from './exercises.js'", 'from ' + real('exercises.js'))
   .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
   .replace("from './analytics.js'", 'from ' + at('analytics.mjs')));
+// v52: coach-fuel.js, staged the same way (the staging edit the brief allows everywhere).
+writeFileSync(join(dir, 'coach-fuel.mjs'), src('coach-fuel.js')
+  .replace("from './coach-prog.js'", 'from ' + at('coach-prog.mjs'))
+  .replace("from './coach-goal.js'", 'from ' + real('coach-goal.js'))
+  .replace("from './units.js'", 'from ' + real('units.js'))
+  .replace("from './exercises.js'", 'from ' + real('exercises.js'))
+  .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
+  .replace("from './analytics.js'", 'from ' + at('analytics.mjs')));
 // v52: coach-ready.js, staged the same way (the staging edit the brief allows everywhere).
 writeFileSync(join(dir, 'coach-ready.mjs'), src('coach-ready.js')
   .replace("from './coach-prog.js'", 'from ' + at('coach-prog.mjs'))
@@ -89,6 +97,7 @@ writeFileSync(join(dir, 'coach.mjs'), src('coach.js')
   .replace("from './coach-live.js'", 'from ' + at('coach-live.mjs'))
   .replace("from './coach-goal.js'", 'from ' + real('coach-goal.js'))
   .replace("from './coach-overlap.js'", 'from ' + at('coach-overlap.mjs'))
+  .replace("from './coach-fuel.js'", 'from ' + at('coach-fuel.mjs'))
   .replace("from './coach-ready.js'", 'from ' + at('coach-ready.mjs'))
   .replace("from './analytics.js'", 'from ' + at('analytics.mjs')));
 const C = await import(pathToFileURL(join(dir, 'coach.mjs')).href);
@@ -238,11 +247,16 @@ section('C. "How did today compare?" and "What’s next time?" answer after a wo
 /* ================= D. v52 — THE TOPIC TABLES, CHANGED ON PURPOSE ================= */
 section('D. v52 — "Should I rest or go lighter?" before the record, and the live list exactly rack-v51’s');
 {
-  // SHIP-V52-PROMPT §6.4: the pre-workout Train list, with the rest question
-  // ahead of "Good day for a record?" — his decided first three unmoved.
-  check('Train before a workout: shape, build, targets, rest-or-lighter, record, lifts, overdue, volume',
-        C.STATE_TOPICS.train.pre.join(',') === 'ask_shape,ask_build,ask_targets,ask_lighter,ask_record_day,ask_lifts,ask_overdue,ask_volume',
+  // SHIP-V52-PROMPT §6.4 and §10: the pre-workout Train list, with "Am I
+  // fueled?" and then the rest question ahead of "Good day for a record?" —
+  // his decided first three unmoved.
+  check('Train before a workout: shape, build, targets, fueled, rest-or-lighter, record, lifts, overdue, volume',
+        C.STATE_TOPICS.train.pre.join(',') === 'ask_shape,ask_build,ask_targets,ask_fueled,ask_lighter,ask_record_day,ask_lifts,ask_overdue,ask_volume',
         C.STATE_TOPICS.train.pre.join(','));
+  check('"Am I fueled?" and its two follow-ups are routes, and only "Am I fueled?" is a topic',
+        ['ask_fueled', 'ask_fed_unlogged', 'ask_fed_none'].every(id => C.ROUTE_IDS.includes(id)) &&
+        C.ALL_TOPICS.some(t => t.id === 'ask_fueled' && t.label === 'Am I fueled?') &&
+        !C.ALL_TOPICS.some(t => t.id === 'ask_fed_unlogged' || t.id === 'ask_fed_none'));
   check('and the question reads "Should I rest or go lighter?" — the same route id, so native’s matcher keeps one',
         C.TRAIN_TOPICS.find(t => t.id === 'ask_lighter').label === 'Should I rest or go lighter?' &&
         C.ALL_TOPICS.find(t => t.id === 'ask_lighter').label === 'Should I rest or go lighter?');

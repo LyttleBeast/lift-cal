@@ -80,6 +80,14 @@ writeFileSync(join(dir, 'coach-overlap.mjs'), src('coach-overlap.js')
   .replace("from './exercises.js'", 'from ' + real('exercises.js'))
   .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
   .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href)));
+// v52: coach-fuel.js, staged the same way (the staging edit the brief allows everywhere).
+writeFileSync(join(dir, 'coach-fuel.mjs'), src('coach-fuel.js')
+  .replace("from './coach-prog.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-prog.mjs')).href))
+  .replace("from './coach-goal.js'", 'from ' + real('coach-goal.js'))
+  .replace("from './units.js'", 'from ' + real('units.js'))
+  .replace("from './exercises.js'", 'from ' + real('exercises.js'))
+  .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
+  .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href)));
 // v52: coach-ready.js, staged the same way (the staging edit the brief allows everywhere).
 writeFileSync(join(dir, 'coach-ready.mjs'), src('coach-ready.js')
   .replace("from './coach-prog.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-prog.mjs')).href))
@@ -97,6 +105,7 @@ writeFileSync(join(dir, 'coach.mjs'), src('coach.js')
   .replace("from './coach-live.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-live.mjs')).href))
   .replace("from './coach-goal.js'", 'from ' + real('coach-goal.js'))
   .replace("from './coach-overlap.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-overlap.mjs')).href))
+  .replace("from './coach-fuel.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-fuel.mjs')).href))
   .replace("from './coach-ready.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-ready.mjs')).href))
   .replace("from './coach-prog.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-prog.mjs')).href))
   .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href)));
@@ -428,6 +437,31 @@ section('J. v52 — the readiness category, three new selectors, and a mark that
         !('marks' in C.normSettings({ marks: { x: { r: 'nope', d: '2026-09-01' } } })) && !('marks' in C.normSettings({})));
   const facts = ['session.rest', 'session.usualRun', 'session.buildFocus', 'session.readiness', 'session.diffs', 'session.replay'];
   check('the new facts are registered once each', facts.every(id => FACTS.filter(f => f.id === id).length === 1), list(facts.filter(id => !FACTS.some(f => f.id === id))));
+}
+
+section('K. v52, Phase B — "Am I fueled?": four selectors, and q_log_timing with its own fact');
+{
+  const want = ['fuel_empty', 'fuel_fueled', 'fuel_fed_unlogged', 'fuel_fed_none'];
+  const bad = want.filter(id => { const i = INTENTS.find(x => x.id === id);
+    return !i || i.kind !== 'selector' || i.tier !== 'pro' || i.category !== 'fuel' || JSON.stringify(i.surfaces) !== '["sheet"]'; });
+  check('fuel_empty, fuel_fueled, fuel_fed_unlogged and fuel_fed_none: selectors, Pro, sheet-only, in Food', !bad.length, list(bad));
+  const q = QUESTIONS.find(x => x.id === 'q_log_timing');
+  check('q_log_timing: asked under "Am I fueled?" (where: fuel), As I go or Later, changing fuel_fueled, with its own fact',
+        !!q && q.where === 'fuel' && q.text === 'Do you usually log food as you go, or later in the day?' &&
+        JSON.stringify(q.options.map(o => [o.value, o.label])) === JSON.stringify([['live', 'As I go'], ['later', 'Later']]) &&
+        JSON.stringify(q.changes) === '["fuel_fueled"]' && q.fact === 'coach.logTiming' &&
+        q.ack === 'Noted. Coach reads your food by the hour when you log as you go, and by the day when you log later.');
+  const f = FACTS.find(x => x.id === 'coach.logTiming');
+  check('coach.logTiming reads the answer straight off settings/coach, and nothing else — so the registry can drive it',
+        !!f && JSON.stringify(f.usesAnswers) === '["q_log_timing"]' &&
+        f.compute({ input: { settings: { answers: { q_log_timing: 'later' } } } }) === 'later' &&
+        f.compute({ input: { settings: { answers: {} } } }) === null && f.compute({ input: { settings: { answers: { q_log_timing: 'soon' } } } }) === null);
+  check('"I haven’t eaten" is a route, never a question — its answer is used once and dropped (decision #9)',
+        C.ROUTE_IDS.includes('ask_fed_none') && !QUESTIONS.some(x => x.options.some(o => /eaten/i.test(o.label))));
+  check('the fuel routes are exported, for the sheet that reads first', JSON.stringify(C.FUEL_ROUTES) ===
+        JSON.stringify(['ask_fueled', 'ask_fed_unlogged', 'ask_fed_none', 'ask_lighter', 'ask_compare']));
+  check('and nothing in the food half stores anything: no new settings key but the mark', JSON.stringify(Object.keys(C.normSettings({
+    marks: { a: { r: 'sleep', d: '2026-09-01' } }, fuel: { x: 1 }, fed: true, ate: 'no' })).sort()) === JSON.stringify(['answers', 'asked', 'marks', 'mute', 'on', 'v']));
 }
 
 /* ---------- report ---------- */

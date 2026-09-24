@@ -234,6 +234,14 @@ export function todayKey(d = new Date()) {
     .replace("from './exercises.js'", 'from ' + real('exercises.js'))
     .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
     .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href)));
+  // v52: coach-fuel.js, staged the same way (the staging edit the brief allows everywhere).
+  writeFileSync(join(dir, 'coach-fuel.mjs'), src('coach-fuel.js')
+    .replace("from './coach-prog.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-prog.mjs')).href))
+    .replace("from './coach-goal.js'", 'from ' + real('coach-goal.js'))
+    .replace("from './units.js'", 'from ' + real('units.js'))
+    .replace("from './exercises.js'", 'from ' + real('exercises.js'))
+    .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
+    .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href)));
   // v52: coach-ready.js, staged the same way (the staging edit the brief allows everywhere).
   writeFileSync(join(dir, 'coach-ready.mjs'), src('coach-ready.js')
     .replace("from './coach-prog.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-prog.mjs')).href))
@@ -251,6 +259,7 @@ export function todayKey(d = new Date()) {
     .replace("from './coach-live.js'", 'from ' + at('coach-live.mjs'))
     .replace("from './coach-goal.js'", 'from ' + real('coach-goal.js'))
     .replace("from './coach-overlap.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-overlap.mjs')).href))
+    .replace("from './coach-fuel.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-fuel.mjs')).href))
     .replace("from './coach-ready.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-ready.mjs')).href))
     .replace("from './analytics.js'", 'from ' + at('analytics.mjs')));
   const C = await import(pathToFileURL(join(dir, 'coach.mjs')).href);
@@ -340,8 +349,10 @@ export function todayKey(d = new Date()) {
   /* Updated deliberately in v49 (SHIP-V49-PROMPT §7.2): "How am I tracking
      toward my goal?" carries the focus-group question under its answer, the
      way the targets answer carries the aim. Those two, and no other route. */
-  check('no route but ask_targets and ask_goal carries a question',
-        C.ROUTE_IDS.filter(r => r !== 'ask_targets' && r !== 'ask_goal').every(r => !('question' in none.ask(r))));
+  /* And v52 (SHIP-V52-PROMPT §10): "Am I fueled?" carries q_log_timing under
+     its answer the same way. Those three, and no other route. */
+  check('no route but ask_targets, ask_goal and (v52) ask_fueled carries a question',
+        C.ROUTE_IDS.filter(r => !['ask_targets', 'ask_goal', 'ask_fueled'].includes(r)).every(r => !('question' in none.ask(r))));
   const focusQ = C.coach(input(settings({ q_goal_aim: 'muscle', q_experience: 'some' }))).ask('ask_goal').question;
   check('and the goal answer carries the focus question, once the aim is set and the focus is not',
         !!focusQ && focusQ.id === 'q_focus_group' && focusQ.options.length === 7 &&

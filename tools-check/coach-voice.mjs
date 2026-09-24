@@ -116,6 +116,14 @@ writeFileSync(join(dir, 'coach-overlap.mjs'), src('coach-overlap.js')
   .replace("from './exercises.js'", 'from ' + real('exercises.js'))
   .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
   .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href)));
+// v52: coach-fuel.js, staged the same way (the staging edit the brief allows everywhere).
+writeFileSync(join(dir, 'coach-fuel.mjs'), src('coach-fuel.js')
+  .replace("from './coach-prog.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-prog.mjs')).href))
+  .replace("from './coach-goal.js'", 'from ' + real('coach-goal.js'))
+  .replace("from './units.js'", 'from ' + real('units.js'))
+  .replace("from './exercises.js'", 'from ' + real('exercises.js'))
+  .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
+  .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href)));
 // v52: coach-ready.js, staged the same way (the staging edit the brief allows everywhere).
 writeFileSync(join(dir, 'coach-ready.mjs'), src('coach-ready.js')
   .replace("from './coach-prog.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-prog.mjs')).href))
@@ -133,6 +141,7 @@ writeFileSync(join(dir, 'coach.mjs'), src('coach.js')
   .replace("from './coach-live.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-live.mjs')).href))
   .replace("from './coach-goal.js'", 'from ' + real('coach-goal.js'))
   .replace("from './coach-overlap.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-overlap.mjs')).href))
+  .replace("from './coach-fuel.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-fuel.mjs')).href))
   .replace("from './coach-ready.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-ready.mjs')).href))
   .replace("from './coach-prog.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-prog.mjs')).href))
   .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href)));
@@ -1223,7 +1232,41 @@ section('L. v52 — every sentence stage four can say: rest, recovery, readiness
     if (last) RD.sessionRows(ri, last).forEach(r => { reached.add('diff:' + r.id); push(name + '/' + u + '/diff', u, r.text); });
   }));
   push('clear', 'lb', C.MARK_ASK.clear.ack);
-  const want = ['rest_day', 'group_ready', 'readiness', 'lift_targets', 'session_compare', 'caution', 'marked', 'build_menu'];
+  /* Phase B: "Am I fueled?" and its two follow-ups, on a month of food
+     logged as he goes (so far today, lighter and heavier), logged in a batch
+     late at night, nothing logged today, and today's log unreadable. */
+  { const fa = (ago, h, m) => at(ago, h, m);
+    const REALF = [[8, 0, 600, 60], [12, 0, 800, 90], [15, 0, 400, 50], [20, 0, 700, 80]];
+    const BAT = [[21, 30, 600, 60], [21, 45, 800, 90], [22, 0, 400, 50], [22, 15, 700, 80]];
+    const monthF = (pat, now, todayScale, todayLog) => {
+      const sessions = [], summaries = {}, foodLog = {};
+      for (let a = 1; a <= 60; a += 2) sessions.push(S(a, a % 4 === 1 ? UP : LO, { hour: 16 + (a % 3) }));
+      for (let a = 1; a <= 30; a++) {
+        const w = 0.9 + ((a * 7) % 5) * 0.05;
+        const es = pat.map(([h, m, cal, c]) => ({ t: fa(a, h, m), cal: Math.round(cal * w), p: 30, c: Math.round(c * w) }));
+        summaries[key(fa(a, 12))] = { cal: es.reduce((x, e) => x + e.cal, 0), p: 120, c: es.reduce((x, e) => x + e.c, 0), f: 70 };
+        if (a % 2 === 1) foodLog[key(fa(a, 12))] = es;
+      }
+      const es = pat.map(([h, m, cal, c]) => ({ t: fa(0, h, m), cal: Math.round(cal * todayScale), p: 30, c: Math.round(c * todayScale) }))
+        .filter(e => e.t <= now - 3600e3);
+      if (todayScale && es.length) summaries[key(now)] = { cal: es.reduce((x, e) => x + e.cal, 0), p: 50, c: es.reduce((x, e) => x + e.c, 0), f: 20 };
+      if (todayLog !== undefined) foodLog[key(now)] = todayLog; else if (es.length) foodLog[key(now)] = es;
+      return inp({ sessions: sort(sessions), summaries, foodLog, now,
+                   weight: { latestLb: 182, latestAt: now, rateWk: -1, rateDays: 30, goalDir: -1, goalRateWk: -1 } });
+    };
+    const T = fa(0, 13, 30);
+    [['fuelLight', monthF(REALF, T, 0.4)], ['fuelHeavy', monthF(REALF, T, 1.6)], ['fuelUsual', monthF(REALF, T, 1)],
+     ['fuelBatch', monthF(BAT, fa(0, 23), 1)], ['fuelEmpty', monthF(REALF, T, 0)], ['fuelUnread', monthF(REALF, T, 1, null)]]
+      .forEach(([name, fx]) => ['lb', 'kg'].forEach(u => {
+        const x = { ...fx, u };
+        const c = C.coach(x);
+        ['ask_fueled', 'ask_fed_unlogged', 'ask_fed_none', 'ask_lighter'].forEach(id => {
+          const a = c.ask(id); reached.add(a.id); answer(name + '/' + u + '/' + id, u, a);
+          if (a.question) { push(name + '/' + u + '/q', u, a.question.text); push(name + '/' + u + '/q', u, a.question.ack); }
+        });
+      })); }
+  const want = ['rest_day', 'group_ready', 'readiness', 'lift_targets', 'session_compare', 'caution', 'marked', 'build_menu',
+                'fuel_fueled', 'fuel_empty', 'fuel_fed_unlogged', 'fuel_fed_none'];
   check('the sweep reaches every new answer — ' + want.filter(w => reached.has(w)).join(', ') + ' (' + said.length + ' strings)',
         want.every(w => reached.has(w)) && said.some(x => x.u === 'kg'), want.filter(w => !reached.has(w)).join(', '));
   check('and every readiness row and every "what was different" component',
@@ -1235,6 +1278,9 @@ section('L. v52 — every sentence stage four can say: rest, recovery, readiness
     .concat(/'/.test(x.t) ? ['a straight apostrophe'] : []).concat(/!/.test(x.t) ? ['an exclamation mark'] : []) })).filter(x => x.w.length);
   check('not one carries the shipped ban, a cause, a max attempt, a body norm, eating, a medical word, guilt, "AI", "should", "try" or "must" — both units',
         !bad.length, list(bad.map(x => x.where + ' “' + x.w.join('/') + '” in: ' + x.t)));
+  const lowFood = said.filter(x => /^fuel/.test(x.where) && /\blow\b/i.test(x.t));
+  check('and no food sentence says "low" — a light day is "on the light side", a half-logged one "not fully logged"', !lowFood.length,
+        list(lowFood.map(x => x.where + ': ' + x.t)));
   check('"Didn’t" is his voice, on a chip, and never Coach’s in a sentence',
         C.MARK_ASK.options.some(o => /Didn’t/.test(o.label)) && !said.some(x => /\bdidn[’']t\b/i.test(x.t)));
   const sources = src('coach-ready.js');

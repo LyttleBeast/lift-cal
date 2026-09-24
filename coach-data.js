@@ -40,7 +40,7 @@ import { allExercises, hiddenIds, libraryReady } from './picker.js';
 import { maintenance, effectiveMaint, trendRate, sortedEntries } from './tdee.js';
 import { goalDirection } from './insights.js';
 import { capabilities } from './access.js';
-import { normSettings, isMuted, patternFoodDays, CATEGORIES } from './coach.js';
+import { normSettings, isMuted, patternFoodDays, fuelDays, CATEGORIES } from './coach.js';
 
 /* ================= STATE =================
    Everything here is set once by initCoachData() and read synchronously
@@ -62,6 +62,12 @@ let settingsRead = false;      // false means the node has never been read clean
 // first pattern asks about. A day read and found empty is null; a day not read
 // is absent. See loadPatternFood().
 let foodFirst   = {};
+// v52: "Am I fueled?" — the food log days loadFuel() has read this app open,
+// { date: [{ t, cal, p, c }] | null }, null a day that could not be read; and
+// the summary today's was read against, so today is read again only when it
+// has moved. See loadFuel().
+let foodLog     = {};
+let fuelToday   = null;
 
 /* ================= THE ROTATION, AND WHY IT IS ON THE DEVICE =================
    The greeting rotates once per app OPEN, and both halves of that live in
@@ -255,6 +261,49 @@ function loadPatternFood() {
   return patternFood;
 }
 
+/* v52: THE READS "AM I FUELED?" ADDS — on an ask, for Pro, with Food on,
+   and never at boot or on a paint. Which days is the pure layer's answer
+   (coach.js fuelDays(): today, the latest session's date, then the most
+   recent complete training dates in the four weeks — fifteen at most), and
+   each is read once per app open: a past day's log does not move. Today does,
+   so it is read again only when its summary has changed since the read it
+   was last read against. At most fifteen reads on the first ask of an open,
+   one more after a food change, and none otherwise.
+
+   read(), not readExact(), exactly as loadPatternFood() reads the same
+   nodes: a value is the day's entries ([] for an empty day), and a failed
+   read is null — a day Coach could not read, which coach-fuel.js leaves out
+   of every baseline and never reads as empty. The reads go out together,
+   and two asks in flight share one wave, like refreshCoachSessions(). Kept
+   apart from loadPatternFood(), whose boot read is Patterns' own. */
+function fuelPlan() {
+  if (logState !== 'readable' || !hasPro() || isMuted(settings, 'fuel')) return [];
+  let days = [];
+  try { days = fuelDays(coachInput({})); } catch { days = []; }
+  const today = days[0];
+  const sumNow = JSON.stringify(summaries[today] || null);
+  return days.filter(d => !(d in foodLog) || (d === today && sumNow !== fuelToday));
+}
+export function fuelNeedsRead() { return fuelPlan().length > 0; }
+let fueling = null;
+export function loadFuel() {
+  if (fueling) return fueling;
+  const plan = fuelPlan();
+  if (!plan.length) return Promise.resolve(true);
+  const today = fuelDays(coachInput({}))[0];
+  const sumAt = JSON.stringify(summaries[today] || null);
+  fueling = Promise.all(plan.map(d => readFoodDay(d).then(v => { foodLog = { ...foodLog, [d]: v }; })))
+    .then(() => { if (plan.includes(today)) fuelToday = sumAt; return true; }, () => false)
+    .finally(() => { fueling = null; });
+  return fueling;
+}
+function readFoodDay(d) {
+  return read('food/log/' + d, null).then(v => (v && typeof v === 'object'
+    ? Object.values(v).filter(e => e && typeof e === 'object')
+        .map(e => ({ t: Number(e.t), cal: Number(e.cal) || 0, p: Number(e.p) || 0, c: Number(e.c) || 0 }))
+    : null), () => null);
+}
+
 // The routines node is keyed by id; Coach wants a list that carries the id.
 // One conversion, used by the boot read and by noteCoachData alike, so the two
 // cannot hand the engine different shapes of the same node.
@@ -327,6 +376,8 @@ export function coachInput(extra) {
     // snapshot below carries only the latest), and foodFirst, above.
     weighIns: safe(() => sortedEntries(entries).map(e => ({ lb: e.lb, t: e.t })), []),
     foodFirst,
+    // v52: the food log days loadFuel() has read, and only those.
+    foodLog,
     weight: {
       latestLb: last ? last.lb : null,
       latestAt: last ? last.t : null,

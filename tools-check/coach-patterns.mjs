@@ -79,6 +79,14 @@ writeFileSync(join(dir, 'coach-overlap.mjs'), src('coach-overlap.js')
   .replace("from './exercises.js'", 'from ' + real('exercises.js'))
   .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
   .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href)));
+// v52: coach-fuel.js, staged the same way (the staging edit the brief allows everywhere).
+writeFileSync(join(dir, 'coach-fuel.mjs'), src('coach-fuel.js')
+  .replace("from './coach-prog.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-prog.mjs')).href))
+  .replace("from './coach-goal.js'", 'from ' + real('coach-goal.js'))
+  .replace("from './units.js'", 'from ' + real('units.js'))
+  .replace("from './exercises.js'", 'from ' + real('exercises.js'))
+  .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
+  .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href)));
 // v52: coach-ready.js, staged the same way (the staging edit the brief allows everywhere).
 writeFileSync(join(dir, 'coach-ready.mjs'), src('coach-ready.js')
   .replace("from './coach-prog.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-prog.mjs')).href))
@@ -96,6 +104,7 @@ writeFileSync(join(dir, 'coach.mjs'), src('coach.js')
   .replace("from './coach-live.js'", 'from ' + at('coach-live.mjs'))
   .replace("from './coach-goal.js'", 'from ' + real('coach-goal.js'))
   .replace("from './coach-overlap.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-overlap.mjs')).href))
+  .replace("from './coach-fuel.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-fuel.mjs')).href))
   .replace("from './coach-ready.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-ready.mjs')).href))
   .replace("from './coach-prog.js'", 'from ' + at('coach-prog.mjs'))
   .replace("from './analytics.js'", 'from ' + at('analytics.mjs')));
@@ -454,6 +463,23 @@ section('G. the food days are read only for an account that asked, and only the 
         /patternFoodDays\(coachInput\(\{\}\)\)/.test(D) && /read\('food\/log\/' \+ k, null\)/.test(D));
   check('and switching Patterns on reads them then, not at the next app open',
         /if \(ok && muted !== true && ready\) loadPatternFood\(\);/.test(D));
+}
+
+/* ================= H. v52 — STILL EIGHT ================= */
+section('H. v52 — stage four quotes Patterns and adds none to them: still eight');
+{
+  /* SHIP-V52-PROMPT decision 6: a ninth comparison is a decision, not a line
+     of code. "Am I fueled?" and "How did today compare?" quote four of the
+     eight, worded as Patterns words them — they register none. */
+  check('PATTERN_FACTS is eight, the same eight, in the same order', C.PATTERN_FACTS.length === 8 &&
+        C.PATTERN_FACTS.join(',') === 'lift.fedBeforeTop,session.setsAfterProtein,fuel.trainingDayCalories,weight.rateBySessions,' +
+        'lift.morningTop,lift.restGapTop,steps.trainingDays,lift.caloriesBeforeTop', C.PATTERN_FACTS.join(','));
+  check('the patterns intent answers from those eight and no others', JSON.stringify(C.INTENTS.find(i => i.id === 'patterns_in_data').factsNeeded) ===
+        JSON.stringify(C.PATTERN_FACTS));
+  check('coach-fuel.js and coach-ready.js compute no comparison of two groups of days — no PATTERN_MIN, no sides()',
+        !/PATTERN_MIN|function sides\(/.test(src('coach-fuel.js') + src('coach-ready.js')));
+  check('and "Am I fueled?" quotes a pattern only with Patterns switched on — coach.js hands it none otherwise',
+        /isMuted\(s, 'patterns'\) \? null : patternLines\(d\)/.test(src('coach.js')));
 }
 
 /* ---------- report ---------- */

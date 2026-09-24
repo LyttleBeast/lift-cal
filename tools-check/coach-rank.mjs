@@ -81,6 +81,14 @@ writeFileSync(join(dir, 'coach-overlap.mjs'), src('coach-overlap.js')
   .replace("from './exercises.js'", 'from ' + real('exercises.js'))
   .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
   .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href)));
+// v52: coach-fuel.js, staged the same way (the staging edit the brief allows everywhere).
+writeFileSync(join(dir, 'coach-fuel.mjs'), src('coach-fuel.js')
+  .replace("from './coach-prog.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-prog.mjs')).href))
+  .replace("from './coach-goal.js'", 'from ' + real('coach-goal.js'))
+  .replace("from './units.js'", 'from ' + real('units.js'))
+  .replace("from './exercises.js'", 'from ' + real('exercises.js'))
+  .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
+  .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href)));
 // v52: coach-ready.js, staged the same way (the staging edit the brief allows everywhere).
 writeFileSync(join(dir, 'coach-ready.mjs'), src('coach-ready.js')
   .replace("from './coach-prog.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-prog.mjs')).href))
@@ -98,6 +106,7 @@ writeFileSync(join(dir, 'coach.mjs'), src('coach.js')
   .replace("from './coach-live.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-live.mjs')).href))
   .replace("from './coach-goal.js'", 'from ' + real('coach-goal.js'))
   .replace("from './coach-overlap.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-overlap.mjs')).href))
+  .replace("from './coach-fuel.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-fuel.mjs')).href))
   .replace("from './coach-ready.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-ready.mjs')).href))
   .replace("from './coach-prog.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-prog.mjs')).href))
   .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href)));
@@ -439,8 +448,11 @@ section('G2. the topic set belongs to the surface that opened the sheet');
   check('Train gets a different set, and a training-first one',
         trainSet.join(',') !== youSet.join(',') &&
         trainSet.every(id => C.TRAIN_TOPICS.some(t => t.id === id)), list(trainSet));
-  check('and not one of Train’s bubbles is about food or weight',
-        !trainSet.some(id => /fuel|weight|cal|protein|macro|rate|weighin/.test(id)), list(trainSet));
+  /* v52 (SHIP-V52-PROMPT §10): "Am I fueled?" joins Train before a workout —
+     the one food question there, and a question about the workout. Every
+     other food and weight question stays off Train. */
+  check('and not one of Train’s bubbles is about food or weight — bar "Am I fueled?", which is about the workout',
+        !trainSet.some(id => id !== 'ask_fueled' && /fuel|weight|cal|protein|macro|rate|weighin/.test(id)), list(trainSet));
   check('every Train bubble is an id the router already answers',
         C.TRAIN_TOPICS.every(t => C.ROUTE_IDS.includes(t.id)),
         list(C.TRAIN_TOPICS.map(t => t.id)));

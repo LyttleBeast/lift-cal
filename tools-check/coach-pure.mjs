@@ -88,6 +88,14 @@ writeFileSync(join(dir, 'coach-overlap.mjs'), src('coach-overlap.js')
   .replace("from './exercises.js'", 'from ' + real('exercises.js'))
   .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
   .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href)));
+// v52: coach-fuel.js, staged the same way (the staging edit the brief allows everywhere).
+writeFileSync(join(dir, 'coach-fuel.mjs'), src('coach-fuel.js')
+  .replace("from './coach-prog.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-prog.mjs')).href))
+  .replace("from './coach-goal.js'", 'from ' + real('coach-goal.js'))
+  .replace("from './units.js'", 'from ' + real('units.js'))
+  .replace("from './exercises.js'", 'from ' + real('exercises.js'))
+  .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
+  .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href)));
 // v52: coach-ready.js, staged the same way (the staging edit the brief allows everywhere).
 writeFileSync(join(dir, 'coach-ready.mjs'), src('coach-ready.js')
   .replace("from './coach-prog.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-prog.mjs')).href))
@@ -105,6 +113,7 @@ writeFileSync(join(dir, 'coach.mjs'), src('coach.js')
   .replace("from './coach-live.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-live.mjs')).href))
   .replace("from './coach-goal.js'", 'from ' + real('coach-goal.js'))
   .replace("from './coach-overlap.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-overlap.mjs')).href))
+  .replace("from './coach-fuel.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-fuel.mjs')).href))
   .replace("from './coach-ready.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-ready.mjs')).href))
   .replace("from './coach-prog.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-prog.mjs')).href))
   .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href)));
@@ -143,11 +152,12 @@ section('A. three imports, and the analytics one is a closed list');
   // section J holds it to the same rules. coach-prog.js is reached through the
   // builder and the overlap, never from here. coach-ready.js is the eighth
   // (v52, deliberately added): the rest read and readiness, food-blind, held
-  // to the same rules in section K.
+  // to the same rules in section K; and coach-fuel.js the ninth (v52, Phase
+  // B), "Am I fueled?", held to them in section M.
   const ALLOWED = ['./exercises.js', './analytics.js', './units.js', './coach-build.js', './coach-live.js',
-                   './coach-goal.js', './coach-overlap.js', './coach-ready.js'];
+                   './coach-goal.js', './coach-overlap.js', './coach-ready.js', './coach-fuel.js'];
   const extra = imports.map(i => i.from).filter(f => !ALLOWED.includes(f));
-  check('coach.js imports nothing outside exercises.js, analytics.js, units.js, coach-build.js, coach-live.js, coach-goal.js, coach-overlap.js and coach-ready.js',
+  check('coach.js imports nothing outside exercises.js, analytics.js, units.js, coach-build.js, coach-live.js, coach-goal.js, coach-overlap.js, coach-ready.js and coach-fuel.js',
         !extra.length, list(extra));
   check('and imports none of them twice',
         new Set(imports.map(i => i.from)).size === imports.length);
@@ -583,7 +593,7 @@ section('I. coach-goal.js — imports nothing, remembers nothing, and its tables
   const tables = Object.keys(G).filter(k => typeof G[k] === 'object' && G[k] !== null);
   check('every exported table is frozen (' + tables.join(', ') + ')',
         tables.length >= 3 && tables.every(k => Object.isFrozen(G[k])), list(tables.filter(k => !Object.isFrozen(G[k]))));
-  check('and the modules importing it are coach.js, coach-prog.js, (v49) coach-overlap.js and (v52) coach-ready.js — nothing it imports reaches back',
+  check('and the modules importing it are coach.js, coach-prog.js, (v49) coach-overlap.js and (v52) coach-ready.js and coach-fuel.js — nothing it imports reaches back',
         /from '\.\/coach-goal\.js'/.test(src('coach.js')) && /from '\.\/coach-goal\.js'/.test(src('coach-prog.js')) &&
         !/from '\.\/coach-goal\.js'/.test(src('coach-build.js')) && !/from '\.\/coach-goal\.js'/.test(src('coach-live.js')));
   /* v49 puts the bodyweight-at-a-moment and the energy band here, beside the
@@ -739,6 +749,45 @@ section('K. coach-ready.js — the rest read is copied byte for byte as well, an
   while (Date.now() === before) { /* spin past a millisecond of real time */ }
   check('and reads it the same again after the real clock has moved', one === shot(NOW));
   check('moving `now` three days moves it — the clock it reads is the argument', one !== shot(NOW + 3 * DAY));
+}
+
+/* ================= M. COACH-FUEL.JS IS HELD TO THE SAME FENCE =================
+   v52's "Am I fueled?" is the seventh file the native port copies verbatim,
+   and the only one that reads food. It may reach coach-goal.js (bodyweight
+   at a moment, the energy bands) and units.js, and NOTHING ELSE — never
+   coach-ready.js, which never reaches it either: coach.js merges their rows,
+   so food can move no rest call, window, target or lift reading. */
+section('M. coach-fuel.js — "Am I fueled?" is copied byte for byte as well, and never sees the training half');
+{
+  const FRAW = src('coach-fuel.js');
+  const FCODE = FRAW.replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n').map(l => l.replace(/(^|[^:'"\\])\/\/.*$/, '$1')).join('\n');
+  const imports = [...FRAW.matchAll(/^import\s+(?:([^;]*?)\s+from\s+)?['"]([^'"]+)['"];?$/gm)]
+    .map(m => ({ names: (m[1] || '').trim(), from: m[2] }));
+  check('it imports coach-goal.js and units.js, and nothing else', imports.every(i => ['./coach-goal.js', './units.js'].includes(i.from)) &&
+        imports.length === 2, list(imports.map(i => i.from)));
+  check('never coach-ready.js, and coach-ready.js never it — the two halves never see each other',
+        !/coach-ready/.test(FCODE) && !/coach-fuel/.test(src('coach-ready.js').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')));
+  check('it reads bodyweight and the bands through coach-goal.js — never its own copy of the bars',
+        /import \{[^}]*\bbwAt\b[^}]*\benergyBand\b[^}]*\} from '\.\/coach-goal\.js'/.test(FRAW) &&
+        !/const\s+\w*(ENERGY|DEEP|DEFICIT|SURPLUS)\w*\s*=/.test(FCODE));
+  check('and never names store.js, reads or writes',
+        !/store\.js/.test(FCODE) && !/\bread\s*\(|\breadExact\s*\(|\bwrite\s*\(/.test(FCODE));
+  check('no clock of its own — no Date.now(), no argless new Date(), no performance.now()',
+        !/Date\.now\s*\(/.test(FCODE) && ![...FCODE.matchAll(/new\s+Date\s*\(\s*\)/g)].length && !/performance\s*\.\s*now/.test(FCODE));
+  check('no Math.random()', !/Math\s*\.\s*random/.test(FCODE));
+  ['document', 'window', 'navigator', 'localStorage', 'sessionStorage', 'fetch', 'XMLHttpRequest']
+    .forEach(g => check('no ' + g, !new RegExp('\\b' + g + '\\b').test(FCODE),
+                        (FCODE.match(new RegExp('.*\\b' + g + '\\b.*')) || [''])[0].trim()));
+  check('no console, no timers', !/\bconsole\s*\./.test(FCODE) && !/\bset(Timeout|Interval)\s*\(/.test(FCODE));
+  const topLevel = FCODE.split('\n').filter(l => /^(export\s+)?(let|var)\s/.test(l));
+  check('no top-level let or var — its memo rides on the input', !topLevel.length, list(topLevel.map(l => l.trim())));
+  check('no default export', !/export\s+default/.test(FCODE));
+  check('fueledRead() is what it exports, and coach.js is what calls it',
+        /export function fueledRead\(input, now\)/.test(FRAW) && /import \{[^}]*\bfueledRead\b[^}]*\} from '\.\/coach-fuel\.js'/.test(RAW));
+  const D = src('coach-data.js');
+  check('coach-data.js reads the food log only through loadFuel(), and only the days coach.js’s fuelDays() names',
+        /export function loadFuel\(/.test(D) && /fuelDays\(coachInput\(/.test(D) && /read\('food\/log\/' \+ d, null\)/.test(D));
 }
 
 /* ================= L. COACH-OVERLAP.JS'S FOUR NEW EXPORTS, BODIES UNCHANGED =================

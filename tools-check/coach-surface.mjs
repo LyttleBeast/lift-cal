@@ -185,7 +185,12 @@ const IMPL = {
   answerQuestion:     (id, v) => { state.calls.push(['answerQuestion', id, v]); return Promise.resolve(true); },
   markAsked:          id => { state.calls.push(['markAsked', id]); return Promise.resolve(true); },
   // v52: the bad-day mark, written or cleared through coach-data.js.
-  markSession:        (sess, r) => { state.calls.push(['markSession', sess, r]); return Promise.resolve(true); }
+  markSession:        (sess, r) => { state.calls.push(['markSession', sess, r]); return Promise.resolve(true); },
+  // v52, Phase B: "Am I fueled?" reads first when there is something to read.
+  fuelNeedsRead:      () => !!state.fuelPending,
+  loadFuel:           () => { state.calls.push(['loadFuel']); state.fuelPending = false;
+                              if (state.fuelArrives) state.input = { ...state.input, foodLog: state.fuelArrives };
+                              return Promise.resolve(true); }
 };
 globalThis.__coachData = (name, args) => {
   if (IMPL[name]) return IMPL[name](...args);
@@ -245,6 +250,14 @@ writeFileSync(join(dir, 'coach-overlap.mjs'), src('coach-overlap.js')
   .replace("from './exercises.js'", 'from ' + real('exercises.js'))
   .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
   .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href)));
+// v52: coach-fuel.js, staged the same way (the staging edit the brief allows everywhere).
+writeFileSync(join(dir, 'coach-fuel.mjs'), src('coach-fuel.js')
+  .replace("from './coach-prog.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-prog.mjs')).href))
+  .replace("from './coach-goal.js'", 'from ' + real('coach-goal.js'))
+  .replace("from './units.js'", 'from ' + real('units.js'))
+  .replace("from './exercises.js'", 'from ' + real('exercises.js'))
+  .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
+  .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href)));
 // v52: coach-ready.js, staged the same way (the staging edit the brief allows everywhere).
 writeFileSync(join(dir, 'coach-ready.mjs'), src('coach-ready.js')
   .replace("from './coach-prog.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-prog.mjs')).href))
@@ -262,6 +275,7 @@ writeFileSync(join(dir, 'coach.mjs'), src('coach.js')
   .replace("from './coach-live.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-live.mjs')).href))
   .replace("from './coach-goal.js'", 'from ' + real('coach-goal.js'))
   .replace("from './coach-overlap.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-overlap.mjs')).href))
+  .replace("from './coach-fuel.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-fuel.mjs')).href))
   .replace("from './coach-ready.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-ready.mjs')).href))
   .replace("from './coach-prog.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-prog.mjs')).href))
   .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href)));
@@ -1833,6 +1847,77 @@ section('N. v52 — the caution before a proposal, the mark’s chips, and "Shou
   const was = cls(execFileSync('git', ['show', '99b49ea:coach-ui.js'], { cwd: ROOT, encoding: 'utf8' }));
   const added = [...cls(src('coach-ui.js'))].filter(c => !was.has(c));
   check('no new CSS class: the caution and the mark are Coach bubbles and chips', !added.length, list(added));
+  // ---- Phase B: "Am I fueled?" ----
+  /* A month of food logged as he goes, training every other day; now is
+     half past one. `logged` decides what loadFuel() "reads": the stub hands
+     the food log over when it is awaited, the way coach-data.js fills
+     coachInput().foodLog. */
+  const REALF = [[8, 0, 600, 60], [12, 0, 800, 90], [15, 0, 400, 50], [20, 0, 700, 80]];
+  const BAT = [[21, 30, 600, 60], [21, 45, 800, 90], [22, 0, 400, 50], [22, 15, 700, 80]];
+  const fmonth = (pat, now, today) => {
+    const sessions = [], summaries = {}, foodLog = {};
+    for (let a = 1; a <= 60; a += 2) sessions.push(S(a, a % 4 === 1 ? UP : LO, { at: at(a, 16 + (a % 3)) }));
+    for (let a = 1; a <= 30; a++) {
+      const w = 0.9 + ((a * 7) % 5) * 0.05;
+      const es = pat.map(([h, m, cal, c]) => ({ t: at(a, h, m), cal: Math.round(cal * w), p: 30, c: Math.round(c * w) }));
+      summaries[key(at(a, 12))] = { cal: es.reduce((x, e) => x + e.cal, 0), p: 120, c: es.reduce((x, e) => x + e.c, 0), f: 70 };
+      if (a % 2 === 1) foodLog[key(at(a, 12))] = es;
+    }
+    const es = today ? pat.map(([h, m, cal, c]) => ({ t: at(0, h, m), cal, p: 30, c })).filter(e => e.t <= now - 3600e3) : [];
+    if (es.length) { summaries[key(now)] = { cal: es.reduce((x, e) => x + e.cal, 0), p: 50, c: es.reduce((x, e) => x + e.c, 0), f: 20 };
+                     foodLog[key(now)] = es; }
+    return { ...inp({ sessions: sessions.sort((x, y) => x.startedAt - y.startedAt), summaries, now }), logged: foodLog };
+  };
+  const tick = () => new Promise(res => setTimeout(res, 0));
+  const T = at(0, 13, 30);
+  const FED = fmonth(REALF, T, true);
+  state.input = { ...FED, foodLog: {} }; state.fuelPending = true; state.fuelArrives = FED.logged; state.calls.length = 0;
+  sh = open(U3, trainOpts).sh;
+  check('"Am I fueled?" is on the Train sheet before a workout', chipsIn(sh).some(b => b.textContent === 'Am I fueled?') ||
+        (tap(sh, 'More') && chipsIn(sh).some(b => b.textContent === 'Am I fueled?')), list(chipsIn(sh).map(b => b.textContent)));
+  sh = open(U3, trainOpts).sh;
+  tap(sh, 'Am I fueled?');
+  check('with a food log to read, one quiet bubble says so — and no answer yet',
+        bubT(sh).slice(-1)[0] === 'Reading your food log…' && state.calls.some(c => c[0] === 'loadFuel'), list(bubT(sh)));
+  await tick(); await tick();
+  const fedAns = engine({ ...FED, foodLog: FED.logged }).ask('ask_fueled');
+  check('then the bubble gives way to the answer, asked afresh with what was read',
+        !bubT(sh).includes('Reading your food log…') && bubT(sh).includes(fedAns.text) && /so far today/.test(fedAns.text), list(bubT(sh)));
+  state.fuelPending = false; state.calls.length = 0;
+  sh = open(U3, trainOpts).sh;
+  tap(sh, 'Am I fueled?');
+  check('with nothing to read, no bubble and no wait: the answer at once',
+        !bubT(sh).includes('Reading your food log…') && bubT(sh).includes(fedAns.text) && !state.calls.some(c => c[0] === 'loadFuel'), list(bubT(sh)));
+  // Nothing logged today: the empty answer and its two chips.
+  state.input = { ...fmonth(REALF, T, false), foodLog: {} }; state.fuelPending = false; state.calls.length = 0;
+  sh = open(U3, trainOpts).sh;
+  tap(sh, 'Am I fueled?');
+  check('"Nothing logged today yet." — no fuel claim — and the two chips, in his voice',
+        bubT(sh).includes('Nothing logged today yet.') && chipsIn(sh).some(b => b.textContent === 'I ate, it’s not logged') &&
+        chipsIn(sh).some(b => b.textContent === 'I haven’t eaten'), list(chipsIn(sh).map(b => b.textContent)));
+  tap(sh, 'I haven’t eaten');
+  check('"I haven’t eaten": said back, and nothing written anywhere',
+        bubT(sh).includes('Noted. That’s for this answer; nothing is saved.') &&
+        !state.calls.some(c => ['answerQuestion', 'markSession', 'setCategoryMuted', 'setAim'].includes(c[0])), JSON.stringify(state.calls));
+  sh = open(U3, trainOpts).sh;
+  tap(sh, 'Am I fueled?'); tap(sh, 'I ate, it’s not logged');
+  check('"I ate, it’s not logged": today is not in the log, so Coach cannot read it — and the day lines',
+        bubT(sh).includes('Then today isn’t in your log yet, so Coach can’t read it.'), list(bubT(sh)));
+  // A batch logger, late at night: the day's totals, and the question under the answer.
+  const BATCHED = fmonth(BAT, at(0, 23), true);
+  state.input = { ...BATCHED, foodLog: BATCHED.logged }; state.calls.length = 0;
+  sh = open(U3, trainOpts).sh;
+  tap(sh, 'Am I fueled?');
+  check('a batch logger is read by the day, and asked once how he logs — under the answer',
+        bubT(sh).includes('Coach reads your food by the day, not the hour.') &&
+        bubT(sh).includes('Do you usually log food as you go, or later in the day?') &&
+        chipsIn(sh).some(b => b.textContent === 'As I go') && chipsIn(sh).some(b => b.textContent === 'Later'), list(bubT(sh)));
+  tap(sh, 'As I go');
+  check('"As I go" is saved as the answer, and the question says what it changes',
+        state.calls.some(c => c[0] === 'answerQuestion' && c[1] === 'q_log_timing' && c[2] === 'live') &&
+        bubT(sh).includes('Noted. Coach reads your food by the hour when you log as you go, and by the day when you log later.'),
+        JSON.stringify(state.calls.filter(c => c[0] !== 'markAsked')));
+  state.fuelPending = false; state.fuelArrives = null;
   check('the coach-data stub still answers everything coach-ui.js imports', !state.unknown.length, list(state.unknown));
   state.input = BASE; body.children.length = 0;
 }
