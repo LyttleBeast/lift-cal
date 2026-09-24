@@ -35,8 +35,14 @@
 //   u           'lb' | 'kg', for the lines that print a load
 //   live        a session is running on this device
 //   ready       train_today_recommendation's own min-data gate, evaluated
-//   overdue     session.shapeOverdue — the default focus — or null
+//   overdue     the default focus when it is a shape (v52: session.buildFocus,
+//               the rest read's pick, or the shipped overdue shape), or null
+//   defaultGroup the default focus when it is a group (v52), or null — only
+//               one of the two is ever set
 //   overdueWhy  that fact's `because`, so the reason reads as Coach reads it
+//   overdueSkipped the pick left the shipped stalest shape out as unrecovered
+//               (v52), so "waited longest" is said of what is recovered
+//   marks       exId -> that lift's bad-day mark (v52), for targetFor()
 //   shapes      session.shapes — every recurring shape, with its members
 //   sessions    the window's sessions, oldest first, each carrying its
 //               signature and the raw record it was shaped from
@@ -63,7 +69,7 @@ import { isWorking, mergeSessionExercises } from './analytics.js';
 import { fmtSetLoad, unitW } from './units.js';
 import { normalizeBlocks, blockOrder } from './blocks.js';
 import { tagsFor } from './coach-tags.js';
-import { prescribe, exposuresFor, sessionDay } from './coach-prog.js';
+import { exposuresFor, sessionDay, targetFor } from './coach-prog.js';
 
 /* How many alternatives "Swap one" offers. Five is a thumb's worth of chips;
    past that it is a picker, and the app already has one. */
@@ -159,7 +165,9 @@ function shapeFocus(sh, overdue) {
 function focusOf(i, id) {
   const shapes = Array.isArray(i.shapes) ? i.shapes : [];
   const due = i.overdue && i.overdue.key ? i.overdue : null;
-  if (!id) return due ? shapeFocus(due, true) : null;
+  // v52: the default is the overdue shape, then — on a group call from the
+  // rest read — that group; coach.js sets one of the two at most.
+  if (!id) return due ? shapeFocus(due, true) : i.defaultGroup ? focusOf(i, 'group:' + i.defaultGroup) : null;
   if (id.startsWith('shape:')) {
     const key = id.slice(6);
     const sh = shapes.find(s => s && s.key === key);
@@ -581,17 +589,22 @@ function build(i, o, top) {
   const targetOf = e => {
     if (i.targetsOn !== true) return null;
     const days = (i.groupDays || {})[e.group];
-    const t = prescribe({ exId: e.exId, name: e.name, group: e.group, equipment: e.equipment,
-                          exposures: exposures(e.exId), groupDaysSince: Number.isFinite(days) ? days : null }, ctx);
+    // v52: targetFor(), with his bad-day mark on this lift — prescribe()
+    // itself, byte for byte, when there is none.
+    const t = targetFor({ exId: e.exId, name: e.name, group: e.group, equipment: e.equipment,
+                          exposures: exposures(e.exId), groupDaysSince: Number.isFinite(days) ? days : null }, ctx,
+                        (i.marks && i.marks[e.exId]) || null);
     if (!t) return null;
     /* Built from a different day than the numbers on this row? Then say which,
-       before the line about how much Coach has seen of the lift. */
+       before the line about how much Coach has seen of the lift. A target
+       from before a marked session names no day: the last time he did this
+       lift IS the marked session. */
     const shown = e.source ? e.source.date : base.date;
     if (!t.from || t.from.date === shown) return t;
     const why = t.why.slice();
     const at = why.findIndex(w => /^Coach is learning/.test(w));
-    why.splice(at === -1 ? why.length : at, 0,
-      'Worked out from ' + sessionDay(t.from.date, t.from.daysAgo) + ', the last time you did this lift.');
+    why.splice(at === -1 ? why.length : at, 0, t.marked ? 'Worked out from before your marked session.'
+      : 'Worked out from ' + sessionDay(t.from.date, t.from.daysAgo) + ', the last time you did this lift.');
     return { ...t, why };
   };
   const targets = laid.map(targetOf);
@@ -673,7 +686,8 @@ function build(i, o, top) {
 
   const reason = [];
   if (focus.kind === 'shape' && focus.overdue && i.overdueWhy) {
-    reason.push('It has waited longest of the sessions you repeat: ' + i.overdueWhy + '.');
+    reason.push((i.overdueSkipped ? 'It has waited longest of what’s recovered: '
+                                  : 'It has waited longest of the sessions you repeat: ') + i.overdueWhy + '.');
   } else if (focus.kind === 'shape' && Number.isFinite(focus.count)) {
     reason.push('It has come round ' + plural(focus.count, 'time') + ' in the last twelve weeks.');
   } else if (focus.kind === 'group') {

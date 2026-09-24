@@ -77,6 +77,16 @@ writeFileSync(join(dir, 'coach-overlap.mjs'), src('coach-overlap.js')
   .replace("from './exercises.js'", 'from ' + real('exercises.js'))
   .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
   .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href)));
+// v52: coach-ready.js, staged the same way (the staging edit the brief allows everywhere).
+writeFileSync(join(dir, 'coach-ready.mjs'), src('coach-ready.js')
+  .replace("from './coach-prog.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-prog.mjs')).href))
+  .replace("from './coach-goal.js'", 'from ' + real('coach-goal.js'))
+  .replace("from './units.js'", 'from ' + real('units.js'))
+  .replace("from './exercises.js'", 'from ' + real('exercises.js'))
+  .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
+  .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href))
+  .replace("from './coach-overlap.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-overlap.mjs')).href))
+  .replace("from './coach-live.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-live.mjs')).href)));
 writeFileSync(join(dir, 'coach.mjs'), src('coach.js')
   .replace("from './exercises.js'", 'from ' + real('exercises.js'))
   .replace("from './units.js'", 'from ' + real('units.js'))
@@ -84,6 +94,7 @@ writeFileSync(join(dir, 'coach.mjs'), src('coach.js')
   .replace("from './coach-live.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-live.mjs')).href))
   .replace("from './coach-goal.js'", 'from ' + real('coach-goal.js'))
   .replace("from './coach-overlap.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-overlap.mjs')).href))
+  .replace("from './coach-ready.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-ready.mjs')).href))
   .replace("from './coach-prog.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-prog.mjs')).href))
   .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href)));
 const C = await import(pathToFileURL(join(dir, 'coach.mjs')).href);
@@ -174,18 +185,27 @@ const CASES = [
   })],
   /* v49's lighter week: twelve weeks of bench and squat on one day and rows
      and curls on another, the two big lifts falling 10% over the last three
-     weeks, and five sets taken to failure in the last two against none
-     before — two of its signs at once. */
+     weeks, and sets taken to failure in the last two against none before —
+     two of its signs at once.
+
+     v52 moved the row-and-curl day five days earlier and the failures into
+     last week alone. "Should I rest or go lighter?" now tries the rest read
+     first (SHIP-V52-PROMPT decision 10), and on v49's log its fatigue flag
+     was up too (failures in the last seven days, and lifts declining) with
+     nothing recovered — so the rest answer spoke, and the lighter week this
+     row exists to hear never did. Here the lighter week's signs are exactly
+     as they were, the flag has one sign, and the back-and-arms day is
+     recovered: the rest read has a pick, and the lighter week answers. */
   ['lighter_week',               'ask_lighter',  RICH({
     sessions: sorted(Array.from({ length: 12 }, (_, k) => 2 + 7 * k).flatMap(ago => {
-      const fall = ago < 21 ? 0.9 : 1, f = ago < 14;
+      const fall = ago < 21 ? 0.9 : 1, f = ago >= 7 && ago < 14;
       const at = (ex, w, types) => ({ exId: ex, name: ex, group: LIB[ex].group, equipment: LIB[ex].equipment,
         sets: types.map(t => ({ w: String(Math.round(w * fall)), r: '5', type: t, done: true })) });
       return [
         { id: 'lw' + ago, startedAt: NOW - ago * DAY, _date: key(NOW - ago * DAY),
           exercises: [at('bench', 225, ['N', 'N', f ? 'F' : 'N']), at('squat', 275, ['N', f ? 'F' : 'N', 'N'])] },
-        { id: 'lx' + ago, startedAt: NOW - (ago + 2) * DAY, _date: key(NOW - (ago + 2) * DAY),
-          exercises: [at('row', 155 / fall, f ? ['F', 'N', 'N'] : ['N', 'N', 'N']), at('curl', 65 / fall, ['N', 'N', 'N'])] }
+        { id: 'lx' + ago, startedAt: NOW - (ago + 5) * DAY, _date: key(NOW - (ago + 5) * DAY),
+          exercises: [at('row', 155 / fall, ago + 5 >= 7 && ago + 5 < 14 ? ['F', 'N', 'N'] : ['N', 'N', 'N']), at('curl', 65 / fall, ['N', 'N', 'N'])] }
       ];
     }))
   })],

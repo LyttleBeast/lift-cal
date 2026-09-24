@@ -723,7 +723,8 @@ if (MAIN) {
       { markedAt: new Set([xs5[0].startedAt]), exposures: xs5, latest: { word: 'felt unwell', exposures: [], groupDaysSince: null, now: xs5[0].startedAt } });
     check('a mark on the lift’s only session: silence, never "first time on this lift"', t5 === null, JSON.stringify(t5));
     check('and with no mark it is prescribe(), the same object shape and bytes', JSON.stringify(P.targetFor(m1.ex, ctx, null)) === JSON.stringify(P.prescribe(m1.ex, ctx)));
-    check('every target coach-overlap.js names goes through targetFor() — prescribe() is called there for a target nowhere',
+    check('the builder and every target coach-overlap.js names go through targetFor() — prescribe() is called for a target nowhere else',
+          /\btargetFor\(/.test(src('coach-build.js')) && !/\bprescribe\s*\(/.test(src('coach-build.js').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')) &&
           !/\bprescribe\s*\(/.test(src('coach-overlap.js').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')));
   }
 

@@ -40,16 +40,20 @@
 // coach-live.js, which reads a workout in progress. Both take everything they
 // know about the log from here. And coach-goal.js, whose aims and energy
 // context the goal's facts read (the targets themselves are coach-prog.js's,
-// reached through the builder). Nothing imports back.
+// reached through the builder). And (v52) coach-ready.js, the rest read and
+// readiness — the training half of stage four, food-blind by construction.
+// Nothing imports back.
 
 import { GROUPS, GROUP_ORDER } from './exercises.js';
 import { e1rm, isWorking, mergeSessionExercises, exerciseIndex } from './analytics.js';
 import { labelW, labelRate, unitW, fmtW } from './units.js';
 import { propose, liveRefusal, buildMenu, swapTo, BUILD_ASK } from './coach-build.js';
-import { liveRead, LIVE_NONE } from './coach-live.js';
+import { liveRead, LIVE_NONE, REP_DROP } from './coach-live.js';
 import { AIMS, EXPERIENCE, energyContext, normGoalLift, goalChecks, AIM_DIR } from './coach-goal.js';
 import { readLift, lighterWeek, recordDay, liftsMoving, prepare, targetsReplay, compareSession, nextTargets,
-         liftTrend, goalLiftRead, bigThree, focusRead } from './coach-overlap.js';
+         liftTrend, goalLiftRead, bigThree, focusRead, groupDaysAt } from './coach-overlap.js';
+import { restRead, usualRun, replay, readinessRows, readinessHas, readinessAnswer, readinessHeavy, sessionRows,
+         mergeRows, groupLine, restAnswer, lighterAnswer, groupAnswer, REST_REASON } from './coach-ready.js';
 
 const DAY = 864e5;
 
@@ -86,6 +90,37 @@ const MILESTONES = Object.freeze([10, 25, 50, 100, 150, 200, 250]);
 // "Post": the three hours after a session ends — the drive home and a meal.
 const POST_MS = 3 * 36e5;
 const OVERDUE_RATIO = 1.4;
+
+/* v52: THE BAD-DAY MARK (Micah's decision #9). One answer about how he felt
+   is kept, and only as a mark on the one session it explains — kept six
+   months, then pruned on the next write (coach-data.js) and ignored here past
+   the same age. A marked session still happened: it counts for every "when"
+   and "how much". It stops counting for "how strong" (the performance log,
+   below), and never counts for him either. The chip labels are his voice;
+   every sentence Coach says uses the words in MARK_WORDS. */
+const MARK_DAYS = 182;
+const MARK_REASONS = Object.freeze(['sleep', 'stress', 'sore', 'unwell']);
+export const MARK_WORDS = Object.freeze({ sleep: 'slept badly', stress: 'stressed', sore: 'sore', unwell: 'felt unwell' });
+const MARK_ID = /^[A-Za-z0-9_-]{1,40}$/;
+const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
+const markValid = (id, m) => MARK_ID.test(id) && !!m && typeof m === 'object' && MARK_REASONS.includes(m.r) &&
+  typeof m.d === 'string' && DATE_KEY.test(m.d);
+const NOTED = 'Noted. That session won’t count against your numbers.';
+/* The question under "How did today compare?" when it came in below, and
+   what each answer says back. Not one of QUESTIONS: nothing it stores is an
+   answer, and "Nothing" stores nothing at all. */
+export const MARK_ASK = Object.freeze({
+  text: 'Anything Coach can’t see?',
+  options: Object.freeze([
+    Object.freeze({ value: 'sleep',  label: 'Slept badly',       ack: NOTED }),
+    Object.freeze({ value: 'stress', label: 'Stressed',          ack: NOTED }),
+    Object.freeze({ value: 'sore',   label: 'Sore',              ack: NOTED }),
+    Object.freeze({ value: 'unwell', label: 'Didn’t feel well',
+                    ack: NOTED + ' Rest is always an option. Coach doesn’t do health, so it’ll leave it there.' }),
+    Object.freeze({ value: null,     label: 'Nothing',           ack: 'Noted.' })
+  ]),
+  clear: Object.freeze({ label: 'Clear the mark', ack: 'Cleared.' })
+});
 
 /* How long a question that was put and not answered stays put. Somebody who
    opened the sheet, saw the question and closed it has not refused it — they
@@ -224,6 +259,11 @@ export const CATEGORIES = Object.freeze([
      down one and keeps its order relative to the others, so no finding's rank
      moves — its one finding is sheet-only and never competes for a card. */
   { id: 'rest',        label: 'Rest and lighter weeks', mutable: true, note: 'When Coach suggests a lighter week or a rest.' },
+  /* v52's, directly after rest because it is the question asked before a
+     workout. Every later category moves down one and keeps its order, so no
+     finding's rank moves — nothing in it competes for a card. */
+  { id: 'readiness',   label: 'Readiness',           mutable: true,
+    note: 'Before a workout: what in your log is different from your normal today.' },
   { id: 'progression', label: 'Stalls and records',  mutable: true,  note: 'Where your best estimated maxes sit, and records as they land.' },
   /* Ship two's. After the training rows because it is one, and it moves no
      existing finding: the builder is a selector, it never competes for a card,
@@ -296,6 +336,14 @@ function derive(input) {
     const sets = {};        // group -> working sets, warm-ups excluded
     const fsets = {};       // group -> the working sets typed F among them (v49)
     const sig = new Set();  // the signature: groups with >= 2 working sets, cardio out
+    /* v52: three more, and only the recovery windows and the big day read
+       them (coach-ready.js). The shipped `sets` files a treadmill walk under
+       legs — eight of the nine cardio exercises are legs — and a walk is not a
+       leg day to recover from. So these are the same working sets with cardio
+       out: whole lifting sets, the ones typed F, and how many of the group's
+       lifts show a rep drop (REP_DROP, coach-live.js's test mid-session, never
+       restated). Every shipped reader keeps `sets`. */
+    const lsets = {}, lfsets = {}, ldrop = {};
     rows.forEach(ex => {
       const g = groupOf(ex);
       if (!g || !GROUPS[g]) return;
@@ -305,6 +353,11 @@ function derive(input) {
       const nf = (ex.sets || []).filter(x => isWorking(x) && x.type === 'F').length;
       if (nf) fsets[g] = (fsets[g] || 0) + nf;
       if (n >= 2 && equipOf(ex) !== 'cardio') sig.add(g);
+      if (equipOf(ex) !== 'cardio') {
+        lsets[g] = (lsets[g] || 0) + n;
+        if (nf) lfsets[g] = (lfsets[g] || 0) + nf;
+        if (repDrop(ex.sets)) ldrop[g] = (ldrop[g] || 0) + 1;
+      }
     });
     return {
       startedAt: s.startedAt,
@@ -316,6 +369,7 @@ function derive(input) {
          in every answer. */
       sets,
       fsets,
+      lsets, lfsets, ldrop,
       groups: Object.keys(sets),
       signature: GROUP_ORDER.filter(g => sig.has(g)),
       // The record itself, untouched. Nothing in this file reads it; the
@@ -384,6 +438,29 @@ function derive(input) {
         routine: routineRef(shapeRoutine(c.groups, input.routines, lib))
       }));
   });
+
+  /* ---------- the two logs (v52) ----------
+     A mark says the numbers that day were not representative, not that the
+     training did not happen. So there are two logs, built here and nowhere
+     else: every session (all(), above), which everything about WHEN and HOW
+     MUCH reads — days since, streaks, sets, windows, shapes, "last time" — and
+     the PERFORMANCE log, the marked sessions out, which everything about HOW
+     STRONG reads (the overlap's lifts, below). Nothing else restates the
+     filter. A mark older than six months is ignored, by the clock argument. */
+  const marks = () => once('marks', () => {
+    const raw = (input.settings && input.settings.marks) || {};
+    const out = new Map();
+    Object.keys(raw).forEach(id => {
+      const m = raw[id];
+      if (!markValid(id, m)) return;
+      if (Math.round((noon(now) - new Date(m.d + 'T12:00:00').getTime()) / DAY) > MARK_DAYS) return;
+      out.set(id, { r: m.r, d: m.d });
+    });
+    return out;
+  });
+  const idOf = s => String((s && s.session && s.session.id) || '');
+  const markOf = s => marks().get(idOf(s)) || null;
+  const perf = () => once('perf', () => { const m = marks(); return m.size ? all().filter(s => !m.has(idOf(s))) : all(); });
 
   /* ---------- per group ---------- */
   // Days since a group was last trained at all — one working set counts, because
@@ -529,13 +606,54 @@ function derive(input) {
       .map(l => ({ ...l, groupDaysSince: l.group && days[l.group] != null ? days[l.group] : null }));
   });
 
+  /* THE SHIPPED OVERDUE SHAPE (v42's session.shapeOverdue, byte for byte):
+     the recurring shape whose stalest group is furthest past its OWN median
+     gap. One private helper, because v52 reads it three ways — as the fact
+     when there is no rest read, as the builder's default on a rest day, and as
+     the shape the rest read's pick says it skipped — and three copies of it
+     would be three rules the first time one of them is tuned. */
+  const stalestOf = sh => {
+    const days = groupDays(), gap = groupGap();
+    let worst = null;
+    sh.groups.forEach(g => {
+      const since = days[g], med = gap[g];
+      if (since == null || med == null || med <= 0) return;
+      const ratio = since / med;
+      if (!worst || ratio > worst.ratio) worst = { group: g, since, med, ratio };
+    });
+    return worst;
+  };
+  const overdue = () => once('overdue', () => {
+    let best = null;
+    shapes().forEach(sh => {
+      const worst = stalestOf(sh);
+      if (!worst) return;
+      const cand = { ...sh, stalest: worst };
+      if (!best || cand.stalest.ratio > best.stalest.ratio ||
+          (cand.stalest.ratio === best.stalest.ratio && cand.key < best.key)) best = cand;
+    });
+    return best;
+  });
+
   return {
-    now, lib, input,
+    now, lib, input, once,
     all, inWindow, shapes, groupDays, groupGap,
     setsThisWeek, setsTrailing, sessionsIn, sessionGap, index,
     pDays, pSessions, trainedDays, pLift, lifts,
-    groupOf, equipOf
+    groupOf, equipOf,
+    marks, markOf, idOf, perf, stalestOf, overdue
   };
+}
+
+/* v52: a rep drop in one exercise's sets — a working set at the same or a
+   lighter load than the first, with reps down by REP_DROP or more. The test
+   coach-live.js's fatigueIn() applies mid-session; REP_DROP is its constant,
+   imported. Sets with no reps logged are not sets to drop from. */
+function repDrop(sets) {
+  const w = (sets || []).filter(s => isWorking(s) && parseInt(s.r, 10) >= 1);
+  if (w.length < 2) return false;
+  const load = s => parseFloat(s.w) || 0, reps = s => parseInt(s.r, 10);
+  return w.slice(1).some(s => load(s) <= load(w[0]) && reps(s) <= reps(w[0]) * (1 - REP_DROP));
 }
 
 /* Two groups of numbers, and whether they may be compared at all: eight on
@@ -691,27 +809,21 @@ export const FACTS = Object.freeze([
     /* The recurring shape whose groups have waited longest. Stalest is measured
        on the group inside the shape that is furthest past its OWN median gap,
        not on days alone — a shape containing core, which everybody trains
-       rarely, would otherwise always be the stale one. */
+       rarely, would otherwise always be the stale one.
+
+       v52: this is the shape the reader NAMES as the one to train — the
+       shipped training answers and the opening bubble — so it follows the
+       rest read. With no rest read (the switch off, or a thin log) it is the
+       shipped computation, byte for byte (derive()'s overdue()). With one, it
+       is the rest read's pick when that is a shape — the most overdue of the
+       RECOVERED shapes, carrying `.skipped` when the shipped one was left out
+       — and null on a group or rest call: nothing may name an unrecovered
+       shape as the one to train. */
     id: 'session.shapeOverdue', unit: null, requires: ['session.shapes'],
     compute: d => {
-      const shapes = d.f('session.shapes');
-      if (!shapes) return null;
-      const days = d.groupDays(), gap = d.groupGap();
-      let best = null;
-      shapes.forEach(sh => {
-        let worst = null;
-        sh.groups.forEach(g => {
-          const since = days[g], med = gap[g];
-          if (since == null || med == null || med <= 0) return;
-          const ratio = since / med;
-          if (!worst || ratio > worst.ratio) worst = { group: g, since, med, ratio };
-        });
-        if (!worst) return;
-        const cand = { ...sh, stalest: worst };
-        if (!best || cand.stalest.ratio > best.stalest.ratio ||
-            (cand.stalest.ratio === best.stalest.ratio && cand.key < best.key)) best = cand;
-      });
-      return best;
+      const r = d.f('session.rest');
+      if (r == null) return d.overdue();
+      return r.pick && r.pick.kind === 'shape' ? r.pick : null;
     },
     because: v => groupLabel(v.stalest.group) + ' is ' + plural(v.stalest.since, 'day') +
                   ' back against a usual ' + one(v.stalest.med),
@@ -956,6 +1068,69 @@ export const FACTS = Object.freeze([
     id: 'session.lighterWeek', unit: null, requires: [],
     compute: d => d.lighterWeek(),
     because: () => 'your own sets, failures and estimated maxes against your own normal'
+  },
+
+  /* ---------- stage four, the training half (v52): coach-ready.js ---------- */
+  {
+    /* The rest read: rest, lighter, a recovered shape or a recovered group —
+       or null, with the Rest switch off or under six sessions in the window.
+       On a card paint, and allowed there: it is per-group arithmetic over the
+       window, and it never reads the replay, so the card, the builder's
+       default and the sheet always read this one call. */
+    id: 'session.rest', unit: null, requires: [],
+    compute: d => (isMuted(d.input.settings, 'rest') ? null : restRead(d.ready(), d.now)),
+    because: v => v.call === 'rest' ? 'every group you usually train is inside its own recovery time'
+      : v.call === 'lighter' ? 'two or more signs in your log against your own normal'
+      : 'each group against its own recovery time'
+  },
+  {
+    // His usual longest run of training days — what the card's rest line reads.
+    id: 'session.usualRun', unit: 'days', requires: [],
+    compute: d => usualRun(d.ready(), d.now),
+    because: v => 'your usual longest run of training days is ' + plural(v, 'day')
+  },
+  {
+    /* WHAT THE BUILDER BUILDS BY DEFAULT, and nothing else decides it: "Build
+       it", "Tell me what to train", "What should I lift today?" and the Basic
+       teaser all build this. The rest read's pick when there is one — shape or
+       group — and otherwise the shipped overdue shape (no rest read, or a rest
+       call, which is how the targets and the teaser still exist on a rest
+       day; the builder's caution says what is unrecovered in it). */
+    id: 'session.buildFocus', unit: null, requires: [],
+    compute: d => {
+      const r = d.f('session.rest');
+      if (r == null || !r.pick) return d.overdue();
+      return r.pick.kind === 'shape' ? r.pick
+        : { kind: 'group', group: r.pick.group, name: groupLabel(r.pick.group) + ' day', since: r.pick.since };
+    },
+    because: v => v.key
+      ? groupLabel(v.stalest.group) + ' is ' + plural(v.stalest.since, 'day') + ' back against a usual ' + one(v.stalest.med)
+      : groupLabel(v.group) + ' is recovered'
+  },
+  {
+    /* Readiness: the training rows (coach-ready.js), or null with the
+       Readiness switch off. Sheet only — built while its answer renders. */
+    id: 'session.readiness', unit: null, requires: [],
+    compute: d => (isMuted(d.input.settings, 'readiness') ? null : readinessRows(d.ready(), d.now)),
+    because: () => 'your log against your own normal today'
+  },
+  {
+    /* What was different about the latest session — every component that
+       could be measured, and the ones that cleared their bar, merged (§6.5).
+       Sheet only. */
+    id: 'session.diffs', unit: null, requires: ['session.latest'],
+    compute: d => {
+      const all = sessionRows(d.ready(), d.f('session.latest'));
+      return { measured: all.length, rows: mergeRows(all) };
+    },
+    because: () => 'each against your own sessions in the twelve weeks before it'
+  },
+  {
+    /* The adherence replay: resolved only by the rest answers, never on a
+       paint. It reports; it adjusts nothing. */
+    id: 'session.replay', unit: null, requires: [],
+    compute: d => replay(d.ready(), d.now),
+    because: () => 'each of the last twelve weeks’ mornings, read the way Coach reads today'
   },
 
   /* ---------- fuel ----------
@@ -2208,8 +2383,44 @@ export const INTENTS = Object.freeze([
     category: 'progression', tier: 'pro', surfaces: ['sheet'],
     factsNeeded: ['lift.recordDay'], supersedes: [],
     minData: d => !isMuted(d.input.settings, 'progression'),
-    when: d => d.f('lift.recordDay') != null,
+    // v52: never on a day the rest read says rest or lighter — a record day on
+    // a rest day is the contradiction the stopping bias exists to prevent.
+    when: d => d.f('lift.recordDay') != null && !restDay(d),
     response: 'resp_record_day'
+  },
+  /* ---------- v52, stage four: rest, recovery and readiness ----------
+     Every one a SELECTOR, sheet-only: none of them competes for a card, and
+     none is in the You topic lists, so no card paint evaluates them. */
+  {
+    /* "What should I train today?" when nothing he usually trains is
+       recovered (rest), or two or more fatigue signs line up (lighter). The
+       answer always leaves a way on: "Train anyway". */
+    id: 'rest_day', kind: 'selector', priorityBand: 5, severity: 1,
+    category: 'rest', tier: 'pro', surfaces: ['sheet'],
+    factsNeeded: ['session.rest'], supersedes: [],
+    minData: d => !isMuted(d.input.settings, 'rest'),
+    when: d => restDay(d),
+    response: 'resp_rest_day'
+  },
+  {
+    // A group he usually trains is recovered, and no whole shape is.
+    id: 'group_ready', kind: 'selector', priorityBand: 5, severity: 1,
+    category: 'rest', tier: 'pro', surfaces: ['sheet'],
+    factsNeeded: ['session.rest'], supersedes: [],
+    minData: d => !isMuted(d.input.settings, 'rest'),
+    when: d => { const r = d.f('session.rest'); return !!r && r.call === 'group'; },
+    response: 'resp_group_ready'
+  },
+  {
+    /* READINESS: what in his log is off his own normal today, as a list.
+       Offered only when three rows have data — counted with their `has` tests
+       alone (coach-ready.js readinessHas), never the rows themselves. */
+    id: 'readiness', kind: 'selector', priorityBand: 5, severity: 1,
+    category: 'readiness', tier: 'pro', surfaces: ['sheet'],
+    factsNeeded: ['session.readiness'], supersedes: [],
+    minData: d => !isMuted(d.input.settings, 'readiness'),
+    when: d => readinessHas(d.ready(), d.now) >= 3,
+    response: 'resp_readiness'
   },
   {
     /* THE IN-SESSION READ, registered so its switch is a category like any
@@ -2411,23 +2622,28 @@ export const RESPONSES = Object.freeze({
        And the number rides in the headline rather than only in the reason
        underneath, because a finding that cannot be backed by a number in its
        own sentence is not a finding. */
+    /* v52: when the rest read left the shipped stalest shape out as
+       unrecovered, "has waited longest" is said of what is recovered — every
+       "waited longest" claim stays true — and a line says what was skipped. */
     text: d => {
       const v = d.f('session.shapeOverdue');
-      return 'If you train today, your ' + v.name + ' has waited longest — ' +
+      return 'If you train today, your ' + v.name + ' has waited longest' + (v.skipped ? ' of what’s recovered' : '') + ' — ' +
              groupLabel(v.stalest.group) + ' is ' + plural(v.stalest.since, 'day') + ' back.';
     },
     reason: d => {
       const v = d.f('session.shapeOverdue');
       return 'Against a usual ' + plural(one(v.stalest.med), 'day') + ' between them, and this shape has come round ' +
              plural(v.count, 'time') + ' in the last twelve weeks.';
-    }
+    },
+    more: d => skippedMore(d)
   },
   resp_shape_overdue: {
     text: d => {
       const v = d.f('session.shapeOverdue'), n = d.f('session.shapes').length;
       return 'Of the ' + (n === 1 ? 'one session shape' : n + ' session shapes') +
-             ' that recur for you, ' + v.name + ' has waited longest.';
-    }
+             ' that recur for you, ' + v.name + ' has waited longest' + (v.skipped ? ' of what’s recovered' : '') + '.';
+    },
+    more: d => skippedMore(d)
   },
   resp_group_overdue: {
     text: d => {
@@ -2637,9 +2853,29 @@ export const RESPONSES = Object.freeze({
     reason: d => d.f('session.lighterWeek').reason
   },
 
+  /* v52, stage four. Every sentence is coach-ready.js's, through units.js;
+     what is composed here is the order they are said in. */
+  resp_rest_day: {
+    text: d => restLines(d).text,
+    reason: d => restLines(d).reason,
+    more: d => restLines(d).more
+  },
+  resp_group_ready: {
+    text: d => groupAnswer(d.f('session.rest')).text,
+    reason: d => groupAnswer(d.f('session.rest')).reason
+  },
+  resp_readiness: {
+    text: d => (readyLines(d) || {}).text || '',
+    reason: d => (readyLines(d) || {}).reason || '',
+    more: d => (readyLines(d) || {}).more || []
+  },
+
   /* v49, stage three. The per-lift sentences are coach-overlap.js's, through
      units.js; what is composed here names no weight of its own but through
      labelW and labelRate. */
+  /* v52: the latest session's own rows, then what was different about the
+     day in his log — differences, never causes, in either direction — then
+     what Coach cannot see, then the mark if he made one. */
   resp_compare: {
     text: d => {
       const v = d.f('session.compare');
@@ -2656,7 +2892,18 @@ export const RESPONSES = Object.freeze({
       if (t && d.f('meta.tierPro') === true && !isMuted(d.input.settings, 'targets')) {
         out.push({ text: t.met + ' of ' + t.n + ' Coach targets met.', reason: 'Each target as Coach would have set it before the session.' });
       }
+      const diffs = d.f('session.diffs');
+      if (diffs && diffs.rows.length) {
+        out.push({ text: 'What was different in your log:', reason: 'Each against your own sessions in the twelve weeks before it, whichever way it went.' });
+        diffs.rows.forEach(r => out.push({ text: r.text, reason: '' }));
+        out.push({ text: 'These are differences, not causes.', reason: 'Coach lists what was different, either way, and never says why.' });
+      } else if (diffs && diffs.measured) {
+        out.push({ text: 'Nothing in your log was off your normal.', reason: 'Each against your own sessions in the twelve weeks before it.' });
+      }
       out.push({ text: 'Coach can’t see sleep, stress or soreness.', reason: 'It reads your log, and nothing about the day you had.' });
+      const m = d.markOf(d.f('session.latest'));
+      if (m) out.push({ text: 'You marked this session: ' + MARK_WORDS[m.r] + '. It doesn’t count against your numbers.',
+                        reason: 'Clear the mark and it counts again.' });
       return out;
     }
   },
@@ -2695,18 +2942,31 @@ export const RESPONSES = Object.freeze({
      there (tools-check/coach-prog.mjs) and in coach-voice.mjs. A lift in a
      duplicated block is one lift with one target, so it is said once. Six at
      most: past that it is the proposal, which is one tap away. */
+  /* v52: named for the builder's default (session.buildFocus), which is
+     what it lists the targets of — never the shipped, unrecovered shape. On a
+     rest day it says so first, and when several training rows are off his
+     normal, that too. Neither line moves a target. */
   resp_lift_targets: {
     text: d => {
-      const v = d.f('session.shapeOverdue');
+      const v = d.f('session.buildFocus');
       return v ? 'Targets for your ' + v.name + '.' : '';
     },
     reason: () => 'Each one is worked out from your own sessions of that lift. Nothing is logged until you tick a set.',
     more: d => {
+      const out = [];
+      const r = d.f('session.rest');
+      if (r && r.call === 'rest') {
+        out.push({ text: 'Today looks like a rest day. These targets keep until your next session.', reason: REST_REASON });
+      }
+      if (!isMuted(d.input.settings, 'readiness') && readinessHeavy(readinessRows(d.ready(), d.now))) {
+        out.push({ text: 'Several things in your log are off your normal today. If the first set moves slowly, staying at last time’s weight is a common approach.',
+                   reason: 'Your training against your own normal. The targets are the same either way.' });
+      }
       const p = d.build({});
       const seen = new Set();
-      return (p ? p.exercises : []).filter(e => e.target && !seen.has(e.exId) && seen.add(e.exId))
+      return out.concat((p ? p.exercises : []).filter(e => e.target && !seen.has(e.exId) && seen.add(e.exId))
         .slice(0, 6)
-        .map(e => ({ text: e.name + ' — ' + e.target.line, reason: e.target.why[0] || '' }));
+        .map(e => ({ text: e.name + ' — ' + e.target.line, reason: e.target.why[0] || '' })));
     }
   },
   // Never rendered through the router — see live_read.
@@ -2843,6 +3103,23 @@ function goalLines(d, u) {
   return out;
 }
 const cap = t => t.charAt(0).toUpperCase() + t.slice(1);
+
+/* v52's composers, memoised on the call: each answer asks for its lines up
+   to three times (text, reason, more), and the rest answers read the replay. */
+function restLines(d) {
+  return d.once('ans:rest', () => {
+    const r = d.f('session.rest'), rp = d.f('session.replay');
+    return r.call === 'rest' ? restAnswer(r, rp) : lighterAnswer(d.ready(), d.now, r, rp);
+  });
+}
+function readyLines(d) {
+  return d.once('ans:ready', () => readinessAnswer(d.f('session.readiness') || []));
+}
+function skippedMore(d) {
+  const r = d.f('session.rest');
+  const l = r && r.pick && r.pick.skippedLine;
+  return l ? [{ text: l, reason: REST_REASON }] : [];
+}
 
 /* ================================================================
    7.  THE ROTATING LINE
@@ -3153,7 +3430,11 @@ export const HYPE = Object.freeze([
        session" is left out: Coach cannot know it was. Shown on its own gate
        even while a lighter week is suggested — it is the same advice. */
     id: 'hype_recovery', category: 'rest', aims: null, facts: ['session.streak'],
-    gate: d => d.f('session.streak') >= 3,
+    // v52: three days or more, and at or past his own usual longest run when
+    // the log knows one (spec §9.4) — three days is ordinary for somebody
+    // whose usual run is five.
+    gate: d => { const n = d.f('session.streak'), u = d.f('session.usualRun');
+                 return n >= 3 && (u == null || n >= u); },
     text: d => { const n = d.f('session.streak'); return (WORD_NUM[n] || String(n)) + ' straight days. A rest day is well earned.'; },
     why: d => 'a session on each of the last ' + plural(d.f('session.streak'), 'day') + ', today included'
   }
@@ -3169,7 +3450,9 @@ function fitsCard(t) {
    ones suited to his aim first, then the most recent evidence, then the id. */
 function hypePool(d, u, opening) {
   const aim = d.f('coach.aim');
-  const lighter = d.f('session.lighterWeek') != null;
+  // v52: a rest or lighter day from the rest read takes the volume lines off
+  // the card the way a lighter week does; the recovery line stays.
+  const lighter = d.f('session.lighterWeek') != null || restDay(d);
   const caution = opening && opening.tone === 'caution' ? (INTENT_BY_ID[opening.id] || {}).factsNeeded || [] : [];
   const out = [];
   HYPE.forEach(h => {
@@ -3250,9 +3533,12 @@ export const TRAIN_TOPICS = Object.freeze([
   { id: 'ask_shape',   label: 'What should I train today?', category: 'recency' },
   { id: 'ask_build',   label: 'Make me a workout',          category: 'build' },
   { id: 'ask_targets', label: 'What should I lift today?',  category: 'targets' },
-  // v49: stage two's three, each offered only when it has an answer.
+  // v49: stage two's three, each offered only when it has an answer. v52:
+  // "Should I rest or go lighter?" — the same route id, so native's matcher
+  // keeps one — moves ahead of the record, because it is the question asked
+  // before training.
+  { id: 'ask_lighter', label: 'Should I rest or go lighter?', category: 'rest' },
   { id: 'ask_record_day', label: 'Good day for a record?',  category: 'progression' },
-  { id: 'ask_lighter', label: 'Should I go lighter?',       category: 'rest' },
   { id: 'ask_lifts',   label: 'How are my lifts moving?',   category: 'progression' },
   { id: 'ask_overdue', label: 'What’s waited longest?',     category: 'recency' },
   { id: 'ask_volume',  label: 'How’s my week going?',       category: 'volume' }
@@ -3275,7 +3561,10 @@ export const STATE_TOPICS = Object.freeze({
     pre:        Object.freeze(TRAIN_TOPICS.map(t => t.id)),
     post:       Object.freeze(['ask_compare', 'ask_next', 'ask_lifts', 'ask_build']),
     done_today: Object.freeze(['ask_compare', 'ask_shape', 'ask_build', 'ask_lifts']),
-    live:       Object.freeze(TRAIN_TOPICS.map(t => t.id))
+    // rack-v51's list, written out (v52): it was derived from TRAIN_TOPICS,
+    // and the pre-workout order moving is not a reason for the live one to.
+    live:       Object.freeze(['ask_shape', 'ask_build', 'ask_targets', 'ask_record_day', 'ask_lighter', 'ask_lifts',
+                               'ask_overdue', 'ask_volume'])
   }),
   you: Object.freeze({
     pre:        Object.freeze(['topic_train', 'topic_fuel', 'topic_weight', 'ask_goal', 'ask_lifts']),
@@ -3305,13 +3594,18 @@ const ROUTES = Object.freeze({
   topic_steps:  ['steps_today_vs_trailing'],
 
   ask_overdue:  ['group_overdue'],
-  ask_shape:    ['session_shape_most_overdue', 'train_today_recommendation'],
+  // v52: rest or lighter first, then a recovered group, then the shipped
+  // two — which read the rest read's pick (session.shapeOverdue).
+  ask_shape:    ['rest_day', 'group_ready', 'session_shape_most_overdue', 'train_today_recommendation'],
   ask_build:    ['build_menu'],
   ask_build_now: ['build_workout'],
+  // "Train anyway": the builder's menu, whose unrecovered choices carry the
+  // caution (c.buildCaution) — the same choice, and no workout invented.
+  ask_build_anyway: ['build_menu'],
   ask_targets:  ['lift_targets'],
   ask_lifts:    ['lift_status'],
   ask_record_day: ['record_day'],
-  ask_lighter:  ['lighter_week'],
+  ask_lighter:  ['rest_day', 'lighter_week', 'readiness'],
   ask_compare:  ['session_compare'],
   ask_next:     ['next_targets'],
   ask_goal:     ['goal_pace'],
@@ -3355,6 +3649,7 @@ const FOLLOWUPS = Object.freeze({
   // chips under either would be one too many.
   ask_build:    [],
   ask_build_now: [],
+  ask_build_anyway: [],
   // The workout the targets are on, one tap away.
   ask_targets:  ['ask_build_now'],
   ask_lifts:    ['ask_record_day', 'ask_targets', 'ask_lighter'],
@@ -3374,14 +3669,20 @@ const FOLLOWUPS = Object.freeze({
    "Build it" whether it came up under "How's my training?" or "What should I
    train today?". Filtered like every other follow-up: no proposal, no chip. */
 const FOLLOWUPS_AFTER = Object.freeze({
-  train_today_recommendation: ['ask_build_now']
+  train_today_recommendation: ['ask_build_now'],
+  // v52. After a rest answer "Build it" is dropped in followupsFor(): on a
+  // rest call there is no recovered pick, and the default would build the
+  // unrecovered shape. After a lighter one it builds the pick.
+  rest_day:    ['ask_build_now', 'ask_build_anyway'],
+  group_ready: ['ask_build_now'],
+  readiness:   ['ask_shape', 'ask_build']
 });
 
 /* A follow-up that stands for a topic: while "Build it" is offered, "Make me a
    workout" is not drawn beside it. They are two routes now — one asks what to
    train, the other already knows — but side by side they are two chips for
    one thing, and the sheet has never drawn that. */
-const STANDS_FOR = Object.freeze({ ask_build_now: 'ask_build' });
+const STANDS_FOR = Object.freeze({ ask_build_now: 'ask_build', ask_build_anyway: 'ask_build' });
 
 /* Every id the router answers, exported so that a verifier can drive all of
    them and so that ship three's text matcher has one list to map a sentence
@@ -3394,7 +3695,8 @@ const ASK_LABELS = Object.freeze({
   ask_targets:  'What should I lift today?',
   ask_lifts:    'How are my lifts moving?',
   ask_record_day: 'Good day for a record?',
-  ask_lighter:  'Should I go lighter?',
+  ask_lighter:  'Should I rest or go lighter?',
+  ask_build_anyway: 'Train anyway',
   ask_compare:  'How did today compare?',
   ask_next:     'What’s next time?',
   ask_goal:     'How am I tracking toward my goal?',
@@ -3519,7 +3821,37 @@ function factStore(input) {
   d.lighterWeek = () => (lighterV !== undefined ? lighterV : (lighterV = lighterWeek(d.overlap(), d.now)));
   d.recordDay = () => (recordV !== undefined ? recordV : (recordV = recordDay(d.overlap(), d.now)));
 
+  /* STAGE FOUR (v52): coach-ready.js's input, one per coach() call, so its
+     memo — the rest read, the replay, the rows — is shared by every answer. */
+  let readyIn = null;
+  d.ready = () => readyIn || (readyIn = readyOf(d));
+  // Each marked lift's mark, for the builder, which reads the whole log.
+  d.markByLift = () => d.once('markByLift', () =>
+    Object.fromEntries(d.overlap().lifts.filter(l => l.mark).map(l => [l.exId, l.mark])));
+
   return d;
+}
+
+/* Everything coach-ready.js is allowed to know, and every piece of it is this
+   file's: the overlap input (the shaped sessions, every one, and the
+   performance log's lifts), today's recurring shapes each with the shipped
+   stalest group, the shipped overdue shape (what a pick says it skipped), and
+   which sessions are marked. */
+function readyOf(d) {
+  return {
+    now: d.now,
+    u: d.input.u === 'kg' ? 'kg' : 'lb',
+    overlap: d.overlap(),
+    shapes: d.shapes().map(sh => ({ ...sh, stalest: d.stalestOf(sh) })),
+    overdue: d.overdue(),
+    marked: new Set(d.marks().keys())
+  };
+}
+
+// The rest read says rest or lighter.
+function restDay(d) {
+  const r = d.f('session.rest');
+  return !!r && (r.call === 'rest' || r.call === 'lighter');
 }
 
 /* Everything coach-overlap.js is allowed to know, and — as with the builder —
@@ -3540,8 +3872,41 @@ function overlapOf(d) {
     targetsOn: !isMuted(d.input.settings, 'targets'),
     shaped: d.all(),
     weighIns: Array.isArray(d.input.weighIns) ? d.input.weighIns : [],
-    lifts: d.lifts(),
+    lifts: liftsOf(d),
     hidden: Array.isArray(d.input.hidden) ? d.input.hidden : []
+  });
+}
+
+/* v52: THE LIFTS, READ FROM THE PERFORMANCE LOG. With no marks this is
+   d.lifts() and prepare() counts their exposures over every session, exactly
+   as v51 did. With marks, each lift's exposures are counted over the
+   performance log instead — coach-overlap.js's prepare() keeps exposures it is
+   handed — and the lift carries its `mark`: the marked exposures (counted the
+   same way, over the marked sessions alone, so "what an exposure is" stays
+   coach-prog.js's), and for each of them the target-from-before record —
+   the exposures before it, the group's clock at its start, its start — which
+   coach-prog.js's targetFor() needs and cannot work out, importing nothing. */
+function liftsOf(d) {
+  const lifts = d.lifts();
+  const m = d.marks();
+  if (!m.size) return lifts;
+  const marked = d.all().filter(s => m.has(d.idOf(s)));
+  const kept = prepare({ shaped: d.perf(), lifts }).lifts;
+  const inMarked = prepare({ shaped: marked, lifts }).lifts;
+  return kept.map((l, k) => {
+    const xs = inMarked[k].exposures;
+    if (!xs.length) return l;
+    const record = e => {
+      const s = marked.find(x => x.startedAt === e.startedAt);
+      const mk = s ? d.markOf(s) : null;
+      return { word: mk ? MARK_WORDS[mk.r] : '', exposures: l.exposures.filter(x => x.startedAt < e.startedAt),
+               groupDaysSince: groupDaysAt(d.all(), l.group, e.startedAt), now: e.startedAt };
+    };
+    const byAt = new Map(xs.map(e => [e.startedAt, record(e)]));
+    const lastKept = l.exposures.length ? Math.max(...l.exposures.map(e => e.startedAt)) : -Infinity;
+    const lastMarked = Math.max(...xs.map(e => e.startedAt));
+    return { ...l, mark: { markedAt: new Set(byAt.keys()), exposures: xs, byAt,
+                           latest: lastMarked > lastKept ? byAt.get(lastMarked) : null } };
   });
 }
 // prescribe()'s context, which readLift() takes beside the input.
@@ -3553,6 +3918,16 @@ const overlapCtx = i => ({ now: i.now, u: i.u, aim: i.aim, exp: i.exp, energy: i
 export function overlapInput(input) {
   try {
     return factStore(input || {}).overlap();
+  } catch {
+    return null;
+  }
+}
+
+/* v52: the same for coach-ready.js — tools-check/coach-ready.mjs drives its
+   battery with exactly what this file hands it. Pure. */
+export function readyInput(input) {
+  try {
+    return factStore(input || {}).ready();
   } catch {
     return null;
   }
@@ -3575,13 +3950,22 @@ export function overlapInput(input) {
    at all — off, every row's target is null and there is no targets view. */
 function builderInput(d) {
   const back = INTENT_BY_ID.returning_from_layoff;
+  /* v52: the default focus is session.buildFocus, and nothing else — a
+     shape as `overdue`, a group as `defaultGroup`, only one of them ever set.
+     `overdueSkipped` words its reason line when the pick left the shipped
+     stalest shape out as unrecovered. `marks` is each marked lift's mark, for
+     coach-prog.js's targetFor(). */
+  const bf = d.f('session.buildFocus');
   return {
     now: d.now,
     u: d.input.u === 'kg' ? 'kg' : 'lb',
     live: d.f('live.active') === true,
     ready: gate(INTENT_BY_ID.train_today_recommendation, d),
-    overdue: d.f('session.shapeOverdue'),
-    overdueWhy: d.because('session.shapeOverdue'),
+    overdue: bf && bf.key ? bf : null,
+    defaultGroup: bf && bf.kind === 'group' ? bf.group : null,
+    overdueWhy: bf && bf.key ? d.because('session.buildFocus') : null,
+    overdueSkipped: !!(bf && bf.skipped),
+    marks: d.markByLift(),
     shapes: d.f('session.shapes') || [],
     sessions: d.inWindow(),
     log: d.all(),
@@ -3968,6 +4352,13 @@ export function coach(input) {
        drawn by the sheet. Empty behind the same silences as build(). */
     buildMenu: () => (d.f('log.confidence') === 'unknown' || isMuted(d.input.settings, 'build')
       ? [] : d.buildMenu()),
+    /* v52: THE CAUTION, before a proposal whose focus holds a group inside
+       its recovery window — any focus the sheet builds: a menu chip, "Tell me
+       what to train" on a rest day, "Train something else". Advice, never a
+       lock: "Build … anyway" builds exactly what was asked. Pro, the Rest
+       switch on, and a rest read to say it from; otherwise null. */
+    buildCaution: opts => (d.f('log.confidence') !== 'readable' || !pro || isMuted(d.input.settings, 'rest')
+      ? null : caution(d, opts)),
     /* "Something else…" under Swap one: the exercise he picked, as the next
        opts, or the reason it cannot stand in (coach-build.js swapTo). */
     swapTo: (opts, from, to) => (d.f('log.confidence') === 'unknown'
@@ -4010,7 +4401,8 @@ function ask(d, u, id) {
     if (v) {
       const where = v.id === 'lift_targets' ? 'targets' : v.id === 'goal_pace' ? 'goal' : null;
       return { ...v, followups: followupsFor(d, u, id, v.id),
-               ...(where ? { question: questionView(questionUnder(d, where), d, u) } : null) };
+               ...(where ? { question: questionView(questionUnder(d, where), d, u) } : null),
+               ...(v.id === 'session_compare' ? markView(d) : null) };
     }
   }
   return {
@@ -4036,10 +4428,55 @@ function nothingFor(id) {
 // Only offer a follow-up that has an answer behind it. The answer's own
 // follow-ups come first, then the button's, each id once.
 function followupsFor(d, u, id, answeredBy) {
-  const list = [...new Set((FOLLOWUPS_AFTER[answeredBy] || []).concat(FOLLOWUPS[id] || []))];
+  let list = [...new Set((FOLLOWUPS_AFTER[answeredBy] || []).concat(FOLLOWUPS[id] || []))];
+  /* v52: after a rest answer there is no recovered pick, and "Build it"
+     would build the builder's default — the unrecovered shape. An explicit
+     condition rather than answerable(): the proposal exists; it is the wrong
+     thing to offer. "Train anyway" is the way on. */
+  if (answeredBy === 'rest_day') {
+    const r = d.f('session.rest');
+    if (!r || !r.pick) list = list.filter(x => x !== 'ask_build_now');
+  }
   return list.filter(next => answerable(d, next))
              .map(next => ({ id: next, label: ASK_LABELS[next] || next,
                              ...(STANDS_FOR[next] ? { stands: STANDS_FOR[next] } : null) }));
+}
+
+/* v52: THE CAUTION. The first group in GROUP_ORDER of the proposal's focus
+   that is inside its recovery window, said as the big-day line or the
+   inside-the-window line (coach-ready.js), with two ways on: build it anyway
+   — the same opts — or the rest read's pick, when there is one and it is not
+   this same focus. */
+function caution(d, opts) {
+  const r = d.f('session.rest');
+  if (!r) return null;
+  let p = null;
+  try { p = d.build(opts || {}); } catch { p = null; }
+  if (!p) return null;
+  const g = GROUP_ORDER.find(x => p.focus.groups.includes(x) && r.groups[x] && !r.groups[x].ready);
+  const text = g ? groupLine(r, g) : null;
+  if (!text) return null;
+  const sh = p.focus.kind === 'shape' ? (d.f('session.shapes') || []).find(x => 'shape:' + x.key === p.focus.id) : null;
+  const name = p.focus.kind === 'group' ? groupLabel(p.focus.groups[0])
+    : sh && sh.routine ? sh.name : 'your ' + (sh ? sh.name : p.name);
+  const pk = r.pick;
+  const rec = pk ? { focus: pk.kind === 'group' ? 'group:' + pk.group : 'shape:' + pk.key } : null;
+  const recovered = rec && rec.focus !== p.focus.id && d.build(rec) ? { label: 'Train something recovered', opts: rec } : null;
+  return { text, reason: REST_REASON, anyway: { label: 'Build ' + name + ' anyway', opts: opts || {} }, recovered };
+}
+
+/* v52: the mark under "How did today compare?". Asked when the session came
+   in below his usual, has an id, is not already marked, and Questions is on;
+   already marked, it says so and offers to clear it. */
+function markView(d) {
+  const s = d.f('session.latest'), v = d.f('session.compare');
+  const id = s && s.session && s.session.id != null ? String(s.session.id) : '';
+  if (!v || !id || !MARK_ID.test(id)) return null;
+  const m = d.markOf(s);
+  if (m) return { marked: { sessionId: id, date: s.date, r: m.r } };
+  const below = v.summary ? v.summary === 'below' : v.rows.length === 1 && v.rows[0].verdict === 'below';
+  if (!below || isMuted(d.input.settings, 'questions')) return null;
+  return { mark: { sessionId: id, date: s.date, text: MARK_ASK.text, options: MARK_ASK.options } };
 }
 
 /* ---------- what settings/coach looks like ----------
@@ -4079,10 +4516,18 @@ export function normSettings(v) {
      normGoalLift() fails safe on every junk value, and an absent or invalid
      one adds no key, so a node without one keeps the shipped shape. */
   const goalLift = normGoalLift(o.goalLift);
+  /* v52: the bad-day marks, { sessionId: { r, d } } — an id's shape, one of
+     the four reasons, a date key. Anything else is dropped, and a node with no
+     mark that survives keeps the shipped shape. Pruned at six months on every
+     write (coach-data.js), and ignored past that by the engine's clock. */
+  const marks = {};
+  const rawMk = o.marks && typeof o.marks === 'object' && !Array.isArray(o.marks) ? o.marks : {};
+  Object.keys(rawMk).forEach(id => { const m = rawMk[id]; if (markValid(id, m)) marks[id] = { r: m.r, d: m.d }; });
   return {
     v: COACH_SETTINGS_VERSION,
     mute, on, answers, asked,
-    ...(goalLift ? { goalLift } : null)
+    ...(goalLift ? { goalLift } : null),
+    ...(Object.keys(marks).length ? { marks } : null)
   };
 }
 

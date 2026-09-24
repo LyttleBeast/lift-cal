@@ -231,10 +231,15 @@ async function rig({ data = {}, slow = [], fail = [] } = {}) {
   const OVER   = put('coach-overlap.mjs', swap(src('coach-overlap.js'), [
     ['./coach-prog.js', PROG], ['./coach-goal.js', real('coach-goal.js')], ['./units.js', real('units.js')],
     ['./exercises.js', real('exercises.js')], ['./coach-tags.js', real('coach-tags.js')], ['./analytics.js', ANALY]]));
+  // v52: coach-ready.js, staged the same way (the staging edit the brief allows everywhere).
+  const READY  = put('coach-ready.mjs', swap(src('coach-ready.js'), [
+    ['./coach-prog.js', PROG], ['./coach-overlap.js', OVER], ['./coach-goal.js', real('coach-goal.js')],
+    ['./coach-live.js', LIVE], ['./units.js', real('units.js')], ['./exercises.js', real('exercises.js')]]));
   const COACH  = put('coach.mjs', swap(src('coach.js'), [
     ['./exercises.js', real('exercises.js')], ['./analytics.js', ANALY],
     ['./units.js', real('units.js')], ['./coach-build.js', BUILD], ['./coach-live.js', LIVE],
-    ['./coach-goal.js', real('coach-goal.js')], ['./coach-prog.js', PROG], ['./coach-overlap.js', OVER]]));
+    ['./coach-goal.js', real('coach-goal.js')], ['./coach-prog.js', PROG], ['./coach-overlap.js', OVER],
+    ['./coach-ready.js', READY]]));
   const DATA_  = put('coach-data.mjs', swap(src('coach-data.js'), [
     ['./store.js', STORE], ['./exercises.js', real('exercises.js')],
     ['./picker.js', PICK], ['./tdee.js', TDEE], ['./insights.js', INSI],

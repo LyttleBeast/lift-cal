@@ -69,6 +69,16 @@ writeFileSync(join(dir, 'coach-overlap.mjs'), src('coach-overlap.js')
   .replace("from './exercises.js'", 'from ' + real('exercises.js'))
   .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
   .replace("from './analytics.js'", 'from ' + at('analytics.mjs')));
+// v52: coach-ready.js, staged the same way (the staging edit the brief allows everywhere).
+writeFileSync(join(dir, 'coach-ready.mjs'), src('coach-ready.js')
+  .replace("from './coach-prog.js'", 'from ' + at('coach-prog.mjs'))
+  .replace("from './coach-goal.js'", 'from ' + real('coach-goal.js'))
+  .replace("from './units.js'", 'from ' + real('units.js'))
+  .replace("from './exercises.js'", 'from ' + real('exercises.js'))
+  .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
+  .replace("from './analytics.js'", 'from ' + at('analytics.mjs'))
+  .replace("from './coach-overlap.js'", 'from ' + at('coach-overlap.mjs'))
+  .replace("from './coach-live.js'", 'from ' + at('coach-live.mjs')));
 writeFileSync(join(dir, 'coach-build.mjs'), src('coach-build.js')
   .replace("from './exercises.js'", 'from ' + real('exercises.js'))
   .replace("from './units.js'", 'from ' + real('units.js'))
@@ -87,6 +97,7 @@ writeFileSync(join(dir, 'coach.mjs'), src('coach.js')
   .replace("from './coach-live.js'", 'from ' + at('coach-live.mjs'))
   .replace("from './coach-goal.js'", 'from ' + real('coach-goal.js'))
   .replace("from './coach-overlap.js'", 'from ' + at('coach-overlap.mjs'))
+  .replace("from './coach-ready.js'", 'from ' + at('coach-ready.mjs'))
   .replace("from './analytics.js'", 'from ' + at('analytics.mjs')));
 const C = await import(pathToFileURL(join(dir, 'coach.mjs')).href);
 const O = await import(pathToFileURL(join(dir, 'coach-overlap.mjs')).href);
@@ -658,9 +669,18 @@ section('D. the wiring — the routes, the topics, the stall reconciled, the swi
   check('and a kilo account whose log sits off the half-kilo grid is never handed a record to chase',
         c({ ...P1(), u: 'kg' }).ask('ask_record_day').id !== 'record_day');
 
-  // Should I go lighter?
+  // Should I go lighter? — v52 (SHIP-V52-PROMPT decision 10) relabels it
+  // "Should I rest or go lighter?" and routes it rest_day → lighter_week →
+  // readiness: when two signs line up the rest read's fatigue flag is up too,
+  // and its lighter answer comes first. The lighter week still answers the
+  // route whenever the rest read has nothing to say (the Rest read off it
+  // cannot be: both are the Rest switch), which is checked on the same log.
   const lw = c(L({ failure: true })).ask('ask_lighter');
-  check('"Should I go lighter?" answers when two signs line up', lw.id === 'lighter_week' && /lighter week/.test(lw.text), lw.id);
+  check('"Should I rest or go lighter?" answers when two signs line up — the rest read first (v52), the lighter week behind it',
+        (lw.id === 'rest_day' && /lighter day|rest day/.test(lw.text)) || (lw.id === 'lighter_week' && /lighter week/.test(lw.text)), lw.id);
+  const lwRead = O.lighterWeek(C.overlapInput(L({ failure: true })), L({ failure: true }).now);
+  check('and the lighter week itself reads that log exactly as before — its sentence intact',
+        !!lwRead && /^A lighter week is a common approach here/.test(lwRead.text), lwRead && lwRead.text);
   check('and not when one does', c(L({ decline: false, volume: true })).ask('ask_lighter').id !== 'lighter_week');
   check('lighter_week is sheet-only, and supersedes the record and near-record findings',
         (() => { const it = C.INTENTS.find(i => i.id === 'lighter_week');
@@ -670,8 +690,11 @@ section('D. the wiring — the routes, the topics, the stall reconciled, the swi
   const tp = x => c(x).topicsFor('train').map(t => t.id);
   check('Train offers "Good day for a record?" only on a day that has one',
         tp(P1()).includes('ask_record_day') && !tp(P1({ deep: true })).includes('ask_record_day'), tp(P1()).join(','));
-  check('and "Should I go lighter?" only when it would answer',
-        tp(L({ failure: true })).includes('ask_lighter') && !tp(L({ decline: false, volume: true })).includes('ask_lighter'));
+  // v52: offered when any of its three routes answers — the shipped rule
+  // for every narrow id — rather than only on the lighter week's own signs.
+  check('and "Should I rest or go lighter?" only when it would answer',
+        [L({ failure: true }), L({ decline: false, volume: true })].every(x =>
+          tp(x).includes('ask_lighter') === (c(x).ask('ask_lighter').id !== 'ask_lighter')));
   check('and "How are my lifts moving?" once a lift has a reading of any kind', tp(C7()).includes('ask_lifts'));
 
   // Anything stalled? — the reconciled stalled_lift.

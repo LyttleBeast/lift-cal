@@ -26,6 +26,7 @@ import { mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { execFileSync } from 'node:child_process';
 
 const HERE = fileURLToPath(new URL('.', import.meta.url));
 const ROOT = join(HERE, '..');
@@ -79,6 +80,16 @@ writeFileSync(join(dir, 'coach-overlap.mjs'), src('coach-overlap.js')
   .replace("from './exercises.js'", 'from ' + real('exercises.js'))
   .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
   .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href)));
+// v52: coach-ready.js, staged the same way (the staging edit the brief allows everywhere).
+writeFileSync(join(dir, 'coach-ready.mjs'), src('coach-ready.js')
+  .replace("from './coach-prog.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-prog.mjs')).href))
+  .replace("from './coach-goal.js'", 'from ' + real('coach-goal.js'))
+  .replace("from './units.js'", 'from ' + real('units.js'))
+  .replace("from './exercises.js'", 'from ' + real('exercises.js'))
+  .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
+  .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href))
+  .replace("from './coach-overlap.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-overlap.mjs')).href))
+  .replace("from './coach-live.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-live.mjs')).href)));
 writeFileSync(join(dir, 'coach.mjs'), src('coach.js')
   .replace("from './exercises.js'", 'from ' + real('exercises.js'))
   .replace("from './units.js'", 'from ' + real('units.js'))
@@ -86,6 +97,7 @@ writeFileSync(join(dir, 'coach.mjs'), src('coach.js')
   .replace("from './coach-live.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-live.mjs')).href))
   .replace("from './coach-goal.js'", 'from ' + real('coach-goal.js'))
   .replace("from './coach-overlap.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-overlap.mjs')).href))
+  .replace("from './coach-ready.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-ready.mjs')).href))
   .replace("from './coach-prog.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-prog.mjs')).href))
   .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href)));
 const C = await import(pathToFileURL(join(dir, 'coach.mjs')).href);
@@ -375,6 +387,47 @@ section('I. v49 — the rest category, the new intents and questions, and the ca
     .map(h => h.id);
   check('every line names a real category, registered facts, the aims it suits (or null), and its gate, text and why', !badH.length, list(badH));
   check('and the table is frozen', Object.isFrozen(H));
+}
+
+section('J. v52 — the readiness category, three new selectors, and a mark that is not a question');
+{
+  const ids = CATEGORIES.map(c => c.id);
+  const rd = CATEGORIES.find(c => c.id === 'readiness');
+  check('category readiness sits directly after rest, mutable, with its note — and Patterns is still last',
+        ids.indexOf('readiness') === ids.indexOf('rest') + 1 && !!rd && rd.mutable === true && rd.label === 'Readiness' &&
+        rd.note === 'Before a workout: what in your log is different from your normal today.' && ids[ids.length - 1] === 'patterns', ids.join(','));
+  const want = { rest_day: 'rest', group_ready: 'rest', readiness: 'readiness' };
+  const wrong = Object.entries(want).filter(([id, cat]) => {
+    const i = INTENTS.find(x => x.id === id);
+    return !i || i.kind !== 'selector' || i.tier !== 'pro' || JSON.stringify(i.surfaces) !== '["sheet"]' || i.category !== cat;
+  }).map(([id]) => id);
+  check('rest_day, group_ready and readiness are SELECTORS — Pro, sheet-only — so no card paint ranks them', !wrong.length, list(wrong));
+  // Against rack-v51's own table, read out of git.
+  const v51 = execFileSync('git', ['show', '99b49ea:coach.js'], { cwd: ROOT, encoding: 'utf8' });
+  const v51Findings = [...v51.matchAll(/id: '([a-z_]+)', kind: 'finding'/g)].map(m => m[1]).sort();
+  check('no finding was added: stage four competes for no card — the findings are rack-v51’s ' + v51Findings.length,
+        v51Findings.length > 10 && JSON.stringify(INTENTS.filter(i => i.kind === 'finding').map(i => i.id).sort()) === JSON.stringify(v51Findings),
+        INTENTS.filter(i => i.kind === 'finding').map(i => i.id).join(','));
+  check('"Train anyway" is its own route, to the builder’s menu', C.ROUTE_IDS.includes('ask_build_anyway'));
+  check('the Pro panel lists Readiness — derived from the table, not typed', C.PRO_ADDS.some(a => a.id === 'readiness' && a.label === 'Readiness'));
+  // The mark under "How did today compare?" is not one of QUESTIONS: nothing
+  // it stores is an answer, and "Nothing" stores nothing at all.
+  check('the bad-day mark is not a question: no QUESTIONS entry carries its words or its reasons',
+        !QUESTIONS.some(q => /can’t see/.test(typeof q.text === 'string' ? q.text : '') ||
+                             q.options.some(o => ['sleep', 'stress', 'sore', 'unwell'].includes(o.value))));
+  check('its options: four reasons and Nothing, each with the words it says back',
+        C.MARK_ASK.options.map(o => o.value).join(',') === 'sleep,stress,sore,unwell,' &&
+        C.MARK_ASK.options.every(o => typeof o.label === 'string' && typeof o.ack === 'string' && o.ack.startsWith('Noted.')));
+  check('and the words a sentence uses for each reason are Coach’s, not the chip’s',
+        JSON.stringify(C.MARK_WORDS) === JSON.stringify({ sleep: 'slept badly', stress: 'stressed', sore: 'sore', unwell: 'felt unwell' }));
+  const n = C.normSettings({ marks: { ok1: { r: 'sleep', d: '2026-09-01' }, 'bad id!': { r: 'sleep', d: '2026-09-01' },
+    ok2: { r: 'tired', d: '2026-09-01' }, ok3: { r: 'sore', d: 'yesterday' }, ok4: null } });
+  check('normSettings keeps a mark only with an id’s shape, one of the four reasons and a date key', JSON.stringify(n.marks) === '{"ok1":{"r":"sleep","d":"2026-09-01"}}',
+        JSON.stringify(n.marks));
+  check('and a node with no mark that survives keeps the shipped shape — no `marks` key at all',
+        !('marks' in C.normSettings({ marks: { x: { r: 'nope', d: '2026-09-01' } } })) && !('marks' in C.normSettings({})));
+  const facts = ['session.rest', 'session.usualRun', 'session.buildFocus', 'session.readiness', 'session.diffs', 'session.replay'];
+  check('the new facts are registered once each', facts.every(id => FACTS.filter(f => f.id === id).length === 1), list(facts.filter(id => !FACTS.some(f => f.id === id))));
 }
 
 /* ---------- report ---------- */

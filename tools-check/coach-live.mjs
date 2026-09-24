@@ -85,6 +85,16 @@ writeFileSync(join(dir, 'coach-overlap.mjs'), src('coach-overlap.js')
   .replace("from './exercises.js'", 'from ' + real('exercises.js'))
   .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
   .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href)));
+// v52: coach-ready.js, staged the same way (the staging edit the brief allows everywhere).
+writeFileSync(join(dir, 'coach-ready.mjs'), src('coach-ready.js')
+  .replace("from './coach-prog.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-prog.mjs')).href))
+  .replace("from './coach-goal.js'", 'from ' + real('coach-goal.js'))
+  .replace("from './units.js'", 'from ' + real('units.js'))
+  .replace("from './exercises.js'", 'from ' + real('exercises.js'))
+  .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
+  .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href))
+  .replace("from './coach-overlap.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-overlap.mjs')).href))
+  .replace("from './coach-live.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-live.mjs')).href)));
 writeFileSync(join(dir, 'coach.mjs'), src('coach.js')
   .replace("from './exercises.js'", 'from ' + real('exercises.js'))
   .replace("from './units.js'", 'from ' + real('units.js'))
@@ -92,6 +102,7 @@ writeFileSync(join(dir, 'coach.mjs'), src('coach.js')
   .replace("from './coach-live.js'", 'from ' + at('coach-live.mjs'))
   .replace("from './coach-goal.js'", 'from ' + real('coach-goal.js'))
   .replace("from './coach-overlap.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-overlap.mjs')).href))
+  .replace("from './coach-ready.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-ready.mjs')).href))
   .replace("from './coach-prog.js'", 'from ' + at('coach-prog.mjs'))
   .replace("from './analytics.js'", 'from ' + at('analytics.mjs')));
 const C = await import(pathToFileURL(join(dir, 'coach.mjs')).href);

@@ -68,6 +68,16 @@ writeFileSync(join(dir, 'coach-overlap.mjs'), src('coach-overlap.js')
   .replace("from './exercises.js'", 'from ' + real('exercises.js'))
   .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
   .replace("from './analytics.js'", 'from ' + at('analytics.mjs')));
+// v52: coach-ready.js, staged the same way (the staging edit the brief allows everywhere).
+writeFileSync(join(dir, 'coach-ready.mjs'), src('coach-ready.js')
+  .replace("from './coach-prog.js'", 'from ' + at('coach-prog.mjs'))
+  .replace("from './coach-goal.js'", 'from ' + real('coach-goal.js'))
+  .replace("from './units.js'", 'from ' + real('units.js'))
+  .replace("from './exercises.js'", 'from ' + real('exercises.js'))
+  .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
+  .replace("from './analytics.js'", 'from ' + at('analytics.mjs'))
+  .replace("from './coach-overlap.js'", 'from ' + at('coach-overlap.mjs'))
+  .replace("from './coach-live.js'", 'from ' + at('coach-live.mjs')));
 writeFileSync(join(dir, 'coach-build.mjs'), src('coach-build.js')
   .replace("from './exercises.js'", 'from ' + real('exercises.js'))
   .replace("from './units.js'", 'from ' + real('units.js'))
@@ -86,6 +96,7 @@ writeFileSync(join(dir, 'coach.mjs'), src('coach.js')
   .replace("from './coach-live.js'", 'from ' + at('coach-live.mjs'))
   .replace("from './coach-goal.js'", 'from ' + real('coach-goal.js'))
   .replace("from './coach-overlap.js'", 'from ' + at('coach-overlap.mjs'))
+  .replace("from './coach-ready.js'", 'from ' + at('coach-ready.mjs'))
   .replace("from './analytics.js'", 'from ' + at('analytics.mjs')));
 const C = await import(pathToFileURL(join(dir, 'coach.mjs')).href);
 const P = await import(pathToFileURL(join(dir, 'coach-prog.mjs')).href);
@@ -179,9 +190,14 @@ const CASES = {
     input({ sessions: sortS(steady().filter(s => s.startedAt < NOW - 13 * DAY).concat([sess(1, [[ROW, xN(3, 155, 8)]])])) }),
     input({ sessions: sortS(steady().concat([sess(1, [[ROW, xN(3, 155, 8)]])])) })
   ],
+  /* v52 moved this log a day: it trains back every three days, and two days
+     after the 25th session the rest read says rest — back is inside its own
+     window — which takes every volume line off the card, the milestone
+     among them (the stopping bias, SHIP-V52-PROMPT §6.2). Three days after,
+     back is recovered and the line is earned, as the row intends. */
   hype_milestone: [
-    input({ sessions: sortS(Array.from({ length: 25 }, (_, k) => sess(2 + 3 * (24 - k), [[ROW, xN(3, 155, 8)]]))) }),
-    input({ sessions: sortS(Array.from({ length: 26 }, (_, k) => sess(2 + 3 * (25 - k), [[ROW, xN(3, 155, 8)]]))) })
+    input({ sessions: sortS(Array.from({ length: 25 }, (_, k) => sess(3 + 3 * (24 - k), [[ROW, xN(3, 155, 8)]]))) }),
+    input({ sessions: sortS(Array.from({ length: 26 }, (_, k) => sess(3 + 3 * (25 - k), [[ROW, xN(3, 155, 8)]]))) })
   ],
   hype_logging: [
     input({ sessions: sortS(steady()), summaries: food(15, 100) }),
@@ -215,6 +231,19 @@ const targetLog = (last) => {
     ...aim('strength', { goalLift: { exId: BENCH, lb: 270, reps: 1, at: NOW - 40 * DAY } }) });
 };
 CASES.hype_target_progress = [targetLog(220), targetLog(212.5)];
+
+// Rule 3's log (section D), and one of the paint spy's (F): two lifts falling,
+// failures well over his usual share, three days running.
+function lwLog() {
+  const fallDays = Array.from({ length: 12 }, (_, k) => 9 + 7 * k);
+  const lw = [];
+  fallDays.forEach((ago, k) => {
+    const fall = k < 3 ? 0.9 : 1;
+    lw.push(sess(ago, [[BENCH, xN(3, Math.round(225 * fall), 5)], [SQUAT, xN(3, Math.round(275 * fall), 5)]]));
+  });
+  [0, 1, 2, 4].forEach(a => lw.push(sess(a, [[ROW, [set(155, 8, 'F'), set(155, 8, 'F'), set(155, 8)]], [CURL, xN(3, 65, 10, 'F')]], 6)));
+  return lw;
+}
 
 /* ================= A. EVERY LINE, EARNED AND NOT ================= */
 section('A. every line is driven true on a log built to its gate, and false on the nearest one that is not — both units');
@@ -303,17 +332,15 @@ section('D. rules 3 and 4 — a lighter week takes the volume lines, and no weig
   // Rule 3. A lighter week suggested (two lifts falling, failures over his
   // usual share) on a week with more sessions than any before it, trained
   // three days running.
-  const fallDays = Array.from({ length: 12 }, (_, k) => 9 + 7 * k);
-  const lw = [];
-  fallDays.forEach((ago, k) => {
-    const fall = k < 3 ? 0.9 : 1;
-    lw.push(sess(ago, [[BENCH, xN(3, Math.round(225 * fall), 5)], [SQUAT, xN(3, Math.round(275 * fall), 5)]]));
-  });
-  [0, 1, 2, 4].forEach(a => lw.push(sess(a, [[ROW, [set(155, 8, 'F'), set(155, 8, 'F'), set(155, 8)]], [CURL, xN(3, 65, 10, 'F')]], 6)));
+  const lw = lwLog();
   const L = input({ sessions: sortS(lw) });
   const c = C.coach(L);
   const pool = poolOf(L);
-  check('the fixture really does suggest a lighter week', c.ask('ask_lighter').id === 'lighter_week', c.ask('ask_lighter').text);
+  // v52 (decision 10): "Should I rest or go lighter?" tries the rest read
+  // first, and on this log its fatigue flag is up too — the lighter answer
+  // comes before the lighter week's own. Either is the fixture doing its job.
+  check('the fixture really does suggest a lighter week', ['lighter_week', 'rest_day'].includes(c.ask('ask_lighter').id) &&
+        /lighter/.test(c.ask('ask_lighter').text), c.ask('ask_lighter').text);
   check('and on it no volume line shows, however many sessions the week had',
         !pool.includes('hype_week_best') && !pool.includes('hype_milestone'), list(pool));
   check('while "A rest day is well earned" shows on its own gate — it is the same advice', pool.includes('hype_recovery'), list(pool));
@@ -354,7 +381,12 @@ section('E. the rotation — the open counter, and a memory one short of the poo
     { ...base0, targets: { cal: 2300, p: 90, f: 70 }, targetsSet: true,
       weight: { latestLb: 180, latestAt: NOW, rateWk: 0.5, rateDays: 30, goalDir: 1, goalRateWk: 0.5 }, ...aim('muscle') } // + goal pace
   ];
-  pools.push({ ...pools[2], sessions: sortS(steady().concat([0, 1, 2].map(a => sess(a, [[CURL, xN(3, 65, 10)]], 6)))) });  // + recovery, week best
+  /* + recovery, week best. v52: one set of curls a day, not three — three
+     days of three sets against a usual three a week trips two fatigue signs
+     (the run and the week's sets), and on a lighter day the stopping bias
+     takes the week-best line off the card. One set a day keeps the run and
+     the most sessions in five weeks, which are what this pool is built of. */
+  pools.push({ ...pools[2], sessions: sortS(steady().concat([0, 1, 2].map(a => sess(a, [[CURL, xN(1, 65, 10)]], 6)))) });
   const fixtures = [[1, pools[0]], [2, pools[1]], [3, pools[2]], [5, pools[3]]];
   fixtures.forEach(([n, fx]) => {
     const pool = poolOf(fx);
@@ -386,6 +418,70 @@ section('E. the rotation — the open counter, and a memory one short of the poo
   const first = C.coach({ ...fx, opens: 0, recentHype: [] }).card.you.id;
   const suited = C.HYPE.find(h => h.id === first);
   check('with an aim set, the walk starts on a line that suits it', !!suited && (suited.aims == null || suited.aims.includes('muscle')), first);
+}
+
+/* ================= F. v52 — THE REST READ ON THE CARD, AND WHAT A PAINT MAY CALL ================= */
+section('F. v52 — the recovery line at his usual run, the rest bias, and a card paint that calls nothing it should not');
+{
+  /* The recovery line: three days or more, and at or past his usual longest
+     run when the log knows one (spec §9.4). Five earlier runs of four days,
+     rest days between, over ten weeks — his usual run is four — then three
+     days running to today, and then four. */
+  const runLog = cur => {
+    const days = [];
+    for (let r = 0; r < 5; r++) for (let d = 0; d < 4; d++) days.push(12 + 12 * r + d);
+    for (let d = 0; d < cur; d++) days.push(d);
+    return input({ sessions: sortS(days.map(a => sess(a, [[CURL, xN(3, 65, 10)]], 6))) });
+  };
+  check('three days running against a usual run of four: no recovery line', !poolOf(runLog(3)).includes('hype_recovery'), list(poolOf(runLog(3))));
+  check('four days running: the line', poolOf(runLog(4)).includes('hype_recovery'), list(poolOf(runLog(4))));
+  check('and with no usual run known (a young log), three days is enough, as it was',
+        poolOf(CASES.hype_recovery[0]).includes('hype_recovery'));
+
+  /* The stopping bias for rest: the week-best log, with the row a day ago
+     rather than eight — every group he trains is inside its window, the
+     rest read says rest, and "most in five weeks" leaves the card. */
+  const restLog = input({ sessions: sortS(Array.from({ length: 10 }, (_, k) => sess(1 + 7 * k, [[ROW, xN(3, 155, 8)]]))
+    .concat([0, 2, 4, 6].map(a => sess(a, [[CURL, xN(3, 65, 10)]])))) });
+  check('the rest log really is a rest day', C.coach(restLog).ask('ask_shape').id === 'rest_day', C.coach(restLog).ask('ask_shape').text);
+  check('on a rest day no volume line shows', !poolOf(restLog).some(id => ['hype_week_best', 'hype_milestone'].includes(id)), list(poolOf(restLog)));
+  const restOff = { ...restLog, settings: { v: 1, mute: { rest: true }, answers: {}, asked: {} } };
+  check('and with the Rest switch off, the week-best line is back — it was the rest read that took it',
+        poolOf(restOff).includes('hype_week_best'), list(poolOf(restOff)));
+
+  /* THE PAINT SPY (SHIP-V52-PROMPT §1). Every card paint runs coach(); the
+     replay, readiness, the session rows and the targets replay must never
+     run on one. coach-ready.js is staged behind a proxy that counts every
+     call into it, and coach.js is staged a second time to import the proxy. */
+  const R = await import(JSON.parse(at('coach-ready.mjs')));
+  const fnNames = Object.keys(R).filter(k => typeof R[k] === 'function');
+  writeFileSync(join(dir, 'coach-ready-spy.mjs'),
+    'import * as R from ' + at('coach-ready.mjs') + ';\nexport const calls = {};\n' +
+    fnNames.map(n => 'export function ' + n + '(...a) { calls.' + n + ' = (calls.' + n + ' || 0) + 1; return R.' + n + '(...a); }').join('\n') + '\n' +
+    Object.keys(R).filter(k => typeof R[k] !== 'function').map(k => 'export const ' + k + ' = R.' + k + ';').join('\n') + '\n');
+  writeFileSync(join(dir, 'coach-spied.mjs'), readFileSync(join(dir, 'coach.mjs'), 'utf8')
+    .replace("from " + at('coach-ready.mjs'), "from " + at('coach-ready-spy.mjs')));
+  const SPY = await import(JSON.parse(at('coach-ready-spy.mjs')));
+  const CS = await import(JSON.parse(at('coach-spied.mjs')));
+  const PAINT_OK = ['restRead', 'usualRun'];
+  const logs = Object.values(CASES).flat().concat([restLog, input({ sessions: sortS(lwLog()) }), runLog(4)]);
+  const bad = [];
+  let restReads = 0;
+  logs.forEach((lg, k) => ['lb', 'kg'].forEach(u => [true, false].forEach(pro => {
+    Object.keys(SPY.calls).forEach(x => { delete SPY.calls[x]; });
+    const c = CS.coach({ ...lg, u, tier: { pro } });
+    // what a card paint draws: both cards, the greeting, the lead question, the teaser
+    void [c.card.you.text, c.card.train.text, c.greet && c.greet.text, c.lead && c.lead.id, c.teaser && c.teaser.text];
+    restReads += SPY.calls.restRead || 0;
+    const extra = Object.keys(SPY.calls).filter(x => !PAINT_OK.includes(x));
+    if (extra.length) bad.push('log ' + k + ' ' + u + (pro ? ' pro' : ' basic') + ': ' + extra.join(', '));
+  })));
+  check('a card paint calls nothing in coach-ready.js but restRead and usualRun (' + logs.length * 4 + ' paints)', !bad.length, list(bad));
+  check('and the spy is really watching: the paints did call restRead (' + restReads + ')', restReads > 0);
+  Object.keys(SPY.calls).forEach(x => { delete SPY.calls[x]; });
+  const cc = CS.coach(restLog);
+  cc.ask('ask_lighter');
+  check('while an answer does reach past them — the replay, on a rest answer', (SPY.calls.replay || 0) > 0, JSON.stringify(SPY.calls));
 }
 
 console.log('\nthe card only says what he has earned\n');

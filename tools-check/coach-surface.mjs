@@ -45,6 +45,7 @@ import { mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { execFileSync } from 'node:child_process';
 
 const HERE = fileURLToPath(new URL('.', import.meta.url));
 const ROOT = join(HERE, '..');
@@ -182,7 +183,9 @@ const IMPL = {
   setGoalLift:        v => { state.calls.push(['setGoalLift', v]); return Promise.resolve(true); },
   setCategoryMuted:   (id, m) => { state.calls.push(['setCategoryMuted', id, m]); return Promise.resolve(true); },
   answerQuestion:     (id, v) => { state.calls.push(['answerQuestion', id, v]); return Promise.resolve(true); },
-  markAsked:          id => { state.calls.push(['markAsked', id]); return Promise.resolve(true); }
+  markAsked:          id => { state.calls.push(['markAsked', id]); return Promise.resolve(true); },
+  // v52: the bad-day mark, written or cleared through coach-data.js.
+  markSession:        (sess, r) => { state.calls.push(['markSession', sess, r]); return Promise.resolve(true); }
 };
 globalThis.__coachData = (name, args) => {
   if (IMPL[name]) return IMPL[name](...args);
@@ -242,6 +245,16 @@ writeFileSync(join(dir, 'coach-overlap.mjs'), src('coach-overlap.js')
   .replace("from './exercises.js'", 'from ' + real('exercises.js'))
   .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
   .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href)));
+// v52: coach-ready.js, staged the same way (the staging edit the brief allows everywhere).
+writeFileSync(join(dir, 'coach-ready.mjs'), src('coach-ready.js')
+  .replace("from './coach-prog.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-prog.mjs')).href))
+  .replace("from './coach-goal.js'", 'from ' + real('coach-goal.js'))
+  .replace("from './units.js'", 'from ' + real('units.js'))
+  .replace("from './exercises.js'", 'from ' + real('exercises.js'))
+  .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
+  .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href))
+  .replace("from './coach-overlap.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-overlap.mjs')).href))
+  .replace("from './coach-live.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-live.mjs')).href)));
 writeFileSync(join(dir, 'coach.mjs'), src('coach.js')
   .replace("from './exercises.js'", 'from ' + real('exercises.js'))
   .replace("from './units.js'", 'from ' + real('units.js'))
@@ -249,6 +262,7 @@ writeFileSync(join(dir, 'coach.mjs'), src('coach.js')
   .replace("from './coach-live.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-live.mjs')).href))
   .replace("from './coach-goal.js'", 'from ' + real('coach-goal.js'))
   .replace("from './coach-overlap.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-overlap.mjs')).href))
+  .replace("from './coach-ready.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-ready.mjs')).href))
   .replace("from './coach-prog.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-prog.mjs')).href))
   .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href)));
 writeFileSync(join(dir, 'coach-data-stub.mjs'),
@@ -792,6 +806,10 @@ section('F. the workout on the sheet, and the four ways out of it');
   check('"Train something else" offers the engine’s other options, only those that build',
         JSON.stringify(focusRow) === JSON.stringify(p.focuses.map(f => f.label)), list(focusRow));
   tap(sh, p.focuses[0].label);
+  // v52: a new focus holding a group inside its recovery window is cautioned
+  // first (section N); "Build … anyway" goes on exactly as it always did.
+  const k0 = eng.buildCaution(p.focuses[0].opts);
+  if (k0) tap(sh, k0.anyway.label);
   const other = eng.build(p.focuses[0].opts);
   const heads = find(sh, 'coach-bub').filter(b => b.classList.contains('coach')).map(b => (find(b, 'coach-bub-t')[0] || {}).textContent);
   check('and a new focus is a new workout, with its own first line naming its own session',
@@ -1683,6 +1701,139 @@ section('M. v49 — the card encourages and the sheet opens on the finding; "Mor
         !topicChipsIn(bsh).length && !bubT(bsh).some(t => t !== teaser.text && /Target:/.test(t)));
   state.pro = true;
   check('a Pro account gets no teaser — it has the targets', engine(state.input).teaser === null);
+  state.input = BASE; body.children.length = 0;
+}
+
+/* ================= N. v52 — THE CAUTION, THE MARK, AND THE RELABELLED QUESTION ================= */
+section('N. v52 — the caution before a proposal, the mark’s chips, and "Should I rest or go lighter?"');
+{
+  const { EXERCISES } = await import(real('exercises.js').slice(1, -1));
+  const RL = {};
+  EXERCISES.forEach(x => { RL[x.id] = { name: x.name, group: x.group, equipment: x.equipment }; });
+  const HOUR = new Date(NOW).getHours();
+  const at = (ago, h, m) => { const d = new Date(NOW - ago * DAY); d.setHours(h, m || 0, 0, 0); return d.getTime(); };
+  let n = 0;
+  const S = (ago, rows, o) => { const t = o && o.at != null ? o.at : at(ago, HOUR); const mins = (o && o.mins) || 60;
+    return { id: (o && o.id) || 'n' + (++n), startedAt: t, endedAt: t + mins * 6e4, durationSec: mins * 60, _date: key(t),
+      exercises: rows.map(([id, k, w, r]) => ({ exId: id, name: RL[id].name, group: RL[id].group, equipment: RL[id].equipment,
+        sets: Array.from({ length: k }, () => ({ w: String(w), r: String(r), type: 'N', done: true })) })) }; };
+  const every = (first, gaps, until) => { const out = []; let a = first, k = 0; while (a <= until) { out.push(a); a += gaps[k % gaps.length]; k++; } return out; };
+  const UP = [['barbell-bench-press', 3, 185, 8], ['barbell-row', 3, 155, 8], ['overhead-press', 3, 95, 8]];
+  const LO = [['back-squat-high-bar', 3, 245, 5], ['leg-press', 3, 300, 10], ['leg-extension', 3, 100, 12], ['bulgarian-split-squat', 3, 40, 10]];
+  const LO_BIG = LO.map(([id, k, w, r]) => [id, 6, w, r]);
+  const inp = x => ({ ...BASE, lib: RL, libReady: true, hidden: [], weighIns: [], ...x });
+  const BIG = inp({ sessions: every(5, [3, 4], 82).map(a => S(a, LO)).concat([S(1, LO_BIG)], every(4, [3, 4], 81).map(a => S(a, UP)))
+    .sort((a, b) => a.startedAt - b.startedAt) });
+  const tap = (sh, label) => { const b = buttonsIn(sh).find(x => x.textContent === label); if (b) b.onclick(); return !!b; };
+  const bubT = sh => find(sh, 'coach-bub').filter(b => b.classList.contains('coach')).map(b => (find(b, 'coach-bub-t')[0] || {}).textContent);
+  const trainOpts = { tight: true, live: false, start(p) { state.calls.push(['start', p]); }, save() {} };
+  state.input = BIG; state.pro = true; state.logKnown = true; state.ready = true; state.calls.length = 0;
+  const eng = engine(BIG);
+  const U3 = await freshUI();
+
+  // The caution: Make me a workout → Legs, the day after a big legs day.
+  let sh = open(U3, trainOpts).sh;
+  tap(sh, 'Make me a workout');
+  const menu = chipsIn(sh).map(b => b.textContent);
+  tap(sh, 'Legs');
+  const k = eng.buildCaution({ focus: 'group:legs' });
+  check('picking a group inside its recovery window draws the caution first, in Coach’s words, and no workout yet',
+        !!k && bubT(sh).includes(k.text) && !find(sh, 'coach-build').length, (k && k.text) + ' / ' + list(bubT(sh)));
+  check('with its two ways on: "Build legs anyway" and "Train something recovered"',
+        chipsIn(sh).some(b => b.textContent === 'Build legs anyway') && chipsIn(sh).some(b => b.textContent === 'Train something recovered'),
+        list(chipsIn(sh).map(b => b.textContent)));
+  tap(sh, 'Build legs anyway');
+  const legs = eng.build({ focus: 'group:legs' });
+  check('"Build legs anyway" goes ahead exactly as it would have: the legs workout, its first line, its buttons',
+        find(sh, 'coach-build').length === 1 && bubT(sh).includes(legs.headline) && buttonsIn(sh).some(b => b.textContent === 'Start it'),
+        list(bubT(sh)));
+  sh = open(U3, trainOpts).sh;
+  tap(sh, 'Make me a workout'); tap(sh, 'Legs'); tap(sh, 'Train something recovered');
+  const rec = eng.build(k.recovered.opts);
+  check('"Train something recovered" builds the rest read’s pick instead', bubT(sh).includes(rec.headline) && rec.focus.id !== 'group:legs',
+        rec.headline);
+  sh = open(U3, trainOpts).sh;
+  tap(sh, 'Make me a workout');
+  const upperChip = menu.find(l => /Chest, back and shoulders/.test(l));
+  tap(sh, upperChip);
+  check('a recovered shape is built with no caution at all', find(sh, 'coach-build').length === 1 && !bubT(sh).some(t => /Coach would give/.test(t)),
+        upperChip);
+
+  // A rest day: "What should I train today?" → rest, "Train anyway", the menu.
+  const on = [];
+  for (let a = 7; a <= 82; a += 3) on.push(a, a + 1);
+  // Two on, one off for twelve weeks; then four straight, ending yesterday —
+  // so the sheet opens before today's workout, and nothing is recovered.
+  const onR = [];
+  for (let a = 8; a <= 82; a += 3) onR.push(a, a + 1);
+  const REST = inp({ sessions: onR.map((a, j) => S(a, j % 2 ? LO : UP)).concat([1, 2, 3, 4].map(a => S(a, a % 2 ? LO : UP)))
+    .sort((a, b) => a.startedAt - b.startedAt) });
+  state.input = REST;
+  const restEng = engine(state.input);
+  sh = open(U3, trainOpts).sh;
+  const topics = chipsIn(sh).map(b => b.textContent);
+  check('the Train sheet offers "Should I rest or go lighter?" — the relabelled question, where it answers',
+        topics.includes('Should I rest or go lighter?') || !topics.includes('More') || (tap(sh, 'More') && chipsIn(sh).some(b => b.textContent === 'Should I rest or go lighter?')),
+        list(chipsIn(sh).map(b => b.textContent)));
+  sh = open(U3, trainOpts).sh;
+  tap(sh, 'What should I train today?');
+  const ra = restEng.ask('ask_shape');
+  check('a rest answer: "Today looks like a rest day." and a way on — "Train anyway", never "Build it"',
+        ra.id === 'rest_day' && bubT(sh).includes(ra.text) && chipsIn(sh).some(b => b.textContent === 'Train anyway') &&
+        !chipsIn(sh).some(b => b.textContent === 'Build it'), ra.id + ': ' + list(chipsIn(sh).map(b => b.textContent)));
+  tap(sh, 'Train anyway');
+  check('"Train anyway" opens the builder’s menu — every choice, the unrecovered ones cautioned when picked',
+        bubT(sh).includes('What do you want to train?') && chipsIn(sh).some(b => b.textContent === 'Tell me what to train'),
+        list(chipsIn(sh).map(b => b.textContent)));
+  tap(sh, 'Tell me what to train');
+  check('and "Tell me what to train" on a rest day is cautioned — what it builds is not recovered',
+        bubT(sh).some(t => /was trained (today|yesterday|\d+ days ago)|had a big day/.test(t)) && !find(sh, 'coach-build').length, list(bubT(sh)));
+
+  // The mark: a session below his usual, an hour after it ended.
+  const xl = o => { const ss = []; let j = 0;
+    every(3, [4, 5, 3], 82).forEach(a => { ss.push(S(a, UP, { at: at(a, 16 + (j % 3)), mins: 55 + 5 * (j % 3) })); j++; });
+    every(1, [3, 4], 82).forEach(a => { ss.push(S(a, LO, { at: at(a, 16 + (j % 3)), mins: 55 + 5 * (j % 3) })); j++; });
+    const t = at(0, 18);
+    ss.push(S(0, UP.map(([id, c, w, r]) => [id, c, Math.round(w * 0.85 / 5) * 5, r]), { at: t, id: 'today' }));
+    return inp({ sessions: ss.sort((a, b) => a.startedAt - b.startedAt), now: t + 2 * 36e5,
+                 settings: { v: 1, mute: {}, answers: {}, asked: {}, ...(o && o.marks ? { marks: o.marks } : {}) } }); };
+  state.input = xl(); state.calls.length = 0;
+  sh = open(U3, trainOpts).sh;
+  tap(sh, 'How did today compare?');
+  const opts = C.MARK_ASK.options.map(o => o.label);
+  check('below his usual: "Anything Coach can’t see?" with Slept badly, Stressed, Sore, Didn’t feel well and Nothing',
+        bubT(sh).includes('Anything Coach can’t see?') && opts.every(l => chipsIn(sh).some(b => b.textContent === l)), list(bubT(sh)));
+  tap(sh, 'Slept badly');
+  const w1 = state.calls.filter(c => c[0] === 'markSession');
+  check('"Slept badly" writes one mark on that session — its id and its own date — and says so',
+        w1.length === 1 && w1[0][1].id === 'today' && w1[0][1].date === key(at(0, 18)) && w1[0][2] === 'sleep' &&
+        bubT(sh).includes('Noted. That session won’t count against your numbers.'), JSON.stringify(w1));
+  state.calls.length = 0;
+  sh = open(U3, trainOpts).sh;
+  tap(sh, 'How did today compare?'); tap(sh, 'Didn’t feel well');
+  check('"Didn’t feel well": the mark, and the one line about rest and health', state.calls.some(c => c[0] === 'markSession' && c[2] === 'unwell') &&
+        bubT(sh).includes('Noted. That session won’t count against your numbers. Rest is always an option. Coach doesn’t do health, so it’ll leave it there.'));
+  state.calls.length = 0;
+  sh = open(U3, trainOpts).sh;
+  tap(sh, 'How did today compare?'); tap(sh, 'Nothing');
+  check('"Nothing" writes nothing at all, and says "Noted."', !state.calls.some(c => c[0] === 'markSession') && bubT(sh).includes('Noted.'));
+  // Already marked: said, and the chip that clears it.
+  state.input = xl({ marks: { today: { r: 'unwell', d: key(at(0, 18)) } } }); state.calls.length = 0;
+  sh = open(U3, trainOpts).sh;
+  tap(sh, 'How did today compare?');
+  check('marked: "You marked this session: felt unwell." — Coach’s words, never the chip’s — and no question',
+        bubT(sh).includes('You marked this session: felt unwell. It doesn’t count against your numbers.') && !bubT(sh).includes('Anything Coach can’t see?'),
+        list(bubT(sh)));
+  tap(sh, 'Clear the mark');
+  const w2 = state.calls.filter(c => c[0] === 'markSession');
+  check('"Clear the mark" clears it — a null for that session — and says "Cleared."',
+        w2.length === 1 && w2[0][1].id === 'today' && w2[0][2] === null && bubT(sh).includes('Cleared.'), JSON.stringify(w2));
+  // Against rack-v51's own coach-ui.js: every class it draws is one it drew.
+  const cls = t => new Set([...t.matchAll(/'((?:coach|day|wk|btn|ob|set|you)-[a-z0-9-]+)'/g)].map(m => m[1]));
+  const was = cls(execFileSync('git', ['show', '99b49ea:coach-ui.js'], { cwd: ROOT, encoding: 'utf8' }));
+  const added = [...cls(src('coach-ui.js'))].filter(c => !was.has(c));
+  check('no new CSS class: the caution and the mark are Coach bubbles and chips', !added.length, list(added));
+  check('the coach-data stub still answers everything coach-ui.js imports', !state.unknown.length, list(state.unknown));
   state.input = BASE; body.children.length = 0;
 }
 

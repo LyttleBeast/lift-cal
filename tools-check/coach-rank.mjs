@@ -27,6 +27,7 @@ import { mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { execFileSync } from 'node:child_process';
 
 const HERE = fileURLToPath(new URL('.', import.meta.url));
 const ROOT = join(HERE, '..');
@@ -80,6 +81,16 @@ writeFileSync(join(dir, 'coach-overlap.mjs'), src('coach-overlap.js')
   .replace("from './exercises.js'", 'from ' + real('exercises.js'))
   .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
   .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href)));
+// v52: coach-ready.js, staged the same way (the staging edit the brief allows everywhere).
+writeFileSync(join(dir, 'coach-ready.mjs'), src('coach-ready.js')
+  .replace("from './coach-prog.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-prog.mjs')).href))
+  .replace("from './coach-goal.js'", 'from ' + real('coach-goal.js'))
+  .replace("from './units.js'", 'from ' + real('units.js'))
+  .replace("from './exercises.js'", 'from ' + real('exercises.js'))
+  .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
+  .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href))
+  .replace("from './coach-overlap.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-overlap.mjs')).href))
+  .replace("from './coach-live.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-live.mjs')).href)));
 writeFileSync(join(dir, 'coach.mjs'), src('coach.js')
   .replace("from './exercises.js'", 'from ' + real('exercises.js'))
   .replace("from './units.js'", 'from ' + real('units.js'))
@@ -87,6 +98,7 @@ writeFileSync(join(dir, 'coach.mjs'), src('coach.js')
   .replace("from './coach-live.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-live.mjs')).href))
   .replace("from './coach-goal.js'", 'from ' + real('coach-goal.js'))
   .replace("from './coach-overlap.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-overlap.mjs')).href))
+  .replace("from './coach-ready.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-ready.mjs')).href))
   .replace("from './coach-prog.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-prog.mjs')).href))
   .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href)));
 const C = await import(pathToFileURL(join(dir, 'coach.mjs')).href);
@@ -595,6 +607,24 @@ section('I. an answer that would repeat the sheet’s opening bubble is marked, 
   check('mute the opening’s category and the opening moves; the same answer is then not a repeat',
         moved.opening.text !== c.opening.text && !moved.ask(same[0]).repeats,
         moved.opening.id + ' / ' + moved.ask(same[0]).id);
+}
+
+/* ================= J. v52 — ONE CATEGORY IN, NO FINDING MOVED ================= */
+section('J. v52 — readiness joins the toggle table after rest, and every other category keeps its order');
+{
+  /* The category index is the ranking's fourth key, and only the ORDER of
+     categories reaches it. So "no finding's rank moves" is exactly: every
+     category rack-v51 had is in the same order relative to the others. Read
+     against v51's own table, out of git. */
+  const v51 = execFileSync('git', ['show', '99b49ea:coach.js'], { cwd: ROOT, encoding: 'utf8' });
+  const table = /export const CATEGORIES = Object\.freeze\(\[([\s\S]*?)\n\]\);/.exec(v51);
+  const was = table ? [...table[1].matchAll(/\{ id: '([a-z]+)'/g)].map(m => m[1]) : [];
+  const now = C.CATEGORIES.map(c => c.id);
+  check('readiness sits directly after rest', now.indexOf('readiness') === now.indexOf('rest') + 1, now.join(','));
+  check('and every rack-v51 category keeps its order relative to the others (' + was.length + ' of them)',
+        was.length >= 14 && JSON.stringify(now.filter(id => id !== 'readiness')) === JSON.stringify(was), now.join(','));
+  check('nothing in readiness can compete for a card — its one intent is a selector',
+        C.INTENTS.filter(i => i.category === 'readiness').every(i => i.kind === 'selector'));
 }
 
 /* ---------- report ---------- */

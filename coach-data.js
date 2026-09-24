@@ -431,7 +431,11 @@ async function patchNow(change) {
     mute:    { ...fresh.mute,    ...(change.mute    || {}) },
     on:      { ...fresh.on,      ...(change.on      || {}) },
     answers: { ...fresh.answers, ...(change.answers || {}) },
-    asked:   { ...fresh.asked,   ...(change.asked   || {}) }
+    asked:   { ...fresh.asked,   ...(change.asked   || {}) },
+    // v52: merged like answers — a key set to null is dropped by
+    // normSettings() — and every mark past six months pruned on every write,
+    // here, where the clock is.
+    marks:   { ...(fresh.marks || {}), ...(change.marks || {}), ...staleMarks(fresh.marks) }
   });
 
   try {
@@ -441,6 +445,22 @@ async function patchNow(change) {
   }
   settings = next;
   return true;
+}
+
+/* v52: THE SIX MONTHS Micah decided, counted in whole days noon to noon —
+   every stored mark older than that, set to null so normSettings() drops it.
+   The engine ignores the same marks by its own clock argument, so a node
+   nobody has written to since still reads right. */
+const MARK_KEEP_DAYS = 182;
+function staleMarks(marks) {
+  const out = {};
+  const today = new Date(); today.setHours(12, 0, 0, 0);
+  Object.keys(marks || {}).forEach(id => {
+    const d = marks[id] && marks[id].d;
+    const at = typeof d === 'string' ? new Date(d + 'T12:00:00').getTime() : NaN;
+    if (!Number.isFinite(at) || Math.round((today.getTime() - at) / 864e5) > MARK_KEEP_DAYS) out[id] = null;
+  });
+  return out;
 }
 
 /* ================= STAYING CURRENT =================
@@ -571,6 +591,17 @@ export function setGoalLift(v) {
 
 export function markAsked(id) {
   return patch({ asked: { [id]: Date.now() } });
+}
+
+/* v52: A BAD-DAY MARK (Micah's decision #9), on one session, by its own
+   record id: { r, d } with d the session's own date key, or null to clear it.
+   The answer to "Anything Coach can’t see?" and nothing else writes one, and
+   "Nothing" writes nothing at all. settings/coach carries a section-level
+   .write in the published rules, so the node takes it as it is. */
+export function markSession(session, r) {
+  const id = session && session.id != null ? String(session.id) : '';
+  if (!id) return Promise.resolve(false);
+  return patch({ marks: { [id]: r ? { r, d: String(session.date || '') } : null } });
 }
 
 /* The greeting Coach opened with. Written at most once per app open, to the

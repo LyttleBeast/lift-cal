@@ -25,9 +25,10 @@
 
 import { el, sheet, noteEl, segmented, toast } from './ui.js';
 import { GROUPS } from './exercises.js';
-import { coach, CATEGORIES, QUESTIONS, PRO_ADDS, LIVE_NONE, isMuted, TOPICS_SHOWN } from './coach.js';
+import { coach, CATEGORIES, QUESTIONS, PRO_ADDS, LIVE_NONE, isMuted, TOPICS_SHOWN, MARK_ASK } from './coach.js';
 import { coachInput, coachReady, coachLogKnown, rememberGreeting, rememberHype, coachSettings, coachSettingsKnown,
-         setCategoryMuted, answerQuestion, markAsked, liveSessionOnDevice, coachPro, setAim, setGoalLift } from './coach-data.js';
+         setCategoryMuted, answerQuestion, markAsked, liveSessionOnDevice, coachPro, setAim, setGoalLift,
+         markSession } from './coach-data.js';
 import { wIn, fmtW, unitW } from './units.js';
 
 /* The two marks. Inline rather than in a sprite because there are two of them
@@ -290,9 +291,10 @@ export function openCoachSheet(opts = {}) {
      all. A proposal whose Start button can do nothing is worse than no
      proposal. */
   const canBuild = typeof opts.start === 'function';
-  // Both of the builder's doors: "Make me a workout" (asks first) and "Build
-  // it" (already knows what to train).
-  const BUILDER = ['ask_build', 'ask_build_now'];
+  // The builder's doors: "Make me a workout" (asks first), "Build it"
+  // (already knows what to train) and (v52) "Train anyway", after a rest or
+  // lighter answer — the same menu as the first.
+  const BUILDER = ['ask_build', 'ask_build_now', 'ask_build_anyway'];
   const offer = list => (canBuild ? list : list.filter(x => !BUILDER.includes(x.id)));
 
   const asked = new Set();
@@ -358,6 +360,9 @@ export function openCoachSheet(opts = {}) {
         });
         openingBub.appendChild(openingRow);
       }
+      // What the answer says beyond its first bubble (v52: the shape the rest
+      // read skipped) is not in the opening bubble, so it follows here.
+      (a.more || []).forEach(m => bubble('coach', m.text, m.reason));
       showButtons(topics.filter(t => !asked.has(t.id) &&
         !follow.some(f => f.id === t.id || f.stands === t.id)));
       return;
@@ -375,6 +380,10 @@ export function openCoachSheet(opts = {}) {
          the opening question is, because it is the same thing in a second
          place; the engine has already decided whether it may be asked. */
       if (a.question) askQuestion(a.question);
+      // v52: the bad-day mark under "How did today compare?" — asked when it
+      // came in below, or, once marked, the chip that clears it.
+      if (a.mark) askMark(a.mark);
+      if (a.marked) clearMark(a.marked);
       /* "Make me a workout" asks what to train, and the choices are the
          engine's (buildMenu). They are the only way on from the question, so
          they stand where the row of topics would, and the topics come back
@@ -389,11 +398,16 @@ export function openCoachSheet(opts = {}) {
       }
       // "Build it": the answer before it has already named what to train, so
       // the workout for that focus — Coach's own — is on screen at once, with
-      // no question asked.
+      // no question asked. v52: unless that focus holds a group inside its
+      // recovery window, when the caution comes first.
       if (a.id === 'build_workout' && canBuild) {
-        buildOpts = {};
-        const p = c.build(buildOpts);
-        if (p) drawProposal(p);
+        withCaution({}, (opts, other) => {
+          buildOpts = opts;
+          const p = c.build(buildOpts);
+          if (p && other) bubble('coach', p.headline, p.reason.join(' '));
+          if (p) drawProposal(p);
+          scroll();
+        });
       }
     }
     // Never offer the same question twice in one sitting, and always leave a
@@ -422,17 +436,75 @@ export function openCoachSheet(opts = {}) {
   function pick(item) {
     if (buttons) { buttons.remove(); buttons = null; }
     bubble('you', item.label);
-    buildOpts = item.opts || {};
-    let p = null;
-    try { p = c.build(buildOpts); } catch { p = null; }
-    if (!p) {
-      bubble('coach', BUILD_NONE, BUILD_NONE_WHY);
-    } else {
-      bubble('coach', p.headline, p.reason.join(' '));
-      drawProposal(p);
-    }
-    showButtons(topics.filter(t => !asked.has(t.id)));
+    withCaution(item.opts || {}, opts => {
+      buildOpts = opts;
+      let p = null;
+      try { p = c.build(buildOpts); } catch { p = null; }
+      if (!p) {
+        bubble('coach', BUILD_NONE, BUILD_NONE_WHY);
+      } else {
+        bubble('coach', p.headline, p.reason.join(' '));
+        drawProposal(p);
+      }
+      showButtons(topics.filter(t => !asked.has(t.id)));
+      scroll();
+    });
+  }
+
+  /* v52: THE CAUTION, before a proposal whose focus holds a group inside its
+     recovery window. The engine decides (c.buildCaution) and words it; this
+     draws it as a Coach bubble with its two ways on — "Build … anyway", which
+     goes ahead exactly as it would have, and "Train something recovered",
+     which builds the rest read's pick. Advice, never a lock. `go(opts, other)`
+     is what the caller would have done; `other` says the opts changed. */
+  function withCaution(opts, go) {
+    let k = null;
+    try { k = c.buildCaution(opts); } catch { k = null; }
+    if (!k) { go(opts, false); return; }
+    const b = bubble('coach', k.text, k.reason);
+    const row = el('div', 'coach-chips');
+    const way = (x, other) => {
+      const chip = el('button', 'coach-chip', x.label);
+      chip.onclick = () => { row.remove(); bubble('you', x.label); go(x.opts, other); };
+      row.appendChild(chip);
+    };
+    way(k.anyway, false);
+    if (k.recovered) way(k.recovered, true);
+    b.appendChild(row);
     scroll();
+  }
+
+  /* v52: "Anything Coach can’t see?" — one chip per answer, each written as
+     a mark on that one session through markSession(), and "Nothing" writing
+     nothing. Each answer's words are the engine's (MARK_ASK). */
+  function askMark(m) {
+    const q = bubble('coach ask', m.text, 'Your answer is kept as a mark on this one session, for six months, and nothing else.');
+    const row = el('div', 'coach-chips');
+    m.options.forEach(op => {
+      const b = el('button', 'coach-chip', op.label);
+      b.onclick = () => {
+        row.remove();
+        bubble('you', op.label);
+        if (op.value) markSession({ id: m.sessionId, date: m.date }, op.value).catch(() => {});
+        bubble('coach', op.ack);
+        scroll();
+      };
+      row.appendChild(b);
+    });
+    q.appendChild(row);
+  }
+  function clearMark(m) {
+    const row = el('div', 'coach-chips');
+    const b = el('button', 'coach-chip', MARK_ASK.clear.label);
+    b.onclick = () => {
+      row.remove();
+      bubble('you', MARK_ASK.clear.label);
+      markSession({ id: m.sessionId, date: m.date }, null).catch(() => {});
+      bubble('coach', MARK_ASK.clear.ack);
+      scroll();
+    };
+    row.appendChild(b);
+    thread.appendChild(row);
   }
 
   // The opening bubble is already on screen when the sheet opens: it is the
@@ -499,22 +571,28 @@ export function openCoachSheet(opts = {}) {
     thread.appendChild(buildBox);
   }
   function adjust(next, label, refocus) {
-    buildOpts = next;
     if (buildBox) { buildBox.remove(); buildBox = null; }
     if (buttons) { buttons.remove(); buttons = null; }
     bubble('you', label);
-    let p = null;
-    try { p = c.build(next); } catch { p = null; }
-    if (!p) {
-      bubble('coach', BUILD_NONE, BUILD_NONE_WHY);
-    } else {
-      // A new focus is a new workout and gets its own first line; fewer and
-      // swap are the same workout, redrawn.
-      if (refocus) bubble('coach', p.headline, p.reason.join(' '));
-      drawProposal(p);
-    }
-    showButtons(chipList);
-    scroll();
+    const show = opts => {
+      buildOpts = opts;
+      let p = null;
+      try { p = c.build(opts); } catch { p = null; }
+      if (!p) {
+        bubble('coach', BUILD_NONE, BUILD_NONE_WHY);
+      } else {
+        // A new focus is a new workout and gets its own first line; fewer and
+        // swap are the same workout, redrawn.
+        if (refocus) bubble('coach', p.headline, p.reason.join(' '));
+        drawProposal(p);
+      }
+      showButtons(chipList);
+      scroll();
+    };
+    // v52: a new focus is cautioned like a menu pick; fewer and swap keep
+    // the focus that already was.
+    if (refocus) withCaution(next, show);
+    else show(next);
   }
 
   /* Coach's one question, if it has earned the right to ask one. Three gates

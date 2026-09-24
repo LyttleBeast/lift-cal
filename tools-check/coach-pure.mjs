@@ -34,6 +34,7 @@ import { mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { execFileSync } from 'node:child_process';
 
 const HERE = fileURLToPath(new URL('.', import.meta.url));
 const ROOT = join(HERE, '..');
@@ -87,6 +88,16 @@ writeFileSync(join(dir, 'coach-overlap.mjs'), src('coach-overlap.js')
   .replace("from './exercises.js'", 'from ' + real('exercises.js'))
   .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
   .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href)));
+// v52: coach-ready.js, staged the same way (the staging edit the brief allows everywhere).
+writeFileSync(join(dir, 'coach-ready.mjs'), src('coach-ready.js')
+  .replace("from './coach-prog.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-prog.mjs')).href))
+  .replace("from './coach-goal.js'", 'from ' + real('coach-goal.js'))
+  .replace("from './units.js'", 'from ' + real('units.js'))
+  .replace("from './exercises.js'", 'from ' + real('exercises.js'))
+  .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
+  .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href))
+  .replace("from './coach-overlap.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-overlap.mjs')).href))
+  .replace("from './coach-live.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-live.mjs')).href)));
 writeFileSync(join(dir, 'coach.mjs'), src('coach.js')
   .replace("from './exercises.js'", 'from ' + real('exercises.js'))
   .replace("from './units.js'", 'from ' + real('units.js'))
@@ -94,6 +105,7 @@ writeFileSync(join(dir, 'coach.mjs'), src('coach.js')
   .replace("from './coach-live.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-live.mjs')).href))
   .replace("from './coach-goal.js'", 'from ' + real('coach-goal.js'))
   .replace("from './coach-overlap.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-overlap.mjs')).href))
+  .replace("from './coach-ready.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-ready.mjs')).href))
   .replace("from './coach-prog.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-prog.mjs')).href))
   .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href)));
 const C = await import(pathToFileURL(join(dir, 'coach.mjs')).href);
@@ -129,11 +141,13 @@ section('A. three imports, and the analytics one is a closed list');
   // coach-overlap.js is the seventh (v49, deliberately added to this list):
   // stage two's plateau-or-cut call, handed the shaped sessions from here, and
   // section J holds it to the same rules. coach-prog.js is reached through the
-  // builder and the overlap, never from here.
+  // builder and the overlap, never from here. coach-ready.js is the eighth
+  // (v52, deliberately added): the rest read and readiness, food-blind, held
+  // to the same rules in section K.
   const ALLOWED = ['./exercises.js', './analytics.js', './units.js', './coach-build.js', './coach-live.js',
-                   './coach-goal.js', './coach-overlap.js'];
+                   './coach-goal.js', './coach-overlap.js', './coach-ready.js'];
   const extra = imports.map(i => i.from).filter(f => !ALLOWED.includes(f));
-  check('coach.js imports nothing outside exercises.js, analytics.js, units.js, coach-build.js, coach-live.js, coach-goal.js and coach-overlap.js',
+  check('coach.js imports nothing outside exercises.js, analytics.js, units.js, coach-build.js, coach-live.js, coach-goal.js, coach-overlap.js and coach-ready.js',
         !extra.length, list(extra));
   check('and imports none of them twice',
         new Set(imports.map(i => i.from)).size === imports.length);
@@ -522,9 +536,16 @@ section('H. coach-prog.js — the targets are copied byte for byte as well');
   const topLevel = PCODE.split('\n').filter(l => /^(export\s+)?(let|var)\s/.test(l));
   check('no top-level let or var — nothing remembered between targets', !topLevel.length, list(topLevel.map(l => l.trim())));
   check('no default export — the port copies named functions', !/export\s+default/.test(PCODE));
-  check('prescribe() and exposuresFor() are what it exports, and coach-build.js is what calls them',
+  // v52: the builder names every target through targetFor(), which is
+  // prescribe() byte for byte with no mark (coach-prog.mjs section E) — so
+  // it is targetFor() coach-build.js calls now, and nothing calls
+  // prescribe() for a target directly any more.
+  check('prescribe(), exposuresFor() and (v52) targetFor() are what it exports, and coach-build.js calls targetFor()',
         /export function prescribe\(ex, ctx\)/.test(PRAW) && /export function exposuresFor\(sessions, exId\)/.test(PRAW) &&
-        /import \{[^}]*\bprescribe\b[^}]*\} from '\.\/coach-prog\.js'/.test(src('coach-build.js')));
+        /export function targetFor\(ex, ctx, mark\)/.test(PRAW) &&
+        /import \{[^}]*\btargetFor\b[^}]*\} from '\.\/coach-prog\.js'/.test(src('coach-build.js')) &&
+        !/\bprescribe\s*\(/.test(src('coach-build.js').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')) &&
+        !/\bprescribe\s*\(/.test(src('coach-overlap.js').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')));
 
   // Driven: the same log is the same target, the wall clock moves nothing,
   // and `now` does.
@@ -562,7 +583,7 @@ section('I. coach-goal.js — imports nothing, remembers nothing, and its tables
   const tables = Object.keys(G).filter(k => typeof G[k] === 'object' && G[k] !== null);
   check('every exported table is frozen (' + tables.join(', ') + ')',
         tables.length >= 3 && tables.every(k => Object.isFrozen(G[k])), list(tables.filter(k => !Object.isFrozen(G[k]))));
-  check('and the only modules importing it are coach.js, coach-prog.js and (v49) coach-overlap.js — nothing it imports reaches back',
+  check('and the modules importing it are coach.js, coach-prog.js, (v49) coach-overlap.js and (v52) coach-ready.js — nothing it imports reaches back',
         /from '\.\/coach-goal\.js'/.test(src('coach.js')) && /from '\.\/coach-goal\.js'/.test(src('coach-prog.js')) &&
         !/from '\.\/coach-goal\.js'/.test(src('coach-build.js')) && !/from '\.\/coach-goal\.js'/.test(src('coach-live.js')));
   /* v49 puts the bodyweight-at-a-moment and the energy band here, beside the
@@ -649,6 +670,101 @@ section('J. coach-overlap.js — the plateau-or-cut call is copied byte for byte
   while (Date.now() === before) { /* spin past a millisecond of real time */ }
   check('and reads it the same again after the real clock has moved', one === shot(NOW));
   check('moving `now` three weeks moves it — the clock it reads is the argument', one !== shot(NOW + 21 * DAY));
+}
+
+/* ================= K. COACH-READY.JS IS HELD TO THE SAME FENCE =================
+   v52's rest read and readiness are the sixth file the native port copies
+   verbatim. It may reach coach-prog.js, coach-overlap.js, coach-goal.js,
+   coach-live.js (REP_DROP), units.js and exercises.js — and NEVER
+   coach-fuel.js: the training half is food-blind by construction, so no rest
+   call, window or training row can move with what he ate. coach.js imports
+   it; nothing reaches back. */
+section('K. coach-ready.js — the rest read is copied byte for byte as well, and never reads food');
+{
+  const RRAW = src('coach-ready.js');
+  const RCODE = RRAW.replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n').map(l => l.replace(/(^|[^:'"\\])\/\/.*$/, '$1')).join('\n');
+  const imports = [...RRAW.matchAll(/^import\s+(?:([^;]*?)\s+from\s+)?['"]([^'"]+)['"];?$/gm)]
+    .map(m => ({ names: (m[1] || '').trim(), from: m[2] }));
+  const ALLOWED = ['./coach-prog.js', './coach-overlap.js', './coach-goal.js', './coach-live.js', './units.js', './exercises.js'];
+  const extra = imports.map(i => i.from).filter(f => !ALLOWED.includes(f));
+  check('it imports nothing outside coach-prog.js, coach-overlap.js, coach-goal.js, coach-live.js, units.js and exercises.js',
+        !extra.length, list(extra));
+  check('never coach-fuel.js — Phase A is food-blind by construction', !/coach-fuel/.test(RCODE));
+  check('and never coach.js or coach-build.js — coach.js imports IT',
+        !imports.some(i => /coach(-build)?\.js$/.test(i.from)));
+  const live = imports.find(i => i.from === './coach-live.js');
+  check('it takes REP_DROP alone from coach-live.js, never a copy of it',
+        !!live && live.names.replace(/[{}]/g, '').split(',').map(x => x.trim()).filter(Boolean).join(',') === 'REP_DROP' &&
+        !/\b(const|let|var)\s+REP_DROP\b/.test(RCODE));
+  const ov = imports.find(i => i.from === './coach-overlap.js');
+  check('it reads the weeks through coach-overlap.js’s blocksOf() and lightOf() — never a second weeks rule',
+        !!ov && /\bblocksOf\b/.test(ov.names) && /\blightOf\b/.test(ov.names) && !/function blocksOf|function lightOf/.test(RCODE));
+  check('and never names store.js, reads or writes',
+        !/store\.js/.test(RCODE) && !/\bread\s*\(|\breadExact\s*\(|\bwrite\s*\(/.test(RCODE));
+  check('no clock of its own — no Date.now(), no argless new Date(), no performance.now()',
+        !/Date\.now\s*\(/.test(RCODE) && ![...RCODE.matchAll(/new\s+Date\s*\(\s*\)/g)].length &&
+        !/performance\s*\.\s*now/.test(RCODE));
+  check('no Math.random()', !/Math\s*\.\s*random/.test(RCODE));
+  ['document', 'window', 'navigator', 'localStorage', 'sessionStorage', 'fetch', 'XMLHttpRequest']
+    .forEach(g => check('no ' + g, !new RegExp('\\b' + g + '\\b').test(RCODE),
+                        (RCODE.match(new RegExp('.*\\b' + g + '\\b.*')) || [''])[0].trim()));
+  check('no console, no timers', !/\bconsole\s*\./.test(RCODE) && !/\bset(Timeout|Interval)\s*\(/.test(RCODE));
+  const topLevel = RCODE.split('\n').filter(l => /^(export\s+)?(let|var)\s/.test(l));
+  check('no top-level let or var — its memo rides on the input, never on the module', !topLevel.length, list(topLevel.map(l => l.trim())));
+  check('no default export — the port copies named functions', !/export\s+default/.test(RCODE));
+  check('restRead() and usualRun() are what a card paint may call, and coach.js imports them',
+        /export function restRead\(input, now\)/.test(RRAW) && /export function usualRun\(input, now\)/.test(RRAW) &&
+        /import \{[^}]*\brestRead\b[^}]*\} from '\.\/coach-ready\.js'/.test(RAW));
+
+  // Driven: the same input is the same read; the wall clock moves nothing.
+  const R = await import(pathToFileURL(join(dir, 'coach-ready.mjs')).href);
+  const DAY = 864e5, NOW = 1789307130123;
+  const set = (w, r) => ({ w: String(w), r: String(r), type: 'N', done: true });
+  const log = [];
+  for (let w = 0; w < 10; w++) {
+    log.push({ id: 'a' + w, startedAt: NOW - (w * 7 + 1) * DAY, exercises: [{ exId: 'barbell-bench-press', name: 'Barbell Bench Press', group: 'chest', equipment: 'barbell', sets: [set(185, 5), set(185, 5), set(185, 5)] }] });
+    log.push({ id: 'b' + w, startedAt: NOW - (w * 7 + 4) * DAY, exercises: [{ exId: 'back-squat-high-bar', name: 'Back Squat (High Bar)', group: 'legs', equipment: 'barbell', sets: [set(245, 5), set(245, 5), set(245, 5)] }] });
+  }
+  const inp = () => ({ now: NOW, opens: 0, recentGreets: [], u: 'lb', log: 'readable', sessions: log.slice().sort((a, b) => a.startedAt - b.startedAt),
+    lib: { 'barbell-bench-press': { group: 'chest', equipment: 'barbell' }, 'back-squat-high-bar': { group: 'legs', equipment: 'barbell' } },
+    routines: [], live: { active: false }, tier: { pro: true }, summaries: {}, steps: { days: {} },
+    weight: { latestLb: null, latestAt: null, rateWk: null, rateDays: null, goalDir: null, goalRateWk: null },
+    settings: { v: 1, mute: {}, answers: {}, asked: {} } });
+  const readyIn = i => { const o = C.overlapInput(i); return { now: i.now, u: 'lb', overlap: o, shapes: [], overdue: null, marked: new Set() }; };
+  const shot = now => JSON.stringify(R.restRead(readyIn({ ...inp(), now }), now));
+  const one = shot(NOW);
+  check('the rest read reads a real log', /"call":"(rest|group|shape|lighter)"/.test(one), one.slice(0, 120));
+  const before = Date.now();
+  while (Date.now() === before) { /* spin past a millisecond of real time */ }
+  check('and reads it the same again after the real clock has moved', one === shot(NOW));
+  check('moving `now` three days moves it — the clock it reads is the argument', one !== shot(NOW + 3 * DAY));
+}
+
+/* ================= L. COACH-OVERLAP.JS'S FOUR NEW EXPORTS, BODIES UNCHANGED =================
+   v52 exports quantile, blocksOf, lightOf and groupDaysAt for coach-ready.js
+   — one quantile, one weeks rule, one group clock — and changes not a
+   character inside them. Read against rack-v51's own file, out of git (a
+   full clone is needed, as coach-prog.mjs section D needs one). */
+section('L. coach-overlap.js — quantile, blocksOf, lightOf and groupDaysAt exported, their bodies byte for byte rack-v51’s');
+{
+  const V51 = execFileSync('git', ['show', '99b49ea:coach-overlap.js'], { cwd: ROOT, encoding: 'utf8' });
+  const NOW_SRC = src('coach-overlap.js');
+  const body = (text, name) => {
+    const at = text.search(new RegExp('\\bfunction ' + name + '\\('));
+    if (at < 0) return null;
+    let depth = 0;
+    for (let j = text.indexOf('{', at); j < text.length; j++) {
+      if (text[j] === '{') depth++;
+      else if (text[j] === '}' && --depth === 0) return text.slice(at, j + 1);
+    }
+    return null;
+  };
+  ['quantile', 'blocksOf', 'lightOf', 'groupDaysAt'].forEach(n => {
+    const was = body(V51, n), is = body(NOW_SRC, n);
+    check(n + ' is exported', new RegExp('export function ' + n + '\\(').test(NOW_SRC) && !new RegExp('export function ' + n + '\\(').test(V51));
+    check('and its body is rack-v51’s, byte for byte', !!was && was === is, n);
+  });
 }
 
 /* ---------- report ---------- */

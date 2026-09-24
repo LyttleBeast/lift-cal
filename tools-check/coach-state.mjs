@@ -25,6 +25,7 @@ import { mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { execFileSync } from 'node:child_process';
 
 const HERE = fileURLToPath(new URL('.', import.meta.url));
 const ROOT = join(HERE, '..');
@@ -60,6 +61,16 @@ writeFileSync(join(dir, 'coach-overlap.mjs'), src('coach-overlap.js')
   .replace("from './exercises.js'", 'from ' + real('exercises.js'))
   .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
   .replace("from './analytics.js'", 'from ' + at('analytics.mjs')));
+// v52: coach-ready.js, staged the same way (the staging edit the brief allows everywhere).
+writeFileSync(join(dir, 'coach-ready.mjs'), src('coach-ready.js')
+  .replace("from './coach-prog.js'", 'from ' + at('coach-prog.mjs'))
+  .replace("from './coach-goal.js'", 'from ' + real('coach-goal.js'))
+  .replace("from './units.js'", 'from ' + real('units.js'))
+  .replace("from './exercises.js'", 'from ' + real('exercises.js'))
+  .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
+  .replace("from './analytics.js'", 'from ' + at('analytics.mjs'))
+  .replace("from './coach-overlap.js'", 'from ' + at('coach-overlap.mjs'))
+  .replace("from './coach-live.js'", 'from ' + at('coach-live.mjs')));
 writeFileSync(join(dir, 'coach-build.mjs'), src('coach-build.js')
   .replace("from './exercises.js'", 'from ' + real('exercises.js'))
   .replace("from './units.js'", 'from ' + real('units.js'))
@@ -78,6 +89,7 @@ writeFileSync(join(dir, 'coach.mjs'), src('coach.js')
   .replace("from './coach-live.js'", 'from ' + at('coach-live.mjs'))
   .replace("from './coach-goal.js'", 'from ' + real('coach-goal.js'))
   .replace("from './coach-overlap.js'", 'from ' + at('coach-overlap.mjs'))
+  .replace("from './coach-ready.js'", 'from ' + at('coach-ready.mjs'))
   .replace("from './analytics.js'", 'from ' + at('analytics.mjs')));
 const C = await import(pathToFileURL(join(dir, 'coach.mjs')).href);
 const { EXERCISES } = await import(pathToFileURL(join(ROOT, 'exercises.js')).href);
@@ -221,6 +233,34 @@ section('C. "How did today compare?" and "What’s next time?" answer after a wo
   check('and says what Coach cannot see, with no reason for the day given',
         (post.ask('ask_compare').more || []).some(m => m.text === 'Coach can’t see sleep, stress or soreness.') &&
         !/because|due to|tired|sleep(y|ing)? badly/i.test(post.ask('ask_compare').text));
+}
+
+/* ================= D. v52 — THE TOPIC TABLES, CHANGED ON PURPOSE ================= */
+section('D. v52 — "Should I rest or go lighter?" before the record, and the live list exactly rack-v51’s');
+{
+  // SHIP-V52-PROMPT §6.4: the pre-workout Train list, with the rest question
+  // ahead of "Good day for a record?" — his decided first three unmoved.
+  check('Train before a workout: shape, build, targets, rest-or-lighter, record, lifts, overdue, volume',
+        C.STATE_TOPICS.train.pre.join(',') === 'ask_shape,ask_build,ask_targets,ask_lighter,ask_record_day,ask_lifts,ask_overdue,ask_volume',
+        C.STATE_TOPICS.train.pre.join(','));
+  check('and the question reads "Should I rest or go lighter?" — the same route id, so native’s matcher keeps one',
+        C.TRAIN_TOPICS.find(t => t.id === 'ask_lighter').label === 'Should I rest or go lighter?' &&
+        C.ALL_TOPICS.find(t => t.id === 'ask_lighter').label === 'Should I rest or go lighter?');
+  // The live list is written out now, and it is rack-v51's: read out of git,
+  // where it was derived from v51's TRAIN_TOPICS.
+  const V51 = execFileSync('git', ['show', '99b49ea:coach.js'], { cwd: ROOT, encoding: 'utf8' });
+  const block = /export const TRAIN_TOPICS = Object\.freeze\(\[([\s\S]*?)\]\);/.exec(V51);
+  const v51Ids = block ? [...block[1].matchAll(/id: '([a-z_]+)'/g)].map(m => m[1]) : [];
+  check('Train during a live session is exactly rack-v51’s list (' + v51Ids.join(', ') + ')',
+        v51Ids.length === 8 && C.STATE_TOPICS.train.live.join(',') === v51Ids.join(','), C.STATE_TOPICS.train.live.join(','));
+  check('You is unchanged in every state — no new id joins it, so no card paint asks a new route',
+        JSON.stringify(C.STATE_TOPICS.you) === JSON.stringify({
+          pre: ['topic_train', 'topic_fuel', 'topic_weight', 'ask_goal', 'ask_lifts'],
+          post: ['ask_compare', 'topic_fuel', 'topic_weight', 'ask_goal'],
+          done_today: ['ask_compare', 'topic_train', 'topic_fuel', 'topic_weight', 'ask_goal', 'ask_lifts'],
+          live: ['topic_train', 'topic_fuel', 'topic_weight'] }));
+  check('and "Train anyway" is a route, not a topic — it follows a rest answer, and opens the builder’s menu',
+        C.ROUTE_IDS.includes('ask_build_anyway') && !C.ALL_TOPICS.some(t => t.id === 'ask_build_anyway'));
 }
 
 console.log('\nthe sheet adapts to the moment it is opened in\n');

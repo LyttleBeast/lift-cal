@@ -116,6 +116,16 @@ writeFileSync(join(dir, 'coach-overlap.mjs'), src('coach-overlap.js')
   .replace("from './exercises.js'", 'from ' + real('exercises.js'))
   .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
   .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href)));
+// v52: coach-ready.js, staged the same way (the staging edit the brief allows everywhere).
+writeFileSync(join(dir, 'coach-ready.mjs'), src('coach-ready.js')
+  .replace("from './coach-prog.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-prog.mjs')).href))
+  .replace("from './coach-goal.js'", 'from ' + real('coach-goal.js'))
+  .replace("from './units.js'", 'from ' + real('units.js'))
+  .replace("from './exercises.js'", 'from ' + real('exercises.js'))
+  .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
+  .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href))
+  .replace("from './coach-overlap.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-overlap.mjs')).href))
+  .replace("from './coach-live.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-live.mjs')).href)));
 writeFileSync(join(dir, 'coach.mjs'), src('coach.js')
   .replace("from './exercises.js'", 'from ' + real('exercises.js'))
   .replace("from './units.js'", 'from ' + real('units.js'))
@@ -123,6 +133,7 @@ writeFileSync(join(dir, 'coach.mjs'), src('coach.js')
   .replace("from './coach-live.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-live.mjs')).href))
   .replace("from './coach-goal.js'", 'from ' + real('coach-goal.js'))
   .replace("from './coach-overlap.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-overlap.mjs')).href))
+  .replace("from './coach-ready.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-ready.mjs')).href))
   .replace("from './coach-prog.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-prog.mjs')).href))
   .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href)));
 const C = await import(pathToFileURL(join(dir, 'coach.mjs')).href);
@@ -1115,6 +1126,123 @@ section('K. v49 — the card ban over every string a card can draw, and the new 
   check('and every question the goal machinery asks is a question, never a verdict',
         C.QUESTIONS.filter(q => /^q_goal_check_/.test(q.id)).every(q => typeof q.text === 'function') &&
         said.filter(x => /opener/.test(x.at)).every(x => /\?$/.test(x.t)));
+}
+
+/* ================= L. v52 — STAGE FOUR'S SENTENCES, UNDER THE BAN ================= */
+section('L. v52 — every sentence stage four can say: rest, recovery, readiness, what was different, the mark');
+{
+  /* Everything below is sheet-only, and it is where Coach says REST, reads
+     a bad day, and lists what was different about a session — so it carries
+     the shipped list, the causal words, and SHIP-V52-PROMPT §11's must-never
+     scan (max attempts, body norms, eating, medical words, guilt, "AI"), in
+     both units. The chip labels are his voice ("Didn’t feel well") and are
+     exempt, as v48 decided; every sentence Coach says is not. */
+  const RD = await import(pathToFileURL(join(dir, 'coach-ready.mjs')).href);
+  const { EXERCISES } = await import(pathToFileURL(join(ROOT, 'exercises.js')).href);
+  const RL = {};
+  EXERCISES.forEach(x => { RL[x.id] = { name: x.name, group: x.group, equipment: x.equipment }; });
+  const HOUR = new Date(NOW).getHours();
+  const at = (ago, h, m) => { const d = new Date(NOW - ago * DAY); d.setHours(h, m || 0, 0, 0); return d.getTime(); };
+  let n = 0;
+  const S = (ago, rows, o) => { const t = o && o.at != null ? o.at : at(ago, o && o.hour != null ? o.hour : HOUR, o && o.min);
+    const mins = (o && o.mins) || 60;
+    return { id: (o && o.id) || 'v' + (++n), startedAt: t, endedAt: t + mins * 6e4, durationSec: mins * 60, _date: key(t),
+      exercises: rows.map(([id, k, w, r, ty]) => ({ exId: id, name: RL[id].name, group: RL[id].group, equipment: RL[id].equipment,
+        sets: Array.from({ length: k }, (_, j) => ({ w: String(w), r: String(Array.isArray(r) ? r[j] : r), type: Array.isArray(ty) ? ty[j] : ty || 'N', done: true })) })) }; };
+  const every = (first, gaps, until) => { const out = []; let a = first, k = 0; while (a <= until) { out.push(a); a += gaps[k % gaps.length]; k++; } return out; };
+  const UP = [['barbell-bench-press', 3, 185, 8], ['barbell-row', 3, 155, 8], ['overhead-press', 3, 95, 8]];
+  const LO = [['back-squat-high-bar', 3, 245, 5], ['leg-press', 3, 300, 10], ['leg-extension', 3, 100, 12], ['bulgarian-split-squat', 3, 40, 10]];
+  const LO_BIG = LO.map(([id, k, w, r]) => [id, 6, w, r]);
+  const AR = [['barbell-curl', 3, 65, 10], ['triceps-pushdown-rope', 3, 50, 12], ['cable-crunch', 3, 60, 15]];
+  const inp = x => base({ lib: RL, libReady: true, hidden: [], recentHype: [], weighIns: [], ...x });
+  const logs = [];
+  // a big legs day yesterday, the upper day recovered
+  logs.push(['big', inp({ sessions: sort(every(5, [3, 4], 82).map(a => S(a, LO)).concat([S(1, LO_BIG)], every(4, [3, 4], 81).map(a => S(a, UP)))) })]);
+  // the legs day the shipped stalest shape, skipped
+  logs.push(['skipped', inp({ sessions: sort(every(10, [7], 80).map(a => S(a, LO.concat([['cable-crunch', 3, 60, 12]]))).concat([S(1, LO_BIG)], every(4, [3, 4], 81).map(a => S(a, UP)))) })]);
+  // two on, one off, then four straight — rest
+  { const on = []; for (let a = 7; a <= 82; a += 3) on.push(a, a + 1);
+    logs.push(['rest', inp({ sessions: sort(on.map((a, k) => S(a, k % 2 ? LO : UP)).concat([0, 1, 2, 3].map(a => S(a, a % 2 ? LO : UP, { hour: Math.max(0, HOUR - 3) })))) })]); }
+  // runs of three, then five straight with two lifts falling — lighter, with failures
+  { const ss = []; for (let a = 10; a <= 82; a += 5) ss.push(S(a + 2, UP), S(a + 1, LO), S(a, AR)); ss.push(S(8, AR));
+    [[4, UP], [3, LO], [2, UP], [1, LO], [0, UP]].forEach(([a, rows]) => ss.push(S(a, rows.map(([id, k, w, r]) =>
+      [id, k, /bench|squat/.test(id) ? Math.round(w * 0.9 / 5) * 5 : w, r, ['N', 'F', 'F']]), { hour: Math.max(0, HOUR - 3) })));
+    logs.push(['lighter', inp({ sessions: sort(ss) })]); }
+  // a group call: legs recovered, the upper day and core yesterday
+  logs.push(['group', inp({ sessions: sort(every(4, [3, 4], 81).map(a => S(a, LO.concat([['cable-crunch', 3, 60, 15]])))
+    .concat(every(1, [3, 4], 82).map(a => S(a, a === 1 ? UP.concat([['cable-crunch', 3, 60, 15]]) : UP)))) })]);
+  // arms three times, yesterday the last — the labelled starting window
+  logs.push(['t3', inp({ sessions: sort(every(2, [3, 4], 70).map((a, k) => S(a, k % 2 ? LO : UP))
+    .concat([15, 8, 1].map(a => S(a, [['barbell-curl', 3, 65, 10], ['triceps-pushdown-rope', 3, 50, 12]])))) })]);
+  // after a session: below, above and marked, at odd hours and lengths, with a weigh-in
+  const xl = o => { const ss = []; let k = 0;
+    every(3, [4, 5, 3], 82).forEach(a => { ss.push(S(a, UP, { hour: 16 + (k % 3), mins: 55 + 5 * (k % 3) })); k++; });
+    every(1, [3, 4], 82).forEach(a => { ss.push(S(a, LO.map(([id, c, w, r]) => [id, c + (k % 2), w, r]), { hour: 16 + (k % 3), mins: 55 + 5 * (k % 3) })); k++; });
+    const t = at(0, o.hour);
+    const kept = ss.filter(x => !o.rest || x.startedAt < at(o.rest, 0));
+    kept.push(S(0, UP.map(([id, c, w, r]) => [id, c, Math.round(w * o.scale / 5) * 5, r]), { at: t, mins: o.mins || 60, id: 'today' }));
+    const wi = []; for (let a = 8; a >= 1; a--) wi.push({ lb: 200, t: at(a, 5) }); wi.push({ lb: o.lb || 200, t: at(0, 5) });
+    return inp({ sessions: sort(kept), now: t + ((o.mins || 60) + 60) * 6e4, weighIns: wi, settings: { v: 1, mute: {}, answers: {}, asked: {}, lastGreet: '', ...(o.marks ? { marks: o.marks } : {}) } }); };
+  logs.push(['below', xl({ scale: 0.85, hour: 18 })]);
+  logs.push(['above', xl({ scale: 1.1, hour: 6, mins: 20, rest: 10, lb: 204 })]);
+  logs.push(['marked', xl({ scale: 0.85, hour: 18, marks: { today: { r: 'unwell', d: key(at(0, 18)) } } })]);
+  // a bench whose last session is marked: the target from before it
+  { const ss = []; const head = [160, 165, 170, 175, 180, 185]; let a = 30;
+    head.forEach(w => { ss.push(S(a, [['barbell-bench-press', 3, w, 8], ['barbell-row', 3, 155, 8], ['overhead-press', 3, 95, 8]])); a -= 4; });
+    ss.push(S(1, [['barbell-bench-press', 3, 190, [6, 5, 5]], ['barbell-row', 3, 155, 8], ['overhead-press', 3, 95, 8]], { id: 'bad' }));
+    logs.push(['markedTarget', inp({ sessions: sort(ss), settings: { v: 1, mute: {}, answers: {}, asked: {}, lastGreet: '', marks: { bad: { r: 'sleep', d: key(at(1, HOUR)) } } } })]); }
+
+  const MUST_NEVER = [
+    /\b(1\s*rm|one[- ]rep max) (test|attempt)|\bmax(ing)? out\b|\bgo for a (single|max)\b|\btest your max\b/i,
+    /\b(because (you|your)|caused|due to (your|the)|led to|made you|that'?s why|despite|even though)\b/i,
+    /\b(healthy (weight|range)|bmi|body ?fat|safe rate|too (fat|thin))\b/i,
+    /\beat\b|\b(cut (your )?calories|skip (a )?meal|fast(ed|ing)?\b|carb[- ]?load(ed|ing)?|supplement|under-?fuel)/i,
+    /\b(injur(y|ed)|diagnos|pain\b|push through)\b/i,
+    /\b(you should have|you missed|slacking|lazy)\b/i,
+    /\b(ai|artificial intelligence|machine learning)\b/i
+  ];
+  const CAUSE = [/\bbecause\b/i, /\bcaused?\b/i, /\bdue to\b/i, /\bthat'?s why\b/i, /\bso you\b/i, /\bleads? to\b/i, /\bmakes? you\b/i, /\bresults? in\b/i, /\bthanks to\b/i];
+  const RULES = BANNED.concat(CAUSE, MUST_NEVER, [/\bshould\b/i, /\btry\b/i, /\bmust\b/i]);
+  const said = [];
+  const push = (where, u, t) => { if (t) said.push({ where, u, t: String(t) }); };
+  const answer = (where, u, a) => { if (!a || !a.id) return; [a.text, a.reason].concat((a.more || []).flatMap(m => [m.text, m.reason])).forEach(t => push(where, u, t));
+    if (a.mark) { push(where + '/mark', u, a.mark.text); a.mark.options.forEach(o => push(where + '/ack', u, o.ack)); } };
+  const reached = new Set();
+  logs.forEach(([name, fx]) => ['lb', 'kg'].forEach(u => {
+    const x = { ...fx, u };
+    const c = C.coach(x);
+    ['ask_shape', 'ask_lighter', 'ask_targets', 'ask_build_now', 'ask_build_anyway', 'ask_compare', 'ask_next'].forEach(id => {
+      const a = c.ask(id); reached.add(a.id); answer(name + '/' + u + '/' + id, u, a); });
+    c.buildMenu().forEach(m => { const k = c.buildCaution(m.opts); if (k) { reached.add('caution'); push(name + '/' + u + '/caution', u, k.text); push(name + '/' + u + '/caution', u, k.reason); } });
+    const p = c.build({});
+    (p ? p.exercises : []).forEach(e => { if (e.target) { if (e.target.marked) reached.add('marked'); push(name + '/' + u + '/target', u, e.target.line); e.target.why.forEach(w => push(name + '/' + u + '/why', u, w)); } });
+    push(name + '/' + u + '/reason', u, p && p.reason.join(' '));
+    const ri = C.readyInput(x);
+    RD.readinessRows(ri, x.now).forEach(r => { if (r.text) { reached.add('row:' + r.id); push(name + '/' + u + '/row', u, r.text); } });
+    const last = ri.overlap.shaped[ri.overlap.shaped.length - 1];
+    if (last) RD.sessionRows(ri, last).forEach(r => { reached.add('diff:' + r.id); push(name + '/' + u + '/diff', u, r.text); });
+  }));
+  push('clear', 'lb', C.MARK_ASK.clear.ack);
+  const want = ['rest_day', 'group_ready', 'readiness', 'lift_targets', 'session_compare', 'caution', 'marked', 'build_menu'];
+  check('the sweep reaches every new answer — ' + want.filter(w => reached.has(w)).join(', ') + ' (' + said.length + ' strings)',
+        want.every(w => reached.has(w)) && said.some(x => x.u === 'kg'), want.filter(w => !reached.has(w)).join(', '));
+  check('and every readiness row and every "what was different" component',
+        ['recovery', 'streak', 'load', 'failure', 'lifts', 'time', 'weighin'].every(r => reached.has('row:' + r)) &&
+        ['rest', 'streak', 'week', 'start', 'length', 'weighin'].every(r => reached.has('diff:' + r)),
+        [...reached].filter(x => /^(row|diff):/.test(x)).join(', '));
+  const bad = said.map(x => ({ ...x, w: RULES.filter(re => re.test(x.t)).map(re => (x.t.match(re) || [''])[0])
+    .concat(x.u === 'kg' && /\d ?lb\b/.test(x.t) ? ['lb on a kilo account'] : [])
+    .concat(/'/.test(x.t) ? ['a straight apostrophe'] : []).concat(/!/.test(x.t) ? ['an exclamation mark'] : []) })).filter(x => x.w.length);
+  check('not one carries the shipped ban, a cause, a max attempt, a body norm, eating, a medical word, guilt, "AI", "should", "try" or "must" — both units',
+        !bad.length, list(bad.map(x => x.where + ' “' + x.w.join('/') + '” in: ' + x.t)));
+  check('"Didn’t" is his voice, on a chip, and never Coach’s in a sentence',
+        C.MARK_ASK.options.some(o => /Didn’t/.test(o.label)) && !said.some(x => /\bdidn[’']t\b/i.test(x.t)));
+  const sources = src('coach-ready.js');
+  // The unit TOKEN (u === 'kg' ? 'kg' : 'lb') selects a unit and is never
+  // printed; coach-units.mjs strips it the same way before it reads copy.
+  const copy = decomment(sources).replace(/=== '(kg|lb)' \? '(kg|lb)' : '(kg|lb)'/g, '').replace(/=== '(kg|lb)'/g, '');
+  check('coach-ready.js prints every weight through units.js — no unit word typed into it',
+        !/'[^'\n]*\b(lb|lbs|kg|pounds?|kilos?)\b[^'\n]*'/.test(copy), (copy.match(/.*'[^'\n]*\b(lb|lbs|kg|pounds?|kilos?)\b[^'\n]*'.*/) || [''])[0].trim());
 }
 
 /* ---------- report ---------- */
