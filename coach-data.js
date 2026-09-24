@@ -575,6 +575,16 @@ export function noteCoachData(patch) {
   }
 }
 
+/* v53: ONE DAY'S SUMMARY, from food.js the moment it writes one — and
+   nothing else. loadFuel() re-reads today only when today's summary has moved,
+   and `summaries` used to move only when the You tab repainted, so food logged
+   after the first "Am I fueled?" of an open was never seen by the second. A
+   copy, not a mutation: the object may be the one you.js handed in. */
+export function noteCoachFood(dateKey, summary) {
+  if (typeof dateKey !== 'string' || !dateKey || !summary || typeof summary !== 'object') return;
+  summaries = { ...summaries, [dateKey]: summary };
+}
+
 /* The one that does cost a read, for the one moment that is worth it: a session
    has just been written, moved or deleted, and the Train card is sitting under
    the button that did it.

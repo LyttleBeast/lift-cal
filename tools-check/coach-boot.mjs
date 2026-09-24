@@ -174,7 +174,9 @@ export const probe = {
   reads:  () => reads.map(r => ({ path: r.path, wave: r.wave, at: r.at })),
   paths:  () => reads.map(r => r.path),
   writes: () => writes.length,
-  lsGets: k => lsGets.get(k) || 0
+  lsGets: k => lsGets.get(k) || 0,
+  // v53: a node changed after boot — food logged — as the database now holds it.
+  put:    (path, v) => { DATA[path] = v; }
 };
 `;
 
@@ -252,7 +254,9 @@ async function rig({ data = {}, slow = [], fail = [], pro = false } = {}) {
 
   const S = await import(JSON.parse(STORE));
   const D = await import(JSON.parse(DATA_));
-  return { S, D, probe: S.probe };
+  // v53: the engine the rig staged, so an answer can be read off coachInput().
+  const C = await import(JSON.parse(COACH));
+  return { S, D, C, probe: S.probe };
 }
 
 /* A promise that cannot make this file hang: a load that never settles is one
@@ -598,6 +602,54 @@ section('H. v52 — "Am I fueled?" reads the food log on an ask: none at boot or
   await withTimeout(D.loadFuel(), 20 * LATENCY);
   check('one read — today again — and nothing else', food(probe).length === first + 1 && food(probe)[first] === 'food/log/' + dk(NOW),
         list(food(probe).slice(first)));
+
+  // food.js: both daySummaries writes tell Coach, straight after.
+  const FOOD = src('food.js');
+  const sites = FOOD.split("write('food/daySummaries/' + key, sum)").length - 1;
+  const told = (FOOD.match(/quiet\(write\('food\/daySummaries\/' \+ key, sum\)\);\n(?:\s*\/\/.*\n)?\s*noteCoachFood\(key, sum\);/g) || []).length;
+  check('food.js writes the day summary in two places, and both tell Coach straight after',
+        sites === 2 && told === 2 && !/write\('food\/daySummaries\/' \+ key, \{/.test(FOOD), sites + ' sites, ' + told + ' told');
+  /* v53 (SHIP-V53-PROMPT §3.5): food logged on the Fuel tab AFTER an ask,
+     the way food.js does it — the log written, the day's summary written,
+     and Coach told the summary straight after (noteCoachFood), with no You
+     repaint in between. A log of its own, at fixed local hours — entries at
+     8:00 and 12:30, sessions at 17:00, today's in the last minute — so the
+     answer is a by-hour read, which states today's total, in every zone at
+     any hour. */
+  {
+    const localAt = (ago, h, m) => { const x = new Date(NOW - ago * DAY); x.setHours(h, m || 0, 0, 0); return x.getTime(); };
+    const t2 = {}, s2 = {}, l2 = {};
+    for (let i = 1; i <= 26; i++) {
+      s2[dk(NOW - i * DAY)] = { cal: 1500, p: 80, c: 170, f: 50 };
+      if (i % 2) {
+        const at = localAt(i, 17), [mk, dd] = key(at);
+        t2[mk] = t2[mk] || {};
+        t2[mk][dd] = { ['v' + i]: { id: 'v' + i, startedAt: at, exercises: [{ exId: 'barbell-bench-press', name: 'Bench', group: 'chest',
+          equipment: 'barbell', sets: [{ w: '185', r: '5', type: 'N', done: true }] }] } };
+        l2['food/log/' + dk(at)] = { e1: { id: 'e1', t: localAt(i, 8), cal: 800, p: 40, c: 90 }, e2: { id: 'e2', t: localAt(i, 12, 30), cal: 700, p: 40, c: 80 } };
+      }
+    }
+    s2[dk(NOW)] = { cal: 600, p: 30, c: 70, f: 20 };
+    l2['food/log/' + dk(NOW)] = { e1: { id: 'e1', t: NOW - 40e3, cal: 600, p: 30, c: 70 } };
+    const v = await rig({ data: { workouts: t2, 'food/daySummaries': s2, 'settings/coach': { v: 1, mute: {}, answers: {}, asked: {} }, ...l2 }, pro: true });
+    await withTimeout(v.D.initCoachData(), 20 * LATENCY);
+    await withTimeout(v.D.loadFuel(), 20 * LATENCY);
+    const said = () => { const a = v.C.coach(v.D.coachInput({})).ask('ask_fueled'); return [a.text].concat((a.more || []).map(m => m.text)).join(' / '); };
+    const before = said();
+    const n0 = food(v.probe).length;
+    v.probe.put('food/log/' + dk(NOW), { ...l2['food/log/' + dk(NOW)],
+      e2: { id: 'e2', t: NOW - 30e3, cal: 900, p: 50, c: 110 }, e3: { id: 'e3', t: NOW - 20e3, cal: 250, p: 10, c: 30 } });
+    v.D.noteCoachFood(dk(NOW), { cal: 1750, p: 90, c: 210, f: 50 });
+    check('v53: food logged after a first ask — noteCoachFood() tells Coach, and today is to be read again',
+          /You’ve logged 600 kcal/.test(before) && v.D.fuelNeedsRead() === true, before);
+    await withTimeout(v.D.loadFuel(), 20 * LATENCY);
+    check('asked again: exactly one read — today — and nothing else', food(v.probe).length === n0 + 1 && food(v.probe)[n0] === 'food/log/' + dk(NOW),
+          list(food(v.probe).slice(n0)));
+    const after = said();
+    check('and the answer carries the new total, 1,750 kcal', /You’ve logged 1,750 kcal/.test(after), after);
+    await withTimeout(v.D.loadFuel(), 20 * LATENCY);
+    check('a third ask with nothing changed since reads nothing', food(v.probe).length === n0 + 1);
+  }
   // Basic, and Food switched off: nothing, at all.
   const basic = await rig({ data: data({ v: 1, mute: {}, answers: {}, asked: {} }) });
   await withTimeout(basic.D.initCoachData(), 20 * LATENCY);

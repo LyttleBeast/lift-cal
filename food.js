@@ -26,6 +26,7 @@ import { initRecall, lookup as recallLookup, remember as recallRemember,
          rememberEntry, kindForSrc, recallList, recallCount,
          forget as recallForget, forgetAll as recallForgetAll } from './recall.js';
 import { bump } from './usage.js';
+import { noteCoachFood } from './coach-data.js';
 import { estimateOrigin, originHeading, EDITED } from './estimate-origin.js';
 import { goalDirection } from './insights.js';
 import { wIn, fmtW, labelW, unitW, rateIn, boxRate, perIn, boxPer,
@@ -116,7 +117,10 @@ function watchDay() {
     // Derived from the log and recomputed on every change, so a refusal here
     // costs a stale rollup until the next edit. write() has already said so;
     // what this owes is not to become an unhandled rejection from a listener.
-    quiet(write('food/daySummaries/' + key, { cal: t.cal, p: Math.round(t.p), c: Math.round(t.c), f: Math.round(t.f) }));
+    const sum = { cal: t.cal, p: Math.round(t.p), c: Math.round(t.c), f: Math.round(t.f) };
+    quiet(write('food/daySummaries/' + key, sum));
+    // v53: and Coach's copy, so the next "Am I fueled?" re-reads today.
+    noteCoachFood(key, sum);
   });
 }
 
@@ -317,7 +321,10 @@ async function saveDay() {
   }
   savedDay = attempt;
   const t = totals();
-  quiet(write('food/daySummaries/' + key, { cal: t.cal, p: Math.round(t.p), c: Math.round(t.c), f: Math.round(t.f) }));
+  const sum = { cal: t.cal, p: Math.round(t.p), c: Math.round(t.c), f: Math.round(t.f) };
+  quiet(write('food/daySummaries/' + key, sum));
+  // v53: and Coach's copy, so the next "Am I fueled?" re-reads today.
+  noteCoachFood(key, sum);
 }
 
 /* write() rejects when the database refuses, having already put the red bar up
