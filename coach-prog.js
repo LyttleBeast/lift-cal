@@ -358,7 +358,7 @@ function stepOf(X, dir, equipment, lowerBody, u) {
    any set past twelve reps counted as twelve.
 
    COUNTED AS TWELVE, NOT LEFT OUT, and that is a deliberate departure from the
-   brief (COACH-REPORT §39). Left out, a session of 13, 14 and 15 reps is no
+   brief (COACH-REPORT §40). Left out, a session of 13, 14 and 15 reps is no
    point at all, the slope reads slow, and Coach holds; take one rep off the
    first set and the session joins the series, the slope rises and the same
    log is told to add weight. Fewer reps must never mean a heavier target. At

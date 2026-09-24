@@ -503,6 +503,41 @@ if (MAIN) {
       });
     }
   }
+  /* THE CASE THAT MOVED A RULE (COACH-REPORT §40), kept by name — the history
+     the sweep first found, written out. A kilo squat (a few loads typed in
+     pounds, as the generator types them) whose last session was 13, 14 and
+     15 reps at 130 kg. Read literally, §6.8 left that session out of the
+     estimated-max series (past twelve reps), the slope read slow and Coach
+     held; one rep off the first set let the session in, and the hold became a
+     jump. Sets past twelve count as twelve now, so the two must agree. */
+  {
+    const sq = metaOf('back-squat-high-bar');
+    const K = v => (typeof v === 'string' ? v : String(U.wIn(v, 'kg')));
+    const S_ = (ago, rows) => sessionOf(sq, NOW - ago * DAY, rows.map(([w, r, t]) => set(K(w), r, t)));
+    const log = [
+      S_(55, [[115, 11], ['255', 13], [115, 11], [115, 13], ['255', 12]]),
+      S_(49, [[120, 14], ['265', 11], [120, 12], [120, 11]]),
+      S_(45, [[120, 13], [120, 11], [120, 12]]),
+      S_(41, [[115, 8, 'W'], [125, 10], [125, 13], [125, 10], [125, 11]]),
+      S_(33, [[120, 10, 'W'], [130, 14], [130, 11], [130, 12], [130, 10], [130, 11, 'F']]),
+      S_(29, [[125, 1], [115, 12]]),
+      S_(25, [[125, 12], [125, 15], ['275', 14], [125, 13]]),
+      S_(20, [[125, 2], [115, 14], [115, 14], ['255', 14]]),
+      S_(15, [[125, 14], ['275', 12], [125, 13, 'F']]),
+      S_(10, [[130, 15], [130, 8], [115, 17, 'D']]),
+      S_(3, [[125, 14], [125, 13], [125, 15]]),
+      S_(0, [[130, 13], [130, 14], [130, 15]])
+    ];
+    const h = { meta: sq, sessions: log, group: 0, u: 'kg',
+                ctx: { now: NOW, u: 'kg', aim: 'muscle', exp: 'some', energy: 'hold', rateWk: 1.1 } };
+    const t = drive(h, log).t;
+    const alt = clone(log);
+    alt[alt.length - 1].exercises[0].sets[0].r = '12';
+    const t2 = drive(h, alt).t;
+    check('the case that moved a rule: 13, 14, 15 and then 12, 14, 15 at 130 kg name the same target',
+          !!t && !!t2 && t.mode === t2.mode && t.loadLb === t2.loadLb && t.code === t2.code,
+          (t && t.line) + ' / ' + (t2 && t2.line));
+  }
   const PROPS = [
     ['deterministic', 'the same history twice is the same target'],
     ['shuffle', 'shuffling the sessions changes nothing'],
