@@ -508,8 +508,9 @@ section('H. coach-prog.js — the targets are copied byte for byte as well');
   const topLevel = PCODE.split('\n').filter(l => /^(export\s+)?(let|var)\s/.test(l));
   check('no top-level let or var — nothing remembered between targets', !topLevel.length, list(topLevel.map(l => l.trim())));
   check('no default export — the port copies named functions', !/export\s+default/.test(PCODE));
-  check('prescribe() and exposuresFor() are what it exports',
-        /export function prescribe\(ex, ctx\)/.test(PRAW) && /export function exposuresFor\(sessions, exId\)/.test(PRAW));
+  check('prescribe() and exposuresFor() are what it exports, and coach-build.js is what calls them',
+        /export function prescribe\(ex, ctx\)/.test(PRAW) && /export function exposuresFor\(sessions, exId\)/.test(PRAW) &&
+        /import \{[^}]*\bprescribe\b[^}]*\} from '\.\/coach-prog\.js'/.test(src('coach-build.js')));
 
   // Driven: the same log is the same target, the wall clock moves nothing,
   // and `now` does.

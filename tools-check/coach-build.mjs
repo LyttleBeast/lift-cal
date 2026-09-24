@@ -37,6 +37,7 @@ import { mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { execFileSync } from 'node:child_process';
 
 const HERE = fileURLToPath(new URL('.', import.meta.url));
 const ROOT = join(HERE, '..');
@@ -255,6 +256,13 @@ const logged = sessions => {
   sessions.forEach(s => s.exercises.forEach(e => e.sets.forEach(x => { w.add(String(x.w)); r.add(String(x.r)); })));
   return { w, r };
 };
+/* v48: a proposal carries targets now — each row's `target` and the `targets`
+   view — and those are coach-prog.js's numbers, fenced by its own battery
+   (tools-check/coach-prog.mjs). The checks that nothing here is a number he
+   never lifted, and that nothing was stepped down after a layoff, are about
+   the three views that come out of the base session, so they read exactly
+   those three and nothing else. Section M fences the targets. */
+const views = pp => ({ placeholders: pp.placeholders, lastNumbers: pp.lastNumbers, record: pp.record });
 function strangers(proposal, sessions) {
   const L = logged(sessions);
   return numbersIn(proposal).filter(t => {
@@ -361,9 +369,9 @@ section('C. two views of one proposal, and every number in both is one he lifted
         !/\b0 lb\b/.test(p.exercises.find(e => e.exId === 'push-up').line),
         p.exercises.find(e => e.exId === 'push-up').line);
 
-  const odd = strangers(p, [want]);
-  check('no number anywhere in the proposal differs from one logged in the base session',
-        numbersIn(p).length > 20 && !odd.length, odd.length ? list(odd) : numbersIn(p).length + ' numbers');
+  const odd = strangers(views(p), [want]);
+  check('no number in its three views differs from one logged in the base session',
+        numbersIn(views(p)).length > 20 && !odd.length, odd.length ? list(odd) : numbersIn(views(p)).length + ' numbers');
   // And the lines on the sheet: every load and every rep count is a logged one.
   const L = logged([want]);
   const bad = [];
@@ -408,9 +416,9 @@ section('D. after a layoff the pre-filled view is refused, not discounted');
   const lastAgo = Math.min(...LOG.map(s => Math.round((NOW + 30 * DAY - s.startedAt) / DAY)));
   check('with the real figure — the days since his last session, from the fixture’s own dates',
         !!lp && (lp.layoffLine || '').includes(lastAgo + ' days'), lp && lp.layoffLine + ' / ' + lastAgo);
-  const odd = lp ? strangers(lp, [lp && LOG.find(s => s.id === lp.base.id)]) : ['no proposal'];
-  check('and no number anywhere in it differs from a logged one — nothing was stepped down',
-        !!lp && numbersIn(lp).length >= 10 && !odd.length, list(odd));
+  const odd = lp ? strangers(views(lp), [lp && LOG.find(s => s.id === lp.base.id)]) : ['no proposal'];
+  check('and no number in its three views differs from a logged one — nothing was stepped down',
+        !!lp && numbersIn(views(lp)).length >= 10 && !odd.length, list(odd));
   check('the targets are still there as ghost text, which is what the line promises',
         !!lp && lp.placeholders.exercises.some(e => e.sets.some(s => s.tw !== '')));
 }
@@ -501,8 +509,8 @@ section('G. swap one: same group, same pattern when both are tagged, his first, 
   check('with ITS OWN last numbers, from the session it was last in, and the note says which',
         !!sp && sp.exercises[at].line === '2 × 10 at 70 lb, 1 × 8 at 70 lb' &&
         sp.exercises[at].note.includes(fmtDateFull(key(NOW - 40 * DAY))), sp && sp.exercises[at].line + ' // ' + sp.exercises[at].note);
-  check('and nothing in the swapped proposal is a number he never lifted',
-        !!sp && !strangers(sp, LOG).length, sp && list(strangers(sp, LOG)));
+  check('and nothing in the swapped proposal’s three views is a number he never lifted',
+        !!sp && !strangers(views(sp), LOG).length, sp && list(strangers(views(sp), LOG)));
   // A swap to a lift he has never logged brings the shape of the sets and no numbers.
   const fresh = alts.find(a => !LOG.some(s => s.exercises.some(e => e.exId === a.exId)));
   const fp = fresh && c.build(fresh.opts);
@@ -745,6 +753,136 @@ section('L. "Something else…": any exercise he picks, swapped in exactly as a 
         !!gone && fewerP.exercises.every(e => e.other && e.other.group === LIB[e.from].group &&
           (fewerP.exercises.some(x => x.exId === gone) || !e.other.exclude.includes(gone))), gone);
   check('same input, same answer', JSON.stringify(c.swapTo({}, bench.from, pickId)) === JSON.stringify(C.coach(FULL).swapTo({}, bench.from, pickId)));
+}
+
+/* ================= M. THE TARGETS, BESIDE THE THREE VIEWS ================= */
+section('M. v48 — targets ride beside the three views, never inside them');
+{
+  /* "BEFORE", READ OUT OF GIT. rack-v47's own coach.js and coach-build.js,
+     staged from 124d33a against the same stub, build every proposal this file
+     builds; v48's must match them byte for byte everywhere but the two new
+     fields. A copy of v47's output typed in here would prove only that the
+     copy agrees with itself. Needs a full clone, like estimate-origin.mjs. */
+  const V47 = '124d33a';
+  const old = f => execFileSync('git', ['show', V47 + ':' + f], { cwd: ROOT, encoding: 'utf8' });
+  writeFileSync(join(dir, 'v47-coach-build.mjs'), old('coach-build.js')
+    .replace("from './exercises.js'", 'from ' + real('exercises.js'))
+    .replace("from './units.js'", 'from ' + real('units.js'))
+    .replace("from './blocks.js'", 'from ' + real('blocks.js'))
+    .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
+    .replace("from './analytics.js'", 'from ' + at('analytics.mjs')));
+  writeFileSync(join(dir, 'v47-coach-live.mjs'), old('coach-live.js')
+    .replace("from './exercises.js'", 'from ' + real('exercises.js'))
+    .replace("from './units.js'", 'from ' + real('units.js'))
+    .replace("from './analytics.js'", 'from ' + at('analytics.mjs')));
+  writeFileSync(join(dir, 'v47-coach.mjs'), old('coach.js')
+    .replace("from './exercises.js'", 'from ' + real('exercises.js'))
+    .replace("from './units.js'", 'from ' + real('units.js'))
+    .replace("from './coach-build.js'", 'from ' + at('v47-coach-build.mjs'))
+    .replace("from './coach-live.js'", 'from ' + at('v47-coach-live.mjs'))
+    .replace("from './analytics.js'", 'from ' + at('analytics.mjs')));
+  const C47 = await import(pathToFileURL(join(dir, 'v47-coach.mjs')).href);
+
+  // Every proposal this file builds, and then some: each focus, each swap,
+  // fewer, the layoff, a group, kilos, and the builder switched off.
+  const inputs = [['plain', FULL], ['kg', { ...FULL, u: 'kg' }], ['layoff', base({ now: NOW + 30 * DAY })],
+                  ['routine', base({ routines: [{ id: 'rPushA', name: 'Push A', exercises: [
+                    { exId: 'barbell-bench-press', group: 'chest', equipment: 'barbell' },
+                    { exId: 'triceps-pushdown-rope', group: 'arms', equipment: 'cable' }] }] })]];
+  const optsOf = pp => [{}].concat(pp.focuses.map(f => f.opts), pp.fewer ? [pp.fewer] : [],
+    pp.exercises.flatMap(e => e.swaps.slice(0, 2).map(x => x.opts)), [{ focus: 'group:legs' }, { focus: 'group:chest' }]);
+  const strip = pp => pp && { ...pp, targets: undefined, exercises: pp.exercises.map(e => ({ ...e, target: undefined })) };
+  const differ = [], viewsDiffer = [];
+  let compared = 0;
+  inputs.forEach(([name, input]) => {
+    const now = C.coach(input), then = C47.coach(input);
+    const first = now.build({});
+    if (!first) { differ.push(name + ': no proposal'); return; }
+    optsOf(first).forEach(o => {
+      const a = now.build(o), b = then.build(o);
+      compared++;
+      if (JSON.stringify(a ? views(a) : null) !== JSON.stringify(b ? views(b) : null)) viewsDiffer.push(name + ' ' + JSON.stringify(o));
+      if (JSON.stringify(strip(a)) !== JSON.stringify(b)) differ.push(name + ' ' + JSON.stringify(o));
+    });
+  });
+  check('placeholders, lastNumbers and record are byte-identical to rack-v47’s on every proposal (' + compared + ')',
+        compared >= 20 && !viewsDiffer.length, list(viewsDiffer));
+  check('and so is everything else a proposal carries — the note included — bar `target` and `targets`',
+        !differ.length, list(differ));
+
+  // The targets themselves, on the fixture above.
+  const withT = p.exercises.filter(e => e.target);
+  check('every row carries a `target` field, and the rows with history have one',
+        p.exercises.every(e => 'target' in e) && withT.length >= 4, withT.length + ' of ' + p.exercises.length);
+  const T = p.targets;
+  check('there is a `targets` view, the placeholders’ shape: same name, same rows, same blocks',
+        !!T && T.name === p.placeholders.name && T.exercises.length === p.placeholders.exercises.length &&
+        T.exercises.every((e, n) => e.exId === p.placeholders.exercises[n].exId &&
+          (e.block || null) === (p.placeholders.exercises[n].block || null)));
+  check('every box in it is empty and nothing is ticked — a target is ghost text until a tick adopts it',
+        !!T && T.exercises.every(e => e.sets.every(x => x.w === '' && x.r === '' && x.done === false)));
+  check('and no ghost weight is blank on a lift he has logged — a blank box is recorded as a 0-lb set',
+        !!T && T.exercises.every(e => !LOG.some(s => s.exercises.some(x => x.exId === e.exId)) ||
+          e.sets.every(x => x.tw !== '')), JSON.stringify(T && T.exercises.map(e => e.sets.map(x => x.tw))));
+  const one = T && T.exercises.map((e, n) => ({ e, row: p.exercises[n] }))
+    .filter(({ row }) => row.target && row.target.sets.length && p.exercises.filter(x => x.exId === row.exId).length === 1);
+  check('a row whose target carries sets takes them as its ghosts, set for set',
+        !!one && one.length >= 2 && one.every(({ e, row }) => JSON.stringify(e.sets.map(x => [x.type, x.tw, x.tr])) ===
+          JSON.stringify(row.target.sets.map(x => [x.type, x.tw, x.tr]))));
+  const none = T && T.exercises.map((e, n) => ({ e, n, row: p.exercises[n] })).filter(({ row }) => !row.target || !row.target.sets.length);
+  check('and a row with none keeps its placeholder sets untouched',
+        !!none && none.every(({ e, n }) => JSON.stringify(e.sets) === JSON.stringify(p.placeholders.exercises[n].sets)));
+  const dup = T && T.exercises.filter(e => e.exId === 'incline-dumbbell-bench-press');
+  check('a lift in a duplicated block is split back across its rows — the same set count per row as the placeholders',
+        !!dup && dup.length === 2 && T.exercises.every((e, n) => e.exId !== 'incline-dumbbell-bench-press' ||
+          e.sets.length === p.placeholders.exercises[n].sets.length));
+  const bench = p.exercises.find(e => e.exId === 'barbell-bench-press');
+  check('the bench row’s target is a sentence with its evidence', !!bench && !!bench.target &&
+        /^(Target|No target)/.test(bench.target.line) && bench.target.why.length >= 1, bench && bench.target && bench.target.line);
+
+  // Built from another day: two sets of bench and two of rows yesterday — a
+  // chest-and-back session, two groups from every shape he repeats, so the
+  // push proposal is still built from its own session while bench's last
+  // session is yesterday's.
+  const extra = sess('bench1', 1, [ex('barbell-bench-press', [[185, 8], [185, 8]]), ex('barbell-row', [[155, 8], [155, 8]])]);
+  const cx = C.coach(base({ sessions: LOG.concat([extra]).sort((a, b) => a.startedAt - b.startedAt) }));
+  const px = cx.build({ focus: 'shape:chest+arms' });
+  const bx = px && px.exercises.find(e => e.exId === 'barbell-bench-press');
+  check('a target built from a different session than the proposal’s says which day it was built from',
+        !!bx && px.base.id !== 'bench1' && !!bx.target &&
+        bx.target.why.some(w => /^Worked out from yesterday’s session, the last time you did this lift\.$/.test(w)),
+        bx && bx.target && bx.target.why.join(' | '));
+  check('and its targets row is that session’s sets, not the base session’s',
+        !!px && !!px.targets && px.targets.exercises.find(e => e.exId === 'barbell-bench-press').sets.length === 2,
+        px && px.targets && JSON.stringify(px.targets.exercises.find(e => e.exId === 'barbell-bench-press').sets));
+
+  // Switched off: no target anywhere, no view, and the three views unmoved.
+  const off = C.coach(base({ settings: { v: 1, mute: { targets: true }, answers: {}, asked: {} } })).build({});
+  check('switched off, no row has a target and there is no targets view',
+        !!off && off.targets === null && off.exercises.every(e => e.target === null));
+  check('and the three views are the same as with targets on', !!off && JSON.stringify(views(off)) === JSON.stringify(views(p)));
+
+  // Kilos. This log was typed in pounds, so on a kilo account not one load in
+  // it sits on a half-kilo step — and not one target names a number.
+  const k = C.coach({ ...FULL, u: 'kg' }).build({});
+  check('the same pound-typed log on a kilo account names no number anywhere — nothing is stepped from an off-grid load',
+        k.exercises.some(e => e.target) && k.exercises.every(e => !e.target || e.target.loadLb == null ||
+          e.target.mode === 'bodyweight'), list(k.exercises.filter(e => e.target && e.target.loadLb != null).map(e => e.target.line)));
+  check('and its ghosts are last time’s weights, never blank', k.targets &&
+        k.targets.exercises.every(e => e.sets.every(x => x.tw !== '')));
+  // A log typed in kilos: every new number a kilo box would adopt prints back
+  // as the line says.
+  const kgSet = (w, r) => ({ w: String(U.wIn(w, 'kg')), r: String(r), type: 'N', done: true });
+  const KG = [92.5, 95, 97.5, 100].map((w, n) => ({ id: 'k' + n, startedAt: NOW - (15 - 4 * n) * DAY,
+    _date: key(NOW - (15 - 4 * n) * DAY), exercises: [{ exId: 'barbell-bench-press', name: 'Barbell Bench Press',
+      group: 'chest', equipment: 'barbell', sets: [kgSet(w, 5), kgSet(w, 5), kgSet(w, 5)] }] }));
+  const kk = C.coach(base({ u: 'kg', sessions: KG })).build({ focus: 'group:chest' });
+  const kb = kk && kk.exercises.find(e => e.exId === 'barbell-bench-press');
+  check('a kilo-typed log gets a kilo number, and every new ghost prints back through fmtSetW as the line says',
+        !!kb && !!kb.target && kb.target.loadLb != null && /102\.5 kg/.test(kb.target.line) &&
+        kk.targets.exercises[0].sets.every(x => kb.target.line.includes(U.fmtSetW(x.tw, 'kg') + ' kg')),
+        kb && kb.target && kb.target.line);
+  check('same log, same targets — byte for byte', JSON.stringify(C.coach(FULL).build({})) === JSON.stringify(p));
 }
 
 /* ---------- report ---------- */

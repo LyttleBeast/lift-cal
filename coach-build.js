@@ -7,12 +7,19 @@
 // them, in the blocks he built, and the numbers he actually lifted.
 //
 // A WRONG NUMBER IS WORSE THAN NO NUMBER, and here the house law has one sharp
-// edge: THE BUILDER NEVER INVENTS A WEIGHT. Every number it pre-fills is one he
-// lifted, and the proposal says when. The one moment a gym app reaches for a
-// percentage — coming back after a layoff — is a REFUSAL here instead: the
-// pre-filled view is withheld and the targets stay as ghost text. A percentage
-// off, then rounded, is a number he never lifted, and on a metric account it
-// is a rounding rule nobody chose.
+// edge: THE BUILDER NEVER INVENTS A WEIGHT ITSELF. Every number it pre-fills is
+// one he lifted, and the proposal says when. The one moment a gym app reaches
+// for a percentage — coming back after a layoff — is a refusal here: the
+// pre-filled view is withheld and his last numbers stay as ghost text.
+//
+// What to put on the bar NEXT time is a separate field, each row's `target`,
+// and its only author is coach-prog.js (v48). It names a load he has logged,
+// or one at most two of his own steps from his last top set — and coming back
+// after a layoff, a load he has logged or a whole number of his own steps
+// BELOW his last top set. Never a percentage, and on a metric account never a
+// rounding rule nobody chose. Targets travel as ghost text in a view of their
+// own (`targets`); nothing is pre-filled from them, and only a tick turns one
+// into a logged set.
 //
 // PURE, and copied into the native tree verbatim (src/pure/coach-build.js). No
 // reads, no DOM, no clock, no module state. It derives nothing about the log
@@ -42,16 +49,21 @@
 //   libReady    whether that library has really been read. Until it has, a
 //               custom exercise is indistinguishable from a deleted one, and
 //               the builder would drop somebody's own lift and call it gone
+//   goal        { aim, exp }: his answers to Coach's two goal questions
+//   energy      { context, rateWk }: the weight trend, read by coach-goal.js
+//   targetsOn   whether the targets category is on. Off, no row has a target
 //
-// Imports exercises.js, units.js, blocks.js and coach-tags.js, and the session
-// MATH of analytics.js (the merge invariant and what a working set is, which
-// must not be restated here). coach.js imports this; nothing imports back.
+// Imports exercises.js, units.js, blocks.js, coach-tags.js and coach-prog.js
+// (the targets), and the session MATH of analytics.js (the merge invariant and
+// what a working set is, which must not be restated here). coach.js imports
+// this; nothing imports back.
 
 import { GROUPS, GROUP_ORDER } from './exercises.js';
 import { isWorking, mergeSessionExercises } from './analytics.js';
 import { fmtSetLoad, unitW } from './units.js';
 import { normalizeBlocks, blockOrder } from './blocks.js';
 import { tagsFor } from './coach-tags.js';
+import { prescribe, exposuresFor, sessionDay } from './coach-prog.js';
 
 /* How many alternatives "Swap one" offers. Five is a thumb's worth of chips;
    past that it is a picker, and the app already has one. */
@@ -258,12 +270,17 @@ function setsLine(sets, u) {
   }).join(', ');
 }
 
-/* PROGRESSION IS A NUDGE, NEVER BAKED IN. What the last session shows, said
-   once and descriptively, and never what to do about it: no next weight, no
-   step, no "try". A set taken to failure is said plainly rather than answered
-   with a suggestion to do more — it is the one place a builder would be most
-   tempted to push, and the log is the only thing Coach knows. When the sets
-   cannot carry a sentence, there is none. */
+/* THE NUDGE IS A READOUT. What the last session shows, said once and
+   descriptively, and never what to do about it: no next weight, no step, no
+   "try". A set taken to failure is said plainly rather than answered with a
+   suggestion to do more — it is the one place a builder would be most tempted
+   to push, and the log is the only thing Coach knows. When the sets cannot
+   carry a sentence, there is none.
+
+   What to do next time is not this line's job and never becomes it. Since v48
+   it is the row's `target`, beside this note rather than inside it, written by
+   coach-prog.js under a battery of its own — so this sentence keeps its voice
+   check exactly as it was. */
 function nudge(sets) {
   const working = sets.filter(isWorking);
   if (!working.length) return null;
@@ -548,7 +565,38 @@ function build(i, o, top) {
   const name = focus.kind === 'shape' && focus.routine ? focus.name : cap(focus.name);
   const bid = baseId(base);
 
-  /* THE TWO VIEWS OF THE NUMBERS, one proposal.
+  /* THE TARGETS (v48), one per row, from that lift's own history across the
+     whole log — not only the base session — so a bench done more recently on
+     another day is the bench it is built from. Cardio and a switched-off
+     category have none. Exposures are read once per lift per proposal: a
+     duplicated block is one lift. */
+  const expo = new Map();
+  const exposures = id => {
+    if (!expo.has(id)) expo.set(id, exposuresFor(i.log, id));
+    return expo.get(id);
+  };
+  const goal = i.goal || {}, energy = i.energy || {};
+  const ctx = { now: i.now, u, aim: goal.aim || null, exp: goal.exp || null,
+                energy: energy.context || null, rateWk: Number.isFinite(energy.rateWk) ? energy.rateWk : null };
+  const targetOf = e => {
+    if (i.targetsOn !== true) return null;
+    const days = (i.groupDays || {})[e.group];
+    const t = prescribe({ exId: e.exId, name: e.name, group: e.group, equipment: e.equipment,
+                          exposures: exposures(e.exId), groupDaysSince: Number.isFinite(days) ? days : null }, ctx);
+    if (!t) return null;
+    /* Built from a different day than the numbers on this row? Then say which,
+       before the line about how much Coach has seen of the lift. */
+    const shown = e.source ? e.source.date : base.date;
+    if (!t.from || t.from.date === shown) return t;
+    const why = t.why.slice();
+    const at = why.findIndex(w => /^Coach is learning/.test(w));
+    why.splice(at === -1 ? why.length : at, 0,
+      'Worked out from ' + sessionDay(t.from.date, t.from.daysAgo) + ', the last time you did this lift.');
+    return { ...t, why };
+  };
+  const targets = laid.map(targetOf);
+
+  /* THE THREE VIEWS OF THE NUMBERS, one proposal.
 
      `placeholders` is exactly what routines.js toSession() makes of a routine
      saved from this session — empty boxes with the logged numbers as ghost
@@ -586,6 +634,35 @@ function build(i, o, top) {
       sets: e.sets.map(s => ({ w: s.w || '', r: s.r || '', type: s.type }))
     }))
   };
+
+  /* `targets` is the placeholders' shape — empty boxes, nothing ticked — with
+     Coach's targets as the ghost text: what "Start with Coach’s targets"
+     starts. A row whose target carries sets takes them (they are the lift's
+     last session, which may not be this one); a row with none keeps its
+     placeholder sets untouched. A lift in a duplicated block is ONE exposure
+     with its sets concatenated, so its target's sets are split back across
+     the rows in order — only when they add up exactly, and otherwise every
+     row of it keeps its placeholders rather than guess which set is whose.
+     Null when no row has a target with sets. */
+  const ghost = s => ({ w: '', r: '', type: s.type, done: false, tw: s.tw, tr: s.tr });
+  const offset = new Map();
+  const targetSets = laid.map((e, n) => {
+    const t = targets[n];
+    if (!t || !t.sets.length) return null;
+    const rows = laid.map((x, k) => [x, k]).filter(([x]) => x.exId === e.exId);
+    if (rows.length === 1) return t.sets.map(ghost);
+    if (rows.reduce((a, [x]) => a + x.sets.length, 0) !== t.sets.length) return null;
+    const from = offset.get(e.exId) || 0;
+    offset.set(e.exId, from + e.sets.length);
+    return t.sets.slice(from, from + e.sets.length).map(ghost);
+  });
+  const targetsView = targetSets.some(Boolean) ? {
+    name,
+    exercises: laid.map((e, n) => ({
+      ...shell(e),
+      sets: targetSets[n] || e.sets.map(s => ({ w: '', r: '', type: s.type, done: false, tw: s.w || '', tr: s.r || '' }))
+    }))
+  } : null;
 
   /* THE WORDS. Every one of them built from a fact, and every number in them
      read off the log or counted from it. */
@@ -629,7 +706,7 @@ function build(i, o, top) {
     headline, reason, routineLine, layoffLine, leftOutLine,
     layoff,
     leftOut,
-    exercises: laid.map(e => {
+    exercises: laid.map((e, n) => {
       const said = nudge(e.sets);
       const note = !e.swapped ? said
         : e.source ? 'Numbers from ' + sessionWhen(e.source.daysAgo, e.source.date) + '.' + (said ? ' ' + said : '')
@@ -638,11 +715,14 @@ function build(i, o, top) {
         slot: e.slot, exId: e.exId, from: e.from, name: e.name, group: e.group,
         block: e.block || null, swapped: e.swapped,
         line: setsLine(e.sets, u), note,
+        // What to put on the bar, beside the note and never inside it.
+        target: targets[n],
         swaps: top ? swapOptions(i, o, laid, e, seen) : [],
         other: top ? otherFor(i, laid, e) : null
       };
     }),
     placeholders, lastNumbers, record,
+    targets: targetsView,
     fewer: top ? fewerOpts(o, laid) : null,
     focuses: top ? focusOptions(i, focus, base) : []
   };

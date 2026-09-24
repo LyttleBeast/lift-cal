@@ -592,7 +592,7 @@ function decide(ex, c) {
       const up = weakestHalf(tops);
       up.forEach(i => { target[i] = lastR[i] + 1; });
       why = [tops.length === 1 ? 'One more rep than last time (' + reps(lastR) + ').'
-             : 'One more rep on your ' + word(up.length) + ' lowest ' + (up.length === 1 ? 'set' : 'sets') +
+             : 'One more rep on your ' + (up.length === 1 ? 'lowest set' : word(up.length) + ' lowest sets') +
                ' (' + reps(lastR) + ' last time).'];
     }
     const sets = keep.slice();
