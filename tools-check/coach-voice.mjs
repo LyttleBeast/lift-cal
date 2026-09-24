@@ -52,8 +52,8 @@
 //   C  the rendered sweep   the same rule against what actually comes out
 //   D  coach-ui.js          the three card states whose copy is not a template
 //   E  stalled_lift         answer-only, and still answering
-//   F  the stall sentence   a readout: a figure, a date, and the goal's own
-//                           direction — with unknown left unknown
+//   F  the stall answer     stage two's reading of that lift (v49): a figure
+//                           through units.js, and "cut" only under the rule
 //   J  the targets (v48)    every line and why coach-prog.mjs's battery
 //                           produces, the targets answer, and the goal
 //                           questions and their acknowledgements, under the
@@ -596,63 +596,50 @@ section('E. stalled_lift answers a question and never volunteers');
         C.coach({ ...FIXTURES.stalled, u: 'lb' }).you.id);
 }
 
-/* ================= F. THE STALL SENTENCE IS A READOUT ================= */
-section('F. the stall sentence — a figure, a date, and the goal’s own direction');
+/* ================= F. THE STALL ANSWER IS STAGE TWO'S READING =================
+   Updated deliberately in v49. This section used to pin the stall sentence as
+   a figure and a date, with a clause added when his own goal pointed down.
+   SHIP-V49-PROMPT §3.10 replaces that sentence: "Anything stalled?" now
+   answers with coach-overlap.js's reading of the same lift — a plateau, a cut
+   that is holding, a slide, a lift trained too rarely to say, or "Coach needs
+   weigh-ins to tell" — because a flat figure with nothing beside it was still a
+   guess about the most sensitive thing Coach reads. What stays pinned: a real
+   figure through units.js in both units, and the direction the account stated
+   (never a direction nobody stated). What is new: "cut" only when his aim or
+   his own food targets say so, and a cut that is holding never called a stall. */
+section('F. the stall answer — stage two’s reading, a figure through units.js, and "cut" only under the rule');
 {
-  const stallText = (weight, u) =>
-    C.coach({ ...FIXTURES.stalled, u, weight: { ...FIXTURES.stalled.weight, ...weight } }).ask('ask_stall').text;
+  const stall = (extra, u) => C.coach({ ...FIXTURES.stalled, u: u || 'lb', ...extra }).ask('ask_stall');
+  const plain = stall({}).text;
+  const plainKg = stall({}, 'kg').text;
 
-  const plain = stallText({}, 'lb');
-  const plainKg = stallText({}, 'kg');
-
-  // A figure, through units.js, exactly as units.js prints one anywhere else.
+  check('with no weigh-ins, the answer says it cannot separate a cut from a plateau, and asks for none of it by name',
+        /Coach needs a couple of weigh-ins/.test(plain) && !/\bcut\b|plateau|\bstall/i.test(plain), plain);
   const lbNum = Number((/([\d.]+) lb/.exec(plain) || [, NaN])[1]);
-  check('it names a weight, and a real one', Number.isFinite(lbNum) && lbNum > 50, plain);
-  check('and the weight is units.js’s own rendering', plain.includes(U.labelW(lbNum, 'lb')), plain);
-  check('it reads differently on kilos — the number moves and the word with it',
-        plainKg !== plain && plainKg.includes(U.labelW(lbNum, 'kg')) && !/\blb\b/.test(plainKg), plainKg);
+  check('it names his estimated max, and a real one', Number.isFinite(lbNum) && lbNum > 50, plain);
+  check('through units.js — the kilo answer says the same figure converted once, and never lb',
+        plainKg.includes(U.labelW(lbNum, 'kg')) && !/\blb\b/.test(plainKg), plainKg);
+  const r = stall({}).reason;
+  check('and the standing best rides in the evidence, as a figure, so the old readout is still there to check',
+        /Your best estimated max on it is [\d.]+ lb\./.test(r), r);
 
-  // And a date: WHEN the figure was last matched, read out of the log.
-  check('it names when the figure was last matched', /last matched/.test(plain), plain);
-  const nearer = C.coach({
-    ...FIXTURES.stalled, u: 'lb',
-    sessions: sort([
-      sess(35, [['bench', three(225, 5)]], 'n'),
-      sess(30, [['bench', three(215, 5)]], 'n'),
-      sess(20, [['bench', three(210, 5)]], 'n'),
-      sess(10, [['bench', three(205, 5)]], 'n'),
-      sess(4,  [['bench', three(200, 5)]], 'n')
-    ])
-  }).ask('ask_stall').text;
-  check('and the date is read from the log rather than printed from a constant — ' +
-        'the same figure matched five days later reads differently',
-        nearer !== plain && nearer.includes(U.labelW(lbNum, 'lb')), nearer);
-
-  /* The direction branch, which is the third half of the same defect. A flat
-     estimated max on an account whose own goal points DOWN and whose rate
-     agrees is a lift held through a deficit, and reading it the other way is a
-     wrong number about the most sensitive thing Coach looks at. */
-  const down = stallText({ goalDir: -1, rateWk: -0.9, rateDays: 21 }, 'lb');
-  check('with the account’s own goal pointing down and the rate agreeing, the reading is different',
-        down !== plain && down.length > plain.length, down);
-  check('and the readout underneath is untouched — the direction is a clause added, not a verdict substituted',
-        down.startsWith(plain) && /last matched/.test(down), down);
-  check('and the down branch renders on kilos too, in the reader’s unit',
-        stallText({ goalDir: -1, rateWk: -0.9, rateDays: 21 }, 'kg').includes(U.labelW(lbNum, 'kg')));
-
-  /* Unknown stays unknown. weight.goalDir is the account's own stated
-     direction and null means nobody stated one — a sentence that read a
-     direction out of a rate nobody declared would be Coach guessing at the
-     goal, which is the thing the fact's own comment forbids. */
-  check('goalDir null does not move the sentence, however the weight is going',
-        stallText({ goalDir: null, rateWk: -0.9, rateDays: 21 }, 'lb') === plain);
-  check('and neither does a goal pointing the other way',
-        stallText({ goalDir: 1, rateWk: -0.9, rateDays: 21 }, 'lb') === plain &&
-        stallText({ goalDir: 0, rateWk: -0.9, rateDays: 21 }, 'lb') === plain);
-  check('nor a stated down goal with no rate behind it — both halves, or neither',
-        stallText({ goalDir: -1, rateWk: null }, 'lb') === plain);
-  check('nor a stated down goal the account is moving against',
-        stallText({ goalDir: -1, rateWk: 0.9, rateDays: 21 }, 'lb') === plain);
+  // A level bench through a cut that is holding: weigh-ins 212 → 205.
+  const level = sort([40, 30, 20, 10, 4].map(a => sess(a, [['bench', three(225, 5)]], 'h')));
+  const falling = Array.from({ length: 24 }, (_, i) => ({ lb: Math.round((212 - 7 * i / 23) * 10) / 10, t: NOW - (46 - 2 * i) * DAY }));
+  const held = (answers, goalDir) => stall({ sessions: level, weighIns: falling,
+    weight: { latestLb: 205, latestAt: NOW - DAY, rateWk: -1, rateDays: 45, goalDir, goalRateWk: null },
+    settings: { v: 1, mute: {}, answers, asked: {}, lastGreet: '' } }).text;
+  const cutAim = held({ q_goal_aim: 'cut' }, null);
+  check('a level lift while he loses weight on purpose is holding, and "that’s the win" — never a stall or a plateau',
+        /that’s the win/.test(cutAim) && !/stall|plateau/i.test(cutAim), cutAim);
+  const noAim = held({}, null);
+  check('the same log with no aim and no direction says his weight came down — never "cut"',
+        /your weight has come down/.test(noAim) && !/\bcut/i.test(noAim), noAim);
+  check('his own food targets set to lose are what let it say "cut"', /In a cut/.test(held({}, -1)), held({}, -1));
+  check('and a direction pointing up or holding does not', [1, 0].every(g => !/\bcut/i.test(held({}, g))));
+  check('and it renders on kilos too, in the reader’s unit',
+        !/\blb\b/.test(C.coach({ ...FIXTURES.stalled, u: 'kg', sessions: level, weighIns: falling,
+          weight: { latestLb: 205, latestAt: NOW - DAY, rateWk: -1, rateDays: 45, goalDir: -1, goalRateWk: null } }).ask('ask_stall').text));
 }
 
 /* ================= G. THE WORKOUT BUILDER ================= */

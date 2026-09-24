@@ -91,6 +91,7 @@ writeFileSync(join(dir, 'coach.mjs'), src('coach.js')
 const C = await import(pathToFileURL(join(dir, 'coach.mjs')).href);
 const O = await import(pathToFileURL(join(dir, 'coach-overlap.mjs')).href);
 const { EXERCISES } = await import(pathToFileURL(join(ROOT, 'exercises.js')).href);
+const U = await import(pathToFileURL(join(ROOT, 'units.js')).href);
 
 /* ---------- harness ---------- */
 let pass = 0, fail = 0;
@@ -611,6 +612,79 @@ section('C. the must-never scan — every sentence and its evidence');
   check('both units were read', said.filter(x => x.u === 'kg').length > 100);
   check('"stalled" appears in no reading but a plateau, and never beside a cut that is holding',
         !said.some(x => /\bstalled\b/i.test(x.text)));
+}
+
+/* ================= D. THE WIRING — through coach.js, end to end ================= */
+section('D. the wiring — the routes, the topics, the stall reconciled, the switches');
+{
+  const c = inp => C.coach(inp);
+  // How are my lifts moving?
+  const moving = c(C7()).ask('ask_lifts');
+  check('"How are my lifts moving?" answers, and a climbing lift says by how much, on its estimated max',
+        moving.id === 'lift_status' && /^Barbell Bench Press: up about [\d.]+ lb on your estimated max over \d+ weeks\.$/.test(moving.text),
+        moving.id + ': ' + moving.text);
+  const thin = c(C8()).ask('ask_lifts');
+  check('"too soon to call" only when the window is too thin to read — three sessions', /too soon to call \(3 sessions\)/.test(thin.text), thin.text);
+  const recent = c(C11()).ask('ask_lifts');
+  check('a new best inside three weeks is never a reading — it is how much it moved, or level since the best',
+        /: up about [\d.]+ lb|level lately, after a new best on /.test(recent.text) && !/plateau|slide|\bcut\b/.test(recent.text), recent.text);
+  const held = c(C1_ten({ aim: 'cut' })).ask('ask_lifts');
+  check('a flat lift is its reading — here, holding through his cut', /that’s the win/.test(held.text), held.text);
+  const many = input({ sessions: sortS(daysFor(2, 8, 2).map((ago, k) => sess(ago, [
+    [BENCH, xN(3, 185 + k, 5)], [SQUAT, xN(3, 245 + k, 5)], [ROW, xN(3, 155, 8)], [OHP, xN(3, 95, 8)],
+    [CURL, xN(2, 65, 10)], [RDL, xN(3, 185, 8)], [FLY, xN(2, 30, 12)]]))) });
+  const m = c(many).ask('ask_lifts');
+  check('five lifts at most: the answer, then one bubble for each of the rest',
+        m.id === 'lift_status' && (m.more || []).length === 4, (m.more || []).length + ' more');
+  check('never an assisted, a bodyweight or a cardio lift in it',
+        !/Assisted|Pull-Up|Treadmill/.test([m.text].concat((m.more || []).map(x => x.text)).join(' ')));
+
+  // Good day for a record?
+  const rd = c(P1()).ask('ask_record_day');
+  check('"Good day for a record?" answers with the rep record, and the unseen line follows it',
+        rd.id === 'record_day' && /Good day for 6 at 225 lb/.test(rd.text) && /can’t see how you slept/.test((rd.more || [])[0].text),
+        rd.text);
+  check('and says nothing on a day that does not qualify', c(P1({ deep: true })).ask('ask_record_day').id !== 'record_day');
+  // A kilo account's log, typed in kilos and stored in pounds, climbing to 3×5
+  // at 100 kg. One typed in pounds lands off the half-kilo grid and, rightly,
+  // names no record at all.
+  const kgLog = { ...P1(), u: 'kg', sessions: P1().sessions.map((x, k, all) => ({ ...x, exercises: x.exercises.map(e =>
+    ({ ...e, sets: e.sets.map(z => ({ ...z, w: String(U.wIn(100 - 2.5 * (all.length - 1 - k), 'kg')) })) })) })) };
+  const kgRec = c(kgLog).ask('ask_record_day');
+  check('on kilos, the same record in kilos, at a weight he typed', /^Good day for 6 at 100 kg on Barbell Bench Press/.test(kgRec.text), kgRec.text);
+  check('and a kilo account whose log sits off the half-kilo grid is never handed a record to chase',
+        c({ ...P1(), u: 'kg' }).ask('ask_record_day').id !== 'record_day');
+
+  // Should I go lighter?
+  const lw = c(L({ failure: true })).ask('ask_lighter');
+  check('"Should I go lighter?" answers when two signs line up', lw.id === 'lighter_week' && /lighter week/.test(lw.text), lw.id);
+  check('and not when one does', c(L({ decline: false, volume: true })).ask('ask_lighter').id !== 'lighter_week');
+  check('lighter_week is sheet-only, and supersedes the record and near-record findings',
+        (() => { const it = C.INTENTS.find(i => i.id === 'lighter_week');
+                 return JSON.stringify(it.surfaces) === '["sheet"]' && it.supersedes.includes('recent_pr') && it.supersedes.includes('pr_proximity'); })());
+
+  // The Train topics.
+  const tp = x => c(x).topicsFor('train').map(t => t.id);
+  check('Train offers "Good day for a record?" only on a day that has one',
+        tp(P1()).includes('ask_record_day') && !tp(P1({ deep: true })).includes('ask_record_day'), tp(P1()).join(','));
+  check('and "Should I go lighter?" only when it would answer',
+        tp(L({ failure: true })).includes('ask_lighter') && !tp(L({ decline: false, volume: true })).includes('ask_lighter'));
+  check('and "How are my lifts moving?" once a lift has a reading of any kind', tp(C7()).includes('ask_lifts'));
+
+  // Anything stalled? — the reconciled stalled_lift.
+  const st = c(C1_ten({ aim: 'cut' })).ask('ask_stall');
+  check('"Anything stalled?" on a cut that is holding answers with the holding reading, never a stall',
+        st.id === 'stalled_lift' && /that’s the win/.test(st.text) && !/stall/i.test(st.text), st.id + ': ' + st.text);
+  check('and on a climbing lift it is not the stall rule that answers', c(C7()).ask('ask_stall').id !== 'stalled_lift');
+
+  // The switches.
+  const ids = C.CATEGORY_IDS;
+  check('category rest sits directly after recency, and patterns is still last',
+        ids.indexOf('rest') === ids.indexOf('recency') + 1 && ids[ids.length - 1] === 'patterns', ids.join(','));
+  const mute = (x, k) => ({ ...x, settings: { ...x.settings, mute: { [k]: true } } });
+  check('Rest and lighter weeks switched off: no lighter week', c(mute(L({ failure: true }), 'rest')).ask('ask_lighter').id !== 'lighter_week');
+  check('Stalls and records switched off: no lift readings and no record day',
+        c(mute(C7(), 'progression')).ask('ask_lifts').id !== 'lift_status' && c(mute(P1(), 'progression')).ask('ask_record_day').id !== 'record_day');
 }
 
 console.log('\nCoach tells a plateau from a cut, or says it can’t\n');

@@ -439,7 +439,13 @@ section('B. the sheet takes its questions from the card that opened it');
     const sh = open(UI, { tight: true, live: false }).sh;
     const chip = chipsIn(sh).find(b => TOPIC_ID[b.textContent] === id);
     chip.onclick();
-    const said = find(sh, 'coach-bub').filter(b => b.classList.contains('coach')).pop();
+    /* The answer is the first Coach bubble after his question. v49's answers
+       can follow it with more — one bubble per lift under "How are my lifts
+       moving?", the unseen line under "Good day for a record?" — so the last
+       bubble is no longer the answer (updated deliberately, v49). */
+    const bubs = find(sh, 'coach-bub');
+    const asked = bubs.map(b => b.classList.contains('you')).lastIndexOf(true);
+    const said = bubs.slice(asked + 1).find(b => b.classList.contains('coach'));
     const text = said ? (find(said, 'coach-bub-t')[0] || {}).textContent : '';
     if (!text || /^Nothing to say/.test(text) || text !== c.ask(id).text) dead.push(id + ': ' + text);
     // A tap that empties the sheet is a dead end: there has to be a way back to

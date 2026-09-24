@@ -172,6 +172,23 @@ const CASES = [
       sess(35, [['curl', 3, 60, 8]], 'c1'), sess(25, [['curl', 3, 55, 8]], 'c2'),
       sess(15, [['curl', 3, 50, 8]], 'c3'), sess(5,  [['curl', 3, 45, 8]], 'c4')]))
   })],
+  /* v49's lighter week: twelve weeks of bench and squat on one day and rows
+     and curls on another, the two big lifts falling 10% over the last three
+     weeks, and five sets taken to failure in the last two against none
+     before — two of its signs at once. */
+  ['lighter_week',               'ask_lighter',  RICH({
+    sessions: sorted(Array.from({ length: 12 }, (_, k) => 2 + 7 * k).flatMap(ago => {
+      const fall = ago < 21 ? 0.9 : 1, f = ago < 14;
+      const at = (ex, w, types) => ({ exId: ex, name: ex, group: LIB[ex].group, equipment: LIB[ex].equipment,
+        sets: types.map(t => ({ w: String(Math.round(w * fall)), r: '5', type: t, done: true })) });
+      return [
+        { id: 'lw' + ago, startedAt: NOW - ago * DAY, _date: key(NOW - ago * DAY),
+          exercises: [at('bench', 225, ['N', 'N', f ? 'F' : 'N']), at('squat', 275, ['N', f ? 'F' : 'N', 'N'])] },
+        { id: 'lx' + ago, startedAt: NOW - (ago + 2) * DAY, _date: key(NOW - (ago + 2) * DAY),
+          exercises: [at('row', 155 / fall, f ? ['F', 'N', 'N'] : ['N', 'N', 'N']), at('curl', 65 / fall, ['N', 'N', 'N'])] }
+      ];
+    }))
+  })],
   ['recent_pr',                  'ask_records',  RICH({
     sessions: sorted([sess(20, [['squat', 3, 275, 3]], 'a'), sess(13, [['squat', 3, 285, 3]], 'b'),
                       sess(2,  [['squat', 3, 315, 3]], 'c')])

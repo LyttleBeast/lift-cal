@@ -48,7 +48,7 @@ import { labelW, labelRate, unitW, fmtW } from './units.js';
 import { propose, liveRefusal, buildMenu, swapTo, BUILD_ASK } from './coach-build.js';
 import { liveRead, LIVE_NONE } from './coach-live.js';
 import { AIMS, EXPERIENCE, energyContext } from './coach-goal.js';
-import { readLift, lighterWeek, recordDay, prepare } from './coach-overlap.js';
+import { readLift, lighterWeek, recordDay, liftsMoving, prepare } from './coach-overlap.js';
 
 const DAY = 864e5;
 
@@ -179,6 +179,11 @@ export const CATEGORIES = Object.freeze([
   { id: 'safety',      label: 'Caution',             mutable: false, note: 'Anything that counsels rest or care.' },
   { id: 'volume',      label: 'Balance and volume',  mutable: true,  note: 'Sets for a group against your own normal.' },
   { id: 'recency',     label: 'Overdue and layoffs', mutable: true,  note: 'How long since a group, and since a session.' },
+  /* v49's, directly after recency because it is the other half of "when":
+     when Coach suggests a lighter week or a rest. Every later category moves
+     down one and keeps its order relative to the others, so no finding's rank
+     moves — its one finding is sheet-only and never competes for a card. */
+  { id: 'rest',        label: 'Rest and lighter weeks', mutable: true, note: 'When Coach suggests a lighter week or a rest.' },
   { id: 'progression', label: 'Stalls and records',  mutable: true,  note: 'Where your best estimated maxes sit, and records as they land.' },
   /* Ship two's. After the training rows because it is one, and it moves no
      existing finding: the builder is a selector, it never competes for a card,
@@ -879,6 +884,39 @@ export const FACTS = Object.freeze([
     },
     because: v => 'each of ' + plural(v.length, 'target') + ' worked out from your own sessions of that lift'
   },
+  /* STAGE TWO (v49): coach-overlap.js's readings. Every word of them is that
+     file's, through units.js, and fenced by tools-check/coach-overlap.mjs;
+     these facts only hold what it said. */
+  {
+    /* The lift lift.stalled names, read against its bodyweight, frequency and
+       sets — or null when coach-overlap.js has nothing to call. A stall
+       readout with no reading beside it is not said at all any more: a flat
+       lift through a cut that is holding is never called a stall. */
+    id: 'lift.stallRead', unit: null, requires: ['lift.stalled'],
+    compute: d => {
+      const r = d.readLift(d.f('lift.stalled').exId);
+      return r && r.call !== 'none' ? r : null;
+    },
+    because: () => 'read against your bodyweight, how often you train it and your sets'
+  },
+  {
+    // "How are my lifts moving?": one line for each of up to five lifts.
+    id: 'lift.moving', unit: null, requires: [],
+    compute: d => { const v = liftsMoving(d.overlap(), d.now); return v.length ? v : null; },
+    because: v => 'your ' + plural(v.length, 'lift') + ' with the most sessions in the last twelve weeks'
+  },
+  {
+    // "Good day for a record?": a rep record at a weight he has lifted, or null.
+    id: 'lift.recordDay', unit: null, requires: [],
+    compute: d => d.recordDay(),
+    because: () => 'one more rep than your best at a weight from the last four weeks'
+  },
+  {
+    // The lighter week, when two or more of its signs line up; null otherwise.
+    id: 'session.lighterWeek', unit: null, requires: [],
+    compute: d => d.lighterWeek(),
+    because: () => 'your own sets, failures and estimated maxes against your own normal'
+  },
 
   /* ---------- fuel ----------
      The guard comes first in this family and it is not optional. Onboarding is
@@ -1560,9 +1598,11 @@ export const INTENTS = Object.freeze([
        The intent itself stays — the question it answers is a good one. */
     id: 'stalled_lift', kind: 'finding', priorityBand: 4, severity: 55,
     category: 'progression', tier: 'pro', surfaces: ['sheet'],
-    factsNeeded: ['lift.stalled'], supersedes: ['pr_proximity'],
+    factsNeeded: ['lift.stalled', 'lift.stallRead'], supersedes: ['pr_proximity'],
     minData: d => d.f('session.windowCount') >= 4,
-    when: d => d.f('lift.stalled') != null,
+    // v49: and only when stage two has a reading of that same lift. A flat
+    // figure with no context beside it is what stage two exists to replace.
+    when: d => d.f('lift.stalled') != null && d.f('lift.stallRead') != null,
     tone: 'neutral',
     response: 'resp_stalled'
   },
@@ -1583,6 +1623,21 @@ export const INTENTS = Object.freeze([
     when: d => d.f('lift.proximity') != null,
     tone: 'good',
     response: 'resp_proximity'
+  },
+  {
+    /* THE LIGHTER WEEK (v49): account-wide, reactive, sheet-only. Two or more
+       of its signs — lifts declining, failures well over his usual share, two
+       big weeks running, six weeks since his last light one — and it answers
+       "Should I go lighter?". It never reaches a card, but it is a finding, so
+       its supersedes is the stopping bias: while it fires, no card cheers a
+       record or a near-record. */
+    id: 'lighter_week', kind: 'finding', priorityBand: 2, severity: 75,
+    category: 'rest', tier: 'pro', surfaces: ['sheet'],
+    factsNeeded: ['session.lighterWeek'], supersedes: ['recent_pr', 'pr_proximity'],
+    minData: d => !isMuted(d.input.settings, 'rest') && d.f('session.windowCount') >= 6,
+    when: d => d.f('session.lighterWeek') != null,
+    tone: 'caution',
+    response: 'resp_lighter_week'
   },
   {
     id: 'group_under_weekly_normal', kind: 'finding', priorityBand: 4, severity: 45,
@@ -1759,6 +1814,29 @@ export const INTENTS = Object.freeze([
     minData: d => !isMuted(d.input.settings, 'targets'),
     when: d => (d.f('lift.targets') || []).length > 0,
     response: 'resp_lift_targets'
+  },
+  {
+    /* HOW ARE MY LIFTS MOVING? (v49) One line per lift, up to five, each
+       coach-overlap.js's: how much a climbing lift is up, what a flat one's
+       reading is, or that it is too soon to say. A selector — it picks the
+       lifts and says each — so it never competes for a card. */
+    id: 'lift_status', kind: 'selector', priorityBand: 5, severity: 1,
+    category: 'progression', tier: 'pro', surfaces: ['sheet'],
+    factsNeeded: ['lift.moving'], supersedes: [],
+    minData: d => !isMuted(d.input.settings, 'progression'),
+    when: d => d.f('lift.moving') != null,
+    response: 'resp_lift_status'
+  },
+  {
+    /* GOOD DAY FOR A RECORD? (v49) Only when asked, never on a card, never
+       pushed, and only offered on a day one qualifies: a rep record at a
+       weight he has already lifted. */
+    id: 'record_day', kind: 'selector', priorityBand: 5, severity: 1,
+    category: 'progression', tier: 'pro', surfaces: ['sheet'],
+    factsNeeded: ['lift.recordDay'], supersedes: [],
+    minData: d => !isMuted(d.input.settings, 'progression'),
+    when: d => d.f('lift.recordDay') != null,
+    response: 'resp_record_day'
   },
   {
     /* THE IN-SESSION READ, registered so its switch is a category like any
@@ -1947,33 +2025,21 @@ export const RESPONSES = Object.freeze({
       return plural(v.days, 'day') + ' since your last working set for ' + groupLabel(v.group) + '.';
     }
   },
-  /* The sentence this ship rewrote. It shipped as "X hasn't moved: your best
-     estimated max there is still N" — which characterises the lifter rather
-     than the log, and did it unprompted on the screen the app opens to. Both
-     halves are fixed: the surface is the sheet (see stalled_lift) and the
-     sentence is a figure and a date.
-
-     The direction branch is the third half of the same defect. A flat
-     estimated max on an account whose stated goal is DOWN is not a stall, it
-     is a lift held through a deficit, and Coach reading it the other way is a
-     wrong number about the most sensitive thing it looks at. `weight.goalDir`
-     is the account's own stated direction and nothing else (§FACTS); when
-     there is no direction to read against, the plain figure stands on its own. */
+  /* The sentence this ship rewrote, twice. It shipped as "X hasn't moved:
+     your best estimated max there is still N" — a characterisation of the
+     lifter, unprompted, on the screen the app opens to — and became a figure
+     and a date on the sheet. v49 goes the rest of the way: a flat figure with
+     nothing beside it was still a guess about the most sensitive thing Coach
+     reads, because a flat estimated max through a cut is a lift held. So the
+     answer is stage two's reading of that lift (coach-overlap.js): plateau,
+     holding through a cut, a slide, trained too rarely to say, or "Coach
+     needs weigh-ins to tell". The standing best rides in the evidence, as a
+     figure through units.js, so the old readout is still there to check. */
   resp_stalled: {
-    text: (d, u) => {
-      const v = d.f('lift.stalled');
-      const when = v.matchedDaysAgo == null ? null
-        : v.matchedDaysAgo === 0 ? 'today'
-        : v.matchedDaysAgo === 1 ? 'yesterday'
-        : plural(v.matchedDaysAgo, 'day') + ' ago';
-      const head = 'Your best estimated max on ' + v.name + ' is ' + labelW(v.best, u) +
-                   (when ? ', last matched ' + when : '') + '.';
-      // The direction is the account's stated goal; the rate is what actually
-      // happened. Both, or neither — a goal nobody has moved toward is not a
-      // thing to mention, and a rate with no stated direction is not Coach's
-      // to characterise.
-      const down = d.f('weight.goalDir') === -1 && d.f('weight.rateWk') != null && d.f('weight.rateWk') < 0;
-      return down ? head + ' Your body weight has been coming down over that stretch.' : head;
+    text: d => d.f('lift.stallRead').text,
+    reason: (d, u) => {
+      const v = d.f('lift.stalled'), r = d.f('lift.stallRead');
+      return r.reason + ' Your best estimated max on it is ' + labelW(v.best, u) + '.';
     }
   },
   resp_recent_pr: {
@@ -2142,6 +2208,23 @@ export const RESPONSES = Object.freeze({
     text: (d, u) => { const l = RESPONSES.resp_patterns.lines(d, u); return l.length ? l[0].text : ''; },
     reason: (d, u) => { const l = RESPONSES.resp_patterns.lines(d, u); return l.length ? l[0].reason : ''; },
     more: (d, u) => RESPONSES.resp_patterns.lines(d, u).slice(1).map(l => ({ text: l.text, reason: l.reason }))
+  },
+
+  /* v49's three. Every sentence is coach-overlap.js's, through units.js. */
+  resp_lift_status: {
+    text: d => d.f('lift.moving')[0].text,
+    reason: d => d.f('lift.moving')[0].reason,
+    more: d => d.f('lift.moving').slice(1).map(l => ({ text: l.text, reason: l.reason }))
+  },
+  resp_record_day: {
+    text: d => d.f('lift.recordDay').text,
+    reason: d => d.f('lift.recordDay').reason,
+    // What Coach cannot see matters most here, so it is its own bubble.
+    more: d => [{ text: d.f('lift.recordDay').unseen, reason: '' }]
+  },
+  resp_lighter_week: {
+    text: d => d.f('session.lighterWeek').text,
+    reason: d => d.f('session.lighterWeek').reason
   },
 
   resp_greet:    { text: () => '' },
@@ -2429,6 +2512,10 @@ export const TRAIN_TOPICS = Object.freeze([
   { id: 'ask_shape',   label: 'What should I train today?', category: 'recency' },
   { id: 'ask_build',   label: 'Make me a workout',          category: 'build' },
   { id: 'ask_targets', label: 'What should I lift today?',  category: 'targets' },
+  // v49: stage two's three, each offered only when it has an answer.
+  { id: 'ask_record_day', label: 'Good day for a record?',  category: 'progression' },
+  { id: 'ask_lighter', label: 'Should I go lighter?',       category: 'rest' },
+  { id: 'ask_lifts',   label: 'How are my lifts moving?',   category: 'progression' },
   { id: 'ask_overdue', label: 'What’s waited longest?',     category: 'recency' },
   { id: 'ask_volume',  label: 'How’s my week going?',       category: 'volume' }
 ]);
@@ -2449,6 +2536,9 @@ const ROUTES = Object.freeze({
   ask_build:    ['build_menu'],
   ask_build_now: ['build_workout'],
   ask_targets:  ['lift_targets'],
+  ask_lifts:    ['lift_status'],
+  ask_record_day: ['record_day'],
+  ask_lighter:  ['lighter_week'],
   ask_stall:    ['stalled_lift', 'pr_proximity'],
   ask_records:  ['recent_pr', 'pr_proximity'],
   ask_volume:   ['group_under_weekly_normal', 'weekly_sessions_vs_trailing'],
@@ -2491,6 +2581,9 @@ const FOLLOWUPS = Object.freeze({
   ask_build_now: [],
   // The workout the targets are on, one tap away.
   ask_targets:  ['ask_build_now'],
+  ask_lifts:    ['ask_record_day', 'ask_targets', 'ask_lighter'],
+  ask_record_day: ['ask_targets', 'ask_lifts'],
+  ask_lighter:  ['ask_volume', 'ask_lifts'],
   // Nothing: the answer is already every pattern that clears its bar.
   ask_patterns: [],
   injury:       []
@@ -2520,6 +2613,9 @@ const ASK_LABELS = Object.freeze({
   ask_build:    'Make me a workout',
   ask_build_now: 'Build it',
   ask_targets:  'What should I lift today?',
+  ask_lifts:    'How are my lifts moving?',
+  ask_record_day: 'Good day for a record?',
+  ask_lighter:  'Should I go lighter?',
   ask_overdue:  'What’s overdue?',
   ask_shape:    'Which session is due?',
   ask_stall:    'Anything stalled?',

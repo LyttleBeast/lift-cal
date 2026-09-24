@@ -53,7 +53,7 @@
 
 import { baselines, prescribe, exposuresFor } from './coach-prog.js';
 import { bwAt, energyBand, volumeFloor } from './coach-goal.js';
-import { labelW, labelRate } from './units.js';
+import { labelW, labelRate, wOut } from './units.js';
 import { GROUPS, GROUP_ORDER } from './exercises.js';
 import { tagsFor } from './coach-tags.js';
 import { e1rm } from './analytics.js';
@@ -310,8 +310,11 @@ function readOne(ex0, c, i) {
 
   const start = W[0].startedAt, end = W[W.length - 1].startedAt;
   const weeks = span / 7;
-  const e1F = median([W[0].y, W[1].y]);
-  const e1L = median([W[W.length - 2].y, W[W.length - 1].y]);
+  // Whole pounds, like every estimated max the app prints (analytics.js's
+  // e1rm rounds): a median of two can land on a half, and 263.5 is a
+  // precision the estimate does not have.
+  const e1F = Math.round(median([W[0].y, W[1].y]));
+  const e1L = Math.round(median([W[W.length - 2].y, W[W.length - 1].y]));
   const abs = e1L / e1F - 1;
   const noise = Math.max(LEVEL_PCT, Number.isFinite(b.sigma) ? b.sigma : 0);
   // Moving up across the window by more than his own noise is not flat,
@@ -511,6 +514,92 @@ function words(r, ex, c, i, u, b) {
           '. Coach needs a couple of weigh-ins near the start and the end of that stretch to tell whether your weight is part of it.',
     reason: evidence
   };
+}
+
+/* ================================================================
+   2b. liftsMoving — "How are my lifts moving?"
+   ================================================================
+   Up to five lifts, the ones with the most sessions in twelve weeks, one line
+   each and every line true: a climbing lift says by how much, a flat one says
+   what readLift() makes of it, a lift with too few sessions in the window says
+   so, and anything else is level lately. Assisted lifts (whose estimated max
+   runs backwards), bodyweight lifts (which have none) and cardio are left out:
+   a line about them would be a number that means nothing. */
+const MOVING_MAX = 5;
+export function liftsMoving(input, now) {
+  try {
+    return moving(input || {}, now);
+  } catch {
+    return [];
+  }
+}
+
+function moving(i0, now) {
+  if (!Number.isFinite(now)) return [];
+  const i = prepare(i0);
+  const u = i.u === 'kg' ? 'kg' : 'lb';
+  const ctx = ctxOf(i, now);
+  const rows = [];
+  i.lifts.forEach(ex => {
+    if (isCardio(ex)) return;
+    const b = baselines(ex, ctx);
+    if (!b || b.assisted || !b.series.length) return;
+    const n84 = b.tops.filter(t => t.daysAgo >= 0 && t.daysAgo < WINDOW_DAYS).length;
+    if (!n84) return;
+    rows.push({ ex, b, n84 });
+  });
+  rows.sort((a, b) => b.n84 - a.n84 || (a.ex.exId < b.ex.exId ? -1 : a.ex.exId > b.ex.exId ? 1 : 0));
+  return rows.slice(0, MOVING_MAX).map(({ ex, b }) => ({ exId: ex.exId, ...lineOf(ex, b, ctx, i, u, now) }));
+}
+
+function lineOf(ex, b, ctx, i, u, now) {
+  const name = String(ex.name || ex.exId);
+  const upBy = (lb, days) => {
+    const wks = Math.max(1, Math.round(days / 7));
+    return name + ': up about ' + labelW(lb, u) + ' on your estimated max over ' + plural(wks, 'week') + '.';
+  };
+  const bestOn = ms => dayLabel(dayKey(ms));
+  if (b.status === 'progressing') {
+    const win = b.series.slice(-8);
+    const days = win.length > 1 ? daysBetween(win[0].startedAt, win[win.length - 1].startedAt) : 0;
+    const shown = Number.isFinite(b.moveLb) ? Math.round(wOut(b.moveLb, u)) : 0;
+    if (shown >= 1 && days >= 7) {
+      return { text: upBy(b.moveLb, days), reason: 'The fitted line through the best set of each of your last ' +
+               plural(win.length, 'session') + ', so one great day or one bad one doesn’t bend it.' };
+    }
+    if (b.lastBestAt != null) {
+      return { text: name + ': a new best on ' + bestOn(b.lastBestAt) + '.',
+               reason: 'Your best estimated max on it, 1% or more over every session before it.' };
+    }
+    return { text: name + ': climbing lately.', reason: 'Its best set has been rising across your last few sessions.' };
+  }
+  const r = readLift(ex, ctx, i);
+  if (r.call !== 'none') return { text: r.text, reason: r.reason };
+  if (r.because === 'rising') {
+    return { text: upBy(r.e1L - r.e1F, r.weeks * 7),
+             reason: 'From the best set of your first two and last two sessions of it in that stretch.' };
+  }
+  if (r.because === 'thin') {
+    return { text: name + ': too soon to call (' + plural(r.points, 'session') + ').',
+             reason: 'Coach wants four sessions across three weeks before it says whether a lift is moving.' };
+  }
+  if (r.because === 'recent' && b.lastBestAt != null) {
+    return { text: name + ': level lately, after a new best on ' + bestOn(b.lastBestAt) + '.',
+             reason: 'Your best estimated max on it, 1% or more over every session before it.' };
+  }
+  return { text: name + ': level lately.', reason: 'No new best in the last three weeks, and nothing Coach reads as a plateau or a slide.' };
+}
+
+/* A session's date the way the app prints one ("Tue, Sep 16"), worked out in
+   UTC from the date KEY, so the day it was filed under is the day this names
+   in every time zone — the spelling coach-prog.js and coach-build.js use. */
+const DAY_NAMES = Object.freeze(['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']);
+const MONTH_NAMES = Object.freeze(['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']);
+function dayLabel(key) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(key || ''));
+  if (!m) return 'a recent session';
+  const y = Number(m[1]), mo = Number(m[2]), dd = Number(m[3]);
+  return DAY_NAMES[new Date(Date.UTC(y, mo - 1, dd)).getUTCDay()] + ', ' + MONTH_NAMES[mo - 1] + ' ' + dd;
 }
 
 /* ================================================================
