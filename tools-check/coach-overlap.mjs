@@ -433,10 +433,13 @@ const said = [];
   tally[l2ok ? 'ok' : 'wrong']++;
   check('L2 — one condition alone is no lighter week: a big fortnight on its own, and two lifts declining three weeks after a light week',
         l2ok, 'wrong — ' + JSON.stringify([l2a && l2a.conds, l2b && l2b.conds]));
-  // And L2b really is the one condition it says it is.
-  const l2bLifts = (() => { const oi = C.overlapInput(L({ lightAgo: 23 })); return oi.lifts; })();
-  check('L2b does hold two declining lifts — the light week three weeks back is what stops it',
-        lw(L({})) !== null || l2bLifts.length >= 2);
+  // And L2b really is the one condition it says it is: the same log without
+  // its light week is offered one — two lifts declining, and more than six
+  // weeks since a light week — so the light week is what stops it.
+  const noLight = lw(L({}));
+  check('L2b holds two declining lifts: without its light week the same log IS offered one — the light week is what stops it',
+        !!noLight && noLight.conds.declining && noLight.conds.sinceLight && !noLight.conds.failure,
+        JSON.stringify(noLight && noLight.conds));
 
   results.push('\n  ok: ' + tally.ok + '   miss: ' + tally.miss + '   wrong: ' + tally.wrong);
   check('wrong: 0 — no row reads a plateau, a cut, a record or a lighter week the row does not', tally.wrong === 0);

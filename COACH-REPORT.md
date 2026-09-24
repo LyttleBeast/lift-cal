@@ -1,5 +1,10 @@
 # COACH — what got built, what changed, and what did not
 
+> **rack-v49 (Coach trainer, stages two and three — plateau or cut, the card
+> and the goal): read §49 first.** Both phases are built and verified; nothing
+> has been seen on a screen. §52 lists the rules the build corrected on the
+> way, each with the case that forced it. The v49 section is at the end.
+>
 > **rack-v48 (Coach trainer, stage one — targets): read §40 first.** It is the
 > one place that run changed a rule of the brief's algorithm — sets past twelve
 > reps count as twelve in the estimated-max series, because leaving them out let
@@ -2272,3 +2277,422 @@ the targets *mean* (the plateau-vs-dip call, the stall ladder) — run the batte
 after every rule you touch, keep `wrong: 0`, and when a property fails, read
 §40a before you reach for the rule the failure points at: the obvious fix and
 the conservative one were not the same fix.
+
+---
+
+## 49. READ THIS FIRST — rack-v49, and what is not done
+
+Written at the end of an unattended overnight run in `~/dev/ship-v49`, against
+`SHIP-V49-PROMPT.md`, with `COACH-TRAINER-SPEC.md` §0, §5, §8 and §9 read first
+as the brief asked. Shipped as `rack-v49`. **Not pushed.**
+
+**Both phases are built, in the brief's order: all of Phase A was built,
+verified and committed before Phase B began.** Every verifier exits 0 under
+`TZ=America/New_York`, `UTC` and `Pacific/Auckland` — 38 of them, four new.
+`coach-prog.mjs` is **57 / 0 / 0**; `coach-overlap.mjs` is **ok 24, miss 0,
+wrong 0**. `database.rules.json` is byte-identical to rack-v48. `sw.js` and
+`usage.js` read `rack-v49`.
+
+**What nobody has seen.** Nothing in this ship has been on a phone or in a
+browser. The card's earned line, the "More" chip, the three new answers after a
+workout, *How am I tracking toward my goal?* with the focus chips under it, the
+Focus rows and the Lift target row in Settings, the *did your goal change?*
+question and the Your goal sheet it opens, the onboarding step and the Basic
+teaser were all driven through `coach-surface.mjs`'s DOM shim, which has no box
+model and never loads `rack.css`. No new CSS was written: the Lift target row
+reuses `.field`, `.row-split` and the existing `.btn` class lists (so
+`touch-target.mjs` holds unedited), and "More" is an ordinary `.coach-chip`.
+
+**Four things the build changed about the brief's rules**, each forced by a
+case, each in §52 with the case:
+
+1. **A normal is read over whole weeks only.** The brief's "sets in days 14–70
+   / 8" counts the weeks before a young log began as zero-set weeks, and on
+   C6's eight-week log that read an ordinary fortnight as a 33% spike — a
+   fatigue call on a lift that was simply level.
+2. **A lift moving up past its own noise is not "flat"**, whatever
+   coach-prog.js's status says: `readLift` returns `none` (`because: 'rising'`)
+   rather than read a plateau into a climb.
+3. **The brief's own weekly line was ten words** under its own nine-word limit,
+   so it was silently never shown. It reads "4 sessions in seven days, most in
+   five weeks." now.
+4. **"How are my lifts moving?" waits for the card's thin bar** (three
+   sessions, three in the window). On two sessions it said "too soon to call
+   (1 session)", true and exactly the thin-account talk the silence verifier
+   exists to stop.
+
+**What is not done**, all of it in BACKLOG.md under *What v49 left open*: the
+stage-four and stage-five work the brief fenced off; the performance cost of the
+card (§55); and the handful of small calls listed in §54.
+
+---
+
+## 50. WHAT GOT BUILT
+
+```
+coach-prog.js     926 lines  was 887. ADDITIVE: baselines() also returns series, lastBestAt,
+                             moveLb, freq, topReps, tops, best and assisted. Nothing it
+                             returned before moved; prescribe() is byte-identical to v48's.
+coach-overlap.js 1,096 lines NEW, PURE. prepare(), readLift() (the call and the ladder),
+                             lighterWeek(), recordDay(), liftsMoving(), and the stage-three
+                             reads that need coach-prog.js: targetsReplay(),
+                             compareSession(), nextTargets(), liftTrend(), goalLiftRead(),
+                             bigThree(), focusRead(). Every sentence of stage two.
+coach-goal.js     287 lines  was 118. energyBand() (energyContext reads through it), bwAt(),
+                             the volume floors, AIM_DIR, normGoalLift(), paceFor(),
+                             weeklyBands(), goalChecks(). Still imports nothing.
+coach.js        4,108 lines  was 3,058. Category rest; fsets on the shaped session; the
+                             overlap input; facts, intents, routes and responses for both
+                             stages; stateOf(); the HYPE registry and c.card; state-aware
+                             topics; the three new questions and the machinery they need
+                             (stale, text as a function, settings: false); normSettings
+                             adds goalLift; the Basic teaser; goalChoices().
+coach-data.js                rateSeWk passed through; recentHype and rememberHype()
+                             (device storage, coachHype); setAim(); setGoalLift().
+coach-ui.js                  the cards read c.card; "More"; the teaser; the aim through
+                             setAim(); "Yes, update my goal" opens Your goal;
+                             Your goal gains Focus (automatically, `always`) and a
+                             Lift target row; openGoalSheet().
+onboarding.js                "What are you training for?" after the weight-goal step.
+sw.js, usage.js              rack-v49.
+```
+
+Commits, each passing every verifier in three time zones:
+
+```
+ed26a0b  coach-prog.js additions (+ coach-goal.js's bwAt, energyBand, volume floors)
+4a495da  coach-overlap.js + its battery (+ the staging edit everywhere; coach-pure J)
+89e82c4  Phase A wiring: ask_lifts, ask_record_day, ask_lighter, stalled_lift reconciled
+3e732f5  Phase B: states, card + hype, topics, compare/next, goal pace + goalLift + focus,
+         goal checks, onboarding, teaser
+119205b  Phase B verifiers: coach-hype, coach-state, coach-pace, the card ban
+8e07907  coach-overlap.js memoised on its input (performance, §55)
+c1cd0ba  rack-v49
+         docs
+```
+
+**Phase A — stage two.** `readLift()` is §3.3 of the brief, row for row: the
+read window is the last six weeks of the lift's series (light weeks out), four
+points across three weeks or `none`; "flat" is status stalled or declining, or
+no new best in three weeks — which is what makes a lift trained twice a week
+readable at all, since v48's status can never call it stalled. Relative
+strength decides a cut, and past a 5% drop it is a slide. The ladder is §3.5,
+the lighter week §3.7, the record day §3.8, the sentences §3.9 with the review's
+rules ("level" only inside his noise, "at steady bodyweight" only when it held,
+"a real plateau" only past five weeks, "cut" only under the rule).
+`stalled_lift` keeps its id and its fact and now also needs a reading of the
+same lift, which it answers with; *Anything stalled?* reaches it as before.
+
+**Phase B — stage three.** `c.you`, `c.train` and `c.opening` are exactly what
+v48 computed; the cards read the new `c.card`. The twelve earned lines are the
+brief's table. The sheet's topics are the brief's §6 table per state. *How did
+today compare?* and *What's next time?* read the latest session in `post` or
+`done_today`. The goal answer is §7.3's five parts. `goalLift`, `q_focus_group`
+and the two goal-change questions are §7.1, §7.2 and §7.4.
+
+---
+
+## 51. THE BATTERIES — every row
+
+### 51.1 `tools-check/coach-overlap.mjs` — stage two
+
+**No row's expectation was changed; two fixtures were, each because it did not
+state the row's facts** (below). Every row's reading, as the engine says it:
+
+| # | call | the reading |
+|---|---|---|
+| C1 | holding_cut | Your estimated max on Barbell Bench Press is level at 264 lb, and for your bodyweight it’s up 4% while your weight has come down about 6.7 lb. Per pound of bodyweight, that’s holding. |
+| C1b | holding_cut | … while you’ve lost 6.7 lb. In a cut, that’s the win. |
+| C2 | sliding | Back Squat (High Bar) is down 8% over 6 weeks while you’ve lost about 2 lb a week, faster than the 1 lb a week you set. (evidence: per pound it is only 1% down — row 3's `abs ≥ −0.05` is what makes it a slide) |
+| C3 | plateau / volume | Barbell Bench Press has been level at about 263 lb for 5 weeks at steady bodyweight, training it about twice a week. That’s a real plateau. +4 sets a week for chest would reach a common starting point of 10. |
+| C3b | plateau / variation | … for 9 weeks … You’ve done Incline Dumbbell Bench Press before. A few weeks of it is a common way through a flat stretch. |
+| C3c | plateau / reset | … level at about 259 lb for 4 weeks … Coach’s target keeps the weight until your reps are back in range. (prescribe() says hold; no "a real plateau" under five weeks) |
+| C4 | irregular | Barbell Bench Press is level, and you’ve done it 3 times in the last 4 weeks against your usual 1.6 times a week. |
+| C5 | fatigue | Barbell Bench Press has been level for 11 weeks while your chest sets ran 40% over your usual. A lighter week is a common way through: about 5 chest sets instead of your usual 10, the same weights, then back to normal. |
+| C6 | unknown | Your estimated max on Barbell Bench Press has been level at about 264 lb for 7 weeks. Coach needs a couple of weigh-ins near the start and the end of that stretch to tell whether your weight is part of it. |
+| C7 | none | and, end to end, no stall, plateau, flat or level word anywhere on the sheet |
+| C8 | none | (three sessions: "too soon to call (3 sessions)" under *How are my lifts moving?*) |
+| C9 | plateau | the C3 log at three a week (v48's status reads `holding` there) |
+| C10 | holding_cut | C1 at three a week |
+| C1@2 | holding_cut | C1 at two a week — the brief asks for a C row at 2× and one at 3× |
+| C11 | none | a best two weeks ago |
+| C12 | plateau | Back Squat (High Bar) is down 7% over 5 weeks while your weight has gone up about 2.5 lb, training it about twice a week. That’s a real plateau. — Micah's case: never "level", never "steady" |
+| C13 | holding_cut | C1 on Build muscle with no food direction: never "cut" |
+| P1 | record | Good day for 6 at 225 lb on Barbell Bench Press, one more rep than your best there. |
+| P2–P5 | none | a hard cut; a best set that was a single (one more is a double); an F last time; last done 14 days ago |
+| L1 | lighter week | A lighter week is a common approach here: about half your usual sets (for you, about 1 for chest, 2 for back, 1 for legs and 2 for arms), the same weights you’ve been using, then back to normal. |
+| L2 | none | a big fortnight alone; and two lifts declining three weeks after a light week (without that light week the same log IS offered one) |
+
+**Fixture choices where a row left a detail open.** Dates are offsets from a
+fixed epoch at a fixed local hour. C1's ten exposures are one a week, then two
+(45, 38, 31, 27, 24, 20, 17, 13, 10, 3 days back), each top set one of 225×5,
+230×4, 220×6 (estimated maxes 263, 261, 264 — no point 1% over any earlier
+one). Weigh-ins are daily, straight lines between the row's two numbers. C3's
+bench climbs 2.5 lb a session to 225×5, then holds; flyes beside it stop four
+weeks ago (so chest sets fall under both his normal and ten), and a steady back
+and legs week runs alongside so that dropping the flyes never makes a whole
+week "light". C12's loads fall 329 → 304.5 estimated (7.4%) over five weeks
+while weigh-ins climb 180 → 183.
+
+**The two fixtures I corrected**, neither of them a rule: C4's first version
+stopped all his other training too, which made those weeks genuinely light by
+the brief's rule (the row is about bench); C12's first loads fell 6.4%, not the
+row's 7%. In the other new verifiers, three fixtures of mine were wrong the
+same way and were fixed the same way: a lift-target log that closed 44% of the
+gap where the row wanted over half (`coach-hype.mjs`), a perfectly straight
+climb with no spread to make a range of (`coach-pace.mjs`), and a "More"
+fixture in the post-workout state, where You has only four topics
+(`coach-surface.mjs` M).
+
+**The properties**, over 2,200 generated histories (1,100 per unit; one to four
+lifts at one to three sessions a week, rising, level and falling, weigh-ins
+falling, holding and climbing and sometimes absent, a lift done far less lately
+now and then): deterministic; order-blind (sessions and weigh-ins reversed);
+weigh-ins moving bodyweight down in the week before the window's end never
+turn `holding_cut` or `small_slide` into `plateau`; no weigh-ins never yields a
+call that needs them; a record day never under three reps, never at a load not
+logged in four weeks, never after an F; and no sentence with a banned word, a
+causal word, "eat", a crossed unit or a straight apostrophe (4,000+ strings,
+both units). Every call occurs in the sweep. Section D drives the wiring end to
+end through `coach()`.
+
+### 51.2 The other new verifiers
+
+- **`coach-hype.mjs`** (89 checks): each of the twelve lines earned on a log
+  built to its gate and not on the nearest one that should not, both units,
+  real library names; nine words, one number, no "!"; the card ban (read from
+  `coach-voice.mjs`); a name too long to fit is not said; the targets replay
+  against `prescribe()` by hand, with a squat done twenty days earlier whose
+  group (leg press) trained three days before — so its target is a hold, not a
+  re-entry; rule 3 and rule 4; rotation on pools of one, two, three and five.
+- **`coach-state.mjs`** (39): `stateOf()` at 2:59, 3:00 and 3:01, across local
+  midnight, with and without `endedAt`, a future end, live; the topics in every
+  state on both surfaces against `STATE_TOPICS` filtered by what answers.
+- **`coach-pace.mjs`** (52): a lift target's range, reached, not moving, past
+  six months, a 225 × 15 target reached once 225 × 15 is logged, a target on an
+  unlogged lift, kilos; the bodyweight range from the trend's own error (±25%
+  without one), the figure alone past the band, moving away, reached, absent;
+  never a date; the big three and their total; the focus readout; no aim;
+  `normGoalLift` on 21 junk values; G1–G8, with G6 driven through the real
+  `coach-data.js` against a stub store.
+- **`coach-prog.mjs` D**: the new fields consistent with status on every row
+  and every swept history; `prescribe()` and every old `baselines()` field
+  byte-identical to rack-v48's own file read out of git.
+
+---
+
+## 52. WHAT I CORRECTED, AND WHY
+
+In the order they were found.
+
+1. **Whole weeks only, in every normal** (`coach-overlap.js` `blocksOf`). The
+   brief's §3.4 normal is "hard sets in days 14–70 / 8". On C6 — bench twice a
+   week for eight weeks, nothing else changed — two of those eight weeks are
+   before his first session, so the normal came out 4.5 a week against a real
+   6, and the last fortnight (6 a week) read 33% over it: a `fatigue` call on a
+   lift that was simply level. C10 did the same at three a week. A week the log
+   does not fully cover is now neither counted into a normal nor ever called a
+   light week. The same fix stopped C12's first week, which the log only half
+   covered, from being called light and dropped.
+2. **Frequency in the plateau sentence is read over the window** ("training it
+   about twice a week"). §3.9 names no source; `freq.normal` is over twelve
+   weeks, and C12's squat — five weeks old, twice a week — read "about once a
+   week".
+3. **A lift climbing past its own noise is not flat** (`because: 'rising'`).
+   `flat` includes "no new best in three weeks", and a lift can clear that and
+   still be up 3% over the window. The sentence would have said "up" beside "a
+   real plateau". *How are my lifts moving?* says how much it is up instead.
+4. **Estimated maxes print as whole pounds.** A median of two points can land
+   on a half, and `coach-units.mjs` (which must pass unedited) failed on "221.5
+   lb" because its rate-band check is a substring test for "1.5". Every e1RM
+   the app prints is already whole (analytics rounds them); 263.5 was a
+   precision the estimate never had.
+5. **The record day's load prints through `labelW`, not `fmtSetLoad`.**
+   `units.mjs` requires every `fmtSetLoad` site to be classified, and the brief
+   allows only the staging edit there. A record-day load is on the half-unit
+   grid by construction, where the two print identically in both units.
+6. **The weekly line**, ten words under a nine-word rule (§49). "4 sessions in
+   seven days, most in five weeks."
+7. **"What's next time?" has a header**, with the targets as its bubbles — the
+   shape *What should I lift today?* has. `coach-units.mjs` renders every route
+   in both units and requires a weight in one to be a weight in the other; a
+   pound-typed log is, by the targets' own grid rule, targeted differently on
+   kilos, so no weight may ride in the headline.
+8. **The card's lead question comes from topics the state's sheet offers.**
+   After a workout the You sheet drops *How's my training?* for *How did today
+   compare?*, and the card was still prompting the one the sheet no longer had.
+9. **"How are my lifts moving?" waits for three sessions** (§49).
+10. **The engine got 3× slower on a card paint**, and was brought back to
+    about 3× v48's instead of 10× (§55).
+
+---
+
+## 53. WHERE THE BRIEF WAS WRONG ABOUT THE CODE
+
+1. **"How are my lifts moving? takes [ask_stall's] place in the topic
+   tables."** `ask_stall` was never in a topic table — only in two `FOLLOWUPS`
+   lists (after *How's my training?* and *Any records lately?*). It stays
+   there, reaching the reconciled `stalled_lift`; *How are my lifts moving?*
+   went into the Train table where §3.10 lists it, and into You's.
+2. **`coach-units.mjs` pins the stall answer to a weight figure.** It must pass
+   unedited, and it reads `ask_stall`'s text for an "N lb" matching `labelW`,
+   and requires every response quoting `lift.stalled` (a pound fact) to call a
+   formatter. The brief replaces the figure-and-date with the reading's
+   sentence. Both hold: the readings name the estimated max through `labelW`
+   ("down 11% over 5 weeks, to 233 lb"), and the standing best rides in the
+   evidence ("Your best estimated max on it is 263 lb.").
+3. **`coach-voice.mjs` section F pinned the old stall sentence** — the
+   figure, "last matched", and a clause when the goal pointed down. It is
+   rewritten (the brief lists coach-voice for "the new answers"), with the
+   reason at its head.
+4. **"`update` opens Settings → Coach → Your goal."** `settings.js` imports
+   `coach-ui.js`, so the sheet cannot reach into Settings without a ring. It
+   opens a Your goal sheet drawn by `coach-ui.js` — the same rows, the same
+   writers. Settings still draws them inline.
+5. **§7.3's "more than 6 months".** `coach-units.mjs` refuses any typed digit
+   in `coach.js` copy that is not a count of days or weeks. "More than six
+   months at your last 12 weeks’ rate."
+6. **§5.1's examples meet short names the library does not have.** "Halfway to
+   a 315 bench" became "Past halfway to your Barbell Bench Press target." (the
+   figures in its evidence); "Up 3 lb in four weeks, right on pace." became the
+   weekly rate the fact actually is: "Up 0.5 lb a week, right on pace."
+7. **"Hard sets" include cardio sets** — the shipped count files a treadmill
+   under legs. The brief is explicit that the shipped count is the one to use,
+   so it is; BACKLOG has it.
+8. **The brief lists no home for the stage-three reads that need a target
+   replayed or a lift's series** (compare, next, the targets met, pace).
+   `coach.js` may import only `coach-overlap.js` among the new files, so they
+   live there, in their own labelled section.
+9. **`coach-rotation.mjs` could not keep its "dropped line comes back" check
+   on the full log**: the only recency greeting that log earned was
+   `g_since_group`, which left the pool. The check moved to the log with plenty
+   to say, where "Logged already today." does the same job.
+10. Confirmed true, for the next brief: v48's status is never `stalled` at two
+    sessions a week (checked: C9 reads `holding` there); `trendRate()` already
+    returned `seWk`; `pendingQuestion()` skipped every answered question
+    (§7.4.1); `q.text` was a static string drawn by `coach-ui.js` (§7.4.2);
+    `coachAnswerRows()` drew every answered non-`always` question (§7.4.3).
+
+---
+
+## 54. EVERY ASSUMPTION I MADE
+
+**Stage two**
+
+- The read window and its end are taken after light-week points are dropped, so
+  its last two points are always real sessions.
+- A light week needs four whole weeks with a session among weeks three to ten
+  before there is a "usual week" to be light against.
+- "Weeks 4–12" in the volume rung is weeks five to twelve (blocks 4–11): the
+  four before are its "last 4 weeks". The lighter week's per-group normals are
+  weeks three to twelve (the spike is the last two).
+- The lighter week's F-share test uses the same 2% floor the group-fatigue test
+  does. Its "usual week" for condition 3 leaves light weeks out, so a deload
+  cannot make an ordinary week look big.
+- "Since the last light week", with none in the log: satisfied only when the log
+  itself reaches back six weeks.
+- Grinding is judged at the last session's top load; a reset is offered only
+  when `prescribe()` really says hold or reduce, and otherwise the rung reads
+  "wait". With the targets switched off, "wait" drops "so the targets stay".
+- A variation candidate's equipment is the library's; the lift being read must
+  itself carry a pattern (a custom exercise does not).
+- Assisted, bodyweight and cardio lifts are never read, never a record, never
+  on *How are my lifts moving?* — an assisted lift's estimated max runs
+  backwards, a bodyweight lift has none.
+- The record day's "best reps at L" is over every non-drop working set at L in
+  the whole log; its 25th-percentile rest is rounded up (the cautious way).
+- `readLift`'s "cut" wording counts `weight.goalDir` −1 whether it came from his
+  food targets or from his answer to *Which way are you trying to go?*.
+
+**Stage three**
+
+- The latest session is the one that ended last. `post` includes an end later
+  than now (a clock skew reads as just finished).
+- A card shows an earned line before Basic's locked state (encouragement is
+  both tiers'); the Train card takes a training line the You card is not
+  showing, and fuel and weight lines are the You card's only, as their findings
+  always were.
+- "Within three days" is up to three days back, inclusive, for the record, the
+  targets met and the milestone; "≤ 2 days old" for the comeback line.
+- `hype_targets_met` is Pro only: a Basic account never saw the targets it
+  would be congratulated on meeting — the one exception to rule 7.
+- The greeting still steps around the ranked finding, not the card's line —
+  which can echo ("… is moving." over "New best on …"), and leaves every
+  greeting rule `coach-rotation.mjs` pins exactly as it was.
+- A pace with no spread (a perfectly straight log) is a one-number range:
+  "about 5 weeks".
+- The bodyweight range is `rate ± rateSeWk` (±25% without one), rounded up;
+  with the slow end at or under zero, "at least N weeks".
+- The goal-change checks read three fixed seven-day blocks back from now; a
+  block end with fewer than two weigh-ins in its week is no reading and no
+  question. "Twenty-one days of weigh-ins" is the span from the first to the
+  last. An aim with no `asked` stamp (none written since v48) counts as old.
+- A stale "temporary" that is asked again and ignored goes quiet for another
+  28 days (its stamp moves when it is shown), not the week an unanswered
+  question gets.
+- The answers he gave to a goal-change question are said back under *How am I
+  tracking toward my goal?* — "and you told Coach that’s on purpose" — which is
+  what makes `changes: ['goal_pace']` true.
+- `goal_pace` needs a readable log, and lives in the "Stalls and records"
+  category.
+- The Lift target select lists thirty lifts at most, most-logged first; a
+  target on a lift older than six months still shows, by its id.
+
+---
+
+## 55. WHAT IS NOT DONE, AND WHAT NOBODY HAS SEEN
+
+1. **Nothing has been seen on a screen** (§49). The one layout I would look at
+   first is the Lift target row — a select, then weight and reps side by side
+   (`.row-split`), then Save and Clear — at 375 px, and the seven focus rows
+   under the aim's six in Settings, which make Your goal long.
+2. **The card costs more.** On a year-long, 200-session log in node, v48 paints
+   a card in about 2–3 ms; v49 in about 8 ms after the memo (24 ms before it).
+   The earned lines read every lift — its baselines, its reading — on every
+   paint, and v48's `baselines()` date arithmetic is most of what remains. A
+   per-open cache in `coach-data.js`, or building the card's pool only when a
+   card is drawn, would win most of it back.
+3. **Stage four and five** are untouched, as the brief says.
+4. **Native was not read.**
+
+---
+
+## 56. MICAH'S DECISIONS, 23 SEP 2026 — carried forward
+
+Rows marked BUILT landed in v48 or tonight; the rest are recorded, not built.
+
+| # | Question | Answer | Where it lands |
+|---|---|---|---|
+| 1 | Labelled training-science starting points? | **Yes, training only** | BUILT (v48): default bands and steps. v49 adds the volume floors and the lighter week, each labelled "a common starting point" / "a common approach" |
+| 2 | The goal set | **The five, plus Powerlifting** | BUILT (v48). v49: Powerlifting's big three and total in goal pace |
+| 3 | Card becomes encouragement only? | **Yes.** Findings move to the sheet's opening | **BUILT (v49)**: `c.card`, the HYPE registry, the card ban; `c.opening` unchanged |
+| 4 | Coming back after time off | the group's clock, 12 days | BUILT (v48); v49's targets replay reads the group's clock as of that session |
+| 5 | Two sessions at the top before adding weight | As proposed | BUILT (v48) |
+| 6 | No targets for singles or lone heavy top sets | Yes | BUILT (v48); v49's record day never proposes a single or a double |
+| 7 | General nutrition science in fuel answers? | No, own data only | Stage 4 |
+| 8 | Learning whether rest advice was taken | replay, save nothing; a per-group recovery window | Stage 4 |
+| 9 | Save answers about how you feel? | a mark on a bad session | Stage 4 — *How did today compare?* says the numbers and what Coach cannot see |
+| 10 | Cut-speed thresholds | As proposed | BUILT (v48); v49's `energyBand()` is the one place they are compared |
+| 11 | Say "carb-loaded"? | No | Stage 4 |
+| 12 | Stage order | As proposed | stages two and three tonight |
+| 13 | Coach reads the water log? | Not yet | — |
+| 14 | Which Start button leads | *Start with Coach’s targets* | BUILT (v48) |
+| 15 | Targets Pro only? | **Pro, with one teaser** | **BUILT (v49)**: Basic sees one real target above the Pro panel |
+| 16 | When rest comes up | answered when asked, and a gentle card line after three days running | **Card line BUILT (v49)**: "Three straight days. A rest day is well earned." — "Great session" left out, because Coach cannot know it was. The rest answer itself is stage 4 |
+
+**Decided in the brief, recorded here:** the **§40a trade** (sets past twelve
+reps count as twelve in the estimated-max series) is **accepted by Micah** —
+decided, not open. **Your goal stays Pro-only** in Settings; the onboarding step
+asks every account, because tier can change and setup is where goals belong.
+
+---
+
+## 57. IF THE NEXT RUN READS ONE THING
+
+`tools-check/coach-overlap.mjs`, and the rule it found: **a normal is only as
+honest as the weeks it is read over.** The first fatigue false-positive tonight
+came from dividing an eight-week log by eight weeks of "normal" that included
+two weeks before the account existed — and it would have told a lifter who was
+simply level that he was overdoing it. Stage four's readiness and stage five's
+volume bands are built out of exactly these normals. Read `blocksOf()`'s
+comment before writing another one, and keep `wrong: 0` fatal.

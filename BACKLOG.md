@@ -7,7 +7,7 @@ Two things this file is not. It is not a design document — where a shape was
 already decided, the decision stays where it was written and this only points at
 it. And it is not a port brief: `NEXT-NATIVE.md`, `NEXT-NATIVE-UNITS.md`,
 `NEXT-NATIVE-V40.md`, `NEXT-NATIVE-V41.md`, `NEXT-NATIVE-V42.md`,
-`NEXT-NATIVE-V43.md`, `NEXT-NATIVE-V45.md`, `NEXT-NATIVE-V46.md` and `NEXT-NATIVE-V48.md` are the instructions for copying
+`NEXT-NATIVE-V43.md`, `NEXT-NATIVE-V45.md`, `NEXT-NATIVE-V46.md`, `NEXT-NATIVE-V48.md` and `NEXT-NATIVE-V49.md` are the instructions for copying
 work into `~/dev/rack-mobile`, and they stay. What is below is the list of
 things nobody has done yet.
 
@@ -52,6 +52,14 @@ That tree moves on its own, so verify before acting on one.
   (`NEXT-NATIVE-V46.md` §6). v46's second switch, "In the gym", is
   `settings/coach/mute/live`: the V43 shape's `mute.$cat` accepts it, but if
   the PROPOSED file has since enumerated the categories, `live` must join them.
+- **The PROPOSED rules need v49's `settings/coach` additions** — the
+  PUBLISHED rules take them as they are (they never mention `coach`), and
+  `database.rules.json` is unchanged. If the PROPOSED `coach` shape keeps its
+  `$other` deny, each of these must join it or its write is refused silently:
+  `goalLift` (`{ exId, lb, reps, at }`), the answers `q_focus_group`,
+  `q_goal_check_weight` and `q_goal_check_targets` (and their `asked` stamps),
+  and `rest` among the `mute` categories if they are enumerated.
+  `NEXT-NATIVE-V49.md` §4 has the exact shapes.
 - **The stricter `.validate` rules themselves.** They were the reason v40's
   Phase 3 existed: until a refused write said so on screen and kept its payload,
   publishing them turned a too-strict rule into silent data loss. That half is
@@ -195,6 +203,73 @@ Carried from `NEXT-NATIVE.md` §7 so it survives that file. Do not "fix" these:
 
 ---
 
+## What v49 left open in its own work
+
+v49 is Coach trainer, stages two and three: **plateau or cut?**
+(`coach-overlap.js` — a flat lift read against bodyweight, frequency and sets;
+the stall ladder; the lighter week; the record day; *How are my lifts moving?*)
+and **the card and the goal** (the card only encourages; the sheet adapts to
+before and after a workout; *How did today compare?*, *What's next time?*, goal
+pace, a lift target and focus group, the *did your goal change?* questions, a
+goal step in onboarding, one target for Basic). Written up in `COACH-REPORT.md`
+§49–§57.
+
+**Deliberately left for later stages** (SHIP-V49-PROMPT.md §9), not fixed:
+
+- **Stage four**: the fueling brain, readiness, the rest-day answer to *What
+  should I train today?*, and the bad-day marks. *How did today compare?* says
+  what the numbers were and nothing about why.
+- **Stage five**: mid-session targets, weekly volume bands and neglect, and the
+  focus group's volume and builder effects (tonight it is read by goal pace
+  only).
+- **A second session on the same day is invisible to the live-session facts**
+  and **`record.groups` counts warm-ups** — both from v42, both untouched.
+- **Anything in native** — see `NEXT-NATIVE-V49.md`.
+
+**Left open in v49's own work:**
+
+- **Nothing in this ship has been seen on a screen.** The earned line on both
+  cards, the "More" chip, the three new answers after a workout, the goal
+  answer with the focus chips under it, Your goal's Focus rows and Lift target
+  row, the goal-change question, the onboarding step and the Basic teaser were
+  all driven through the DOM shim (`coach-surface.mjs` M), which has no box
+  model and never loads `rack.css`.
+- **"Hard sets" include cardio sets.** They are the shipped count
+  (`shapeSession()`'s `sets[g]`), as the brief requires, and that count files a
+  treadmill's sets under legs and a rowing machine's under back. The fatigue
+  and lighter-week reads inherit it. The fix belongs in `shapeSession()`, for
+  every reader at once, and it would move shipped numbers.
+- **A light week is read account-wide, from sets alone** (the brief's rule): a
+  week he trained less for any reason — not only a deload — reads as light, and
+  its sessions leave the plateau read. That makes a reading quieter, never
+  wrong; the battery's first C4 fixture showed it.
+- **The card costs more to paint.** A year-long log in node: about 8 ms a paint
+  against v48's 2–3 ms, because the earned lines read every lift. A per-open
+  cache in `coach-data.js`, or computing the card's pool only when a card is
+  drawn, would win most of it back.
+- **The greeting can echo the card's line** — "Bench Press is moving." above
+  "New best on Barbell Bench Press." Both true. The greeting still steps around
+  the ranked finding (the sheet's opening), not the card's new line, so the
+  rotation's shipped rules stayed exactly as they were.
+- **"Yes, update my goal" opens a Your goal sheet drawn by `coach-ui.js`**, not
+  Settings itself — `settings.js` imports `coach-ui.js`, so the reverse would
+  be a ring. Same rows, same writers.
+- **The record day is silent for a kilo account whose loads were typed in
+  pounds** (off the half-kilo grid), by the targets' own grid rule.
+- **Goal pace sits in the "Stalls and records" category** — no category fitted
+  better without adding one — so switching that off also silences *How am I
+  tracking toward my goal?*.
+- **"Every Coach target met" is Pro only** (a Basic account never saw the
+  targets), the one exception to "Pro and Basic both get earned lines".
+- **The volume rung reads "weeks 4–12" as weeks 5 to 12** (the four weeks
+  before them are the "last 4 weeks" it compares).
+- **Phase B landed as four commits rather than the brief's eight** (engine and
+  UI together, then its verifiers, then a performance change): the pieces share
+  `coach.js`, and splitting them afterwards would have meant hand-built partial
+  patches. Each commit passes every verifier.
+- **Native was not read** — the run was fenced — so `NEXT-NATIVE-V49.md`
+  carries its native paths from V48, unverified.
+
 ## What v48 left open in its own work
 
 v48 is Coach trainer, stage one: **targets** — per lift, the weight and reps for
@@ -207,12 +282,9 @@ written up in `COACH-REPORT.md` §40–§48.
 
 **Deliberately left for later stages** (SHIP-V48-PROMPT.md §11), not fixed:
 
-- **`lift.stalled` and the new per-lift status disagree about "stalled".** The
-  shipped fact calls a lift stalled when its last three entries do not beat the
-  best before them; `coach-prog.js` computes progressing / holding / stalled /
-  declining over a window with a time span and his own noise. Status is
-  computed and never printed tonight. Stage two reconciles the two, beside the
-  context (plateau vs dip) that interprets them.
+- ~~**`lift.stalled` and the new per-lift status disagree about "stalled".**~~
+  **Closed in v49**: `stalled_lift` now also needs stage two's reading of the
+  same lift, and answers with it (`COACH-REPORT.md` §50).
 - **`coach-live.js` still never names a weight**, mid-session. Stage five
   replaces its fence ("a number to put on the bar must be a quote") with one
   that allows a `coach-prog.js` target — not a deletion of it.
@@ -222,9 +294,8 @@ written up in `COACH-REPORT.md` §40–§48.
 - **A second session on the same day is invisible to the live-session facts**
   and **`record.groups` counts warm-ups** — both already listed under v42 below,
   both untouched by v48.
-- **Basic accounts see no target at all.** The Pro panel names "Weight and rep
-  targets" and that is the whole change. The one-real-target teaser is stage
-  three.
+- ~~**Basic accounts see no target at all.**~~ **Closed in v49**: the sheet
+  shows Basic one real target above the Pro panel.
 
 **Left open in v48's own work:**
 

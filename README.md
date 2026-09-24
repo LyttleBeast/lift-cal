@@ -98,11 +98,12 @@ node in the database. See *Access* below for what replaced them, and why.
 | `coach.js` | **Coach's engine.** Facts, intents, responses, router — four tables and a sort. Pure: no clock, no DOM, no reads, no module state. Copied into the native tree verbatim |
 | `coach-build.js` | **The workout builder** — "Make me a workout" on Train. Turns the shape that has waited longest into a workout made out of his own log: the most recent such session, its exercises, blocks and logged numbers, never an invented weight — and beside each exercise its target from `coach-prog.js`. Pure, and copied into the native tree verbatim like `coach.js` |
 | `coach-prog.js` | **The targets** — per lift, the weight and reps for next time: his rep range learned from where he moves up, his step learned from his own jumps, a hold, a jump, a reduction or a way back after a layoff, each with its evidence. Every weight is one he logged or at most two of his own steps away (coming back, a whole number of steps below). Pure; copied verbatim. `tools-check/coach-prog.mjs` is its battery |
-| `coach-goal.js` | **The goal's dials** — the six aims and three experience answers, what each turns (confirm twice before a jump, one jump or two, the starting rep band), and the energy context read off the weight trend. Pure; imports nothing; copied verbatim |
+| `coach-goal.js` | **The goal's dials** — the six aims and three experience answers, what each turns (confirm twice before a jump, one jump or two, the starting rep band), and the energy context read off the weight trend. Since v49 also bodyweight at a moment, the energy band, the volume floors, the lift target's shape (`normGoalLift`), its pace (`paceFor`) and the goal-change checks. Pure; imports nothing; copied verbatim |
+| `coach-overlap.js` | **Plateau or cut?** (v49) — a flat lift read against the bodyweight, the frequency and the sets beside it: a real plateau and the rung of the stall ladder, a cut that is holding, a slide, trained too rarely to say, or "Coach needs weigh-ins". Also the lighter week, the record day, "How are my lifts moving?", and the stage-three reads that need a target replayed or a lift's series (how today compared, what's next time, the lift target's pace). Pure; copied verbatim. `tools-check/coach-overlap.mjs` is its battery |
 | `coach-tags.js` | Movement pattern, angle, load and side for every built-in exercise. A sidecar keyed on `exercises.js`'s ids, so a tagging mistake can never reach the picker. Pure; imports nothing. The builder reads it: pattern for "Swap one", load for "Fewer exercises" |
 | `coach-live.js` | **Coach in the gym** — during a live workout, what usually comes next, one more set, the next group, or "you're probably good for today", read off the session in progress against his own sessions of that shape. Never a weight. Pure, and copied into the native tree verbatim like `coach.js` |
 | `coach-data.js` | The impure half — the one file the native port rewrites. Reads once per app open and never on a paint |
-| `coach-ui.js` | Coach's card, the COACH ME sheet, the Settings switches, and the live session's chip, sheet and one-line nudge |
+| `coach-ui.js` | Coach's card (since v49 one earned line from his own log — the sheet opens on the finding), the COACH ME sheet with "More", the Settings switches and Your goal (aim, experience, focus, Lift target), and the live session's chip, sheet and one-line nudge |
 | `settings.js` | The settings hub behind the You gear, and the profile editor |
 | `admin.js` | Owner-only panel — feature usage, the Accounts page, People & access |
 | `accounts.js` | Account types and what each one may do. Pure, and the single entitlement choke point — every limit and feature check goes through `capabilitiesFor()` |
@@ -145,6 +146,7 @@ app.js → you.js       → coach-ui.js  → coach.js   → analytics.js ──�
                                                                   → coach-prog.js → coach-goal.js
                                                  → coach-live.js
                                                  → coach-goal.js
+                                                 → coach-overlap.js → coach-prog.js  coach-goal.js  coach-tags.js
                                     → coach-data.js → picker.js
                                                     → tdee.js  insights.js
                                                     → access.js → store.js
@@ -174,6 +176,7 @@ app.js → you.js       → coach-ui.js  → coach.js   → analytics.js ──�
                       → analytics.js
       → access.js     → store.js
       → onboarding.js → tdee.js
+                      → coach.js  coach-data.js (the training-goal step)
       → usage.js ─────────────────────────────────────────→ store.js
 ```
 
@@ -196,7 +199,7 @@ close a loop, and `bump()` is one line at a call site that already has real work
 to do.
 
 `coach.js` is at the bottom of the graph with `units.js` and `blocks.js`: it
-imports `exercises.js`, `units.js`, `coach-build.js`, `coach-live.js`, `coach-goal.js` and the SESSION MATH from
+imports `exercises.js`, `units.js`, `coach-build.js`, `coach-live.js`, `coach-goal.js`, `coach-overlap.js` and the SESSION MATH from
 `analytics.js` (`e1rm`, `isWorking`, `mergeSessionExercises`, `exerciseIndex`)
 and nothing else — never `loadAll`/`allSessions`, which are that file's impure
 half. It holds no state and takes its clock as an argument, so two renders

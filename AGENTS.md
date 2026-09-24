@@ -519,10 +519,13 @@ inside it. A step term would count the same walking twice.
 
 ```json
 { "v": 1,
-  "mute":    { "fuel": true, "targets": true },
+  "mute":    { "fuel": true, "targets": true, "rest": true },
   "on":      { "patterns": true },
-  "answers": { "q_goal_direction": "down", "q_goal_aim": "strength", "q_experience": "some" },
-  "asked":   { "q_goal_direction": 1789307130123, "q_goal_aim": 1789307130123 } }
+  "answers": { "q_goal_direction": "down", "q_goal_aim": "strength", "q_experience": "some",
+               "q_focus_group": "chest", "q_goal_check_weight": "temp" },
+  "asked":   { "q_goal_direction": 1789307130123, "q_goal_aim": 1789307130123,
+               "q_goal_check_weight": 1789307130123 },
+  "goalLift": { "exId": "barbell-bench-press", "lb": 315, "reps": 1, "at": 1789307130123 } }
 ```
 
 Everything Coach remembers, and it is deliberately almost nothing: the user's
@@ -532,7 +535,9 @@ without a byte having been written. Since v46 that includes `live` — "In the
 gym", the chip and the one quiet line in a live workout. Since v48 it includes
 `targets` — "Weight and rep targets", the target line under each exercise in a
 proposal, *Start with Coach’s targets* and the *What should I lift today?*
-bubble. Off, the proposal carries no targets at all.
+bubble. Off, the proposal carries no targets at all. Since v49 it includes
+`rest` — "Rest and lighter weeks", *Should I go lighter?* and the card's "a rest
+day is well earned" line.
 
 `on` is the reverse, and it exists for one category: **Patterns** (v46), the
 eight comparisons between two groups of the account's own days. It is OFF until
@@ -555,7 +560,12 @@ cannot supply one. `asked` stamps when each was put, so nothing is asked twice.
 validate against their options in `normSettings()`, stamp when they were given
 and show in Settings, and a second record of the same fact is the one that goes
 stale. **`asked.q_goal_aim` is when the goal was set** (`answerQuestion()`
-stamps `asked` with every answer); nothing reads it yet, and stage three does.
+stamps `asked` with every answer); since v49 the goal-change questions read it
+— nothing is asked until fourteen days after it. **Since v49 the aim is written
+through `coach-data.js` `setAim()` and nothing else** (Settings, the sheet and
+onboarding all call it): one patch that writes the aim, its `asked` stamp, and
+`null` for both goal-change answers, because "it's on purpose" was said about
+the old goal.
 Both questions carry `always: true` in `coach.js`, which is what Settings →
 Coach reads: they are shown under **Your goal**, answered or not (on Pro, since
 the goal turns the Pro targets); every other question is shown only once
@@ -566,6 +576,32 @@ the targets use the no-aim dials — the goal refines them, it never gates them.
 No new key and no new node, so no rules change: both are children of the
 already-granted `settings/coach`. The longest answer value is `powerlifting`,
 twelve characters.
+
+**v49 adds three answers and one key, all children of the already-granted
+`settings/coach`, so no rules change:**
+
+- `q_focus_group` — `chest`, `back`, `legs`, `shoulders`, `arms`, `core` or
+  `none` ("No focus"). `always: true` like the aim (shown under Your goal on
+  Pro), and `where: 'goal'`: asked under the *How am I tracking toward my
+  goal?* answer, never as the opener. Tonight it changes what goal pace reads.
+- `q_goal_check_weight` and `q_goal_check_targets` — `update`, `temp` or
+  `keep`. The "did your goal change?" questions: asked as the sheet's opener
+  (Pro only) when three weeks of weigh-ins run against the aim, or the food
+  targets point the other way. `temp` (and `update`, which opens Your goal
+  first) goes stale 28 days after its `asked` stamp and may be asked again;
+  `keep` stays until `setAim()` clears it. Both carry `settings: false`, so
+  Settings never draws them as a switch.
+- `goalLift` — `{ exId, lb, reps, at }`: a lift target, `lb` in POUNDS like
+  every stored weight, `reps` 1–20, `at` the epoch ms it was set. Written
+  whole by `setGoalLift()` and cleared with `null`. `coach-goal.js`
+  `normGoalLift()` fails safe on every junk value (a bad id shape, a weight
+  that is not a positive number, a bad `at` → no target at all; reps out of
+  range → 1), and `normSettings()` adds the key only when it is valid, so a
+  node without one keeps the shipped shape.
+
+The card's earned line (v49) keeps a device-local memory beside the greeting's,
+`rack:{uid}:coachHype` — the last three lines the card showed, written once per
+app open — for the same reason and in the same namespace.
 
 **`lastGreet` was here in v42 and is not any more.** The rotating greeting and
 its open counter are DEVICE state, in `localStorage` under the account's own

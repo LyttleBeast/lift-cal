@@ -39,6 +39,11 @@
 // imported by it) — so "chest sets" is the same number in every answer on the
 // sheet. Its F sets ride along on the same shape (`fsets`).
 //
+// STAGE THREE lives here too (section 5), for one reason: coach.js reaches
+// coach-prog.js only through this file and the builder, and "How did today
+// compare?", "What's next time?", the card's "every Coach target met" and the
+// lift target's pace all need a target replayed or a lift's series.
+//
 // Every threshold below carries its reason, and none of them is ever printed.
 // Every weight goes through units.js; every sentence and its evidence are
 // fenced by tools-check/coach-overlap.mjs and coach-voice.mjs.
