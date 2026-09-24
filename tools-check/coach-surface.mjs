@@ -613,6 +613,16 @@ section('F. the workout on the sheet, and the four ways out of it');
   const MAKE = C.TRAIN_TOPICS.find(t => t.id === 'ask_build').label;
   const PICK = 'Tell me what to train';
   const FOUR = ['Start it', 'Start with my last numbers', 'Save as routine', 'Change something'];
+  /* v48: when the proposal has targets, "Start with Coach’s targets" leads,
+     yellow, and "Start it" steps down to second, ghost. Micah's 23 Sep
+     answer — the targets are the main way into a workout. With none, the row
+     is the shipped four exactly. Which row a proposal gets is its own
+     `targets`, read here rather than assumed. */
+  const TARGETS = 'Start with Coach’s targets';
+  const rowFor = pp => (pp && pp.targets ? [TARGETS].concat(FOUR) : FOUR);
+  const yellow = box => buttonsIn(box).filter(b => b.classList.contains('btn') && b.classList.contains('btn-primary'))
+    .map(b => b.textContent);
+  const ghostStart = box => buttonsIn(box).some(b => b.textContent === 'Start it' && b.classList.contains('btn-ghost'));
   const tap = (sh, label) => {
     const b = buttonsIn(sh).find(x => x.textContent === label);
     if (b) b.onclick();
@@ -657,7 +667,20 @@ section('F. the workout on the sheet, and the four ways out of it');
   check('each with its sets exactly as the engine wrote them — the sheet invents no number',
         JSON.stringify(find(box, 'day-ex-sets').map(n => n.textContent)) === JSON.stringify(p.exercises.map(e => e.line)),
         list(find(box, 'day-ex-sets').map(n => n.textContent)));
-  check('then EXACTLY four buttons, in order', JSON.stringify(actsIn(box)) === JSON.stringify(FOUR), list(actsIn(box)));
+  check('the proposal has targets, so the row is the shipped four with "Start with Coach’s targets" in front',
+        !!p.targets && JSON.stringify(actsIn(box)) === JSON.stringify([TARGETS].concat(FOUR)), list(actsIn(box)));
+  check('and it is the one yellow button — "Start it" is second, and ghost',
+        JSON.stringify(yellow(box)) === JSON.stringify([TARGETS]) && ghostStart(box), list(yellow(box)));
+
+  // Start with Coach's targets.
+  calls.length = 0;
+  tap(sh, TARGETS);
+  check('"Start with Coach’s targets" closes the sheet and hands startWorkout the targets view',
+        !body.children.some(x => x.classList.contains('sheet')) && calls.length === 1 && calls[0][0] === 'start' &&
+        JSON.stringify(calls[0][1]) === JSON.stringify(p.targets), calls.length ? calls[0][0] : 'not called');
+  check('boxes empty and nothing ticked — the targets are ghost text until a tick adopts them',
+        calls.length === 1 && calls[0][1].exercises.every(e => e.sets.every(x => x.w === '' && x.r === '' && x.done === false)));
+  sh = open(UI, trainOpts).sh; toProposal(sh);
 
   // Start it.
   calls.length = 0;
@@ -707,7 +730,8 @@ section('F. the workout on the sheet, and the four ways out of it');
         boxes(sh).length === 1 && namesIn(box0(sh)).length === p.exercises.length - 1 &&
         JSON.stringify(namesIn(box0(sh))) === JSON.stringify(fewer.exercises.map(e => e.name)),
         list(namesIn(box0(sh))));
-  check('with the four buttons again, on the new one', JSON.stringify(actsIn(box0(sh))) === JSON.stringify(FOUR));
+  check('with its buttons again, on the new one — the targets button first when it has targets',
+        JSON.stringify(actsIn(box0(sh))) === JSON.stringify(rowFor(fewer)), list(actsIn(box0(sh))));
   check('and the tap is said in the thread, as a follow-up rather than a question',
         find(sh, 'coach-bub').filter(b => b.classList.contains('you')).some(b => textOf(b) === 'Fewer exercises'));
 
@@ -743,16 +767,34 @@ section('F. the workout on the sheet, and the four ways out of it');
         heads.includes(other.headline) && other.base.id !== p.base.id &&
         JSON.stringify(namesIn(box0(sh))) === JSON.stringify(other.exercises.map(e => e.name)), other.headline);
 
-  /* The layoff: no filled view exists, so there is no button for it — three,
-     not four — and the line saying why is on the sheet. */
+  /* The layoff: no filled view exists, so there is no button for it — and
+     the line saying why is on the sheet. With a re-entry target the row is
+     four, "Start with Coach’s targets" first; without one, the shipped three. */
   state.input = { ...BUILD, now: NOW + 30 * DAY };
   const lay = engine(state.input).build({});
   sh = open(UI, trainOpts).sh; toProposal(sh);
-  check('after a layoff there is no "Start with my last numbers" at all',
-        !!lay && lay.lastNumbers === null && boxes(sh).length === 1 &&
-        JSON.stringify(actsIn(box0(sh))) === JSON.stringify(FOUR.filter(l => l !== 'Start with my last numbers')),
+  check('after a layoff there is no "Start with my last numbers" at all — and the re-entry targets lead',
+        !!lay && lay.lastNumbers === null && boxes(sh).length === 1 && !!lay.targets &&
+        lay.exercises.some(e => e.target && e.target.mode === 'reenter') &&
+        JSON.stringify(actsIn(box0(sh))) === JSON.stringify(rowFor(lay).filter(l => l !== 'Start with my last numbers')),
         boxes(sh).length ? list(actsIn(box0(sh))) : 'no proposal');
+
   check('and the sheet says how long it has been', !!lay && textOf(box0(sh)).includes(lay.layoffLine), lay && lay.layoffLine);
+
+  /* Switched off: Settings → Coach → Weight and rep targets. No targets, so
+     the row is exactly the shipped four, "Start it" in yellow. Driven, not
+     asserted. */
+  state.input = { ...BUILD, settings: { ...BUILD.settings, mute: { targets: true } } };
+  const offP = engine(state.input).build({});
+  sh = open(UI, trainOpts).sh; toProposal(sh);
+  check('targets switched off: no targets view, and EXACTLY the shipped four buttons, in order',
+        !!offP && offP.targets === null && JSON.stringify(actsIn(box0(sh))) === JSON.stringify(FOUR), list(actsIn(box0(sh))));
+  check('with "Start it" the yellow one again', JSON.stringify(yellow(box0(sh))) === JSON.stringify(['Start it']),
+        list(yellow(box0(sh))));
+  check('and no target line under any exercise', !find(box0(sh), 'coach-build-target').length);
+  sh = open(UI, trainOpts).sh; toProposal(sh); tap(sh, 'Change something'); tap(sh, 'Fewer exercises');
+  check('and after "Fewer exercises", the shipped four again', JSON.stringify(actsIn(box0(sh))) === JSON.stringify(FOUR),
+        list(actsIn(box0(sh))));
 
   /* What is left out is said, once, on the sheet. */
   state.input = { ...BUILD, hidden: ['press'], lib: Object.fromEntries(Object.entries(NAMED).filter(([k]) => k !== 'press')) };
@@ -1342,6 +1384,114 @@ export async function write() {}
         buttonsIn(plain).some(b => /^Add/.test(b.textContent)) &&
         find(plain, 'ex-item').map(b => (find(b, 'nm')[0] || {}).textContent).includes('Barbell Bench Press'));
   body.children.length = 0;
+}
+
+/* ================= L. v48 — THE TARGETS ON THE SCREEN ================= */
+section('L. v48 — the target line, the goal question under its answer, and Your goal in Settings');
+{
+  const NAMED = {
+    bench: { name: 'Bench', group: 'chest', equipment: 'barbell' }, row: { name: 'Row', group: 'back', equipment: 'barbell' },
+    squat: { name: 'Squat', group: 'legs', equipment: 'barbell' }, press: { name: 'Press', group: 'shoulders', equipment: 'barbell' },
+    curl: { name: 'Curl', group: 'arms', equipment: 'dumbbell' }
+  };
+  const BUILD = { ...BASE, lib: NAMED, libReady: true, hidden: [] };
+  const tap = (sh, label) => { const b = buttonsIn(sh).find(x => x.textContent === label); if (b) b.onclick(); return !!b; };
+  const trainOpts = { tight: true, live: false, start() {}, save() {} };
+  const LIFT = C.TRAIN_TOPICS.find(t => t.id === 'ask_targets');
+  state.input = BUILD; state.pro = true; state.logKnown = true; state.ready = true; state.calls.length = 0;
+  const eng = engine(BUILD);
+  const p = eng.build({});
+
+  // The line under each exercise.
+  let sh = open(UI, trainOpts).sh;
+  tap(sh, C.TRAIN_TOPICS.find(t => t.id === 'ask_build').label); tap(sh, 'Tell me what to train');
+  const box = find(sh, 'coach-build').filter(b => b.parent)[0] || mkEl('div');
+  const lines = find(box, 'coach-build-target');
+  const want = p.exercises.filter(e => e.target && e.target.line).map(e => e.target.line);
+  check('every exercise with a target shows its line, word for word, under its note',
+        want.length >= 2 && JSON.stringify(lines.map(l => l.textContent)) === JSON.stringify(want), list(lines.map(l => l.textContent)));
+  const first = lines[0];
+  const firstT = p.exercises.find(e => e.target && e.target.line === (first || {}).textContent).target;
+  const dim = n => find(n.parent, 'coach-build-w').map(x => x.textContent);
+  first.onclick();
+  check('a tap on the line opens its evidence under it, every entry, in the note’s dim type',
+        JSON.stringify(dim(first)) === JSON.stringify(firstT.why) && first.getAttribute('aria-expanded') === 'true',
+        list(dim(first)));
+  first.onclick();
+  check('and a second tap puts it away — no new sheet either way',
+        !dim(first).length && body.children.filter(x => x.classList.contains('sheet')).length === 1);
+
+  // The Train bubble, and the question under its answer.
+  sh = open(UI, trainOpts).sh;
+  check('"What should I lift today?" is on the Train sheet, third', chipsIn(sh).map(b => b.textContent)[2] === LIFT.label,
+        list(chipsIn(sh).map(b => b.textContent)));
+  state.calls.length = 0;
+  tap(sh, LIFT.label);
+  const a = eng.ask('ask_targets');
+  const said = find(sh, 'coach-bub').filter(b => b.classList.contains('coach')).map(b => (find(b, 'coach-bub-t')[0] || {}).textContent);
+  check('its answer names the workout, then one bubble per lift with a target',
+        a.id === 'lift_targets' && said.includes(a.text) && (a.more || []).length >= 2 && a.more.every(m => said.includes(m.text)),
+        list(said));
+  check('the answer carries the goal question, and the sheet draws it as the opening question is drawn — stamped as asked',
+        !!a.question && a.question.id === 'q_goal_aim' &&
+        find(sh, 'coach-bub').some(b => b.classList.contains('ask') && textOf(b).includes(a.question.text)) &&
+        state.calls.some(x => x[0] === 'markAsked' && x[1] === 'q_goal_aim'), JSON.stringify(state.calls));
+  const askBub = find(sh, 'coach-bub').find(b => b.classList.contains('ask'));
+  const aims = askBub ? chipsIn(askBub).map(b => b.textContent) : [];
+  check('with a chip for each of the six aims', JSON.stringify(aims) === JSON.stringify(a.question.options.map(o => o.label)) &&
+        aims.length === 6, list(aims));
+  tap(askBub || mkEl('div'), 'Powerlifting');
+  check('tapping one saves it and answers with the question’s own acknowledgement, not the weight question’s',
+        state.calls.some(x => x[0] === 'answerQuestion' && x[1] === 'q_goal_aim' && x[2] === 'powerlifting') &&
+        find(sh, 'coach-bub-t').some(n => n.textContent === 'Noted. Coach sets your targets with that in mind.') &&
+        !find(sh, 'coach-bub-t').some(n => n.textContent === 'Noted. That changes how Coach reads your weight.'));
+  check('the goal question is never the sheet’s opening question', engine(BUILD).question === null ||
+        !['q_goal_aim', 'q_experience'].includes(engine(BUILD).question.id));
+
+  // The opening question keeps its own words.
+  state.input = QUESTIONING; state.calls.length = 0;
+  sh = open(UI, {}).sh;
+  const opener = find(sh, 'coach-bub').find(b => b.classList.contains('ask'));
+  if (opener) tap(opener, chipsIn(opener)[0].textContent);
+  check('the weight question still answers with the shipped line',
+        !!opener && find(sh, 'coach-bub-t').some(n => n.textContent === 'Noted. That changes how Coach reads your weight.'));
+
+  // Switched off: no bubble.
+  state.input = { ...BUILD, settings: { ...BUILD.settings, mute: { targets: true } } };
+  check('targets switched off: no "What should I lift today?" bubble',
+        !chipsIn(open(UI, trainOpts).sh).some(b => b.textContent === LIFT.label));
+
+  // Settings → Coach → Your goal.
+  const host = mkEl('div');
+  state.input = BUILD; state.pro = true; state.calls.length = 0;
+  UI.coachAnswerRows(host, () => {});
+  const heads = find(host, 'you-sec-t').map(n => n.textContent);
+  check('Settings shows a Your goal heading on a Pro account, before either question is answered',
+        JSON.stringify(heads) === JSON.stringify(['Your goal']), list(heads));
+  const labels = walk(host).filter(n => n.tag === 'label').map(n => n.textContent);
+  check('with both goal questions under it', labels.includes('What are you training for right now?') &&
+        labels.includes('How long have you been lifting consistently?'), list(labels));
+  const rows = find(host, 'ob-choice');
+  check('six aims as vertical choice rows, nothing selected', rows.length === 6 && !rows.some(r => r.classList.contains('on')),
+        rows.length + ' rows');
+  check('three experience answers on the segmented control, nothing selected',
+        find(host, 'seg-btn').length === 3 && !find(host, 'seg-btn').some(b => b.classList.contains('on')));
+  rows[4].onclick();
+  check('a tap saves the answer and marks that row', rows[4].classList.contains('on') &&
+        state.calls.some(x => x[0] === 'answerQuestion' && x[1] === 'q_goal_aim' && x[2] === 'recomp'), JSON.stringify(state.calls));
+  const answered = mkEl('div');
+  state.input = { ...BUILD, settings: { ...BUILD.settings, answers: { q_goal_aim: 'cut', q_experience: 'years' } } };
+  UI.coachAnswerRows(answered, () => {});
+  check('an answered goal shows its answers selected',
+        find(answered, 'ob-choice').filter(r => r.classList.contains('on')).map(r => textOf(r)).join() === 'Lose fat, keep strength' &&
+        find(answered, 'seg-btn').filter(b => b.classList.contains('on')).map(b => b.textContent).join() === 'Two years or more');
+  state.pro = false;
+  const basic = mkEl('div');
+  state.input = BUILD;
+  UI.coachAnswerRows(basic, () => {});
+  check('a basic account sees no Your goal block — the goal turns the targets, and the targets are Pro',
+        !find(basic, 'you-sec-t').length && !find(basic, 'ob-choice').length);
+  state.pro = true; state.input = BASE; body.children.length = 0;
 }
 
 /* ---------- report ---------- */

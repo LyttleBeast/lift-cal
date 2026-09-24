@@ -2119,6 +2119,14 @@ body.peeking .view.active { padding-bottom: 65px; }
 .coach-build-note { font-size: 12px; line-height: 1.45; color: var(--steel); }
 .coach-build-note.mine { color: var(--chalk); font-variation-settings: 'wdth' 94, 'wght' 600; }
 .coach-build-w { font-size: 11px; line-height: 1.4; color: var(--dim); margin-top: 2px; }
+/* The target for next time (v48): the note's size, in the body colour rather
+   than --dim, because it is the line to act on — and never yellow, which is for
+   buttons. A button, so a tap opens its evidence, with the UA's padding and
+   centring taken off so it reads as a line of the list. */
+.coach-build-target {
+  display: block; width: 100%; padding: 0; margin-top: 2px; text-align: left;
+  font-size: 11px; line-height: 1.4; color: var(--chalk);
+}
 
 /* ---------- Coach in a live session ----------
    The chip sits in the session's header row beside the calendar button, at

@@ -353,6 +353,11 @@ export function openCoachSheet(opts = {}) {
       // An answer that says more than one thing — Patterns says every check
       // that clears — follows its first bubble with the rest, one each.
       (a.more || []).forEach(m => bubble('coach', m.text, m.reason));
+      /* "What should I lift today?" can carry the goal question it refines —
+         the moment the answer changes something he can see. Drawn exactly as
+         the opening question is, because it is the same thing in a second
+         place; the engine has already decided whether it may be asked. */
+      if (a.question) askQuestion(a.question);
       /* "Make me a workout" asks what to train, and the choices are the
          engine's (buildMenu). They are the only way on from the question, so
          they stand where the row of topics would, and the topics come back
@@ -500,29 +505,39 @@ export function openCoachSheet(opts = {}) {
      nothing is already waiting for an answer, and the answer really changes
      what a registered rule does. Answering writes it and the sheet closes on
      the next open with the rule live. */
-  if (c.question) {
-    /* Stamped as ASKED the moment it is on screen, not when it is answered.
-       Somebody who opened this sheet looking for something else and closed it
-       has not refused the question — so it goes quiet for a week and comes back
-       rather than appearing every single time the sheet opens, which is the
-       difference between being asked and being nagged. */
-    markAsked(c.question.id).catch(() => {});
-    const q = bubble('coach ask', c.question.text,
+  if (c.question) askQuestion(c.question);
+
+  /* A question, drawn: the bubble, one chip per answer, and the question's
+     own acknowledgement once one is tapped — the goal's "Coach sets your
+     targets with that in mind" is not the weight question's "That changes how
+     Coach reads your weight", and the shipped line stays the fallback. The
+     sheet's opener and the goal question under "What should I lift today?"
+     are this one function.
+
+     Stamped as ASKED the moment it is on screen, not when it is answered.
+     Somebody who opened this sheet looking for something else and closed it
+     has not refused the question — so it goes quiet for a week and comes back
+     rather than appearing every single time the sheet opens, which is the
+     difference between being asked and being nagged. */
+  function askQuestion(question) {
+    markAsked(question.id).catch(() => {});
+    const q = bubble('coach ask', question.text,
       'Coach asks at most one thing, and only something that changes what it can tell you.');
     const row = el('div', 'coach-chips');
-    c.question.options.forEach(op => {
+    question.options.forEach(op => {
       const b = el('button', 'coach-chip', op.label);
       b.onclick = () => {
         row.remove();
         bubble('you', op.label);
-        answerQuestion(c.question.id, op.value).catch(() => {});
-        bubble('coach', 'Noted. That changes how Coach reads your weight.',
+        answerQuestion(question.id, op.value).catch(() => {});
+        bubble('coach', question.ack || 'Noted. That changes how Coach reads your weight.',
           'Nothing else about it is stored, and you can change it any time from Settings → Coach.');
         scroll();
       };
       row.appendChild(b);
     });
     q.appendChild(row);
+    return q;
   }
 
   /* THE TIER GATE, AND IT IS A REAL ONE NOW. The lock in the card's corner
@@ -597,14 +612,26 @@ function proPanel() {
    What the builder draws under a chosen focus — a pick from "What do you want
    to train?", or "Build it" — his routine by his name if
    he has one for this, then the exercises — name, the sets as he did them,
-   and one dim line of what the log shows — then what was left out and why,
-   then exactly four buttons. Built from the recap's own list (.day-ex) and
-   the workout screen's block label, because it is the same thing turned
-   forward: what he did, about to be done again.
+   one dim line of what the log shows, and (v48) the target for next time,
+   which a tap opens onto its evidence — then what was left out and why, then
+   the buttons. Built from the recap's own list (.day-ex) and the workout
+   screen's block label, because it is the same thing turned forward: what he
+   did, about to be done again.
 
    Every string here is fenced by coach-voice.mjs section G, which reads this
    section of the file and nothing else of it.
 
+   FOUR BUTTONS, OR FIVE. When the proposal has targets, "Start with Coach’s
+   targets" comes first and is the yellow one, and "Start it" steps down to
+   second. Micah's answer, 23 Sep 2026: "this coach should be at the level
+   where I can trust it … following it, I should see my lifts going up." The
+   targets are the main way into a workout, which is exactly why a wrong one
+   must stay at zero. With no targets — switched off, a basic account, or
+   nothing to target — the row is the shipped four, "Start it" in yellow.
+
+     Start with Coach’s targets  the targets view: Coach's numbers as ghost
+                                 text, adopted only by a tick — absent when
+                                 there are no targets
      Start it                    the placeholders: his numbers as ghost text
      Start with my last numbers  the boxes filled and nothing ticked — absent
                                  after a layoff, when there is no such view
@@ -631,6 +658,24 @@ function proposalBlock(p, on) {
     body.appendChild(el('div', 'day-ex-name', e.name));
     body.appendChild(el('div', 'day-ex-sets num', e.line));
     if (e.note) body.appendChild(el('div', 'coach-build-w', e.note));
+    /* The target, under the note and never merged into it: the note says what
+       the log shows, this says what to put on the bar. Its evidence is one tap
+       away, in the same dim type as the note, and a second tap puts it away. */
+    if (e.target && e.target.line) {
+      const tgt = el('div');
+      const line = el('button', 'coach-build-target', e.target.line);
+      line.setAttribute('aria-expanded', 'false');
+      let why = null;
+      line.onclick = () => {
+        if (why) { why.remove(); why = null; line.setAttribute('aria-expanded', 'false'); return; }
+        why = el('div');
+        (e.target.why || []).forEach(w => why.appendChild(el('div', 'coach-build-w', w)));
+        tgt.appendChild(why);
+        line.setAttribute('aria-expanded', 'true');
+      };
+      tgt.appendChild(line);
+      body.appendChild(tgt);
+    }
     row.append(tag, body);
     box.appendChild(row);
   });
@@ -643,7 +688,8 @@ function proposalBlock(p, on) {
     b.onclick = fn;
     acts.appendChild(b);
   };
-  button('Start it', true, () => on.start(p.placeholders));
+  if (p.targets) button('Start with Coach’s targets', true, () => on.start(p.targets));
+  button('Start it', !p.targets, () => on.start(p.placeholders));
   if (p.lastNumbers) button('Start with my last numbers', false, () => on.start(p.lastNumbers));
   if (on.save) button('Save as routine', false, () => on.save(p.record));
 
@@ -753,36 +799,69 @@ function toggle(cat, onChange) {
   return b;
 }
 
-/* What Coach has been told, and the way to change it. Only questions that have
+/* What Coach has been told, and the way to change it. Questions that have
    actually been answered appear: a settings screen listing every question Coach
    might one day ask is a screen about Coach rather than about this account.
 
    It is here because the sheet promises it — "you can change it any time from
    Settings → Coach" — and a promise a screen does not keep is worse than one it
-   never made. */
+   never made.
+
+   YOUR GOAL is the exception, and it is one on purpose (v48). A question
+   marked `always` — what he trains for, and how long he has been at it — is
+   shown answered or not, nothing selected until it is, because it is how he
+   sets the goal his targets are turned by. Pro only: the targets are, and a
+   goal that changes nothing a basic account can see is a survey. Six answers
+   do not fit the segmented control on a phone, so a question with more than
+   three is drawn as the vertical choice rows Settings' own goal sheet uses. */
 export function coachAnswerRows(host, onChange) {
   const answers = coachSettings().answers || {};
-  const given = QUESTIONS.filter(q => answers[q.id] != null);
-  if (!given.length) return null;
+  const given = QUESTIONS.filter(q => !q.always && answers[q.id] != null);
+  let pro = false;
+  try { pro = coachPro() === true; } catch { pro = false; }
+  const goal = pro ? QUESTIONS.filter(q => q.always) : [];
+  if (!given.length && !goal.length) return null;
 
-  given.forEach(q => {
+  const save = (q, v) => answerQuestion(q.id, v)
+    .then(ok => {
+      toast(ok === false ? 'Couldn’t save that' : 'Saved');
+      if (ok !== false && onChange) onChange();
+    })
+    .catch(() => toast('Couldn’t save that'));
+  const draw = q => {
     const f = el('div', 'field');
     f.style.marginTop = '14px';
     f.appendChild(el('label', null, q.text));
-    f.appendChild(segmented(
-      q.options.map(op => [op.value, op.label]),
-      answers[q.id],
-      v => {
-        answerQuestion(q.id, v)
-          .then(ok => {
-            toast(ok === false ? 'Couldn’t save that' : 'Saved');
-            if (ok !== false && onChange) onChange();
-          })
-          .catch(() => toast('Couldn’t save that'));
-      }));
+    if (q.options.length <= 3) {
+      f.appendChild(segmented(q.options.map(op => [op.value, op.label]), answers[q.id], v => save(q, v)));
+    } else {
+      let sel = answers[q.id];
+      const wrap = el('div', 'ob-choices');
+      q.options.forEach(op => {
+        const b = el('button', 'ob-choice' + (op.value === sel ? ' on' : ''));
+        b.appendChild(el('div', 'ob-choice-t', op.label));
+        b.onclick = () => {
+          if (op.value === sel) return;
+          sel = op.value;
+          wrap.querySelectorAll('.ob-choice').forEach(x => x.classList.remove('on'));
+          b.classList.add('on');
+          save(q, op.value);
+        };
+        wrap.appendChild(b);
+      });
+      f.appendChild(wrap);
+    }
     host.appendChild(f);
-  });
-  return given.length;
+  };
+
+  given.forEach(draw);
+  if (goal.length) {
+    const h = el('div', 'you-sec-t', 'Your goal');
+    h.style.marginTop = '18px';
+    host.appendChild(h);
+    goal.forEach(draw);
+  }
+  return given.length + goal.length;
 }
 
 /* ================= IN THE GYM =================

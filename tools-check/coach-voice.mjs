@@ -54,6 +54,10 @@
 //   E  stalled_lift         answer-only, and still answering
 //   F  the stall sentence   a readout: a figure, a date, and the goal's own
 //                           direction — with unknown left unknown
+//   J  the targets (v48)    every line and why coach-prog.mjs's battery
+//                           produces, the targets answer, and the goal
+//                           questions and their acknowledgements, under the
+//                           shipped ban and the words the brief adds to it
 
 import { mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -747,8 +751,8 @@ section('G. the workout builder — sheet-only, and under the ban anyway');
   const uiCopy = from !== -1 && to > from ? literals(decomment(UIS.slice(from, to))).filter(t => /[a-z]{3}/i.test(t) && /\s/.test(t)) : [];
   const uiBad = uiCopy.map(t => ({ t, w: offence(t) })).filter(x => x.w);
   check('the proposal’s own copy in coach-ui.js was found and read (' + uiCopy.length + ' strings)',
-        uiCopy.length >= 6 && ['Start it', 'Start with my last numbers', 'Save as routine', 'Change something']
-          .every(l => uiCopy.includes(l)), list(uiCopy));
+        uiCopy.length >= 6 && ['Start with Coach’s targets', 'Start it', 'Start with my last numbers', 'Save as routine',
+                               'Change something'].every(l => uiCopy.includes(l)), list(uiCopy));
   check('and carries no banned word', !uiBad.length, list(uiBad.map(x => '“' + x.w + '” in: ' + x.t)));
 
   /* The nudge is a readout and never a push. A set taken to failure is SAID,
@@ -923,6 +927,87 @@ section('I. Patterns — two groups side by side, and never a cause');
   check('no causal word in anything they say: because, helps, makes, leads to, boosts, so you', !causal.length, list(causal));
   const advice = said.filter(t => ADVICE.some(re => re.test(t)));
   check('and no advice: should, try, aim, better, worse', !advice.length, list(advice));
+}
+
+/* ================= J. THE TARGETS ================= */
+section('J. v48 — every target Coach names, under the ban and the words this ship adds to it');
+{
+  /* Tonight Coach names a weight to put on a bar. Its sentences are
+     sheet-only, so the card's exemption would let them off — and they are the
+     sentences least entitled to it: a target that says "try" or "push" is the
+     push the builder's note was fenced against for three ships. So they carry
+     the shipped list with NO exemption, plus the words SHIP-V48-PROMPT.md §9
+     bans (try, should, push, beat, go for, aim for, easy, must), a max attempt
+     in any form, a claim of cause, a pound on a kilo account, and a straight
+     apostrophe where Coach's own files write the curly one.
+
+     The lines are the ones tools-check/coach-prog.mjs's battery produces,
+     imported rather than rebuilt here, so the two files read the same
+     targets. That battery also sweeps thousands of generated histories through
+     the same list; this section adds what only coach.js and coach-build.js
+     say around the targets. */
+  const PROG = await import(pathToFileURL(join(HERE, 'coach-prog.mjs')).href);
+  const P = await PROG.stageProg();
+  const EXTRA = [/\btry\b/i, /\bshould\b/i, /\bpush\b/i, /\bbeat\b/i, /\bgo for\b/i, /\baim for\b/i, /\beasy\b/i, /\bmust\b/i,
+                 /\b(1\s*rm|one[- ]rep max) (test|attempt)|\bmax(ing)? out\b|\bgo for a (single|max)\b|\btest your max\b/i,
+                 /\b(because (you|your)|caused|due to (your|the)|that'?s why)\b/i];
+  const hits = (t, u) => BANNED.concat(EXTRA).filter(re => re.test(t)).map(re => (t.match(re) || [''])[0])
+    .concat(u === 'kg' && /\d ?lb\b/.test(t) ? ['lb on a kilo account'] : [])
+    .concat(/'/.test(t) ? ['a straight apostrophe'] : []);
+
+  const said = [];
+  PROG.cases().forEach(c => {
+    const { t } = PROG.run(P, c);
+    if (t) [t.line].concat(t.why).forEach(x => said.push({ id: c.id, u: c.u, t: x }));
+  });
+  const modes = new Set(PROG.cases().map(c => (PROG.run(P, c).t || {}).mode).filter(Boolean));
+  check('the battery’s targets were read — every mode (' + said.length + ' lines)',
+        said.length >= 150 && ['add', 'reps', 'hold', 'reduce', 'reenter', 'first', 'bodyweight', 'defer'].every(m => modes.has(m)),
+        [...modes].join(', '));
+
+  // What coach.js and coach-build.js say around them, on a log with targets.
+  const TLIB = { 'barbell-bench-press': ['Barbell Bench Press', 'chest', 'barbell'],
+                 'triceps-pushdown-rope': ['Triceps Pushdown (Rope)', 'arms', 'cable'],
+                 'barbell-row': ['Barbell Row', 'back', 'barbell'], 'barbell-curl': ['Barbell Curl', 'arms', 'barbell'],
+                 'back-squat-high-bar': ['Back Squat (High Bar)', 'legs', 'barbell'] };
+  const TL = Object.fromEntries(Object.entries(TLIB).map(([id, [name, group, equipment]]) => [id, { name, group, equipment }]));
+  const tx = (id, rows) => ({ exId: id, ...TL[id], sets: rows.map(([w, r]) => ({ w: String(w), r: String(r), type: 'N', done: true })) });
+  const TLOG = [];
+  for (let k = 0; k < 10; k++) {
+    TLOG.push(vsT('p' + k, 9 + 7 * k, [tx('barbell-bench-press', [[185 - 5 * (k >> 1), k % 2 ? 8 : 12], [185 - 5 * (k >> 1), k % 2 ? 8 : 12]]),
+                                        tx('triceps-pushdown-rope', [[50, 12], [50, 12]])]));
+    TLOG.push(vsT('b' + k, 4 + 7 * k, [tx('barbell-row', [[155, 8], [155, 8]]), tx('barbell-curl', [[65, 10], [65, 10]])]));
+    TLOG.push(vsT('l' + k, 6 + 7 * k, [tx('back-squat-high-bar', [[245, 5], [245, 5], [245, 5]])]));
+  }
+  function vsT(id, ago, exs) { return { id, startedAt: NOW - ago * DAY, _date: key(NOW - ago * DAY), exercises: exs }; }
+  ['lb', 'kg'].forEach(u => {
+    const cc = C.coach(base({ u, sessions: sort(TLOG), lib: TL, hidden: [], libReady: true }));
+    const a = cc.ask('ask_targets');
+    if (a.id === 'lift_targets') {
+      said.push({ id: 'answer/' + u, u, t: a.text }, { id: 'answer/' + u, u, t: a.reason });
+      (a.more || []).forEach(m => said.push({ id: 'more/' + u, u, t: m.text }, { id: 'more/' + u, u, t: m.reason }));
+    }
+    const pp = cc.build({});
+    (pp ? pp.exercises : []).forEach(e => e.target && [e.target.line].concat(e.target.why).forEach(x => said.push({ id: 'row/' + u, u, t: x })));
+  });
+  C.QUESTIONS.filter(q => q.where === 'targets').forEach(q => [q.text, q.ack].forEach(x => said.push({ id: q.id, u: 'lb', t: x })));
+  check('the targets answer, its bubbles, the proposal’s target lines and both goal questions were read',
+        said.some(x => /^Targets for your /.test(x.t)) && said.some(x => x.id === 'q_goal_aim') && said.some(x => x.id === 'q_experience') &&
+        said.some(x => x.id === 'row/kg'), String(said.length));
+  const bad = said.map(x => ({ ...x, w: hits(x.t, x.u) })).filter(x => x.w.length);
+  check('not one of them carries a banned word, a max attempt, a cause, a pound in kilos or a straight apostrophe',
+        !bad.length, list(bad.map(x => x.id + ' [' + x.u + '] ' + x.w.join('/') + ' in: ' + x.t)));
+
+  /* The line the builder writes when a target is built from another day is
+     coach-build.js copy, and so are the words coach-ui.js draws around a
+     target — read from source too, so a branch no fixture reaches is still
+     under the ban. */
+  const BSRC = literals(decomment(src('coach-build.js'))).filter(t => /Worked out from|the last time you did/.test(t));
+  const PSRC = literals(decomment(src('coach-prog.js'))).filter(t => /[a-z]{3}/i.test(t) && /\s/.test(t));
+  const srcBad = BSRC.concat(PSRC).map(t => ({ t, w: hits(t, 'lb').filter(w => w !== 'a straight apostrophe') })).filter(x => x.w.length);
+  check('and no literal in coach-prog.js, nor the builder’s “worked out from” line, carries one either (' +
+        (BSRC.length + PSRC.length) + ' read)', PSRC.length >= 40 && BSRC.length >= 1 && !srcBad.length,
+        list(srcBad.map(x => x.w.join('/') + ' in: ' + x.t)));
 }
 
 /* ---------- report ---------- */
