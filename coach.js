@@ -48,6 +48,7 @@ import { labelW, labelRate, unitW, fmtW } from './units.js';
 import { propose, liveRefusal, buildMenu, swapTo, BUILD_ASK } from './coach-build.js';
 import { liveRead, LIVE_NONE } from './coach-live.js';
 import { AIMS, EXPERIENCE, energyContext } from './coach-goal.js';
+import { readLift, lighterWeek, recordDay, prepare } from './coach-overlap.js';
 
 const DAY = 864e5;
 
@@ -248,6 +249,7 @@ function derive(input) {
   function shapeSession(s) {
     const rows = mergeSessionExercises(s.exercises).filter(ex => ex && ex.exId);
     const sets = {};        // group -> working sets, warm-ups excluded
+    const fsets = {};       // group -> the working sets typed F among them (v49)
     const sig = new Set();  // the signature: groups with >= 2 working sets, cardio out
     rows.forEach(ex => {
       const g = groupOf(ex);
@@ -255,13 +257,20 @@ function derive(input) {
       const n = (ex.sets || []).filter(isWorking).length;
       if (!n) return;
       sets[g] = (sets[g] || 0) + n;
+      const nf = (ex.sets || []).filter(x => isWorking(x) && x.type === 'F').length;
+      if (nf) fsets[g] = (fsets[g] || 0) + nf;
       if (n >= 2 && equipOf(ex) !== 'cardio') sig.add(g);
     });
     return {
       startedAt: s.startedAt,
       date: s._date || dayKey(s.startedAt),
       daysAgo: daysBetween(s.startedAt, now),
+      /* "Hard sets" everywhere on the sheet, v49's fatigue and lighter-week
+         reads included: coach-overlap.js is handed these shaped sessions
+         rather than counting sets its own way, so "chest sets" is one number
+         in every answer. */
       sets,
+      fsets,
       groups: Object.keys(sets),
       signature: GROUP_ORDER.filter(g => sig.has(g)),
       // The record itself, untouched. Nothing in this file reads it; the
@@ -449,11 +458,37 @@ function derive(input) {
     } : null;
   });
 
+  /* ---------- the lifts, for the overlap (v49) ----------
+     Every exercise with a working set in the last half year, once, named as
+     the picker names it today and filed where the library files it — the
+     same two rules the builder uses — with its group's days since. What
+     coach-overlap.js reads a lift's plateau-or-cut call, a record day and a
+     variation from his own log off. Its exposures are coach-prog.js's to
+     count (coach-overlap.js's prepare()), never a second copy here. */
+  const lifts = () => once('lifts', () => {
+    const by = new Map();
+    all().forEach(s => {
+      if (s.daysAgo < 0 || s.daysAgo >= PATTERN_DAYS) return;
+      mergeSessionExercises((s.session && s.session.exercises) || []).forEach(ex => {
+        if (!ex || !ex.exId || !(ex.sets || []).some(isWorking)) return;
+        const was = by.get(ex.exId);
+        if (was && was.lastAt >= s.startedAt) return;
+        by.set(ex.exId, {
+          exId: ex.exId, name: String((lib[ex.exId] && lib[ex.exId].name) || ex.name || ex.exId),
+          group: groupOf(ex), equipment: equipOf(ex), lastAt: s.startedAt
+        });
+      });
+    });
+    const days = groupDays();
+    return [...by.values()].sort((a, b) => (a.exId < b.exId ? -1 : a.exId > b.exId ? 1 : 0))
+      .map(l => ({ ...l, groupDaysSince: l.group && days[l.group] != null ? days[l.group] : null }));
+  });
+
   return {
     now, lib, input,
     all, inWindow, shapes, groupDays, groupGap,
     setsThisWeek, setsTrailing, sessionsIn, sessionGap, index,
-    pDays, pSessions, trainedDays, pLift,
+    pDays, pSessions, trainedDays, pLift, lifts,
     groupOf, equipOf
   };
 }
@@ -2575,7 +2610,63 @@ function factStore(input) {
     return menu;
   };
 
+  /* THE OVERLAP (v49), memoised like the builder: one input per coach()
+     call, and one reading per lift however many answers ask for it. */
+  let overlapIn = null;
+  const reads = new Map();
+  d.overlap = () => {
+    if (!overlapIn) overlapIn = overlapOf(d);
+    return overlapIn;
+  };
+  d.readLift = exId => {
+    if (!reads.has(exId)) {
+      const i = d.overlap();
+      const ex = i.lifts.find(l => l.exId === exId);
+      reads.set(exId, ex ? readLift(ex, overlapCtx(i), i) : null);
+    }
+    return reads.get(exId);
+  };
+  let lighterV, recordV;
+  d.lighterWeek = () => (lighterV !== undefined ? lighterV : (lighterV = lighterWeek(d.overlap(), d.now)));
+  d.recordDay = () => (recordV !== undefined ? recordV : (recordV = recordDay(d.overlap(), d.now)));
+
   return d;
+}
+
+/* Everything coach-overlap.js is allowed to know, and — as with the builder —
+   every piece of it is a fact or a derivation this file already owns: the
+   shaped sessions (so "hard sets" is the shipped count), the lifts, the goal,
+   the energy context, his stated direction and goal rate, and the weigh-ins
+   the gatherer already hands over for Patterns. */
+function overlapOf(d) {
+  return prepare({
+    now: d.now,
+    u: d.input.u === 'kg' ? 'kg' : 'lb',
+    aim: d.f('coach.aim'),
+    exp: d.f('coach.experience'),
+    energy: d.f('weight.energy'),
+    rateWk: d.f('weight.rateWk'),
+    goalDir: d.f('weight.goalDir'),
+    goalRateWk: d.f('weight.goalRateWk'),
+    targetsOn: !isMuted(d.input.settings, 'targets'),
+    shaped: d.all(),
+    weighIns: Array.isArray(d.input.weighIns) ? d.input.weighIns : [],
+    lifts: d.lifts(),
+    hidden: Array.isArray(d.input.hidden) ? d.input.hidden : []
+  });
+}
+// prescribe()'s context, which readLift() takes beside the input.
+const overlapCtx = i => ({ now: i.now, u: i.u, aim: i.aim, exp: i.exp, energy: i.energy, rateWk: i.rateWk });
+
+/* Exported for tools-check/coach-overlap.mjs, so its battery drives
+   coach-overlap.js with exactly what this file hands it — the shaped sessions
+   above all — rather than a second copy of shapeSession(). Pure. */
+export function overlapInput(input) {
+  try {
+    return factStore(input || {}).overlap();
+  } catch {
+    return null;
+  }
 }
 
 /* Everything the builder is allowed to know, and every piece of it is a fact

@@ -226,10 +226,15 @@ async function rig({ data = {}, slow = [], fail = [] } = {}) {
   const LIVE   = put('coach-live.mjs', swap(src('coach-live.js'), [
     ['./exercises.js', real('exercises.js')], ['./analytics.js', ANALY],
     ['./units.js', real('units.js')]]));
+  // v49's stage two: coach.js imports coach-overlap.js, which reads
+  // coach-prog.js's baselines and the same session math.
+  const OVER   = put('coach-overlap.mjs', swap(src('coach-overlap.js'), [
+    ['./coach-prog.js', PROG], ['./coach-goal.js', real('coach-goal.js')], ['./units.js', real('units.js')],
+    ['./exercises.js', real('exercises.js')], ['./coach-tags.js', real('coach-tags.js')], ['./analytics.js', ANALY]]));
   const COACH  = put('coach.mjs', swap(src('coach.js'), [
     ['./exercises.js', real('exercises.js')], ['./analytics.js', ANALY],
     ['./units.js', real('units.js')], ['./coach-build.js', BUILD], ['./coach-live.js', LIVE],
-    ['./coach-goal.js', real('coach-goal.js')], ['./coach-prog.js', PROG]]));
+    ['./coach-goal.js', real('coach-goal.js')], ['./coach-prog.js', PROG], ['./coach-overlap.js', OVER]]));
   const DATA_  = put('coach-data.mjs', swap(src('coach-data.js'), [
     ['./store.js', STORE], ['./exercises.js', real('exercises.js')],
     ['./picker.js', PICK], ['./tdee.js', TDEE], ['./insights.js', INSI],
