@@ -16,7 +16,8 @@
 // copy of it.
 //
 // PURE, and copied into the native tree verbatim (src/pure/coach-goal.js).
-// Imports nothing, reads nothing, keeps no state, and has no clock.
+// Imports nothing, reads nothing, keeps no state, and has no clock: v49's
+// bodyweight-at-a-moment takes its moment as an argument.
 
 /* The six aims, in the order the question offers them. Powerlifting is its own
    aim rather than a label on Get stronger (Micah, 23 Sep 2026): tonight it
@@ -84,11 +85,57 @@ export function energyContext(w) {
   if (!Number.isFinite(rateWk)) return null;
   if (!Number.isFinite(latestLb) || latestLb <= 0) return null;
   if (rateDays != null && !(Number.isFinite(rateDays) && rateDays >= ENERGY_MIN_DAYS)) return null;
-  const pct = rateWk / latestLb * 100;
+  return energyBand(rateWk / latestLb * 100);
+}
+
+/* The four words for a weekly change in % of bodyweight — the one place the
+   bars above are compared against. energyContext() reads the whole trend
+   through it, and v49's plateau-or-cut call (coach-overlap.js) and the
+   goal-change question (coach.js) read a stretch of weigh-ins through it, so
+   the three can never disagree about where a cut starts. */
+export function energyBand(pct) {
+  if (!Number.isFinite(pct)) return null;
   if (pct <= ENERGY_DEEP + ENERGY_EPS) return 'deep';
   if (pct <= ENERGY_DEFICIT + ENERGY_EPS) return 'deficit';
   if (pct >= ENERGY_SURPLUS - ENERGY_EPS) return 'surplus';
   return 'hold';
+}
+
+/* BODYWEIGHT AT A MOMENT (v49): the median of the weigh-ins in the seven days
+   up to and including `ms`, or null with fewer than two. A median, because one
+   heavy morning is a scale reading and not a bodyweight; two, because one
+   reading is exactly that morning. The only bodyweight function the plateau
+   call and the goal-change question use — here rather than in either of them
+   so this file can keep importing nothing. Pounds in, pounds out. */
+export const BW_WINDOW_DAYS = 7;
+export const BW_MIN_READINGS = 2;
+export function bwAt(weighIns, ms) {
+  if (!Array.isArray(weighIns) || !Number.isFinite(ms)) return null;
+  const from = ms - BW_WINDOW_DAYS * 864e5;
+  const v = weighIns
+    .filter(w => w && Number.isFinite(w.lb) && w.lb > 0 && Number.isFinite(w.t) && w.t > from && w.t <= ms)
+    .map(w => w.lb).sort((a, b) => a - b);
+  if (v.length < BW_MIN_READINGS) return null;
+  const m = v.length >> 1;
+  return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2;
+}
+
+/* WEEKLY HARD SETS FOR A LIFT'S GROUP, the floor under which "more sets" is a
+   rung of the stall ladder (v49). A labelled training starting point, always
+   printed as "a common starting point": ten or more a week per muscle is the
+   most studied range for growth (Schoenfeld 2017; Pelland 2024 finds
+   diminishing returns, not a ceiling), and strength needs less volume and more
+   practice with the lift. A cut aims to KEEP what he has, so its floor is his
+   own normal — two thirds of it — and that row lives in volumeFloor(). */
+export const VOLUME_FLOOR = Object.freeze({
+  muscle: 10, recomp: 10, none: 10,
+  strength: 6, powerlifting: 6, maintain: 6
+});
+// Lose fat, keep strength: two thirds of his own twelve-week normal.
+export const VOLUME_CUT_SHARE = 2 / 3;
+export function volumeFloor(aim, normal) {
+  if (aim === 'cut') return Number.isFinite(normal) && normal > 0 ? Math.floor(normal * VOLUME_CUT_SHARE) : null;
+  return VOLUME_FLOOR[AIMS.includes(aim) ? aim : 'none'];
 }
 
 /* The dials for one account right now: the aim's row, then what the energy

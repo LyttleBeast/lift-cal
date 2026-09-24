@@ -39,6 +39,7 @@ import { mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { execFileSync } from 'node:child_process';
 
 const HERE = fileURLToPath(new URL('.', import.meta.url));
 const ROOT = join(HERE, '..');
@@ -52,8 +53,12 @@ const { EXERCISE_BY_ID } = await import(pathToFileURL(join(ROOT, 'exercises.js')
 /* ================= STAGING =================
    coach-prog.js against a stubbed store, through analytics.js's session math,
    exactly as coach-build.js is staged everywhere else. */
-export async function stageProg() {
+export async function stageProg(rev) {
   const dir = mkdtempSync(join(tmpdir(), 'rack-coach-prog-'));
+  // `rev` stages a past commit's coach-prog.js instead (section D: v49 must
+  // leave v48's targets byte for byte where they were). Needs a full clone.
+  const prog = rev ? execFileSync('git', ['show', rev + ':coach-prog.js'], { cwd: ROOT, encoding: 'utf8' })
+                   : src('coach-prog.js');
   writeFileSync(join(dir, 'store-stub.mjs'), `
 export async function read(_p, fallback) { return fallback; }
 export function todayKey(d = new Date()) {
@@ -66,7 +71,7 @@ export function todayKey(d = new Date()) {
     .replace("from './exercises.js'", 'from ' + real('exercises.js'))
     .replace("from './ui.js'", 'from ' + real('ui.js'))
     .replace("from './units.js'", 'from ' + real('units.js')));
-  writeFileSync(join(dir, 'coach-prog.mjs'), src('coach-prog.js')
+  writeFileSync(join(dir, 'coach-prog.mjs'), prog
     .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href))
     .replace("from './units.js'", 'from ' + real('units.js'))
     .replace("from './exercises.js'", 'from ' + real('exercises.js'))
@@ -568,6 +573,71 @@ if (MAIN) {
           list(said.filter(x => !/[.)]$/.test(x.text)).map(x => x.text)));
     const kgSaid = said.filter(x => x.u === 'kg').length;
     check('both units were read (' + kgSaid + ' kilo strings)', kgSaid > 2000);
+  }
+
+  /* ================= D. v49 — WHAT BASELINES() ADDED, AND WHAT IT DID NOT MOVE ================= */
+  section('D. v49 — baselines() gains its stage-two fields, and v48’s targets do not move');
+  {
+    /* "BEFORE", READ OUT OF GIT: rack-v48's own coach-prog.js (ca5c677),
+       staged against the same stub. A copy of v48's output typed in here
+       would prove only that the copy agrees with itself. */
+    const P48 = await stageProg('ca5c677');
+    const OLD = ['exposures', 'range', 'step', 'status', 'slope', 'sigma'];
+    const pick = (b, keys) => (b ? Object.fromEntries(keys.map(k => [k, b[k]])) : null);
+    const rowsMoved = [], basesMoved = [], inconsistent = [];
+    let rows = 0, swept = 0;
+
+    // The two promises, over one lift: the target and the old fields are v48's
+    // byte for byte, and the new fields agree with the status beside them.
+    const hold = (label, meta, sessions, group, ctx) => {
+      const exposures = P.exposuresFor(sessions, meta.exId);
+      const ex = { ...meta, exposures, groupDaysSince: group };
+      const now = JSON.stringify(P.prescribe(ex, ctx)), then = JSON.stringify(P48.prescribe(ex, ctx));
+      if (now !== then) rowsMoved.push(label);
+      const b = P.baselines(ex, ctx), b48 = P48.baselines(ex, ctx);
+      if (JSON.stringify(pick(b, OLD)) !== JSON.stringify(pick(b48, OLD))) basesMoved.push(label);
+      if (!b) return;
+      const bad = [];
+      const S = b.series;
+      const dayOf = ms => Math.round((new Date(ctx.now).setHours(12, 0, 0, 0) - new Date(ms).setHours(12, 0, 0, 0)) / DAY);
+      if (!S.every((p, i) => i === 0 || p.startedAt >= S[i - 1].startedAt)) bad.push('series out of order');
+      if (!S.every(p => dayOf(p.startedAt) < 84)) bad.push('a point older than twelve weeks');
+      if (!S.every((p, i) => i === 0 || dayOf(S[i - 1].startedAt) - dayOf(p.startedAt) <= 21)) bad.push('a layoff inside the series');
+      const lastIdx = b.lastBestAt == null ? -1 : S.map(p => p.startedAt).lastIndexOf(b.lastBestAt);
+      if (b.lastBestAt != null && lastIdx < 1) bad.push('lastBestAt is not a later point of the series');
+      const win = S.slice(-8);
+      const gateOk = win.length >= 4 && dayOf(win[0].startedAt) - dayOf(win[win.length - 1].startedAt) >= 21;
+      if (lastIdx >= S.length - 3 && lastIdx >= 1 && gateOk && b.status !== 'progressing') bad.push('a best in the last three, and status ' + b.status);
+      if ((b.status === 'stalled' || b.status === 'declining') && lastIdx >= S.length - 3 && lastIdx >= 1) bad.push(b.status + ' with a best in the last three');
+      if (b.status === 'stalled' && lastIdx >= S.length - 4 && lastIdx >= Math.max(1, S.length - win.length)) bad.push('stalled with a best in the last four');
+      if (!(b.freq.recent * 4 <= b.freq.normal * 12 + 1e-9 && b.freq.normal * 12 <= b.exposures + 1e-9)) bad.push('freq ' + JSON.stringify(b.freq));
+      if (b.topReps.length !== Math.min(3, b.exposures)) bad.push('topReps ' + b.topReps.length);
+      if (b.tops.length !== b.exposures) bad.push('tops ' + b.tops.length);
+      if (b.moveLb != null && b.slope != null && b.moveLb !== 0 && Math.sign(b.moveLb) !== Math.sign(b.slope)) bad.push('moveLb and slope disagree');
+      if (S.length && !(b.best >= Math.max(...S.map(p => p.y)))) bad.push('best below a point of the series');
+      if (bad.length) inconsistent.push(label + ': ' + bad.join('; '));
+    };
+
+    for (const c of cases()) {
+      rows++;
+      const exposures = P.exposuresFor(c.sessions, c.meta.exId);
+      const last = exposures[exposures.length - 1];
+      const own = last ? Math.round((new Date(NOW).setHours(12, 0, 0, 0) - new Date(last.startedAt).setHours(12, 0, 0, 0)) / DAY) : null;
+      hold(c.id, c.meta, c.sessions, c.group != null ? c.group : own, { now: NOW, u: c.u, ...c.ctx });
+    }
+    for (const u of ['lb', 'kg']) {
+      for (let s = 1; s <= PER_UNIT; s++) {
+        const h = history(s * 7919 + (u === 'kg' ? 13 : 0), u);
+        swept++;
+        hold(u + ' seed ' + s, h.meta, h.sessions, h.group, h.ctx);
+      }
+    }
+    check('prescribe() is byte-identical to rack-v48’s on every battery row (' + rows + ') and every swept history (' + swept + ')',
+          rows >= 57 && !rowsMoved.length, list(rowsMoved));
+    check('and every field baselines() already returned is too', !basesMoved.length, list(basesMoved));
+    check('the new fields agree with the status beside them — a best in the last three is progressing, ' +
+          'a stall has none in its last four, the series is the window after the last layoff, oldest first',
+          !inconsistent.length, list(inconsistent));
   }
 
   console.log('\nCoach names a weight only when it is one he can load\n');

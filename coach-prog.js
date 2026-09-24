@@ -37,9 +37,10 @@
 //
 // STATUS IS COMPUTED, NOT SHOWN. Each lift's progressing / holding / stalled /
 // declining is worked out because the confirmation dial and the battery need
-// it; no sentence prints it tonight. A stall readout with nothing beside it to
-// interpret it is the defect v43 fixed, and stage two puts it next to its
-// context.
+// it; no sentence here prints it. A stall readout with nothing beside it to
+// interpret it is the defect v43 fixed, and stage two (v49, coach-overlap.js)
+// reads baselines() to put a lift's movement next to its context — the
+// bodyweight, the frequency, the sets — before anything is said about it.
 //
 // PURE, and copied into the native tree verbatim (src/pure/coach-prog.js). No
 // reads, no DOM, no module state, and no clock: `now` is an argument. Imports
@@ -379,7 +380,10 @@ function progressOf(X, now) {
   let win = pts.filter(p => -p.day < WINDOW_DAYS);
   let cut = 0;
   for (let i = 1; i < win.length; i++) if (win[i].day - win[i - 1].day > GAP_DAYS) cut = i;
-  win = win.slice(cut).slice(-SLOPE_POINTS);
+  // Every point after the last layoff in the window, before the slope takes
+  // its eight: what stage two reads the plateau-or-cut call from (v49).
+  const series = win.slice(cut);
+  win = series.slice(-SLOPE_POINTS);
 
   const slopes = [];
   for (let i = 0; i < win.length; i++) {
@@ -410,7 +414,15 @@ function progressOf(X, now) {
     else if (prev3.length === 3 && median(last3) < median(prev3) * (1 - bar / 100)) status = 'declining';
     else if (!bestIn(4) && last4[last4.length - 1].day - last4[0].day >= STATUS_SPAN_DAYS) status = 'stalled';
   }
+  // The most recent point 1% over every earlier one in the series — the same
+  // bar as a best above, over the whole series rather than the slope's eight.
+  let lastBestAt = null;
+  series.forEach((p, i) => {
+    if (i > 0 && series.slice(0, i).every(q => p.y > q.y * (1 + NEW_BEST))) lastBestAt = p.startedAt;
+  });
   return {
+    series: series.map(p => ({ startedAt: p.startedAt, y: p.y })), lastBestAt,
+    best: pts.length ? Math.max(...pts.map(p => p.y)) : null,
     points: win.length, slope, sigma, status,
     slow: win.length >= SLOPE_POINTS && slope != null && slope < SLOPE_SLOW,
     fast: win.length >= SLOPE_POINTS && slope != null && slope >= SLOPE_FAST,
@@ -437,7 +449,24 @@ function liftOf(ex, dials) {
 }
 
 /* Everything this file knows about one lift before it decides anything. What
-   stage two reads to put a status next to the context that explains it. */
+   stage two reads to put a status next to the context that explains it.
+
+   v49 ADDS, and changes nothing it already returned (coach-prog.mjs pins that
+   against rack-v48's own file):
+     series      every estimated-max point in the window after the last
+                 layoff, oldest first — { startedAt, y }, y in stored pounds
+     lastBestAt  when the most recent new best landed, or null
+     moveLb      the slope's fitted move across its window, in pounds
+     freq        exposures a week: the last four weeks, and the last twelve
+     topReps     the last three exposures' top-set reps and top loads
+                 (display unit), oldest first — the grinding test
+     tops        every exposure's top load (display unit), whether it sits on
+                 the grid, its stored weight string and its working sets, so
+                 the record-day read never restates what a top load is
+     best        the best estimated max on the whole log (reps capped at
+                 twelve, as the series is), in pounds
+     assisted    whether the lift runs backwards (assistance), when every
+                 estimated max above means nothing */
 export function baselines(ex, ctx) {
   try {
     const c = ctx || {};
@@ -449,11 +478,21 @@ export function baselines(ex, ctx) {
       .map(e => readExposure(e, u, lift.assisted, c.now)).filter(Boolean);
     if (!X.length) return null;
     const prog = progressOf(X, c.now);
+    const within = n => X.filter(e => e.daysAgo >= 0 && e.daysAgo < n).length;
     return {
       exposures: X.length,
       range: rangeOf(X, c.now, lift.dir, lift.band),
       step: stepOf(X, lift.dir, lift.equipment, lift.lowerBody, u),
-      status: prog.status, slope: prog.slope, sigma: prog.sigma
+      status: prog.status, slope: prog.slope, sigma: prog.sigma,
+      series: prog.series, lastBestAt: prog.lastBestAt, moveLb: prog.moveLb, best: prog.best,
+      freq: { recent: within(28) / 4, normal: within(WINDOW_DAYS) / 12 },
+      topReps: X.slice(-3).map(e => ({ reps: e.R.slice(), load: e.T })),
+      tops: X.map(e => ({
+        startedAt: e.startedAt, daysAgo: e.daysAgo, date: e.date, load: e.T, grid: e.grid,
+        w: e.all[e.top[0].i].w,
+        sets: e.work.map(s => ({ load: s.L, reps: s.R, type: s.type, w: s.w }))
+      })),
+      assisted: lift.assisted
     };
   } catch {
     return null;
