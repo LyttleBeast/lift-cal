@@ -99,7 +99,7 @@ for (const [file, text] of sources) {
 const load = f => import(pathToFileURL(join(dir, f)).href);
 const { collectFrom, computeVolume, foldSessionIntoHistory } = await load('workout.mjs');
 const { e1rm, detectPRs, sessionMilestones, prTimeline, exerciseIndex,
-        isWorking, sessionComparison, sessionReps } = await load('analytics.mjs');
+        isWorking, sameKindComparison, sessionReps } = await load('analytics.mjs');
 const { fmtSetLoad } = await load('units.mjs');
 
 /* ---------- harness ---------- */
@@ -328,8 +328,16 @@ bwRecord.volume = computeVolume(bwRecord.exercises);
   // both of them used to take it and then say something false.
 
   // The clock is derived from the fixture, never from the machine: `now` is an
-  // argument to sessionComparison precisely so this runs the same at 2 AM in
+  // argument to sameKindComparison precisely so this runs the same at 2 AM in
   // any timezone.
+  //
+  // v53, on purpose (SHIP-V53-PROMPT §5.2): these checks were written against
+  // sessionComparison(), which averaged every session in 28 days — a chest day
+  // against leg days — and printed a percentage. The recap stopped calling it
+  // and it is gone; the same promises are held here against its replacement,
+  // which compares a session only with sessions of its own kind, by median,
+  // and prints no percentage at all. What a pull-up day must never be told is
+  // unchanged: nothing about a volume it never attempted.
   const NOW = bwRecord.startedAt + 3600e3;
   const weighted = (i, volume) => ({
     id: 'p' + i, _date: '2026-09-0' + i, startedAt: bwRecord.startedAt - i * 864e5,
@@ -339,40 +347,39 @@ bwRecord.volume = computeVolume(bwRecord.exercises);
   });
   const prior = [1, 2, 3].map(i => weighted(i, 10900));
 
+  const c = sameKindComparison(bwRecord, prior, NOW);
   check('a bodyweight session is not compared by volume — no -100%',
-    sessionComparison(bwRecord, prior, NOW).kind === 'reps',
-    shape(sessionComparison(bwRecord, prior, NOW)));
+    c && c.volume === null && c.usualVolume === null, shape(c));
   check('and the card it does get carries no percentage at all',
-    !('pct' in sessionComparison(bwRecord, prior, NOW)),
-    shape(sessionComparison(bwRecord, prior, NOW)));
-  const c = sessionComparison(bwRecord, prior, NOW);
-  check('it compares reps to reps — 30 today against a 20-rep average over 3 sessions',
-    c.reps === 30 && c.avg === 20 && c.n === 3, shape(c));
-  check('the reps it counts are sessionReps, the same number the recap heading prints',
-    c.reps === sessionReps(bwRecord), c.reps + ' / ' + sessionReps(bwRecord));
+    !!c && !('pct' in c) && !/%/.test(shape(c)), shape(c));
+  check('it compares working sets to working sets — 3 today against a usual 2 over 3 back days',
+    c.sets === 3 && c.usualSets === 2 && c.n === 3 && c.label === 'back days', shape(c));
+  check('the sets it counts are the working sets the recap’s stat row prints',
+    c.sets === bwRecord.exercises.reduce((a, e) => a + e.sets.filter(isWorking).length, 0));
+  check('and the reps the recap heading prints are still sessionReps', sessionReps(bwRecord) === 30, String(sessionReps(bwRecord)));
 
-  // The ordinary path is untouched, which is most of the value of a pure
-  // function: a loaded session still gets the percentage it always got.
+  // A loaded session is compared by volume, both sides above zero.
   const loadedRec = { ...bwRecord, volume: 12000,
     exercises: [ex('row', 'Row', [{ w: '120', r: '10', type: 'N', done: true },
                                   { w: '120', r: '10', type: 'N', done: true }])] };
-  const lc = sessionComparison(loadedRec, prior, NOW);
+  const lc = sameKindComparison(loadedRec, prior, NOW);
   check('a loaded session is still compared by volume',
-    lc.kind === 'volume' && lc.volume === 12000 && lc.n === 3, shape(lc));
-  check('and its percentage is the same arithmetic as before — 12000 vs 10900 is +10%',
-    lc.pct === Math.round((12000 - 10900) / 10900 * 100), String(lc.pct));
+    lc.volume === 12000 && lc.usualVolume === 10900 && lc.n === 3, shape(lc));
+  check('and against the MEDIAN, never a mean one big day can drag — and still no percentage',
+    sameKindComparison(loadedRec, prior.concat([weighted(4, 40000)]), NOW).usualVolume === 10900 && !('pct' in lc),
+    shape(sameKindComparison(loadedRec, prior.concat([weighted(4, 40000)]), NOW)));
 
   // The edges.
-  check('fewer than two sessions in the window: no card, exactly as before',
-    sessionComparison(bwRecord, prior.slice(0, 1), NOW) === null);
-  check('sessions older than 28 days are not in the window',
-    sessionComparison(bwRecord, prior.map(p => ({ ...p, startedAt: p.startedAt - 40 * 864e5 })), NOW) === null);
-  check('a loaded session behind four weeks of bodyweight work divides by nothing',
-    sessionComparison(loadedRec, [1, 2].map(i => ({ ...weighted(i, 0) })), NOW).kind === 'reps',
-    shape(sessionComparison(loadedRec, [1, 2].map(i => ({ ...weighted(i, 0) })), NOW)));
-  check('a session with neither volume nor reps says nothing',
-    sessionComparison({ ...bwRecord, volume: 0, exercises: [] },
-                      [1, 2].map(i => weighted(i, 0)), NOW) === null);
+  check('fewer than two sessions like it: no card, exactly as before',
+    sameKindComparison(bwRecord, prior.slice(0, 1), NOW) === null);
+  check('sessions older than 56 days are not in the window',
+    sameKindComparison(bwRecord, prior.map(p => ({ ...p, startedAt: p.startedAt - 60 * 864e5 })), NOW) === null);
+  check('a loaded session behind weeks of bodyweight work divides by nothing — sets only',
+    (r => r && r.volume === null && r.sets === 2)(sameKindComparison(loadedRec, [1, 2].map(i => ({ ...weighted(i, 0) })), NOW)),
+    shape(sameKindComparison(loadedRec, [1, 2].map(i => ({ ...weighted(i, 0) })), NOW)));
+  check('a session with nothing in it says nothing',
+    sameKindComparison({ ...bwRecord, volume: 0, exercises: [] },
+                       [1, 2].map(i => weighted(i, 0)), NOW) === null);
 
   // And the printing rule from the same ship, against the same record.
   check("the recorded w:'0' prints as BW, not as 0",

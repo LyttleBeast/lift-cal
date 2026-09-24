@@ -290,8 +290,8 @@ export function sessionMilestones(record, prior, u) {
 }
 
 // Reps in a session — working sets only, the same filter volume uses. One
-// definition, because the recap's "N reps" heading and the comparison card
-// under it have to be the same number.
+// definition, the recap's "N reps" heading (v53: the comparison under it
+// counts working sets, the number the stat row prints).
 export function sessionReps(s) {
   return ((s && s.exercises) || []).reduce((a, ex) =>
     a + (ex.sets || []).filter(isWorking).reduce((b, x) => b + (parseInt(x.r) || 0), 0), 0);
@@ -318,45 +318,65 @@ export function normFeel(v) {
   return out;
 }
 
-// What the recap says about this session against the last four weeks, and
-// WHETHER it says anything at all.
-//
-// Volume is weight × reps, so a session with no weight on the bar has no
-// volume to compare. The card used to divide anyway: after a set of pull-ups
-// it read "AGAINST YOUR LAST 4 WEEKS · -100% · 0 lb today against a 10.9k lb
-// average across 19 sessions". Every number in that sentence is arithmetically
-// right and the sentence is false — a percentage against a quantity you never
-// attempted is a division, not a comparison, and -100% in the failure colour
-// says you went backwards on a day you trained.
-//
-// So: volume against volume, and only when there is volume on BOTH sides. When
-// this session has none, reps against reps instead — the same 28 days, the same
-// sessions, a quantity that exists and that a bodyweight set really does move.
-// When neither side has anything, the card does not appear, which is what it
-// has always done with fewer than two prior sessions. There is deliberately no
-// percentage on the reps branch: the number it would colour red is the one this
-// function exists to stop claiming.
-//
-// `now` is an argument rather than a Date.now() inside, so this is pure and the
-// native port copies it instead of re-deriving it.
-export function sessionComparison(record, prior, now) {
-  const recent = (prior || []).filter(s => s && s.startedAt > now - 28 * 864e5);
-  if (recent.length < 2) return null;
-  const n = recent.length;
+/* v53: WHAT THE RECAP COMPARES THIS SESSION WITH — SESSIONS LIKE IT.
 
+   sessionComparison(), which this replaces, averaged EVERY session in 28
+   days, so a chest day was divided by an average that had leg days in it —
+   and a good chest day, on Micah's phone on 24 Sep 2026, read "-30%" in the
+   failure colour at the bottom of an amazing workout. So:
+
+     kind(s)  the groups with two or more working sets from non-cardio
+              exercises, by the group the record stored (this file does not
+              read the library);
+     like     sessions in the 56 days before `now` whose kind differs from
+              this one's by one group at most, and shares at least one;
+     needs    two or more of them, or null — and the card is not drawn;
+     usual    the MEDIAN of theirs, so one huge or tiny day does not move it.
+
+   Volume is compared only when BOTH today's and the usual are above zero —
+   the rule this file has kept since a set of pull-ups read "-100%" against
+   a loaded average — and otherwise working sets alone. No percentage is
+   worked out at all: the recap prints two plain numbers side by side.
+
+   The label is the kind's groups as Coach joins them ("chest and arms
+   days"), restated here, since analytics.js must not import coach.js. Pure,
+   `now` an argument, so the port copies it verbatim. */
+const LIKE_DAYS = 56;
+function kindOf(s) {
+  const n = {};
+  mergeSessionExercises((s && s.exercises) || []).forEach(ex => {
+    if (!ex || ex.equipment === 'cardio' || !GROUPS[ex.group]) return;
+    n[ex.group] = (n[ex.group] || 0) + (ex.sets || []).filter(isWorking).length;
+  });
+  return GROUP_ORDER.filter(g => n[g] >= 2);
+}
+const workingSets = s => ((s && s.exercises) || []).reduce((a, ex) => a + ((ex && ex.sets) || []).filter(isWorking).length, 0);
+function medianOf(xs) {
+  const v = xs.slice().sort((a, b) => a - b), m = v.length >> 1;
+  return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2;
+}
+function kindLabel(kind) {
+  const o = kind.map(g => GROUPS[g].label.toLowerCase());
+  if (o.length >= 5) return 'whole-body days';
+  return (o.length === 1 ? o[0] : o.slice(0, -1).join(', ') + ' and ' + o[o.length - 1]) + ' days';
+}
+export function sameKindComparison(record, prior, now) {
+  const mine = kindOf(record);
+  if (!mine.length) return null;
+  const like = (prior || []).filter(s => {
+    if (!s || !(s.startedAt > now - LIKE_DAYS * 864e5) || s.startedAt >= now) return false;
+    const k = kindOf(s);
+    const shared = k.filter(g => mine.includes(g)).length;
+    return shared >= 1 && (k.length - shared) + (mine.length - shared) <= 1;
+  });
+  if (like.length < 2) return null;
   const vol = (record && record.volume) || 0;
-  const avgVol = recent.reduce((a, s) => a + (s.volume || 0), 0) / n;
-  // avgVol > 0 as well as vol > 0: four weeks of bodyweight work behind a
-  // barbell day would otherwise divide by zero and print "+0%".
-  if (vol > 0 && avgVol > 0) {
-    return { kind: 'volume', n, volume: vol, avg: avgVol,
-             pct: Math.round((vol - avgVol) / avgVol * 100) };
-  }
-
-  const reps = sessionReps(record);
-  const avgReps = recent.reduce((a, s) => a + sessionReps(s), 0) / n;
-  if (reps > 0 && avgReps > 0) return { kind: 'reps', n, reps, avg: avgReps };
-  return null;
+  const usualVol = medianOf(like.map(s => s.volume || 0));
+  const sets = workingSets(record), usualSets = medianOf(like.map(workingSets));
+  if (!sets && !(vol > 0)) return null;
+  const both = vol > 0 && usualVol > 0;
+  return { n: like.length, volume: both ? vol : null, usualVolume: both ? usualVol : null,
+           sets, usualSets, label: kindLabel(mine) };
 }
 
 // Every PR ever hit, newest first. Walks the log forward keeping running bests.

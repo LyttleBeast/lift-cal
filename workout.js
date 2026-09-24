@@ -10,7 +10,7 @@ import {
   fmtDate, fmtDateFull, fmtDuration, parseKey, clamp, setNum, LIMITS
 } from './ui.js';
 import {
-  allSessions, invalidate, detectPRs, sessionMilestones, sessionComparison,
+  allSessions, invalidate, detectPRs, sessionMilestones, sameKindComparison,
   sessionReps, isWorking, groupColor,
   mergeSessionExercises, prDetail
 } from './analytics.js';
@@ -21,7 +21,7 @@ import { openStats, isStatsOpen, renderStats, refresh as refreshStats } from './
 import { initPicker, allExercises, openPicker, openExerciseManager } from './picker.js';
 import { initRoutines, openRoutines, saveSessionAsRoutine } from './routines.js';
 import { coachCard, liveChip, openLiveSheet, noteLiveTick, nudgeLine, dismissNudge } from './coach-ui.js';
-import { initCoachData, coachLogReady, refreshCoachSessions, noteCoachData } from './coach-data.js';
+import { initCoachData, coachLogReady, refreshCoachSessions, noteCoachData, coachFinishRead } from './coach-data.js';
 import { bump } from './usage.js';
 import { wOut, wIn, fmtSetW, fmtSetLoad, fmtVol, volOut, unitW, limW } from './units.js';
 
@@ -1732,31 +1732,32 @@ async function saveEdit() {
 }
 
 
-/* ================= POST-WORKOUT SUMMARY ================= */
+/* ================= POST-WORKOUT SUMMARY =================
+   v53, redone after Micah's first workout built by Coach: "After a workout
+   the first thing I want to see is like 'Great workout!' … get rid of the %,
+   like I did an amazing workout but the ending said -30%". So, top to bottom:
+   the win (finishRead()'s headline, earned or warm, and one true line), the
+   records, the tiles, what he did, and — only when there are sessions LIKE
+   this one to set it beside — a plain comparison in neutral words, at the
+   bottom, where it never leads the page. No percentage anywhere on it. */
 function renderSummary() {
   const { record, prs, firsts, milestones, prior } = summary;
   const wrap = el('div', 'screen-pad summary-page');
+  const u = wu();
 
+  /* ---- the win ----
+     The same decision the Coach card and the sheet open on after a workout,
+     worked out once when the recap first draws (coach-data.js hands the
+     engine this snapshot, and the records this file already has). */
+  if (!summary.finish) summary.finish = coachFinishRead(record, { prs, firsts, milestones });
+  const fin = summary.finish;
   const hero = el('div', 'summary-hero');
   hero.appendChild(el('div', 'eyebrow', 'Session complete'));
-  hero.appendChild(el('h1', null, record.name || 'Workout'));
-  hero.appendChild(el('div', 'summary-date', fmtDateFull(todayKey(new Date(record.startedAt)))));
+  hero.appendChild(el('h1', null, fin.headline));
+  if (fin.line) hero.appendChild(el('div', 'summary-line', fin.line));
+  hero.appendChild(el('div', 'summary-date',
+    (record.name || 'Workout') + '  ·  ' + fmtDateFull(todayKey(new Date(record.startedAt)))));
   wrap.appendChild(hero);
-
-  const workingSets = record.exercises.reduce((a, ex) => a + ex.sets.filter(isWorking).length, 0);
-  const totalReps = sessionReps(record);
-
-  const row = el('div', 'stat-row');
-  const u = wu();
-  [[fmtDuration(record.durationSec), 'Duration'],
-   [fmtVol(record.volume, u), 'Volume ' + unitW(u)],
-   [workingSets, 'Working sets']].forEach(([v, l]) => {
-    const s = el('div', 'stat');
-    s.appendChild(el('div', 'stat-val num', String(v)));
-    s.appendChild(el('div', 'stat-lbl', l));
-    row.appendChild(s);
-  });
-  wrap.appendChild(row);
 
   /* ---- PRs ---- */
   if (prs.length) {
@@ -1824,32 +1825,19 @@ function renderSummary() {
     wrap.appendChild(card);
   }
 
-  /* ---- comparison ----
-     Which of the two comparisons this session gets — and whether it gets one —
-     is sessionComparison's decision, not this screen's. See analytics.js: a
-     bodyweight session has no volume, and dividing by the average anyway is how
-     a set of pull-ups came to read -100% in the failure colour. */
-  const cmp = sessionComparison(record, prior, Date.now());
-  if (cmp) {
-    const card = el('div', 'card');
-    const hd = el('div', 'card-hd');
-    hd.appendChild(el('div', 'eyebrow', 'Against your last 4 weeks'));
-    card.appendChild(hd);
-    const big = el('div', 'load-num num',
-      cmp.kind === 'volume' ? (cmp.pct >= 0 ? '+' : '') + cmp.pct + '%' : String(cmp.reps));
-    big.style.fontSize = '34px';
-    // The reps branch is uncoloured on purpose. Green-or-steel is a verdict,
-    // and the verdict this card used to pass on a bodyweight session is the
-    // thing that was wrong with it.
-    if (cmp.kind === 'volume') big.style.color = cmp.pct >= 0 ? 'var(--good)' : 'var(--steel)';
-    card.appendChild(big);
-    card.appendChild(noteEl(cmp.kind === 'volume'
-      ? fmtVol(cmp.volume, u) + ' ' + unitW(u) + ' today against a ' + fmtVol(Math.round(cmp.avg), u) +
-        ' ' + unitW(u) + ' average across ' + cmp.n + ' sessions.'
-      : cmp.reps + ' reps today against a ' + Math.round(cmp.avg) + '-rep average across ' +
-        cmp.n + ' sessions.'));
-    wrap.appendChild(card);
-  }
+  const workingSets = record.exercises.reduce((a, ex) => a + ex.sets.filter(isWorking).length, 0);
+  const totalReps = sessionReps(record);
+
+  const row = el('div', 'stat-row');
+  [[fmtDuration(record.durationSec), 'Duration'],
+   [fmtVol(record.volume, u), 'Volume ' + unitW(u)],
+   [workingSets, 'Working sets']].forEach(([v, l]) => {
+    const s = el('div', 'stat');
+    s.appendChild(el('div', 'stat-val num', String(v)));
+    s.appendChild(el('div', 'stat-lbl', l));
+    row.appendChild(s);
+  });
+  wrap.appendChild(row);
 
   /* ---- what you did ---- */
   const recap = el('div', 'card');
@@ -1869,6 +1857,29 @@ function renderSummary() {
     recap.appendChild(r);
   });
   wrap.appendChild(recap);
+
+  /* ---- compared with sessions like this ----
+     Only against sessions of this one's kind (analytics.js
+     sameKindComparison), by median, and only when there are two or more of
+     them. Two plain lines in body text — no percentage, no big number, no
+     verdict colour — and never at the top of the page. */
+  const like = sameKindComparison(record, prior, Date.now());
+  if (like) {
+    const card = el('div', 'card summary-like');
+    const hd = el('div', 'card-hd');
+    hd.appendChild(el('div', 'eyebrow', 'Compared with sessions like this'));
+    card.appendChild(hd);
+    const on = ' on ' + like.label + ' (' + like.n + ' sessions).';
+    const usual = n => String(Math.round(n * 10) / 10);
+    if (like.volume != null) {
+      card.appendChild(el('div', 'summary-like-row', 'Volume: ' + fmtVol(like.volume, u) + ' ' + unitW(u) +
+        ' today, against a usual ' + fmtVol(Math.round(like.usualVolume), u) + on));
+      card.appendChild(el('div', 'summary-like-row', 'Sets: ' + like.sets + ' today, against a usual ' + usual(like.usualSets) + '.'));
+    } else {
+      card.appendChild(el('div', 'summary-like-row', 'Sets: ' + like.sets + ' today, against a usual ' + usual(like.usualSets) + on));
+    }
+    wrap.appendChild(card);
+  }
 
   const done = el('button', 'btn btn-primary btn-block btn-lg', 'Done');
   done.onclick = () => { summary = null; render(); };

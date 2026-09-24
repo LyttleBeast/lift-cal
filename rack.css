@@ -835,7 +835,14 @@ body.peeking .view.active { padding-bottom: 65px; }
    to the recap so no other screen's tiles move. */
 .summary-page .stat-row { margin-bottom: 12px; }
 .summary-hero h1 { margin-top: 2px; }
+/* v53: the finish line's one true sentence under the headline, in body text —
+   the win is the headline's, this only says what earned it. */
+.summary-line { font-size: 15px; color: var(--chalk); margin-top: 4px; }
 .summary-date { font-size: 12px; color: var(--dim); margin-top: 4px; }
+/* v53: "Compared with sessions like this" — two plain lines in body colour,
+   deliberately no big number and no green/steel verdict. */
+.summary-like-row { font-size: 13px; color: var(--chalk); line-height: 1.45; }
+.summary-like-row + .summary-like-row { margin-top: 4px; }
 
 .pr-card {
   border-color: rgba(240,190,30,.4);
