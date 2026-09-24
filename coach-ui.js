@@ -542,7 +542,14 @@ export function openCoachSheet(opts = {}) {
   // same finding the card that opened it is showing, so the two cannot
   // disagree in the half second between the tap and the paint. Kept, because
   // an answer that repeats it hangs its follow-ups here (`repeats`, above).
-  const openingBub = bubble('coach', c.opening.text, c.opening.reason);
+  /* v53: after a workout the engine opens on the finish line and hands the
+     finding over as openingNext, drawn second — the first thing after a
+     workout is never a correction. An answer that repeats the FINDING hangs
+     its follow-ups under the finding's bubble, never under the finish line:
+     `openingBub` is whichever bubble holds the finding. */
+  if (c.openingNext) bubble('coach', c.opening.text, c.opening.reason);
+  const finding = c.openingNext || c.opening;
+  const openingBub = bubble('coach', finding.text, finding.reason);
   let openingRow = null;
 
   /* A session is running, so there is no "Make me a workout" — starting one

@@ -297,6 +297,27 @@ export function sessionReps(s) {
     a + (ex.sets || []).filter(isWorking).reduce((b, x) => b + (parseInt(x.r) || 0), 0), 0);
 }
 
+/* v53: HOW A SESSION FELT — his own rating from the recap, stored with the
+   record at workouts/{mk}/{dd}/{id}/feel as { e, s, at }: energy 1 to 10,
+   strength against his normal as one of five steps (120 is "120% or more"),
+   and when he rated it. Either of e and s may be absent, never both.
+   Everything that reads `feel` reads it through here, and it FAILS SAFE:
+   anything that is not one of those values is not a rating, and null is
+   what an unrated session is. Pure, beside the other record helpers, so the
+   port copies it verbatim. */
+export const FEEL_STRENGTH = Object.freeze([80, 90, 100, 110, 120]);
+export function normFeel(v) {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
+  const e = Number.isInteger(v.e) && v.e >= 1 && v.e <= 10 ? v.e : null;
+  const s = FEEL_STRENGTH.includes(v.s) ? v.s : null;
+  if (e == null && s == null) return null;
+  const out = {};
+  if (e != null) out.e = e;
+  if (s != null) out.s = s;
+  if (typeof v.at === 'number' && Number.isFinite(v.at) && v.at > 0) out.at = v.at;
+  return out;
+}
+
 // What the recap says about this session against the last four weeks, and
 // WHETHER it says anything at all.
 //

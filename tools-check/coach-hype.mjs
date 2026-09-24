@@ -19,7 +19,8 @@
 //                   a change with no aim in its direction, or a cut that is
 //                   gaining; "holding through your cut" needs his word for it.
 //   IT ROTATES.     On pickGreeting's cap exactly: pools of one, two, three
-//                   and five, the memory one short of the pool.
+//                   and four (five until v53), the memory one short of the
+//                   pool — and (v53) a fact value once in 24 hours.
 //
 // And the one line that replays Coach's own targets (hype_targets_met) is held
 // to prescribe() called by hand, a comeback lift whose group kept training
@@ -171,9 +172,18 @@ const cardsOf = inp => { const out = {}; Array.from({ length: 30 }, (_, k) => C.
 
 /* One log per line: the gate true, and the nearest log it should be false on. */
 const CASES = {
+  /* v53 moved this log a day: a session TODAY now puts the finish line
+     first on the card all day (SHIP-V53-PROMPT §4.4), and walking the card
+     would never reach the week's best. The same counts, a day earlier. */
   hype_week_best: [
-    input({ sessions: sortS(steady().concat([0, 2, 4, 6].map(a => sess(a, [[CURL, xN(3, 65, 10)]])))) }),
-    input({ sessions: sortS(steady().concat([0, 2, 4].map(a => sess(a, [[CURL, xN(3, 65, 10)]])), [9, 11, 13].map(a => sess(a, [[CURL, xN(3, 65, 10)]])))) })
+    input({ sessions: sortS(steady().concat([1, 3, 5, 6].map(a => sess(a, [[CURL, xN(3, 65, 10)]])))) }),
+    input({ sessions: sortS(steady().concat([1, 3, 5].map(a => sess(a, [[CURL, xN(3, 65, 10)]])), [9, 11, 13].map(a => sess(a, [[CURL, xN(3, 65, 10)]])))) })
+  ],
+  // v53: the finish line — a session that ended an hour ago, and the same log
+  // without it.
+  hype_finish: [
+    input({ sessions: sortS(steady().concat([{ ...sess(0, [[ROW, xN(3, 155, 8)]]), startedAt: NOW - 2 * 3600e3, endedAt: NOW - 3600e3, _date: key(NOW - 2 * 3600e3) }])) }),
+    input({ sessions: sortS(steady()) })
   ],
   hype_pr: [
     input({ sessions: sortS([30, 20, 10, 2].map((a, k) => sess(a, [[BENCH, xN(3, 185 + 10 * k, 5)]]))) }),
@@ -285,8 +295,11 @@ section('B. nine words, one number, no exclamation mark — and the card ban, on
   const both = rendered.flatMap(r => [r.text, r.why]);
   const bad = both.filter(t => CARD_BAN.some(re => re.test(t)));
   check('no line and no evidence clause carries the card ban (' + CARD_BAN.length + ' words)', !bad.length, list(bad));
-  check('and every line is a sentence, every clause is not', rendered.every(r => /[.]$/.test(r.text) && !/[.]$/.test(r.why)),
-        list(rendered.filter(r => !/[.]$/.test(r.text) || /[.]$/.test(r.why)).map(r => r.text + ' / ' + r.why)));
+  // v53: bar the finish line, whose small line is finishRead()'s own `why` —
+  // a sentence, the same words the sheet's first bubble carries under it.
+  const clause = r => r.id === 'hype_finish' || !/[.]$/.test(r.why);
+  check('and every line is a sentence, every clause is not', rendered.every(r => /[.]$/.test(r.text) && clause(r)),
+        list(rendered.filter(r => !/[.]$/.test(r.text) || !clause(r)).map(r => r.text + ' / ' + r.why)));
   // A long name renders past the limit and simply does not qualify that day.
   const longName = input({ lib: { ...LIB, [BENCH]: { ...LIB[BENCH], name: 'Paused Close Grip Competition Barbell Bench Press On The Floor' } },
     sessions: CASES.hype_pr[0].sessions.map(s => ({ ...s, exercises: s.exercises.map(e => ({ ...e, name: 'Paused Close Grip Competition Barbell Bench Press On The Floor' })) })) });
@@ -378,7 +391,7 @@ section('D. rules 3 and 4 — a lighter week takes the volume lines, and no weig
 }
 
 /* ================= E. IT ROTATES ON THE GREETING'S CAP ================= */
-section('E. the rotation — the open counter, and a memory one short of the pool: pools of 1, 2, 3 and 5');
+section('E. the rotation — the open counter, and a memory one short of the pool: pools of 1, 2, 3 and 4');
 {
   // Lines that do not lean on each other, stacked: the log grows by one line
   // at a time, and the last step brings two (three days running also makes
@@ -395,8 +408,13 @@ section('E. the rotation — the open counter, and a memory one short of the poo
      (the run and the week's sets), and on a lighter day the stopping bias
      takes the week-best line off the card. One set a day keeps the run and
      the most sessions in five weeks, which are what this pool is built of. */
-  pools.push({ ...pools[2], sessions: sortS(steady().concat([0, 1, 2].map(a => sess(a, [[CURL, xN(1, 65, 10)]], 6)))) });
-  const fixtures = [[1, pools[0]], [2, pools[1]], [3, pools[2]], [5, pools[3]]];
+  /* v53: + week best, a day earlier. The v52 pool of five had three days
+     running TO TODAY (the recovery line), and a session today now puts the
+     recovery and finish lines first on the card all day — the walk there is
+     no rotation (coach-hype G, finish.mjs N12). So the widest pool here is
+     four, and the memory still bites at its full depth of three. */
+  pools.push({ ...pools[2], sessions: sortS(steady().concat([1, 2, 3].map(a => sess(a, [[CURL, xN(1, 65, 10)]], 6)))) });
+  const fixtures = [[1, pools[0]], [2, pools[1]], [3, pools[2]], [4, pools[3]]];
   fixtures.forEach(([n, fx]) => {
     const pool = poolOf(fx);
     check('the log built for a pool of ' + n + ' has ' + n + ' lines', pool.length === n, list(pool));
@@ -416,10 +434,10 @@ section('E. the rotation — the open counter, and a memory one short of the poo
     // The memory blocks at most min(3, pool − 1): whatever it names, a line shows.
     const everything = C.coach({ ...fx, opens: 0, recentHype: pool.slice(0, 3) }).card.you;
     check('a memory naming ' + Math.min(3, n) + ' of the ' + n + ' still leaves a line on the card', everything.state === 'earned', everything.state);
-    if (n === 5) {
+    if (n === 4) {
       const mem = pool.slice(0, 3);
       const picks = Array.from({ length: 10 }, (_, k) => C.coach({ ...fx, opens: k, recentHype: mem }).card.you.id);
-      check('on a pool of five the memory reads all three it keeps: none of them is chosen', !picks.some(id => mem.includes(id)), list(picks));
+      check('on a pool of four the memory reads all three it keeps: none of them is chosen', !picks.some(id => mem.includes(id)), list(picks));
     }
   });
   // Goal-aware order: the lines suited to his aim come first in the walk.
@@ -450,8 +468,10 @@ section('F. v52 — the recovery line at his usual run, the rest bias, and a car
   /* The stopping bias for rest: the week-best log, with the row a day ago
      rather than eight — every group he trains is inside its window, the
      rest read says rest, and "most in five weeks" leaves the card. */
+  // v53: the curls a day earlier, so no session is today's and the card
+  // walks its rotation rather than leading with the finish line.
   const restLog = input({ sessions: sortS(Array.from({ length: 10 }, (_, k) => sess(1 + 7 * k, [[ROW, xN(3, 155, 8)]]))
-    .concat([0, 2, 4, 6].map(a => sess(a, [[CURL, xN(3, 65, 10)]])))) });
+    .concat([1, 3, 5, 6].map(a => sess(a, [[CURL, xN(3, 65, 10)]])))) });
   check('the rest log really is a rest day', C.coach(restLog).ask('ask_shape').id === 'rest_day', C.coach(restLog).ask('ask_shape').text);
   check('on a rest day no volume line shows', !poolOf(restLog).some(id => ['hype_week_best', 'hype_milestone'].includes(id)), list(poolOf(restLog)));
   const restOff = { ...restLog, settings: { v: 1, mute: { rest: true }, answers: {}, asked: {} } };

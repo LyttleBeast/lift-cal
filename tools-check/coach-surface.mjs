@@ -1608,7 +1608,14 @@ section('M. v49 — the card encourages and the sheet opens on the finding; "Mor
   check('the line is remembered once for the next open, like the greeting',
         state.calls.filter(c => c[0] === 'rememberHype').length === 1 && state.calls.some(c => c[0] === 'rememberHype' && c[1] === eng.card.you.id),
         JSON.stringify(state.calls.filter(c => c[0] === 'rememberHype')));
-  check('while the sheet it opens still opens on the finding, c.opening', bubT(sh)[0] === eng.opening.text, bubT(sh)[0]);
+  /* v53, on purpose: this log has a session an hour old, and after a
+     workout the sheet opens on the finish line and draws the finding second
+     (SHIP-V53-PROMPT §4.4) — the finding is still there, one bubble down. */
+  check('after a workout the sheet opens on the finish line, and the finding is the second bubble',
+        eng.state === 'post' && eng.opening.id === 'finish' && bubT(sh)[0] === eng.opening.text &&
+        !!eng.openingNext && eng.openingNext.text === eng.you.text && bubT(sh)[1] === eng.openingNext.text, list(bubT(sh)));
+  check('and the card and the sheet agree: the card’s finish line is the sheet’s first bubble',
+        eng.card.you.id === 'hype_finish' && eng.opening.text.startsWith(eng.card.you.text.split('. ')[0]), eng.card.you.text + ' / ' + eng.opening.text);
   const trainCard = U2.coachCard({ tight: true, live: false });
   check('the Train card reads c.card too', (find(trainCard, 'coach-line')[0] || {}).textContent === eng.card.train.text,
         eng.card.train.state + ': ' + eng.card.train.text);

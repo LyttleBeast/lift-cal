@@ -1065,7 +1065,12 @@ section('K. v49 — the card ban over every string a card can draw, and the new 
     weight: { latestLb: 180, latestAt: NOW, rateWk: 0.5, rateDays: 30, goalDir: 1, goalRateWk: 0.5 },
     settings: { v: 1, mute: {}, answers: { q_goal_aim: 'muscle' }, asked: {}, lastGreet: '' } });
   const drawn = [];
-  const logs = Object.entries(FIXTURES).concat([['earn', EARN]]);
+  /* v53: and the same log before today's session. A session today puts the
+     finish line first on the card all day (SHIP-V53-PROMPT §4.4), so EARN
+     alone now draws that and the recovery line; the day before, the card
+     walks the rest of its lines, and every one of them is read here too. */
+  const EARN_BEFORE = { ...EARN, sessions: EARN.sessions.filter(x => x.startedAt < NOW - DAY / 2) };
+  const logs = Object.entries(FIXTURES).concat([['earn', EARN], ['earn-before', EARN_BEFORE]]);
   logs.forEach(([name, fx]) => ['lb', 'kg'].forEach(u => {
     for (let opens = 0; opens < 12; opens++) {
       const c = C.coach({ ...fx, u, opens, recentHype: [] });
@@ -1293,6 +1298,59 @@ section('L. v52 — every sentence stage four can say: rest, recovery, readiness
   const copy = decomment(sources).replace(/=== '(kg|lb)' \? '(kg|lb)' : '(kg|lb)'/g, '').replace(/=== '(kg|lb)'/g, '');
   check('coach-ready.js prints every weight through units.js — no unit word typed into it',
         !/'[^'\n]*\b(lb|lbs|kg|pounds?|kilos?)\b[^'\n]*'/.test(copy), (copy.match(/.*'[^'\n]*\b(lb|lbs|kg|pounds?|kilos?)\b[^'\n]*'.*/) || [''])[0].trim());
+}
+
+/* ================= M. v53 — THE FINISH LINE, UNDER EVERY BAN ================= */
+section('M. v53 — every sentence of the finish line, on the recap, the card and the sheet, both units');
+{
+  /* The finish line is the first thing he reads after a workout, on three
+     surfaces, one of them the card — so it carries the card ban as well as
+     the shipped list, the causal words, "eat", "should", "try" and "must",
+     and SHIP-V53-PROMPT §4.2's own: never a percentage, "down", "under",
+     "below", "lighter", "only", "still" or "!". Read on the source, so a
+     branch no log reaches is under it too, and on what finishRead() says. */
+  const CAUSE = [/\bbecause\b/i, /\bcaused?\b/i, /\bdue to\b/i, /\bthat'?s why\b/i, /\bso you\b/i, /\bleads? to\b/i,
+                 /\bmakes? you\b/i, /\bresults? in\b/i, /\bthanks to\b/i];
+  const NEVER = [/%/, /\bdown\b/i, /\bunder\b/i, /\bbelow\b/i, /\blighter\b/i, /\bonly\b/i, /\bstill\b/i, /!/];
+  const RULES = BANNED.concat(CARD_BANNED, CAUSE, NEVER, [/\beat\b/i, /\beating\b/i, /\bshould\b/i, /\btry\b/i, /\bmust\b/i]);
+  const hits = t => RULES.filter(re => re.test(t)).map(re => (t.match(re) || [''])[0]);
+  const COACH = src('coach.js');
+  // From the opening of the section's own comment, so decomment() sees it whole.
+  const from = COACH.lastIndexOf('/*', COACH.indexOf('7c. THE FINISH LINE')), to = COACH.lastIndexOf('/*', COACH.indexOf('8.  THE SHEET\'S TOPICS'));
+  const part = from > 0 && to > from ? decomment(COACH.slice(from, to)) : '';
+  const lits = literals(part).filter(t => /[a-z]{3}/i.test(t));
+  const srcBad = lits.map(t => ({ t, w: hits(t) })).filter(x => x.w.length);
+  check('the finish line’s source was found and read (' + lits.length + ' strings), and none carries a ban',
+        lits.length >= 20 && !srcBad.length, list(srcBad.map(x => '“' + x.w.join('/') + '” in: ' + x.t)));
+  check('and it types no unit word: every weight goes through units.js',
+        !/'[^'\n]*\b(lb|lbs|kg|pounds?|kilos?)\b[^'\n]*'/.test(part.replace(/=== '(kg|lb)'/g, '')));
+  // What it says: every fixture's latest session as though just finished,
+  // rated every way and marked, on both tiers and both units.
+  const said = [];
+  const FEELS = [null, { e: 9 }, { s: 120 }, { s: 80 }, { e: 2 }, { e: 5, s: 100 }];
+  Object.entries(FIXTURES).forEach(([name, fx]) => {
+    const ss = (fx.sessions || []).slice();
+    if (!ss.length) return;
+    const last = ss[ss.length - 1];
+    FEELS.forEach((feel, k) => ['lb', 'kg'].forEach(u => [true, false].forEach(pro => {
+      const rec = { ...last, id: 'fin' + k, startedAt: NOW - 2 * 36e5, endedAt: NOW - 36e5, _date: key(NOW - 2 * 36e5), ...(feel ? { feel } : {}) };
+      const marks = k === 3 ? { [rec.id]: { r: 'sleep', d: key(rec.startedAt) } } : {};
+      const inp = { ...fx, u, tier: { pro }, sessions: ss.slice(0, -1).concat([rec]),
+                    settings: { ...(fx.settings || {}), marks } };
+      const f = C.finishRead(inp, rec);
+      [f.headline, f.line, f.why].forEach(t => said.push({ where: name + '/' + u + '/' + k, u, t }));
+      const c = C.coach(inp);
+      if (c.card.you.id === 'hype_finish') [c.card.you.text, c.card.you.reason].forEach(t => said.push({ where: name + '/card', u, t }));
+      if (c.opening.id === 'finish') [c.opening.text, c.opening.reason].forEach(t => said.push({ where: name + '/sheet', u, t }));
+    })));
+  });
+  const heads = new Set(said.filter(x => /\/\d+$/.test(x.where)).map(x => x.t).filter(t => /^(Great workout|Good work)\.$/.test(t)));
+  check('the sweep reads both headlines, the card and the sheet (' + said.length + ' strings)',
+        heads.size === 2 && said.some(x => /card$/.test(x.where)) && said.some(x => /sheet$/.test(x.where)), [...heads].join(', '));
+  const bad = said.map(x => ({ ...x, w: hits(x.t).concat(x.u === 'kg' && /\d ?lb\b/.test(x.t) ? ['lb on a kilo account'] : [])
+    .concat(/'/.test(x.t) ? ['a straight apostrophe'] : []) })).filter(x => x.w.length);
+  check('not one carries a ban, a cause, "eat", a percentage, "down", "under", "below", "lighter", "only", "still" or "!" — both units',
+        !bad.length, list(bad.map(x => x.where + ' “' + x.w.join('/') + '” in: ' + x.t)));
 }
 
 /* ---------- report ---------- */

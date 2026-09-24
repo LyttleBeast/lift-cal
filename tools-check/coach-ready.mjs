@@ -423,7 +423,13 @@ row('R15', () => {
     const c = C.coach(inp), r = rs(inp);
     const ship = C.coach(withSettings(inp, { mute: { rest: true } }));
     const shipShape = ship.ask('ask_shape');
-    const opening = c.opening;
+    /* v53, on purpose: this fixture has a session today, and after a
+       workout the sheet opens on the finish line and draws the finding
+       second (SHIP-V53-PROMPT §4.4). The row is about the finding, so it
+       reads openingNext — c.opening would pass it without testing it. */
+    const after = c.state === 'post' || c.state === 'done_today';
+    if (after && (!c.openingNext || c.opening.id !== 'finish')) bad.push(n + ': no finish line first after a workout');
+    const opening = c.openingNext || c.opening;
     if (['train_today_recommendation', 'session_shape_most_overdue'].includes(opening.id)) bad.push(n + ': opening ' + opening.text);
     const a = c.ask('ask_shape');
     if (['train_today_recommendation', 'session_shape_most_overdue'].includes(a.id)) bad.push(n + ': ask_shape ' + a.text);

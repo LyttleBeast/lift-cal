@@ -46,8 +46,8 @@
 // never see each other: their rows are merged here. Nothing imports back.
 
 import { GROUPS, GROUP_ORDER } from './exercises.js';
-import { e1rm, isWorking, mergeSessionExercises, exerciseIndex } from './analytics.js';
-import { labelW, labelRate, unitW, fmtW } from './units.js';
+import { e1rm, isWorking, mergeSessionExercises, exerciseIndex, detectPRs, sessionMilestones, normFeel } from './analytics.js';
+import { labelW, labelRate, unitW, fmtW, fmtSetLoad, labelVol } from './units.js';
 import { propose, liveRefusal, buildMenu, swapTo, BUILD_ASK } from './coach-build.js';
 import { liveRead, LIVE_NONE, REP_DROP } from './coach-live.js';
 import { AIMS, EXPERIENCE, energyContext, normGoalLift, goalChecks, AIM_DIR } from './coach-goal.js';
@@ -1758,7 +1758,9 @@ export const FACTS = Object.freeze([
     compute: d => {
       const s = d.latestAny();
       if (!s || s.daysAgo > HYPE_DAYS) return null;
-      const r = targetsReplay(d.overlap(), s);
+      // v53: through the same memo as the finish line's, which replays the
+      // same session after a workout — one replay a paint, not two.
+      const r = replayOf(d, s);
       return r ? { ...r, daysAgo: s.daysAgo, date: s.date } : null;
     },
     because: v => plural(v.n, 'lift') + ' with a Coach target that named a weight',
@@ -1831,6 +1833,16 @@ export const FACTS = Object.freeze([
     },
     because: v => v.n + ' sessions in your log',
     age: v => v.daysAgo
+  },
+  {
+    /* v53: the finish line for the latest session (finishRead(), §7c) —
+       what the card and the sheet open on after a workout. It requires
+       session.latest, so a paint in any state but post and done_today never
+       works it out. */
+    id: 'session.finish', unit: null, requires: ['session.latest'],
+    compute: d => finishOf(d, d.f('session.latest').session, null),
+    because: () => 'your latest session',
+    age: () => 0
   },
   {
     // Training days in a row, ending today.
@@ -3490,6 +3502,21 @@ const WORD_NUM = ['Zero', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven',
 
 export const HYPE = Object.freeze([
   {
+    /* v53: THE FINISH LINE, after a workout — finishRead()'s headline, and
+       its evidence beside it when the two fit the card; a long lift name
+       leaves the headline alone and the evidence goes in the reason line,
+       never truncated. Every aim, both tiers, and category core: the one
+       thing said after every session is not a switch. First in post and
+       done_today (after the recovery line — cardView), and exempt from the
+       24-hour rule while the state lasts, so it is there on every open that
+       day. */
+    id: 'hype_finish', category: 'core', aims: null, facts: ['session.finish'],
+    gate: () => true,
+    text: d => finishCard(d.f('session.finish')).text,
+    why: d => finishCard(d.f('session.finish')).why,
+    key: d => 'finish:' + d.f('session.finish').id
+  },
+  {
     id: 'hype_week_best', category: 'volume', aims: null, facts: ['session.weekBest'],
     gate: d => { const v = d.f('session.weekBest'); return v.n >= 3 && v.prev.every(p => v.n > p); },
     // Rolling words for a rolling count: never "this week" (the defect v43
@@ -3686,6 +3713,220 @@ function pickWarm(d, opens, greetText, not) {
     .filter(w => fitsCard(w.text) && w.text !== greetText && w.id !== not);
   if (!lines.length) return null;
   return lines[rotate(opens, lines.length)];
+}
+
+/* ================================================================
+   7c. THE FINISH LINE (v53) — what to celebrate after a workout
+   ================================================================
+   Micah, 24 Sep: "I am expecting a lot of encouragement" — and, the day
+   before, "this coach should be at the level where I can trust it". Both
+   hold here, because the headline is one of two and the stronger one is
+   EARNED:
+
+     "Great workout."  when at least one piece of evidence backs it, in this
+                       order — a record, every Coach target met (two or more,
+                       Pro, targets on), a session milestone, above his usual
+                       (Pro), his own rating (energy 8+, strength 110%+), a
+                       comeback after twelve days or more;
+     "Good work."      always available, with a plain true fact under it — or,
+                       on a harder day (marked, or rated strength 90% or less,
+                       or energy 3 or less), "Showing up on a harder day
+                       counts."
+
+   Never a percentage, "down", "under", "below", "lighter", "only", "still",
+   a comparison with anything but his own log, an exclamation mark, or
+   "Great" without evidence (tools-check/finish.mjs).
+
+   ONE DECISION, THREE SURFACES. The recap, the card (hype_finish) and the
+   sheet's first bubble all read this, so the three can never disagree. The
+   recap hands in the records it has already worked out; the card and the
+   sheet have none in hand, so the same two analytics.js functions work them
+   out here over the same prior sessions — the same arithmetic either way. */
+const FINISH_GREAT = 'Great workout.';
+const FINISH_GOOD = 'Good work.';
+const FINISH_HARDER = 'Showing up on a harder day counts.';
+const FEEL_HIGH_E = 8, FEEL_HIGH_S = 110, FEEL_LOW_E = 3, FEEL_LOW_S = 90;
+// The top of his energy scale — the "10" in "8 out of 10" is the scale's.
+const FEEL_TOP = 10;
+const PR_RANK = Object.freeze({ e1rm: 0, weight: 1, volume: 2 });
+
+/* A harder day by his own rating: strength 90% or less, or energy 3 or
+   less. The same test brings up the mark chips on the recap, so it is
+   exported rather than written twice. */
+export function feelHarder(feel) {
+  const f = normFeel(feel);
+  return !!f && ((f.s != null && f.s <= FEEL_LOW_S) || (f.e != null && f.e <= FEEL_LOW_E));
+}
+
+const workingSetsOf = rec => (rec && Array.isArray(rec.exercises) ? rec.exercises : [])
+  .reduce((a, ex) => a + (ex && Array.isArray(ex.sets) ? ex.sets : []).filter(isWorking).length, 0);
+
+/* What was trained, for "Good work.": his own routine's name when one covers
+   exactly these groups (shapeRoutine, the builder's test), otherwise the
+   groups with two or more lifting sets, as Coach joins them. */
+function doneName(sh, d) {
+  const sig = sh.signature;
+  const mine = sig.length ? shapeRoutine(sig, d.input.routines, d.input.lib || {}) : null;
+  if (mine) return String(mine.name);
+  const gs = sig.length ? sig : GROUP_ORDER.filter(g => (sh.lsets[g] || 0) > 0);
+  const o = GROUP_ORDER.filter(g => gs.includes(g)).map(groupLabel);
+  if (!o.length) return 'Session';
+  const s = o.length >= 5 ? 'whole body' : o.length === 1 ? o[0] : o.slice(0, -1).join(', ') + ' and ' + o[o.length - 1];
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+/* The record's own detail, as analytics.js prDetail() prints it — which
+   is on the impure list, so it is restated here through units.js: the set
+   behind an estimated-max record, or the record's phrase with its number. */
+function prText(p, u) {
+  if (p.set) return fmtSetLoad(p.set.w, u) + ' x ' + p.set.r;
+  return p.kind === 'weight' ? 'heaviest ever, ' + labelW(p.value, u) : 'best session volume, ' + labelVol(p.value, u);
+}
+function prWhy(p, prior, u) {
+  if (p.kind === 'e1rm' && p.set) {
+    const w = parseFloat(p.set.w);
+    let best = 0;
+    prior.forEach(s => ((s && s.exercises) || []).forEach(ex => {
+      if (!ex || ex.exId !== p.exId) return;
+      (ex.sets || []).filter(isWorking).forEach(z => {
+        if (Math.abs((parseFloat(z.w) || 0) - w) < 0.01) best = Math.max(best, parseInt(z.r, 10) || 0);
+      });
+    }));
+    if (w > 0 && best > 0) return 'Your best at ' + labelW(w, u) + ' was ' + plural(best, 'rep') + '.';
+    return 'Your best estimated max before was ' + labelW(p.prev, u) + '.';
+  }
+  return p.kind === 'weight' ? 'Your heaviest before was ' + labelW(p.prev, u) + '.'
+    : 'Your most before was ' + labelVol(p.prev, u) + '.';
+}
+
+/* The targets replayed for one session, once per coach() call: the card's
+   "every Coach target met" line replays the latest session too, and after a
+   workout the two are the same session. */
+function replayOf(d, sh) {
+  return d.once('replay|' + d.idOf(sh) + '|' + sh.startedAt, () => targetsReplay(d.overlap(), sh));
+}
+
+function finishSafe(rec) {
+  const n = workingSetsOf(rec);
+  const line = n ? 'Session done: ' + plural(n, 'set') + '.' : 'Session done.';
+  return { headline: FINISH_GOOD, line, why: '', earned: false, evidence: [], short: line,
+           id: rec && rec.id != null ? String(rec.id) : '' };
+}
+
+/* The decision itself, on a fact store whose sessions hold the record. */
+function finishOf(d, rec, extras) {
+  const u = uOf(d);
+  const sh = d.all().find(s => s.session === rec);
+  if (!sh) return finishSafe(rec);
+  const readable = d.f('log.confidence') === 'readable';
+  const pro = d.f('meta.tierPro') === true;
+  const prior = readable ? d.all().filter(s => s !== sh && s.startedAt < sh.startedAt).map(s => s.session) : [];
+  // With no readable log there is nothing to judge a record against: the
+  // recap's own, when it handed them in, and none otherwise.
+  /* detectPRs() reads the index of only the record's own lifts, and a
+     lift's index entry is built from only the sessions that hold it — so it
+     is handed those, and answers exactly as it would over every one, at a
+     fraction of a paint (SHIP-V53-PROMPT §4.4's budget). The milestones
+     compare against every earlier session, and are handed every one. */
+  const mine = new Set((Array.isArray(rec.exercises) ? rec.exercises : []).map(ex => ex && ex.exId).filter(Boolean));
+  const x = extras && typeof extras === 'object' ? extras
+    : readable ? { prs: detectPRs(rec, prior.filter(s => ((s && s.exercises) || []).some(ex => ex && mine.has(ex.exId)))).prs,
+                   milestones: sessionMilestones(rec, prior, u) } : {};
+  const prs = Array.isArray(x.prs) ? x.prs.filter(p => p && PR_RANK[p.kind] != null) : [];
+  const ms = Array.isArray(x.milestones) ? x.milestones.filter(m => m && m.label) : [];
+  const feel = normFeel(rec.feel);
+  const ev = [];
+
+  // 1. A record. The strongest kind first, then the order he did them in.
+  const pr = prs.slice().sort((a, b) => PR_RANK[a.kind] - PR_RANK[b.kind])[0];
+  if (pr) {
+    const name = String(pr.name || pr.exId);
+    ev.push({ id: 'pr', line: 'New best on ' + name + ': ' + prText(pr, u) + '.', short: 'New best on ' + name + '.',
+              why: prWhy(pr, prior, u) });
+  }
+  // 2. Every Coach target met — two or more that named a weight, the bar
+  // hype_targets_met holds (Pro, and the targets switch on).
+  if (readable && pro && !isMuted(d.input.settings, 'targets')) {
+    const t = replayOf(d, sh);
+    if (t && t.n >= 2 && t.met === t.n) {
+      ev.push({ id: 'targets', line: 'Every Coach target met: ' + t.met + ' of ' + t.n + '.', short: 'Every Coach target met.',
+                why: plural(t.n, 'lift') + ', each at its target weight and reps.' });
+    }
+  }
+  // 3. A session milestone, in its own shipped words.
+  if (ms.length) {
+    ev.push({ id: 'milestone', line: ms[0].label + '.', short: ms[0].label + '.',
+              why: ms[0].value + ', against a previous best of ' + ms[0].prev + '.' });
+  }
+  // 4. Above his usual — "How did today compare?"'s own reading, and Pro
+  // like that answer is.
+  if (readable && pro && !isMuted(d.input.settings, 'progression')) {
+    const v = compareSession(d.overlap(), sh, d.now);
+    const up = !v ? [] : v.summary ? (v.summary === 'above' ? v.rows.filter(r => r.verdict === 'above') : [])
+      : v.rows.filter(r => r.verdict === 'above');
+    if (up.length) {
+      const names = up.length > 2 ? plural(up.length, 'lift') : up.map(r => r.name).join(' and ');
+      ev.push({ id: 'compare', line: 'Above your usual on ' + names + '.', short: 'Above your usual on ' + names + '.',
+                why: 'An estimated max of ' + labelW(up[0].now, u) + ' on ' + up[0].name + ', against a usual ' + labelW(up[0].usual, u) + '.' });
+    }
+  }
+  // 5. His own rating.
+  if (feel && ((feel.e != null && feel.e >= FEEL_HIGH_E) || (feel.s != null && feel.s >= FEEL_HIGH_S))) {
+    const line = feel.e != null && feel.e >= FEEL_HIGH_E ? 'You rated it ' + feel.e + ' out of ' + FEEL_TOP + '.' : 'Stronger than normal, by your rating.';
+    ev.push({ id: 'rating', line, short: line, why: 'Your own rating, straight after the session.' });
+  }
+  // 6. A comeback: the first session after twelve days or more away.
+  if (readable) {
+    const before = d.all().filter(s => s !== sh && s.startedAt < sh.startedAt);
+    const gap = before.length ? daysBetween(before[before.length - 1].startedAt, sh.startedAt) : null;
+    if (gap != null && gap >= BACK_GAP_DAYS) {
+      ev.push({ id: 'back', line: 'First session in ' + gap + ' days.', short: 'First session in ' + gap + ' days.',
+                why: 'The session before it was ' + plural(gap, 'day') + ' earlier.' });
+    }
+  }
+
+  const id = rec.id != null ? String(rec.id) : '';
+  if (ev.length) {
+    return { headline: FINISH_GREAT, line: ev[0].line, why: ev[0].why, earned: true, evidence: ev.map(e => e.id),
+             short: ev[0].short, id };
+  }
+  const mark = d.markOf(sh);
+  if (mark || feelHarder(feel)) {
+    return { headline: FINISH_GOOD, line: FINISH_HARDER, earned: false, evidence: [], short: FINISH_HARDER, id,
+             why: mark ? 'You marked it: ' + MARK_WORDS[mark.r] + '.' : 'By your own rating, straight after it.' };
+  }
+  const line = doneName(sh, d) + ' done: ' + plural(workingSetsOf(rec), 'set') + '.';
+  return { headline: FINISH_GOOD, line, why: 'Every working set in the session, warm-ups out.', earned: false, evidence: [],
+           short: line, id };
+}
+
+/* The card's form: the headline and its evidence when the two fit the
+   card's limits, and otherwise the headline alone with the evidence in the
+   reason line — a name is never cut to make it fit. */
+function finishCard(f) {
+  const both = f.headline + ' ' + f.short;
+  return fitsCard(both) ? { text: both, why: f.why } : { text: f.headline, why: f.line };
+}
+
+/* `finishRead(input, record, extras)` — the recap's door. `input` is
+   coachInput(); `record` is the session just saved, added to the sessions
+   when its id is not there yet (straight after Finish the re-read has not
+   landed), and put in place of the stored one when it is (a rating the
+   re-read predates); `extras` is { prs, firsts, milestones } as workout.js
+   worked them out, or absent. Pure, with the clock in `input.now`. Never
+   throws: anything that goes wrong is "Good work." from the record alone. */
+export function finishRead(input, record, extras) {
+  const rec = record && typeof record === 'object' ? record : null;
+  if (!rec) return finishSafe(null);
+  try {
+    const i = input || {};
+    const ss = Array.isArray(i.sessions) ? i.sessions : [];
+    const same = s => s === rec || (!!s && rec.id != null && s.id === rec.id);
+    const sessions = ss.some(same) ? ss.map(s => (same(s) ? rec : s)) : ss.concat([rec]);
+    return finishOf(factStore({ ...i, sessions }), rec, extras || null);
+  } catch {
+    return finishSafe(rec);
+  }
 }
 
 /* ================================================================
@@ -4563,10 +4804,18 @@ export function coach(input) {
      Train card takes a training line the You card is not already showing. */
   const pool = blocked ? [] : hypePool(d, u, you.state === 'finding' ? you : null);
   const recentHype = d.f('coach.recentHype') || [];
+  const state = d.f('coach.state');
   function cardView(surface, claimed) {
     if (blocked) return { ...blocked, state: blocked.id };
     const mine = pool.filter(h => (surface === 'you' || TRAIN_HYPE.includes(h.category)) && h.id !== claimed);
-    const h = pickHype(mine, recentHype, d.input.opens, d.now);
+    /* v53: after a workout, an explicit order — the recovery line when its
+       gate passes, then the finish line, then the shipped rotation. The pool
+       is sorted by suits, age and id and the walk starts at a rotated
+       offset, so "top of the pool" alone would not put it first. */
+    const after = state === 'post' || state === 'done_today';
+    const lead = after ? (mine.find(x => x.id === 'hype_recovery' && !shownWithin(recentHype, x.key, d.now)) ||
+                          mine.find(x => x.id === 'hype_finish')) : null;
+    const h = lead || pickHype(mine, recentHype, d.input.opens, d.now, after ? (x => x.key.startsWith('finish:')) : null);
     if (h) return { id: h.id, kind: 'hype', state: 'earned', category: h.category, tone: 'good', text: h.text, reason: h.why, key: h.key };
     if (!pro && lockedCount > 0) {
       const it = INTENT_BY_ID.card_state_locked;
@@ -4581,6 +4830,9 @@ export function coach(input) {
     const it = INTENT_BY_ID.card_state_clear;
     return { ...renderIntent(it, d, u), state: it.id };
   }
+  const fin = !blocked && (state === 'post' || state === 'done_today') ? d.f('session.finish') : null;
+  const finishBubble = fin ? { id: 'finish', kind: 'finish', state: 'finish', tone: 'good',
+                               text: fin.headline + ' ' + fin.line, reason: fin.why } : null;
   const cardYou = cardView('you', null);
   const card = { you: cardYou, train: cardView('train', cardYou.state === 'earned' || cardYou.state === 'warm' ? cardYou.id : null) };
 
@@ -4612,7 +4864,14 @@ export function coach(input) {
     question: questionView(question, d, u),
     // The opening bubble: the same finding the You card is showing, so the
     // sheet does not contradict the card that opened it.
-    opening: you,
+    /* v53: after a workout the sheet opens on the finish line instead, and
+       the finding it used to open on is the second bubble, `openingNext` —
+       the first thing after a workout is never a correction. `repeats`
+       (withRepeat, above) is keyed to the finding, `you`, which is
+       openingNext here: an answer that repeats the finding is marked
+       against the finding, never against the finish bubble. */
+    opening: finishBubble || you,
+    openingNext: finishBubble ? you : null,
     /* An unreadable log silences the ROUTER as well as the card, and the reach
        of that is deliberate: it takes the fuel and weight readouts down with it.
        They are not wrong in themselves — those nodes read fine — but when

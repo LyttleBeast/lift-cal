@@ -1,10 +1,14 @@
 #!/usr/bin/env node
 //
-// What a card paint costs, on a year-long, 200-session log — rack-v51 against
-// the working tree (SHIP-V52-PROMPT §1: "the budget is +1 ms").
+// What a card paint costs, on a year-long, 200-session log — rack-v52 against
+// the working tree (SHIP-V52-PROMPT §1: "the budget is +1 ms"; v53 keeps it).
 //
-//   node report/coach-paint/bench.mjs            v51 and the working tree
+//   node report/coach-paint/bench.mjs            v52 and the working tree
 //   node report/coach-paint/bench.mjs <rev>...   any commits, by name
+//
+// v53: timed in three moments, because the finish line (finishRead()) is
+// worked out on a paint in two of them only — `post`, an hour after a
+// session, and `done_today`, hours after one — and not at all otherwise.
 //
 // A card paint is what coach-ui.js's coachCard() asks of the engine: one
 // coach() call, then the two cards, the greeting, the lead question and (for
@@ -99,13 +103,24 @@ function time(C, input) {
 }
 
 const revs = process.argv.slice(2);
-const targets = revs.length ? revs.map(r => [r, r]) : [['rack-v51 (99b49ea)', '99b49ea'], ['working tree', null]];
+const targets = revs.length ? revs.map(r => [r, r]) : [['rack-v52 (6f76c3b)', '6f76c3b'], ['working tree', null]];
+// The three moments: the year as it is (no session today), an hour after a
+// session, and five hours after one — the same session on top of the year.
+const before = sessions.filter(s => s.startedAt < NOW - 12 * 3600e3);
+const today = (start, end) => ({ ...sessions[sessions.length - 4], id: 'today', startedAt: NOW - start * 3600e3,
+  endedAt: NOW - end * 3600e3, durationSec: (start - end) * 3600, _date: key(NOW - start * 3600e3) });
+const MOMENTS = [['pre', { ...INPUT, sessions: before }],
+                 ['post', { ...INPUT, sessions: before.concat([today(2, 1)]) }],
+                 ['done_today', { ...INPUT, sessions: before.concat([today(6, 5)]) }]];
 console.log('\na card paint, ' + sessions.length + ' sessions over ' + Math.round((NOW - sessions[0].startedAt) / DAY) + ' days\n');
 for (const [label, rev] of targets) {
   const { C, R } = await stage(rev);
-  const pro = time(C, INPUT), basic = time(C, { ...INPUT, tier: { pro: false } });
-  console.log('  ' + label.padEnd(22) + '  Pro ' + pro.median.toFixed(2) + ' ms (p90 ' + pro.p90.toFixed(2) + ')   Basic ' +
-              basic.median.toFixed(2) + ' ms (p90 ' + basic.p90.toFixed(2) + ')');
+  for (const [m, inp] of MOMENTS) {
+    const pro = time(C, inp), basic = time(C, { ...inp, tier: { pro: false } });
+    console.log('  ' + label.padEnd(22) + '  ' + m.padEnd(10) + '  Pro ' + pro.median.toFixed(2) + ' ms (p90 ' + pro.p90.toFixed(2) + ')   Basic ' +
+                basic.median.toFixed(2) + ' ms (p90 ' + basic.p90.toFixed(2) + ')' +
+                (C.coach(inp).card && C.coach(inp).card.you ? '   card: ' + C.coach(inp).card.you.id : ''));
+  }
   /* v52's adherence replay — answer-time only, never on a paint; its own
      budget is 150 ms (SHIP-V52-PROMPT §4.5). A fresh input each time, so the
      memo it rides on cannot answer for it. */

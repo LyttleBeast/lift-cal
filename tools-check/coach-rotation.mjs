@@ -915,7 +915,14 @@ section('J. the card’s earned line rotates on the same counter, and never repe
   // The pool each log offers, read off a long walk with no memory at all.
   const poolOfCard = fx => [...new Set(Array.from({ length: 24 }, (_, k) =>
     C.coach({ ...fx, opens: k, recentGreets: [], recentHype: [] }).card.you).filter(v => v.state === 'earned').map(v => v.id))];
-  const logs = [['a full log', FULL], ['a log with plenty to say', RICH], ['a caution card', CAUTION],
+  /* v53: RICH's heavy bench and CAUTION's chest, a day earlier. A session
+     TODAY now puts the finish line first on the card all day (SHIP-V53-PROMPT
+     §4.4) — no rotation to walk — so these logs are read the day before, where
+     the rotation is what the card does. finish.mjs N12 holds the other day. */
+  const dayBefore = fx => ({ ...fx, sessions: fx.sessions.map(x => (x.startedAt > NOW - DAY / 2
+    ? { ...x, id: x.id + 'y', startedAt: x.startedAt - DAY, _date: key(x.startedAt - DAY) } : x))
+    .sort((a, b) => a.startedAt - b.startedAt) });
+  const logs = [['a full log', FULL], ['a log with plenty to say', dayBefore(RICH)], ['a caution card', dayBefore(CAUTION)],
                 ['the same log with the card muted', FULL_MUTED]];
   const sized = logs.map(([n, fx]) => [n, fx, poolOfCard(fx)]);
   check('the logs here put earned lines on the card — ' + sized.map(([n, , p]) => n + ': ' + p.length).join(', '),

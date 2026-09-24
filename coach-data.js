@@ -40,7 +40,7 @@ import { allExercises, hiddenIds, libraryReady } from './picker.js';
 import { maintenance, effectiveMaint, trendRate, sortedEntries } from './tdee.js';
 import { goalDirection } from './insights.js';
 import { capabilities } from './access.js';
-import { normSettings, isMuted, patternFoodDays, fuelDays, CATEGORIES } from './coach.js';
+import { normSettings, isMuted, patternFoodDays, fuelDays, CATEGORIES, finishRead } from './coach.js';
 
 /* ================= STATE =================
    Everything here is set once by initCoachData() and read synchronously
@@ -572,6 +572,24 @@ export function noteCoachData(patch) {
   if (p.targets   && typeof p.targets === 'object') {
     targets = p.targets;
     if (Number.isFinite(p.targets.cal) && p.targets.cal > 0) targetsSet = true;
+  }
+}
+
+/* v53: THE FINISH LINE, for the recap — finishRead() on this snapshot, the
+   session just saved and the records workout.js worked out for it. Nothing
+   new is read: straight after Finish the re-read has not landed, and the
+   engine adds the record itself. Anything that throws is "Good work." from
+   the record alone, because the recap is the screen he sees after every
+   session and it must never be the one that breaks. */
+export function coachFinishRead(record, extras) {
+  try {
+    return finishRead(coachInput({}), record, extras || null);
+  } catch {
+    const n = (record && Array.isArray(record.exercises) ? record.exercises : []).reduce((a, ex) =>
+      a + (ex && Array.isArray(ex.sets) ? ex.sets : []).filter(x => x && x.type !== 'W').length, 0);
+    const line = n ? 'Session done: ' + n + (n === 1 ? ' set.' : ' sets.') : 'Session done.';
+    return { headline: 'Good work.', line, why: '', earned: false, evidence: [], short: line,
+             id: record && record.id != null ? String(record.id) : '' };
   }
 }
 

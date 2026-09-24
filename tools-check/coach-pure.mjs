@@ -166,7 +166,15 @@ section('A. three imports, and the analytics one is a closed list');
   // the port honest: e1rm and the merge invariant must NOT be restated in
   // coach.js (two copies of the set row's arithmetic is how they drift), and
   // loadAll/allSessions must never be reachable from it.
-  const PURE = ['e1rm', 'isWorking', 'setVolume', 'mergeSessionExercises', 'exerciseIndex'];
+  // v53, on purpose (SHIP-V53-PROMPT §4.1): finishRead() works out a
+  // session's records with the recap's own two functions, detectPRs and
+  // sessionMilestones — pure, over sessions it is handed, so the card, the
+  // sheet and the recap reach one answer by one arithmetic — and reads his
+  // rating through normFeel, the one fail-safe reader of `feel`. analytics.js
+  // imports nothing from coach.js, so there is no cycle. prDetail stays on
+  // the impure list: its one line is restated in coach.js through units.js.
+  const PURE = ['e1rm', 'isWorking', 'setVolume', 'mergeSessionExercises', 'exerciseIndex',
+                'detectPRs', 'sessionMilestones', 'normFeel'];
   const IMPURE = ['loadAll', 'allSessions', 'invalidate', 'lineChart', 'barChart', 'ring',
                   'sparkline', 'donut', 'heatStrip', 'emptyChart', 'legend', 'prTimeline', 'prDetail'];
   const a = imports.find(i => i.from === './analytics.js');
