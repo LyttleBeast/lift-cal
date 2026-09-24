@@ -176,6 +176,10 @@ const IMPL = {
   liveSessionOnDevice: () => false,
   coachPro:           () => state.pro,
   rememberGreeting:   id => { state.calls.push(['rememberGreeting', id]); },
+  // v49: the card's earned line, the aim, and the lift target.
+  rememberHype:       id => { state.calls.push(['rememberHype', id]); },
+  setAim:             v => { state.calls.push(['setAim', v]); return Promise.resolve(true); },
+  setGoalLift:        v => { state.calls.push(['setGoalLift', v]); return Promise.resolve(true); },
   setCategoryMuted:   (id, m) => { state.calls.push(['setCategoryMuted', id, m]); return Promise.resolve(true); },
   answerQuestion:     (id, v) => { state.calls.push(['answerQuestion', id, v]); return Promise.resolve(true); },
   markAsked:          id => { state.calls.push(['markAsked', id]); return Promise.resolve(true); }
@@ -251,6 +255,8 @@ writeFileSync(join(dir, 'coach-data-stub.mjs'),
   IMPORTED.map(n => `export function ${n}(...a) { return globalThis.__coachData('${n}', a); }`).join('\n') + '\n');
 writeFileSync(join(dir, 'coach-ui.mjs'), UI_SRC
   .replace("from './ui.js'", 'from ' + real('ui.js'))
+  // v49: the Lift target row converts its box through units.js.
+  .replace("from './units.js'", 'from ' + real('units.js'))
   .replace("from './exercises.js'", 'from ' + real('exercises.js'))
   .replace("from './coach.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach.mjs')).href))
   .replace("from './coach-data.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-data-stub.mjs')).href)));
@@ -299,8 +305,11 @@ function openBare(ui, opts) {
 /* Every label that IS a topic, whichever surface offers it. The tier checks ask
    whether a sheet is showing topics at all, and this is how they recognise one
    without a copy of the list. */
-const TOPIC_LABELS = C.TOPICS.concat(C.TRAIN_TOPICS).map(t => t.label);
-const TOPIC_ID = Object.fromEntries(C.TOPICS.concat(C.TRAIN_TOPICS).map(t => [t.label, t.id]));
+// v49: every topic any state may offer, and the one relabelled after a
+// workout ("What should I train next?"), with Patterns.
+const TOPIC_LIST = C.ALL_TOPICS.concat([{ id: 'ask_shape', label: 'What should I train next?' }, C.PATTERN_TOPIC]);
+const TOPIC_LABELS = TOPIC_LIST.map(t => t.label);
+const TOPIC_ID = Object.fromEntries(TOPIC_LIST.map(t => [t.label, t.id]));
 const topicChipsIn = sh => chipsIn(sh).map(b => b.textContent).filter(l => TOPIC_LABELS.includes(l));
 const engine = input => C.coach({ ...input, tier: { pro: state.pro } });
 
@@ -374,8 +383,12 @@ section('A. the lock in the corner now means something behind it');
   state.pro = true;
   const proSheet = open(UI, { go() {} }).sh;
   const proTopics = topicChipsIn(proSheet);
-  check('a Pro account on the same log DOES get the topics',
-        proTopics.length === engine(QUESTIONING).topicsFor('you').length && proTopics.length > 0,
+  /* v49 (updated deliberately): four topics show and the rest wait under
+     "More", so what is drawn is the first four of the engine's list. */
+  const proAll = engine(QUESTIONING).topicsFor('you');
+  check('a Pro account on the same log DOES get the topics — the first ' + C.TOPICS_SHOWN + ', and "More" when there are others',
+        proTopics.join(',') === proAll.slice(0, C.TOPICS_SHOWN).map(t => t.label).join(',') && proTopics.length > 0 &&
+        chipsIn(proSheet).some(b => b.textContent === 'More') === (proAll.length > C.TOPICS_SHOWN),
         list(proTopics));
   check('and gets no Pro panel — nobody is sold what they already have',
         !find(proSheet, 'coach-bub').some(b => b.classList.contains('pro')));
@@ -388,7 +401,7 @@ section('A. the lock in the corner now means something behind it');
   try { bare = openBare(UI, undefined); } catch (e) { threw = String((e && e.message) || e); }
   check('openCoachSheet() with no opts at all does not throw', !threw, threw || '');
   check('and the Settings door opens on the general You set',
-        !!bare && topicChipsIn(bare).join(',') === engine(QUESTIONING).topicsFor('you').map(t => t.label).join(','),
+        !!bare && topicChipsIn(bare).join(',') === engine(QUESTIONING).topicsFor('you').slice(0, C.TOPICS_SHOWN).map(t => t.label).join(','),
         bare ? list(topicChipsIn(bare)) : 'no sheet');
 }
 
@@ -404,10 +417,11 @@ section('B. the sheet takes its questions from the card that opened it');
   const youSheet   = open(UI, { go() {} }).sh;
   const trainSheet = open(UI, { tight: true, live: false }).sh;
 
+  // v49: the first four of each, with the rest under "More".
   check('the You card’s sheet offers the general set',
-        topicChipsIn(youSheet).join(',') === youSet.join(','), list(topicChipsIn(youSheet)));
+        topicChipsIn(youSheet).join(',') === youSet.slice(0, C.TOPICS_SHOWN).join(','), list(topicChipsIn(youSheet)));
   check('the Train card’s sheet offers the training set',
-        topicChipsIn(trainSheet).join(',') === trainSet.join(','), list(topicChipsIn(trainSheet)));
+        topicChipsIn(trainSheet).join(',') === trainSet.slice(0, C.TOPICS_SHOWN).join(','), list(topicChipsIn(trainSheet)));
   /* The two checks that catch a scoping function ignoring its argument. Both of
      the ones above pass on an engine that hands one set to everybody, because
      both sides of those comparisons come from the same call. These do not: this
@@ -1118,6 +1132,10 @@ section('H. Patterns: a switch that starts off, and a bubble only when it is on 
         !chipsIn(offSheet).some(b => b.textContent === LABEL), list(chipsIn(offSheet).map(b => b.textContent)));
   state.input = PAT(ONS);
   const onSheet = openBare(UI);
+  // v49: Patterns stays last on You, which puts it under "More" once the
+  // list runs past four — so "More" is tapped first, as he would.
+  const moreChip = chipsIn(onSheet).find(b => b.textContent === 'More');
+  if (moreChip) moreChip.onclick();
   const chip = chipsIn(onSheet).find(b => b.textContent === LABEL);
   check('on: the Patterns bubble is there', !!chip, list(chipsIn(onSheet).map(b => b.textContent)));
   const before = find(onSheet, 'coach-bub').length;
@@ -1458,8 +1476,9 @@ section('L. v48 — the target line, the goal question under its answer, and You
   check('with a chip for each of the six aims', JSON.stringify(aims) === JSON.stringify(a.question.options.map(o => o.label)) &&
         aims.length === 6, list(aims));
   tap(askBub || mkEl('div'), 'Powerlifting');
+  // v49: the aim is saved through setAim(), which clears the goal-change answers.
   check('tapping one saves it and answers with the question’s own acknowledgement, not the weight question’s',
-        state.calls.some(x => x[0] === 'answerQuestion' && x[1] === 'q_goal_aim' && x[2] === 'powerlifting') &&
+        state.calls.some(x => x[0] === 'setAim' && x[1] === 'powerlifting') &&
         find(sh, 'coach-bub-t').some(n => n.textContent === 'Noted. Coach sets your targets with that in mind.') &&
         !find(sh, 'coach-bub-t').some(n => n.textContent === 'Noted. That changes how Coach reads your weight.'));
   check('the goal question is never the sheet’s opening question', engine(BUILD).question === null ||
@@ -1488,14 +1507,18 @@ section('L. v48 — the target line, the goal question under its answer, and You
   const labels = walk(host).filter(n => n.tag === 'label').map(n => n.textContent);
   check('with both goal questions under it', labels.includes('What are you training for right now?') &&
         labels.includes('How long have you been lifting consistently?'), list(labels));
-  const rows = find(host, 'ob-choice');
+  /* v49: the focus question sits under Your goal too, as seven more rows, so
+     the aim's rows are read from its own field. */
+  const fieldOf = text => walk(host).find(n => n.classList.contains('field') &&
+    walk(n).some(x => x.tag === 'label' && x.textContent === text));
+  const rows = find(fieldOf('What are you training for right now?') || mkEl('div'), 'ob-choice');
   check('six aims as vertical choice rows, nothing selected', rows.length === 6 && !rows.some(r => r.classList.contains('on')),
         rows.length + ' rows');
   check('three experience answers on the segmented control, nothing selected',
         find(host, 'seg-btn').length === 3 && !find(host, 'seg-btn').some(b => b.classList.contains('on')));
   rows[4].onclick();
-  check('a tap saves the answer and marks that row', rows[4].classList.contains('on') &&
-        state.calls.some(x => x[0] === 'answerQuestion' && x[1] === 'q_goal_aim' && x[2] === 'recomp'), JSON.stringify(state.calls));
+  check('a tap saves the answer through setAim() and marks that row', rows[4].classList.contains('on') &&
+        state.calls.some(x => x[0] === 'setAim' && x[1] === 'recomp'), JSON.stringify(state.calls));
   const answered = mkEl('div');
   state.input = { ...BUILD, settings: { ...BUILD.settings, answers: { q_goal_aim: 'cut', q_experience: 'years' } } };
   UI.coachAnswerRows(answered, () => {});
@@ -1509,6 +1532,158 @@ section('L. v48 — the target line, the goal question under its answer, and You
   check('a basic account sees no Your goal block — the goal turns the targets, and the targets are Pro',
         !find(basic, 'you-sec-t').length && !find(basic, 'ob-choice').length);
   state.pro = true; state.input = BASE; body.children.length = 0;
+}
+
+/* ================= M. v49 ================= */
+section('M. v49 — the card encourages and the sheet opens on the finding; "More"; the new answers; Your goal; the teaser');
+{
+  const NAMED = {
+    bench: { name: 'Bench', group: 'chest', equipment: 'barbell' }, row: { name: 'Row', group: 'back', equipment: 'barbell' },
+    squat: { name: 'Squat', group: 'legs', equipment: 'barbell' }, press: { name: 'Press', group: 'shoulders', equipment: 'barbell' },
+    curl: { name: 'Curl', group: 'arms', equipment: 'dumbbell' }
+  };
+  const tap = (sh, label) => { const b = buttonsIn(sh).find(x => x.textContent === label); if (b) b.onclick(); return !!b; };
+  const bubT = sh => find(sh, 'coach-bub').filter(b => b.classList.contains('coach')).map(b => (find(b, 'coach-bub-t')[0] || {}).textContent);
+  /* A heavy bench today, an hour ago, on top of the full log: a new best (an
+     earned line on the card) and a session that has just ended (the sheet's
+     post-workout topics). Aim: Get stronger. */
+  const EARN = { ...BASE, lib: NAMED, libReady: true, hidden: [],
+    sessions: BASE.sessions.concat([{ id: 'today', startedAt: NOW - 36e5, endedAt: NOW - 1800e3, _date: key(NOW),
+      exercises: [{ exId: 'bench', name: 'Bench', group: 'chest', equipment: 'barbell', sets: sets(3, 205, 5) }] }])
+      .sort((a, b) => a.startedAt - b.startedAt),
+    settings: { v: 1, mute: {}, answers: { q_goal_aim: 'strength', q_experience: 'some' }, asked: {} } };
+  state.input = EARN; state.pro = true; state.logKnown = true; state.ready = true; state.calls.length = 0;
+  const eng = engine(EARN);
+  const U2 = await freshUI();
+  const { card, sh } = open(U2, { go() {} });
+  const line = (find(card, 'coach-line')[0] || {}).textContent;
+  check('the You card shows its earned line — c.card, never the ranked finding',
+        eng.card.you.state === 'earned' && line === eng.card.you.text && line !== eng.you.text, line + ' / ' + eng.you.text);
+  check('and its small line is the line’s own evidence', (find(card, 'coach-why')[0] || {}).textContent === eng.card.you.reason);
+  check('the line is remembered once for the next open, like the greeting',
+        state.calls.filter(c => c[0] === 'rememberHype').length === 1 && state.calls.some(c => c[0] === 'rememberHype' && c[1] === eng.card.you.id),
+        JSON.stringify(state.calls.filter(c => c[0] === 'rememberHype')));
+  check('while the sheet it opens still opens on the finding, c.opening', bubT(sh)[0] === eng.opening.text, bubT(sh)[0]);
+  const trainCard = U2.coachCard({ tight: true, live: false });
+  check('the Train card reads c.card too', (find(trainCard, 'coach-line')[0] || {}).textContent === eng.card.train.text,
+        eng.card.train.state + ': ' + eng.card.train.text);
+
+  // After a workout: the sheet's first question is how it compared.
+  check('an hour after a session the moment is post, and the Train sheet leads with "How did today compare?"',
+        eng.state === 'post' && eng.topicsFor('train')[0].id === 'ask_compare', eng.state + ' ' + eng.topicsFor('train').map(t => t.id).join(','));
+  const tsh = open(U2, { tight: true, live: false, start() {}, save() {} }).sh;
+  tap(tsh, 'How did today compare?');
+  const cmp = eng.ask('ask_compare');
+  check('tapped, it draws the engine’s answer and then each lift, the targets met and what Coach cannot see',
+        cmp.id === 'session_compare' && bubT(tsh).includes(cmp.text) && (cmp.more || []).every(m => bubT(tsh).includes(m.text)) &&
+        bubT(tsh).includes('Coach can’t see sleep, stress or soreness.'), list(bubT(tsh)));
+  const tsh2 = open(U2, { tight: true, live: false, start() {}, save() {} }).sh;
+  tap(tsh2, 'What’s next time?');
+  const nx = eng.ask('ask_next');
+  check('"What’s next time?" draws a header and a bubble per lift, each the target the builder would set',
+        nx.id === 'next_targets' && bubT(tsh2).includes(nx.text) && (nx.more || []).length >= 1 &&
+        nx.more.every(m => bubT(tsh2).includes(m.text) && /^Next time on /.test(m.text)), list(bubT(tsh2)));
+
+  // "More" — before a workout the You list is the general three, the goal and
+  // the lifts: five, one more than shows.
+  const longer = { ...BASE, lib: NAMED, libReady: true, hidden: [], settings: EARN.settings };
+  state.input = longer;
+  const all = engine(longer).topicsFor('you');
+  const ysh = openBare(U2);
+  const before = topicChipsIn(ysh);
+  const more = chipsIn(ysh).find(b => b.textContent === 'More');
+  if (more) more.onclick();
+  const after = topicChipsIn(ysh);
+  check('four topics show and "More" holds the rest, revealed in place — nothing moves above it',
+        all.length > C.TOPICS_SHOWN && before.length === C.TOPICS_SHOWN && !!more &&
+        after.join(',') === all.map(t => t.label).join(',') && !chipsIn(ysh).some(b => b.textContent === 'More'),
+        list(before) + ' → ' + list(after));
+
+  // How am I tracking toward my goal? — and the focus question under it.
+  state.input = EARN; state.calls.length = 0;
+  const gsh = openBare(U2);
+  if (!tap(gsh, 'How am I tracking toward my goal?')) { const m = chipsIn(gsh).find(b => b.textContent === 'More'); if (m) m.onclick(); tap(gsh, 'How am I tracking toward my goal?'); }
+  const goal = eng.ask('ask_goal');
+  check('"How am I tracking toward my goal?" answers with the aim first', goal.id === 'goal_pace' &&
+        /^You set Get stronger\./.test(goal.text) && bubT(gsh).includes(goal.text), goal.text);
+  const fq = find(gsh, 'coach-bub').find(b => b.classList.contains('ask'));
+  const fchips = fq ? chipsIn(fq).map(b => b.textContent) : [];
+  check('and carries the focus question under it, seven chips and "No focus" last',
+        !!goal.question && goal.question.id === 'q_focus_group' && fchips.length === 7 && fchips[6] === 'No focus', list(fchips));
+  if (fq) tap(fq, 'Chest');
+  check('tapping one saves it as an answer', state.calls.some(c => c[0] === 'answerQuestion' && c[1] === 'q_focus_group' && c[2] === 'chest'),
+        JSON.stringify(state.calls));
+
+  // Settings → Your goal: the focus and the Lift target.
+  const host = mkEl('div');
+  state.calls.length = 0;
+  U2.coachAnswerRows(host, () => {});
+  const labels = walk(host).filter(n => n.tag === 'label').map(n => n.textContent);
+  check('Your goal lists the focus question and the Lift target beside the aim and experience',
+        labels.includes('Is there one muscle group you most want to bring up?') && labels.includes('Lift target'), list(labels));
+  const sel = walk(host).find(n => n.tag === 'select');
+  const opts = sel ? sel.children.map(o => o.value) : [];
+  check('the Lift target select offers his own lifts, most-logged first, and nothing selected',
+        opts[0] === '' && opts.slice(1).join(',') === eng.goalChoices().map(x => x.exId).join(',') && opts.length > 2, list(opts));
+  const inputs = walk(host).filter(n => n.tag === 'input');
+  sel.value = 'bench'; inputs[0].value = '100'; inputs[1].value = '5';
+  const kgHost = mkEl('div');
+  state.input = { ...EARN, u: 'kg' };
+  U2.coachAnswerRows(kgHost, () => {});
+  const ksel = walk(kgHost).find(n => n.tag === 'select'), kin = walk(kgHost).filter(n => n.tag === 'input');
+  ksel.value = 'bench'; kin[0].value = '100'; kin[1].value = '5';
+  state.calls.length = 0;
+  tap(kgHost, 'Save lift target');
+  const saved = (state.calls.find(c => c[0] === 'setGoalLift') || [])[1];
+  check('Save stores the target in pounds through units.js — 100 kg is 220.46 lb — with its reps and the moment',
+        !!saved && saved.exId === 'bench' && saved.lb === 220.46 && saved.reps === 5 && Number.isFinite(saved.at), JSON.stringify(saved));
+  state.input = { ...EARN, settings: { ...EARN.settings, goalLift: { exId: 'bench', lb: 315, reps: 1, at: NOW - 30 * DAY } } };
+  const has = mkEl('div');
+  state.calls.length = 0;
+  U2.coachAnswerRows(has, () => {});
+  tap(has, 'Clear lift target');
+  check('with a target set, Clear writes it away — null, and nothing else',
+        state.calls.some(c => c[0] === 'setGoalLift' && c[1] === null), JSON.stringify(state.calls));
+  const answeredCheck = mkEl('div');
+  state.input = { ...EARN, settings: { ...EARN.settings, answers: { ...EARN.settings.answers, q_goal_check_weight: 'temp', q_goal_direction: 'down' } } };
+  U2.coachAnswerRows(answeredCheck, () => {});
+  check('a goal-change answer is never drawn in Settings as a switch — only the answers that are settings',
+        !textOf(answeredCheck).includes('Did the goal change') && walk(answeredCheck).some(n => n.tag === 'label' && /Which way/.test(n.textContent)));
+
+  // Did your goal change? "Yes, update my goal" opens Your goal.
+  const falling = Array.from({ length: 30 }, (_, i) => ({ lb: 190 - 0.25 * i, t: NOW - (29 - i) * DAY }));
+  const CHECK = { ...EARN, sessions: BASE.sessions, weighIns: falling,
+    weight: { latestLb: 182.75, latestAt: NOW, rateWk: -1.75, rateDays: 29, goalDir: 1, goalRateWk: null },
+    settings: { v: 1, mute: {}, answers: { q_goal_aim: 'muscle' }, asked: { q_goal_aim: NOW - 20 * DAY } } };
+  state.input = CHECK; state.calls.length = 0;
+  const qsh = openBare(U2);
+  const opener = find(qsh, 'coach-bub').find(b => b.classList.contains('ask'));
+  check('a Pro account building muscle whose weight has fallen three weeks running is asked, once, with his numbers',
+        !!opener && /^You set Build muscle, and your weight has come down about [\d.]+ lb over the last 3 weeks\. Did the goal change\?$/.test(textOf(opener).split('Coach asks')[0].trim()),
+        opener ? textOf(opener) : 'no question');
+  if (opener) tap(opener, 'Yes, update my goal');
+  const sheets = body.children.filter(x => x.classList.contains('sheet'));
+  check('"Yes, update my goal" saves the answer and opens Your goal',
+        state.calls.some(c => c[0] === 'answerQuestion' && c[1] === 'q_goal_check_weight' && c[2] === 'update') &&
+        sheets.length === 2 && walk(sheets[1]).some(n => n.tag === 'h2' && n.textContent === 'Your goal'),
+        sheets.length + ' sheets; ' + JSON.stringify(state.calls));
+  state.pro = false;
+  check('and a Basic account is never asked', engine(CHECK).question === null || !/^q_goal_check/.test(engine(CHECK).question.id));
+
+  // The Basic teaser.
+  state.input = { ...BASE, lib: NAMED, libReady: true, hidden: [] };
+  const bsh = openBare(U2);
+  const teaser = engine(state.input).teaser;
+  check('Basic sees one real target above the Pro panel — "One of your targets: …", from the same engine',
+        !!teaser && /^One of your targets: \w+ — Target: /.test(teaser.text) && bubT(bsh).includes(teaser.text) &&
+        find(bsh, 'coach-bub').findIndex(b => b.classList.contains('pro')) >
+          find(bsh, 'coach-bub').findIndex(b => (find(b, 'coach-bub-t')[0] || {}).textContent === teaser.text),
+        teaser ? teaser.text : 'no teaser');
+  check('and nothing else about targets reaches Basic — no topics, no "What should I lift today?"',
+        !topicChipsIn(bsh).length && !bubT(bsh).some(t => t !== teaser.text && /Target:/.test(t)));
+  state.pro = true;
+  check('a Pro account gets no teaser — it has the targets', engine(state.input).teaser === null);
+  state.input = BASE; body.children.length = 0;
 }
 
 /* ---------- report ---------- */

@@ -88,9 +88,14 @@ let foodFirst   = {};
    would change the line under the reader's thumb as the loads land. */
 const LS_OPENS  = 'coachOpens';
 const LS_GREETS = 'coachGreets';
+/* v49: the card's earned lines keep the same kind of memory, for the same
+   reason, under their own key in the same per-account namespace — a sibling
+   of the greeting's, written once per app open. */
+const LS_HYPE   = 'coachHype';
 
 let opens        = 0;
 let recentGreets = [];
+let recentHype   = [];
 let rotationRead = false;
 
 function readRotation() {
@@ -105,6 +110,8 @@ function readRotation() {
   LS.set(LS_OPENS, opens);
   const g = LS.get(LS_GREETS, []);
   recentGreets = Array.isArray(g) ? g.filter(x => typeof x === 'string' && x).slice(0, 3) : [];
+  const h = LS.get(LS_HYPE, []);
+  recentHype = Array.isArray(h) ? h.filter(x => typeof x === 'string' && x).slice(0, 3) : [];
 }
 
 export function coachReady() { return ready; }
@@ -299,6 +306,7 @@ export function coachInput(extra) {
        nothing passes one in any more. */
     opens,
     recentGreets,
+    recentHype,
     u: wu(),
     log: logKnown ? logState : 'unknown',
     sessions,
@@ -323,6 +331,9 @@ export function coachInput(extra) {
       latestLb: last ? last.lb : null,
       latestAt: last ? last.t : null,
       rateWk:   Number.isFinite(rate.rateWk) ? rate.rateWk : null,
+      // v49: how sure the trend is of that rate, which trendRate() already
+      // returns and this used to drop — the goal answer's range is read off it.
+      rateSeWk: Number.isFinite(rate.seWk) ? rate.seWk : null,
       rateDays: Number.isFinite(rate.days) ? rate.days : null,
       // The maintenance NUMBER: goalDirection compares it to targets.cal, and
       // handed effectiveMaint's whole object every account without an auto
@@ -539,6 +550,25 @@ export function answerQuestion(id, value) {
   return patch({ answers: { [id]: value }, asked: { [id]: Date.now() } });
 }
 
+/* v49: THE AIM, SET. Its answer and its asked stamp — the moment the goal was
+   set, which the goal-change questions count fourteen days from — and both of
+   those questions' answers cleared in the same patch: a changed goal is a new
+   goal, and "it's on purpose" was said about the old one. Settings, the sheet
+   and onboarding all set the aim through here and nowhere else. */
+export function setAim(aim) {
+  return patch({
+    answers: { q_goal_aim: aim, q_goal_check_weight: null, q_goal_check_targets: null },
+    asked: { q_goal_aim: Date.now() }
+  });
+}
+
+/* v49: THE LIFT TARGET, replaced whole — { exId, lb, reps, at }, pounds — or
+   cleared with null. normSettings() drops anything that does not survive
+   coach-goal.js's normGoalLift(), so a bad value is never written. */
+export function setGoalLift(v) {
+  return patch({ goalLift: v || null });
+}
+
 export function markAsked(id) {
   return patch({ asked: { [id]: Date.now() } });
 }
@@ -561,6 +591,17 @@ export function rememberGreeting(id) {
   if (recentGreets[0] === id) return;
   recentGreets = [id].concat(recentGreets.filter(x => x !== id)).slice(0, 3);
   LS.set(LS_GREETS, recentGreets);
+}
+
+/* v49: the card's earned line, the same way and for the same reasons — at
+   most once per app open, synchronously, to the device. */
+let hypeWritten = false;
+export function rememberHype(id) {
+  if (hypeWritten || !id) return;
+  hypeWritten = true;
+  if (recentHype[0] === id) return;
+  recentHype = [id].concat(recentHype.filter(x => x !== id)).slice(0, 3);
+  LS.set(LS_HYPE, recentHype);
 }
 
 /* The live session, read from the device rather than from the database. A

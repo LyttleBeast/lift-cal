@@ -316,11 +316,15 @@ section('A. the pool is the log’s, and the card’s — stated, not assumed');
      than two. Asserting the equivalence in both directions is what stops a
      rotation that has quietly collapsed to one line passing itself off as one
      that was correctly confined. */
+  /* v49 (updated deliberately): "N days since chest" and "N days since a
+     session" left the pool — the card only encourages now, and both read as
+     "you haven't" — so the log with the card muted and the caution card each
+     admit one data-aware line fewer than they did. */
   const FIXTURES = [['a new log', P_QUIET, 0], ['one data line', P_ONE, 1],
                     ['two data lines', P_TWO, 2], ['a full log', P_FULL, 3],
-                    ['the same log with the card muted', P_MUTED, 3],
+                    ['the same log with the card muted', P_MUTED, 2],
                     ['a log with plenty to say', P_RICH, 5],
-                    ['a caution card', P_CAUTION, 2]];
+                    ['a caution card', P_CAUTION, 1]];
   const miscounted = FIXTURES.filter(([, p, n]) => p.data.length !== n)
     .map(([n, p, want]) => n + ': ' + p.data.length + ' not ' + want);
   check('each log admits the number of data-aware lines it was built to admit', !miscounted.length,
@@ -377,9 +381,20 @@ section('A. the pool is the log’s, and the card’s — stated, not assumed');
         !P_FULL.found.some(id => line(id).topic === cat) &&
         !P_MUTED.found.some(id => line(id).topic === catMuted),
         cat + ' / ' + catMuted);
+  /* v49 (updated deliberately): the full log's only recency line was "N days
+     since chest", which left the pool, so the line that comes back is shown
+     on the log with plenty to say instead — "Logged already today." is
+     dropped under its recency card and returns when the card says something
+     else, while the line about the new card goes. */
+  const RICH_MUTED = { ...RICH, settings: { ...RICH.settings, mute: { recency: true } } };
+  const rCat = C.coach({ ...RICH, opens: 0, recentGreets: [] }).you.category;
+  const rCatM = C.coach({ ...RICH_MUTED, opens: 0, recentGreets: [] }).you.category;
+  const P_RM = poolOf(RICH_MUTED, UNGATED);
   check('and the line that was dropped for it comes back when the card says something else',
-        P_MUTED.found.some(id => line(id).topic === cat) && P_FULL.found.some(id => line(id).topic === catMuted),
-        list(P_MUTED.found.filter(id => line(id).topic === cat)));
+        rCat !== rCatM && !P_RICH.found.some(id => line(id).topic === rCat) && P_RM.found.some(id => line(id).topic === rCat) &&
+        !P_RM.found.some(id => line(id).topic === rCatM) && P_RICH.found.some(id => line(id).topic === rCatM) &&
+        P_FULL.found.some(id => line(id).topic === catMuted),
+        rCat + ' / ' + rCatM + ': ' + list(P_RM.found.filter(id => line(id).topic === rCat)));
 }
 
 /* ================= B. THE PROPERTY ================= */
@@ -468,7 +483,11 @@ section('D. the question under the card rotates on the same counter');
      withholds none of them, because no topic is about safety, and that is
      asserted rather than assumed. */
   const cCard = C.coach({ ...CAUTION, opens: 0, recentGreets: [] });
-  const cTopics = cCard.topicsFor('you').map(t => t.id);
+  /* v49: the You sheet's topics now run past the general three (the goal, the
+     lifts), but the lead question under the card is drawn from the general
+     three alone — so its pool is those of them that are live (updated
+     deliberately). */
+  const cTopics = cCard.topicsFor('you').filter(t => C.TOPICS.some(x => x.id === t.id)).map(t => t.id);
   check('a caution card leaves every live topic to be asked about — a pool of ' + cTopics.length,
         cTopics.length > 1 && !cCard.topicsFor('you').some(t => t.category === cCard.you.category),
         list(cTopics) + ' against a card about ' + cCard.you.category);
@@ -853,6 +872,54 @@ section('I. where the log has several numbers to offer, the line is one of them'
   const thin = greetsOver(ONE, 0, N).filter(id => line(id).kind === 'data').length;
   check('and on a log with one data line the two-thirds promise is not made — it could only be kept by repeating',
         thin * 3 < N * 2, thin + ' of ' + N + ' data-aware, and one line cannot rotate against itself');
+}
+
+/* ================= J. THE CARD'S EARNED LINE ROTATES THE SAME WAY (v49) =================
+   The card's line is chosen the way the greeting is: the open counter walks
+   the lines that qualify, and the device's memory of the last ones shown
+   pushes it forward, capped one short of the pool. Driven across opens with
+   that memory carried from one to the next, exactly as coach-data.js keeps
+   it. */
+section('J. the card’s earned line rotates on the same counter, and never repeats on a pool of two or more');
+{
+  const cardOver = (fx, from, n) => {
+    const out = [];
+    let history = [];
+    for (let k = from; k < from + n; k++) {
+      const c = C.coach({ ...fx, opens: k, recentGreets: [], recentHype: history });
+      out.push(c.card.you);
+      if (c.card.you.state === 'earned') history = [c.card.you.id].concat(history.filter(x => x !== c.card.you.id)).slice(0, 3);
+    }
+    return out;
+  };
+  // The pool each log offers, read off a long walk with no memory at all.
+  const poolOfCard = fx => [...new Set(Array.from({ length: 24 }, (_, k) =>
+    C.coach({ ...fx, opens: k, recentGreets: [], recentHype: [] }).card.you).filter(v => v.state === 'earned').map(v => v.id))];
+  const logs = [['a full log', FULL], ['a log with plenty to say', RICH], ['a caution card', CAUTION],
+                ['the same log with the card muted', FULL_MUTED]];
+  const sized = logs.map(([n, fx]) => [n, fx, poolOfCard(fx)]);
+  check('the logs here put earned lines on the card — ' + sized.map(([n, , p]) => n + ': ' + p.length).join(', '),
+        sized.some(([, , p]) => p.length >= 2), sized.map(([n, , p]) => n + ' ' + p.join('/')).join(' | '));
+  sized.forEach(([n, fx, pool]) => {
+    if (pool.length < 2) return;
+    const walk = cardOver(fx, 0, pool.length * 3).map(v => v.id);
+    check('no two consecutive opens show the same line — ' + n + ', a pool of ' + pool.length,
+          walk.every((id, i) => i === 0 || id !== walk[i - 1]), list(walk));
+    const first = cardOver(fx, 5, pool.length).map(v => v.id);
+    check('and ' + pool.length + ' consecutive opens show all ' + pool.length + ' lines — ' + n,
+          sameSet(first, pool), list(first));
+  });
+  // A memory naming every line in the pool still leaves a line to show.
+  const [, fx, pool] = sized.find(([, , p]) => p.length >= 2) || [];
+  if (fx) {
+    const c = C.coach({ ...fx, opens: 0, recentGreets: [], recentHype: pool.slice(0, 3) });
+    check('a memory naming every line still gets a line, never a blank card', c.card.you.state === 'earned' && !!c.card.you.text,
+          c.card.you.state);
+  }
+  // And the greeting rotation is untouched by it: the same open, with and
+  // without a card memory, opens with the same greeting.
+  check('the card’s memory does not move the greeting',
+        C.coach({ ...RICH, opens: 3, recentGreets: [] }).greet.id === C.coach({ ...RICH, opens: 3, recentGreets: [], recentHype: ['hype_pr'] }).greet.id);
 }
 
 /* ---------- report ---------- */

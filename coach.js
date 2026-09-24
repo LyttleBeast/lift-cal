@@ -47,8 +47,9 @@ import { e1rm, isWorking, mergeSessionExercises, exerciseIndex } from './analyti
 import { labelW, labelRate, unitW, fmtW } from './units.js';
 import { propose, liveRefusal, buildMenu, swapTo, BUILD_ASK } from './coach-build.js';
 import { liveRead, LIVE_NONE } from './coach-live.js';
-import { AIMS, EXPERIENCE, energyContext } from './coach-goal.js';
-import { readLift, lighterWeek, recordDay, liftsMoving, prepare } from './coach-overlap.js';
+import { AIMS, EXPERIENCE, energyContext, normGoalLift, goalChecks, AIM_DIR } from './coach-goal.js';
+import { readLift, lighterWeek, recordDay, liftsMoving, prepare, targetsReplay, compareSession, nextTargets,
+         liftTrend, goalLiftRead, bigThree, focusRead } from './coach-overlap.js';
 
 const DAY = 864e5;
 
@@ -74,6 +75,16 @@ const RATE_BAND_LB = 1.5;
    other day "overdue" at three, and the margin alone makes a group trained
    monthly overdue every month. Neither number is ever printed. */
 const OVERDUE_MARGIN_DAYS = 2;
+
+/* v49's card: a record or a met target counts for three days, a comeback
+   line for two, and a comeback is a session after twelve days away — the same
+   twelve days coach-prog.js's layoff clock holds a first session back on. */
+const HYPE_DAYS = 3;
+const BACK_GAP_DAYS = 12;
+const BACK_SHOW_DAYS = 2;
+const MILESTONES = Object.freeze([10, 25, 50, 100, 150, 200, 250]);
+// "Post": the three hours after a session ends — the drive home and a meal.
+const POST_MS = 3 * 36e5;
 const OVERDUE_RATIO = 1.4;
 
 /* How long a question that was put and not answered stays put. Somebody who
@@ -122,6 +133,35 @@ function keysBack(now, n) {
   const out = [];
   for (let i = n - 1; i >= 0; i--) out.push(dayKey(now - i * DAY));
   return out;
+}
+
+/* When a session ended: its endedAt, else its start and its duration. */
+function sessionEnd(rec) {
+  if (!rec) return null;
+  if (Number.isFinite(rec.endedAt) && rec.endedAt >= rec.startedAt) return rec.endedAt;
+  return rec.startedAt + (Number.isFinite(rec.durationSec) && rec.durationSec > 0 ? rec.durationSec * 1000 : 0);
+}
+
+/* THE MOMENT (v49, spec §9.1) — what the sheet is opened in, from the input
+   alone:
+     live        a session is running on this device
+     post        none running, and the last one ended three hours ago or less
+     done_today  a session today (its own day key), ended more than three
+                 hours ago
+     pre         otherwise
+   Three hours covers the drive home and a meal. A session that says it ended
+   after `now` reads as just finished. Pure; exported so the verifier can
+   drive it at its boundaries. */
+export function stateOf(input, now) {
+  const i = input || {};
+  const t = Number.isFinite(now) ? now : i.now;
+  if (i.live && i.live.active) return 'live';
+  const ss = (Array.isArray(i.sessions) ? i.sessions : []).filter(s => s && Number.isFinite(s.startedAt) && s.startedAt <= t);
+  if (!ss.length) return 'pre';
+  const lastEnd = Math.max(...ss.map(sessionEnd));
+  if (t - lastEnd <= POST_MS) return 'post';
+  const today = dayKey(t);
+  return ss.some(s => (s._date || dayKey(s.startedAt)) === today) ? 'done_today' : 'pre';
 }
 
 /* ---------- small numbers ---------- */
@@ -1318,6 +1358,17 @@ export const FACTS = Object.freeze([
     because: () => 'the lines Coach opened with last time'
   },
   {
+    /* v49: the card's last few earned lines, newest first — device storage,
+       like the greeting's, written once per app open (coach-data.js). */
+    id: 'coach.recentHype', unit: null, requires: [],
+    compute: d => {
+      const list = d.input.recentHype;
+      if (!Array.isArray(list)) return [];
+      return list.filter(x => typeof x === 'string' && x).slice(0, 3);
+    },
+    because: () => 'the lines the card showed last time'
+  },
+  {
     /* A question already put and not yet answered. It expires: see
        ASK_COOLDOWN_DAYS. Null is the common case and it is what lets a new
        question be asked at all. */
@@ -1357,6 +1408,226 @@ export const FACTS = Object.freeze([
     },
     because: () => 'how long you told Coach you have been lifting',
     usesAnswers: ['q_experience']
+  },
+
+  /* ---------- v49: the goal, made useful ---------- */
+  {
+    // The focus group: one of the six, or 'none' ("No focus") — an answer too.
+    id: 'coach.focus', unit: null, requires: [],
+    compute: d => {
+      const a = ((d.input.settings && d.input.settings.answers) || {}).q_focus_group;
+      return FOCUS_VALUES.includes(a) ? a : null;
+    },
+    because: () => 'the group you told Coach you most want to bring up',
+    usesAnswers: ['q_focus_group']
+  },
+  {
+    // His answers to the two goal-change questions, each read straight off
+    // settings/coach like every other answer.
+    id: 'coach.goalCheckWeight', unit: null, requires: [],
+    compute: d => {
+      const a = ((d.input.settings && d.input.settings.answers) || {}).q_goal_check_weight;
+      return CHECK_VALUES.includes(a) ? a : null;
+    },
+    because: () => 'what you told Coach about your weight moving against your goal',
+    usesAnswers: ['q_goal_check_weight']
+  },
+  {
+    id: 'coach.goalCheckTargets', unit: null, requires: [],
+    compute: d => {
+      const a = ((d.input.settings && d.input.settings.answers) || {}).q_goal_check_targets;
+      return CHECK_VALUES.includes(a) ? a : null;
+    },
+    because: () => 'what you told Coach about your food targets pointing against your goal',
+    usesAnswers: ['q_goal_check_targets']
+  },
+  {
+    /* The lift target, settings/coach.goalLift, through coach-goal.js's
+       normGoalLift() — the same fail-safe normSettings() applies. Pounds. */
+    id: 'coach.goalLift', unit: 'lb', requires: [],
+    compute: d => normGoalLift((d.input.settings || {}).goalLift),
+    because: (v, d) => 'the target you set: ' + labelW(v.lb, uOf(d)) + (v.reps > 1 ? ' for ' + v.reps : '')
+  },
+  {
+    /* Does what the scale and his food targets are doing contradict his aim?
+       coach-goal.js's goalChecks(): three weeks of weigh-ins, banded. */
+    id: 'coach.goalChecks', unit: null, requires: [],
+    compute: d => goalChecks({ aim: d.f('coach.aim'), weighIns: d.input.weighIns, now: d.now,
+                               goalRateWk: d.f('weight.goalRateWk') }),
+    because: () => 'your weigh-ins over the last three weeks, against the goal you set'
+  },
+  {
+    // pre | post | done_today | live — the moment the sheet is opened in.
+    id: 'coach.state', unit: null, requires: [],
+    compute: d => stateOf(d.input, d.now),
+    because: v => v === 'post' ? 'you finished a session in the last three hours'
+      : v === 'done_today' ? 'you trained earlier today' : v === 'live' ? 'a session is running now' : 'no session yet today'
+  },
+  {
+    // The session "How did today compare?" and "What's next time?" are about:
+    // the latest one, when it is today's or just finished.
+    id: 'session.latest', unit: null, requires: ['coach.state'],
+    compute: d => {
+      const st = d.f('coach.state');
+      return st === 'post' || st === 'done_today' ? d.latest() : null;
+    },
+    because: v => v.daysAgo === 0 ? 'your session today' : 'your last session',
+    age: v => v.daysAgo
+  },
+  {
+    id: 'session.compare', unit: null, requires: ['session.latest'],
+    compute: d => compareSession(d.overlap(), d.f('session.latest'), d.now),
+    because: () => 'each lift against the middle of its last three sessions'
+  },
+  {
+    // Coach's targets for that session, replayed as they stood before it.
+    id: 'session.latestTargets', unit: null, requires: ['session.latest'],
+    compute: d => { const r = targetsReplay(d.overlap(), d.f('session.latest')); return r && r.n ? r : null; },
+    because: v => plural(v.n, 'lift') + ' with a Coach target that named a weight'
+  },
+  {
+    id: 'lift.next', unit: null, requires: ['session.latest'],
+    compute: d => { const v = nextTargets(d.overlap(), d.f('session.latest'), d.now); return v.length ? v : null; },
+    because: () => 'each lift worked out the way the builder would, from your sessions now'
+  },
+  {
+    id: 'lift.goalRead', unit: 'lb', requires: ['coach.goalLift'],
+    compute: d => goalLiftRead(d.overlap(), d.f('coach.goalLift'), d.now),
+    because: (v, d) => 'your target’s estimated max is ' + labelW(v.target, uOf(d))
+  },
+  {
+    id: 'lift.bigThree', unit: 'lb', requires: [],
+    compute: d => bigThree(d.overlap(), d.now),
+    because: () => 'your most-logged squat, bench and deadlift over the last twelve weeks'
+  },
+  {
+    id: 'group.focusRead', unit: null, requires: ['coach.focus'],
+    compute: d => (d.f('coach.focus') === 'none' ? null : focusRead(d.overlap(), d.f('coach.focus'), d.now)),
+    because: () => 'your working sets for that group, and its lifts'
+  },
+  {
+    // The goal's bodyweight target is food/targets.goalLb — read, never copied.
+    id: 'weight.goalLb', unit: 'lb', requires: ['fuel.targetsSet'],
+    compute: d => {
+      const g = (d.input.targets || {}).goalLb;
+      return Number.isFinite(g) && g > 0 ? g : null;
+    },
+    because: (v, d) => 'the goal weight in your daily targets, ' + labelW(v, uOf(d))
+  },
+  {
+    // The standard error of the trend's rate, which coachInput() hands over
+    // from tdee.js's trendRate() beside the rate itself (v49). Pounds a week.
+    id: 'weight.rateSeWk', unit: 'lbWk', requires: [],
+    compute: d => {
+      const v = (d.input.weight || {}).rateSeWk;
+      return Number.isFinite(v) && v >= 0 ? v : null;
+    },
+    because: () => 'how sure the fitted trend is of its own rate'
+  },
+
+  /* ---------- v49: what the card may say (the HYPE registry's facts) ---------- */
+  {
+    // Sessions in the last seven days against each of the four seven-day
+    // blocks before them.
+    id: 'session.weekBest', unit: 'count', requires: [],
+    compute: d => {
+      const n = d.sessionsIn(7, 0);
+      const prev = [1, 2, 3, 4].map(k => d.sessionsIn(7 * k + 7, 7 * k));
+      return { n, prev };
+    },
+    because: v => 'against ' + v.prev.slice(0, -1).join(', ') + ' and ' + v.prev[v.prev.length - 1] + ' in the four weeks before',
+    age: () => 0
+  },
+  {
+    id: 'session.targetsMet', unit: null, requires: [],
+    compute: d => {
+      const s = d.latestAny();
+      if (!s || s.daysAgo > HYPE_DAYS) return null;
+      const r = targetsReplay(d.overlap(), s);
+      return r ? { ...r, daysAgo: s.daysAgo, date: s.date } : null;
+    },
+    because: v => plural(v.n, 'lift') + ' with a Coach target that named a weight',
+    age: v => v.daysAgo
+  },
+  {
+    id: 'lift.trend', unit: 'lb', requires: [],
+    compute: d => liftTrend(d.overlap(), d.now),
+    because: (v, d) => v.name + '’s estimated max over ' + plural(v.weeks, 'week'),
+    age: (v, d) => daysBetween(v.lastAt, d.now)
+  },
+  {
+    // The most-logged lift whose stage-two reading is holding through a cut.
+    id: 'lift.holdingCut', unit: 'lb', requires: [],
+    compute: d => {
+      const i = d.overlap();
+      const lifts = i.lifts.slice().sort((a, b) => b.exposures.length - a.exposures.length || (a.exId < b.exId ? -1 : 1));
+      for (const l of lifts) { const r = d.readLift(l.exId); if (r && r.call === 'holding_cut') return r; }
+      return null;
+    },
+    because: (v, d) => 'your estimated max against your bodyweight over ' + plural(Math.round(v.weeks), 'week'),
+    age: (v, d) => daysBetween(v.end, d.now)
+  },
+  {
+    id: 'fuel.proteinStreak', unit: 'count', requires: ['fuel.proteinTarget'],
+    compute: d => {
+      const want = d.f('fuel.proteinTarget'), sums = d.input.summaries || {};
+      let n = 0;
+      for (let k = 1; k <= PATTERN_DAYS; k++) {
+        const x = sums[dayKey(d.now - k * DAY)];
+        if (!x || !(x.cal > 0) || !((x.p || 0) >= want)) break;
+        n++;
+      }
+      return n;
+    },
+    because: (v, d) => 'your ' + int(d.f('fuel.proteinTarget')) + ' g target, from your food log',
+    age: () => 1
+  },
+  {
+    id: 'fuel.loggingStreak', unit: 'count', requires: [],
+    compute: d => {
+      const sums = d.input.summaries || {};
+      let n = 0;
+      for (let k = 1; k <= PATTERN_DAYS; k++) { const x = sums[dayKey(d.now - k * DAY)]; if (!x || !(x.cal > 0)) break; n++; }
+      return n;
+    },
+    because: () => 'every day up to yesterday with food in your log',
+    age: () => 1
+  },
+  {
+    // The latest session, when it came after a gap of twelve days or more.
+    id: 'session.back', unit: 'days', requires: [],
+    compute: d => {
+      const a = d.all();
+      if (a.length < 2) return null;
+      const last = a[a.length - 1], prev = a[a.length - 2];
+      const gap = daysBetween(prev.startedAt, last.startedAt);
+      return gap >= BACK_GAP_DAYS ? { gap, daysAgo: last.daysAgo } : null;
+    },
+    because: v => 'your first session in ' + plural(v.gap, 'day'),
+    age: v => v.daysAgo
+  },
+  {
+    // The session count crossing a milestone inside the last three days.
+    id: 'session.milestone', unit: 'count', requires: [],
+    compute: d => {
+      const a = d.all();
+      const m = MILESTONES.filter(n => a.length >= n && a[n - 1].daysAgo <= HYPE_DAYS).pop();
+      return m ? { n: m, daysAgo: a[m - 1].daysAgo } : null;
+    },
+    because: v => v.n + ' sessions in your log',
+    age: v => v.daysAgo
+  },
+  {
+    // Training days in a row, ending today.
+    id: 'session.streak', unit: 'days', requires: [],
+    compute: d => {
+      const days = d.trainedDays();
+      let n = 0;
+      while (days.has(dayKey(d.now - n * DAY))) n++;
+      return n;
+    },
+    because: v => plural(v, 'day') + ' in a row with a session, today included',
+    age: () => 0
   }
 ]);
 
@@ -1393,6 +1664,36 @@ export const PATTERN_FACTS = Object.freeze([
    Your goal. `ack` is what the sheet says once an answer is in — each question
    its own, because "that changes how Coach reads your weight" is false of an
    aim. */
+/* The goal-change questions' three answers, and the focus group's values. */
+const CHECK_OPTIONS = [
+  Object.freeze({ value: 'update', label: 'Yes, update my goal' }),
+  Object.freeze({ value: 'temp',   label: 'No, it’s temporary' }),
+  Object.freeze({ value: 'keep',   label: 'It’s on purpose' })
+];
+const CHECK_VALUES = Object.freeze(CHECK_OPTIONS.map(o => o.value));
+const FOCUS_VALUES = Object.freeze(GROUP_ORDER.concat(['none']));
+// Temporary (and "update", which reads like it afterwards) goes quiet for four
+// weeks from the moment it was asked; "on purpose" stays quiet until setAim()
+// clears it.
+const CHECK_QUIET_DAYS = 28;
+// Behaviour needs time to follow a new goal.
+const CHECK_AIM_DAYS = 14;
+function checkStale(answer, askedAt, d) {
+  if (answer === 'keep') return false;
+  return !Number.isFinite(askedAt) || daysBetween(askedAt, d.now) >= CHECK_QUIET_DAYS;
+}
+function goalCheckOpen(d) {
+  if (d.f('meta.tierPro') !== true || d.f('coach.aim') == null) return false;
+  const at = ((d.input.settings && d.input.settings.asked) || {}).q_goal_aim;
+  return !Number.isFinite(at) || daysBetween(at, d.now) >= CHECK_AIM_DAYS;
+}
+// An aim as the question offers it: "Build muscle", "Lose fat, keep strength".
+function aimLabel(aim) {
+  const q = QUESTIONS.find(x => x.id === 'q_goal_aim');
+  const o = q && q.options.find(x => x.value === aim);
+  return o ? o.label : 'a goal';
+}
+
 export const QUESTIONS = Object.freeze([
   {
     id: 'q_goal_direction',
@@ -1446,6 +1747,76 @@ export const QUESTIONS = Object.freeze([
     where: 'targets',
     ack: 'Noted. That sets how big a jump Coach will suggest.',
     when: d => d.f('coach.aim') != null && d.f('coach.experience') == null
+  },
+  /* v49. The focus group: asked under "How am I tracking toward my goal?"
+     (where: 'goal'), never as the opener, and shown in Settings → Your goal
+     like the aim. Tonight it changes what goal pace reads; its volume and
+     builder effects are stage five's. */
+  {
+    id: 'q_focus_group',
+    text: 'Is there one muscle group you most want to bring up?',
+    options: Object.freeze([
+      { value: 'chest',     label: 'Chest' },
+      { value: 'back',      label: 'Back' },
+      { value: 'legs',      label: 'Legs' },
+      { value: 'shoulders', label: 'Shoulders' },
+      { value: 'arms',      label: 'Arms' },
+      { value: 'core',      label: 'Core' },
+      { value: 'none',      label: 'No focus' }
+    ]),
+    changes: Object.freeze(['goal_pace']),
+    fact: 'coach.focus',
+    always: true,
+    where: 'goal',
+    ack: 'Noted. Coach reads that group’s sets and lifts when you ask how you’re tracking.',
+    when: d => d.f('coach.aim') != null && d.f('coach.focus') == null
+  },
+  /* v49. "DID YOUR GOAL CHANGE?" — two questions, asked as the sheet's opener
+     through the shipped machinery, each a question and never a verdict. Pro
+     only: "Yes" opens Your goal, which is Pro only, and the opener is drawn
+     before the Pro gate for Basic, so the tier is checked in `when`. Both need
+     three weeks of weigh-ins (coach-goal.js's goalChecks()) and fourteen days
+     since the aim was set: behaviour needs time to follow a new goal.
+
+       update  opens Your goal, and then reads like temp
+       temp    quiet for 28 days from its asked stamp (`stale`)
+       keep    quiet until the aim changes — setAim() clears both answers
+
+     `text` is a function here, resolved with his numbers through units.js;
+     `settings: false` keeps them out of Settings' answer rows, which would
+     otherwise draw them as a three-way switch. */
+  {
+    id: 'q_goal_check_weight',
+    text: (d, u) => {
+      const w = (d.f('coach.goalChecks') || {}).weeks || [];
+      const moved = w.length ? w[w.length - 1].to - w[0].from : 0;
+      const aim = aimLabel(d.f('coach.aim'));
+      const way = moved < 0 ? 'come down' : 'gone up';
+      return 'You set ' + aim + ', and your weight has ' + way + ' about ' + labelW(Math.abs(moved), u) +
+             ' over the last ' + plural(w.length, 'week') + '. Did the goal change?';
+    },
+    options: Object.freeze(CHECK_OPTIONS),
+    changes: Object.freeze(['goal_pace']),
+    fact: 'coach.goalCheckWeight',
+    settings: false,
+    ack: 'Noted. Coach won’t ask about that again for a while.',
+    stale: (answer, askedAt, d) => checkStale(answer, askedAt, d),
+    when: d => goalCheckOpen(d) && (d.f('coach.goalChecks') || {}).weight === true
+  },
+  {
+    id: 'q_goal_check_targets',
+    text: (d, u) => {
+      const g = d.f('weight.goalRateWk');
+      return 'You set ' + aimLabel(d.f('coach.aim')) + ', and your food targets are set to ' +
+             (g < 0 ? 'lose' : 'gain') + ' about ' + labelRate(Math.abs(g), u) + ' a week. Did the goal change?';
+    },
+    options: Object.freeze(CHECK_OPTIONS),
+    changes: Object.freeze(['goal_pace']),
+    fact: 'coach.goalCheckTargets',
+    settings: false,
+    ack: 'Noted. Coach won’t ask about that again for a while.',
+    stale: (answer, askedAt, d) => checkStale(answer, askedAt, d),
+    when: d => goalCheckOpen(d) && (d.f('coach.goalChecks') || {}).targets === true
   }
 ]);
 
@@ -1864,6 +2235,43 @@ export const INTENTS = Object.freeze([
     tone: 'neutral',
     response: 'resp_patterns'
   },
+  /* ---------- v49, stage three: the sheet after a workout, and the goal ---------- */
+  {
+    /* HOW DID TODAY COMPARE? The latest session — today's, or the one that
+       just ended — each lift against its own usual. Training only tonight: the
+       fuel and the bad-day marks are stage four's. A selector, sheet-only. */
+    id: 'session_compare', kind: 'selector', priorityBand: 5, severity: 1,
+    category: 'progression', tier: 'pro', surfaces: ['sheet'],
+    factsNeeded: ['session.compare'], supersedes: [],
+    minData: d => !isMuted(d.input.settings, 'progression'),
+    when: d => d.f('session.compare') != null,
+    response: 'resp_compare'
+  },
+  {
+    /* WHAT'S NEXT TIME? For each lift in that session, the target the builder
+       would set now. Pro, and off with the targets switch. */
+    id: 'next_targets', kind: 'selector', priorityBand: 5, severity: 1,
+    category: 'targets', tier: 'pro', surfaces: ['sheet'],
+    factsNeeded: ['lift.next'], supersedes: [],
+    minData: d => !isMuted(d.input.settings, 'targets'),
+    when: d => d.f('lift.next') != null,
+    response: 'resp_next'
+  },
+  {
+    /* HOW AM I TRACKING TOWARD MY GOAL? Pro, because Your goal is. The aim,
+       then whichever of the lift target, the bodyweight target, the big three
+       and the focus group apply — or, with no aim, where to set one. It always
+       has an answer, so it is always offered where it is listed. Carries the
+       focus question under it, the way the targets answer carries the aim. */
+    id: 'goal_pace', kind: 'selector', priorityBand: 5, severity: 1,
+    category: 'progression', tier: 'pro', surfaces: ['sheet'],
+    factsNeeded: ['coach.aim'], supersedes: [],
+    // Something logged first: on an empty log it would be a promise with
+    // nothing behind it yet.
+    minData: d => d.f('log.confidence') === 'readable',
+    when: () => true,
+    response: 'resp_goal_pace'
+  },
   {
     /* Registered, and deliberately unreachable from any button tonight. Coach
        does not do injuries, and the seam where ship three's text box routes a
@@ -2227,6 +2635,44 @@ export const RESPONSES = Object.freeze({
     reason: d => d.f('session.lighterWeek').reason
   },
 
+  /* v49, stage three. The per-lift sentences are coach-overlap.js's, through
+     units.js; what is composed here names no weight of its own but through
+     labelW and labelRate. */
+  resp_compare: {
+    text: d => {
+      const v = d.f('session.compare');
+      const when = v.day === 0 ? 'today' : v.day === 1 ? 'yesterday' : 'last time';
+      if (!v.summary) return v.rows[0].text;
+      const head = v.summary === 'above' ? 'Above your usual ' : v.summary === 'below' ? 'Below your usual ' : 'About your usual ';
+      return head + when + ', across ' + plural(v.rows.length, 'lift') +
+             (v.summary === 'usual' ? '.' : ': ' + (v.summary === 'above' ? v.above : v.below) + ' of them.');
+    },
+    reason: () => 'Each lift’s best set against the middle of its last three sessions, measured in its own session-to-session swing.',
+    more: d => {
+      const v = d.f('session.compare'), t = d.f('session.latestTargets');
+      const out = (v.summary ? v.rows : []).map(r => ({ text: r.text, reason: '' }));
+      if (t && d.f('meta.tierPro') === true && !isMuted(d.input.settings, 'targets')) {
+        out.push({ text: t.met + ' of ' + t.n + ' Coach targets met.', reason: 'Each target as Coach would have set it before the session.' });
+      }
+      out.push({ text: 'Coach can’t see sleep, stress or soreness.', reason: 'It reads your log, and nothing about the day you had.' });
+      return out;
+    }
+  },
+  /* A header, and the targets as the bubbles under it — the shape "What
+     should I lift today?" has, and for the same reason: a pound-typed log can
+     be targeted differently on kilos, so no weight rides in the headline. */
+  resp_next: {
+    text: d => 'Next time, for each lift from ' + (d.f('session.latest').daysAgo === 0 ? 'today’s' : 'your last') + ' session.',
+    reason: () => 'Each worked out the way the builder would, from your sessions now. Nothing is logged until you tick a set.',
+    more: d => d.f('lift.next').map(x => ({ text: x.text, reason: x.reason }))
+  },
+  resp_goal_pace: {
+    lines: (d, u) => goalLines(d, u),
+    text: (d, u) => goalLines(d, u)[0].text,
+    reason: (d, u) => goalLines(d, u)[0].reason,
+    more: (d, u) => goalLines(d, u).slice(1)
+  },
+
   resp_greet:    { text: () => '' },
   resp_lead:     { text: () => '' },
   /* The builder's answer is the proposal's own first line and its reason —
@@ -2276,6 +2722,123 @@ export const RESPONSES = Object.freeze({
   }
 });
 
+/* "HOW AM I TRACKING TOWARD MY GOAL?" (v49), one bubble per part, in the
+   brief's order: the aim, the lift target, the bodyweight target, the big
+   three, the focus group — whichever apply. With no aim it says where to set
+   one and nothing else. ALWAYS A RANGE IN WEEKS, NEVER A DATE: strength gains
+   slow down and a scale is noisy, so a date would be a promise the numbers
+   cannot make. Never "test it" either: Coach does not schedule max attempts.
+   And no approving word past RATE_BAND_LB — the figure alone. */
+const STATUS_WORD = Object.freeze({ progressing: 'climbing', holding: 'holding', stalled: 'flat', declining: 'coming down' });
+function weeksRange(lo, hi) {
+  if (hi != null && hi > GOAL_MAX_WEEKS) return 'more than six months';
+  if (hi == null) return 'at least ' + plural(lo, 'week');
+  return 'about ' + (lo === hi ? plural(lo, 'week') : lo + '–' + hi + ' weeks');
+}
+const GOAL_MAX_WEEKS = 26;
+const GOAL_CHOICES = 30;
+function goalLines(d, u) {
+  const aim = d.f('coach.aim');
+  if (!aim) {
+    return [{ text: 'Set a goal in Settings → Coach → Your goal and Coach will track it.',
+              reason: 'It reads what you’re training for, a lift target if you set one, and the goal weight in your daily targets.' }];
+  }
+  const out = [];
+  // The aim, and — only where he has answered one — what he said about a
+  // contradiction the goal-change questions raised. Never raised here.
+  const checks = d.f('coach.goalChecks') || {};
+  const said = a => (a === 'keep' ? 'on purpose' : 'temporary');
+  let aside = '';
+  const cw = d.f('coach.goalCheckWeight'), ct = d.f('coach.goalCheckTargets');
+  if (checks.weight && (cw === 'temp' || cw === 'keep') && checks.weeks) {
+    const moved = checks.weeks[checks.weeks.length - 1].to - checks.weeks[0].from;
+    aside += ' Your weight has ' + (moved < 0 ? 'come down' : 'gone up') + ' about ' + labelW(Math.abs(moved), u) +
+             ' over the last ' + plural(checks.weeks.length, 'week') + ', and you told Coach that’s ' + said(cw) + '.';
+  }
+  if (checks.targets && (ct === 'temp' || ct === 'keep')) {
+    aside += ' Your food targets are set to ' + (d.f('weight.goalRateWk') < 0 ? 'lose' : 'gain') +
+             ', and you told Coach that’s ' + said(ct) + '.';
+  }
+  out.push({ text: 'You set ' + aimLabel(aim) + '.' + aside, reason: 'Change it any time in Settings → Coach → Your goal.' });
+
+  // The lift target.
+  const g = d.f('coach.goalLift');
+  if (g) {
+    const r = d.f('lift.goalRead');
+    const name = (r && r.name) || ((d.lib[g.exId] || {}).name) || g.exId;
+    const what = 'Your target, ' + labelW(g.lb, u) + (g.reps > 1 ? ' for ' + g.reps : '') + ' on ' + name;
+    const why = 'The middle of your last two sessions of it, against the target’s estimated max; reps past twelve count as twelve, ' +
+                'the way every estimated max Coach reads does.';
+    if (!r || !r.logged || !r.pace) {
+      out.push({ text: what + ': no sessions of it lately, so there’s nothing to measure yet.', reason: why });
+    } else if (r.pace.reached) {
+      out.push({ text: 'Your estimated max on ' + name + ' is at your target: ' + labelW(r.pace.current, u) +
+                       ' against ' + labelW(r.target, u) + '.', reason: why });
+    } else {
+      const head = what + ': your estimated max is ' + labelW(r.pace.current, u) + ' against its ' + labelW(r.target, u) + '.';
+      if (r.pace.weeks) {
+        const [lo, hi] = r.pace.weeks;
+        out.push({ text: head + ' ' + cap(weeksRange(lo, hi)) + ' at your last 12 weeks’ rate.',
+                   reason: why + ' The range runs from the fitted pace of your sessions to its slow end.' });
+      } else if (r.pace.perWk == null) {
+        out.push({ text: head + ' Coach needs six sessions of it in twelve weeks to put a pace on it.', reason: why });
+      } else {
+        const read = r.read && r.read.call !== 'none' ? ' ' + r.read.text : '';
+        out.push({ text: head + ' Not moving toward it right now.' + read, reason: why });
+      }
+    }
+  }
+
+  // The bodyweight target: food/targets.goalLb, read and never copied.
+  const goalLb = d.f('weight.goalLb'), latest = d.f('weight.latestLb'), rate = d.f('weight.rateWk');
+  if (goalLb != null && latest != null) {
+    const dist = goalLb - latest;
+    const goalW = labelW(goalLb, u);
+    const why = FACT_BY_ID['weight.rateWk'].because(rate, d);
+    if (Math.abs(dist) < 0.5) {
+      out.push({ text: 'Your weight is at your ' + goalW + ' goal weight.', reason: 'Your last weigh-in, against the goal weight in your daily targets.' });
+    } else if (rate != null && rate !== 0 && Math.sign(rate) === Math.sign(dist)) {
+      const r = Math.abs(rate);
+      if (r > RATE_BAND_LB) {
+        out.push({ text: 'Your weight is moving ' + labelRate(r, u) + ' a week toward your ' + goalW + ' goal weight.',
+                   reason: why.charAt(0).toUpperCase() + why.slice(1) + '. Coach reports a rate that size and leaves the reading to you.' });
+      } else {
+        const se = d.f('weight.rateSeWk');
+        const spread = se != null ? se : r * 0.25;
+        const lo = Math.max(1, Math.ceil(Math.abs(dist) / (r + spread) - 1e-9));
+        const hi = r - spread > 0 ? Math.max(lo, Math.ceil(Math.abs(dist) / (r - spread) - 1e-9)) : null;
+        out.push({ text: 'Your weight: ' + weeksRange(lo, hi) + ' to your ' + goalW + ' goal weight, at your current ' +
+                         labelRate(r, u) + ' a week.',
+                   reason: why.charAt(0).toUpperCase() + why.slice(1) + ', give or take how sure the trend is of its own rate.' });
+      }
+    } else {
+      out.push({ text: 'Your weight is ' + labelW(latest, u) + ', against your ' + goalW + ' goal weight.',
+                 reason: 'Your last weigh-in, against the goal weight in your daily targets.' });
+    }
+  }
+
+  // Powerlifting: the big three and their total, estimated.
+  const bt = aim === 'powerlifting' ? d.f('lift.bigThree') : null;
+  if (bt && bt.lifts.some(x => x.lift)) {
+    const parts = bt.lifts.filter(x => x.lift)
+      .map(x => x.which + ' ' + labelW(x.lift.e1, u) + ' (' + STATUS_WORD[x.lift.status] + ')');
+    out.push({ text: 'Your big three, estimated: ' + parts.join(', ') + (bt.total != null ? '. Total ' + labelW(bt.total, u) + '.' : '.'),
+               reason: 'Each is your most-logged variant over the last twelve weeks, the middle of its last two sessions.' });
+  }
+
+  // The focus group.
+  const f = d.f('group.focusRead');
+  if (f) {
+    const lifts = f.lifts.map(l => l.name + ' is ' + STATUS_WORD[l.status]);
+    out.push({ text: 'Your focus, ' + groupLabel(f.group) + ': about ' + one(f.recent4) + ' sets a week over the last 4 weeks' +
+                     (f.normal != null ? ', against your usual ' + one(f.normal) : '') + '.' +
+                     (lifts.length ? ' ' + lifts.join('; ') + '.' : ''),
+               reason: 'Working sets for that group, warm-ups out, against the eight weeks before.' });
+  }
+  return out;
+}
+const cap = t => t.charAt(0).toUpperCase() + t.slice(1);
+
 /* ================================================================
    7.  THE ROTATING LINE
    ================================================================
@@ -2310,6 +2873,10 @@ export const RESPONSES = Object.freeze({
    or stops passing moves the walk from one pool to the other between two
    opens, and covering that is the whole job of the memory. It is an input for
    the same reason `now` is: this file has no clock and no storage of its own. */
+/* v49: "7 days since chest." and "12 days since a session." left the pool.
+   The card only encourages now (Micah's decision #3), and both read as "you
+   haven't" on the screen the app opens to. What they said is still said, on
+   the sheet, by the findings it opens on. */
 export const GREETINGS = Object.freeze([
   // generic
   { id: 'g_hello',   kind: 'generic', tone: 'warm',    topic: null, text: () => 'Good to see you.' },
@@ -2321,11 +2888,6 @@ export const GREETINGS = Object.freeze([
   { id: 'g_back',    kind: 'generic', tone: 'warm',    topic: null, text: () => 'Back at it.' },
 
   // data-aware
-  {
-    id: 'g_since_group', kind: 'data', tone: 'neutral', topic: 'recency',
-    gate: d => { const v = d.f('group.overdue'); return v != null && v.days <= 60; },
-    text: d => { const v = d.f('group.overdue'); return v.days + ' days since ' + groupLabel(v.group) + '.'; }
-  },
   {
     /* A ROLLING count under a rolling word. It said "this week", which on a
        Tuesday could be three sessions that all happened last week — a right
@@ -2349,11 +2911,6 @@ export const GREETINGS = Object.freeze([
     id: 'g_trained_today', kind: 'data', tone: 'warm', topic: 'recency',
     gate: d => d.f('session.lastDaysAgo') === 0,
     text: () => 'Logged already today.'
-  },
-  {
-    id: 'g_away', kind: 'data', tone: 'neutral', topic: 'recency',
-    gate: d => { const n = d.f('session.lastDaysAgo'); return n != null && n >= 7 && n <= 120; },
-    text: d => d.f('session.lastDaysAgo') + ' days since a session.'
   },
   /* Deliberately unit-free. A greeting is five words at the outside and there
      is no room in it for a number and its unit word, so the lines that touch
@@ -2468,6 +3025,181 @@ function rotate(counter, n) {
 }
 
 /* ================================================================
+   7b. THE EARNED LINE (v49) — what the card says now
+   ================================================================
+   THE CARD ONLY ENCOURAGES, AND EVERY ENCOURAGEMENT IS TRUE (Micah's
+   decision #3). The ranked findings did not go anywhere: c.you, c.train and
+   c.opening are what they were, and the sheet opens on the finding. The card
+   shows one of these instead — a fact from his own log that is worth hearing —
+   or, when none qualifies, the shipped blocking and fall-through states.
+
+   Each line carries its category (switched off, it is not said), the aims it
+   suits (null: every aim), a gate over facts this file already owns, its text
+   and a one-clause `why` for the card's small line, and the facts it quotes.
+   Its rendered text must fit the card: nine words at most, one number at
+   most, no exclamation mark — checked on the RENDERED string, because library
+   names are long and there are no short ones, so a line that renders past the
+   limit simply does not qualify that day.
+
+   What no line ever does: correct him (tools-check/coach-voice.mjs bans the
+   corrective vocabulary from every string a card can draw), celebrate a rate
+   past RATE_BAND_LB, a weight change with no aim in its direction, or a low
+   day — there is deliberately no weight-loss line without an aim of cut — or
+   contradict the sheet: while a lighter week is being suggested no volume
+   line shows, and a line quoting the evidence of a caution the sheet opens on
+   is dropped. */
+const HYPE_WORDS = 9;
+const HYPE_NUMBERS = 1;
+const TRAIN_HYPE = Object.freeze(['volume', 'progression', 'targets', 'recency', 'rest']);
+const weekday = key => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(key || ''));
+  return m ? ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][
+    new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]))).getUTCDay()] : null;
+};
+const WORD_NUM = ['Zero', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten'];
+
+export const HYPE = Object.freeze([
+  {
+    id: 'hype_week_best', category: 'volume', aims: null, facts: ['session.weekBest'],
+    gate: d => { const v = d.f('session.weekBest'); return v.n >= 3 && v.prev.every(p => v.n > p); },
+    // Rolling words for a rolling count: never "this week" (the defect v43 fixed).
+    text: d => d.f('session.weekBest').n + ' sessions in seven days, your most in five weeks.',
+    why: d => FACT_BY_ID['session.weekBest'].because(d.f('session.weekBest'), d)
+  },
+  {
+    id: 'hype_pr', category: 'progression', aims: ['strength', 'powerlifting', 'muscle', 'recomp'], facts: ['lift.recentPr'],
+    // A heavier set or a higher estimated max: the kinds that carry a weight.
+    gate: d => { const v = d.f('lift.recentPr'); return v.daysAgo <= HYPE_DAYS && (v.kind === 'e1rm' || v.kind === 'weight'); },
+    text: d => 'New best on ' + d.f('lift.recentPr').name + '.',
+    why: (d, u) => { const v = d.f('lift.recentPr');
+                     return (v.kind === 'weight' ? 'heaviest set, ' : 'estimated max, ') + labelW(v.value, u); }
+  },
+  {
+    id: 'hype_e1rm_trend', category: 'progression', aims: ['strength', 'powerlifting', 'recomp'], facts: ['lift.trend'],
+    gate: d => d.f('lift.trend').gainLb > 0,
+    text: (d, u) => { const v = d.f('lift.trend'); return v.name + ' is up about ' + labelW(v.gainLb, u) + '.'; },
+    why: d => 'estimated max, over ' + plural(d.f('lift.trend').weeks, 'week')
+  },
+  {
+    /* Coach's targets are Pro — a Basic account never saw them to meet them —
+       so this one line asks for Pro. Every other line is both tiers'. */
+    id: 'hype_targets_met', category: 'targets', aims: null, facts: ['session.targetsMet'],
+    gate: d => { const v = d.f('session.targetsMet'); return d.f('meta.tierPro') === true && v.n >= 2 && v.met === v.n; },
+    text: d => { const v = d.f('session.targetsMet');
+                 return 'Every Coach target met ' + (v.daysAgo === 0 ? 'today' : v.daysAgo === 1 ? 'yesterday' : 'on ' + weekday(v.date)) + '.'; },
+    why: d => plural(d.f('session.targetsMet').n, 'lift') + ', each at its target weight and reps'
+  },
+  {
+    /* Weight he did not mean to lose is never "a cut": this needs his aim, or
+       his own food targets set to lose. */
+    id: 'hype_holding_cut', category: 'progression', aims: ['cut', 'recomp'], facts: ['lift.holdingCut'],
+    gate: d => ['cut', 'recomp'].includes(d.f('coach.aim')) || d.f('weight.goalDir') === -1,
+    text: d => d.f('lift.holdingCut').name + ' is holding through your cut.',
+    why: (d, u) => { const v = d.f('lift.holdingCut'), rs = Math.round(v.rs * 100);
+                     return labelW(v.bwS - v.bwE, u) + ' down, estimated max for your bodyweight ' + (rs >= 1 ? 'up ' + rs + '%' : 'level'); }
+  },
+  {
+    id: 'hype_goal_pace', category: 'weight', aims: ['cut', 'muscle'], facts: ['weight.rateWk', 'weight.goalRateWk'],
+    gate: d => {
+      const aim = d.f('coach.aim'), dir = AIM_DIR[aim], r = d.f('weight.rateWk'), g = d.f('weight.goalRateWk');
+      return (aim === 'cut' || aim === 'muscle') && r != null && g != null && Math.sign(r) === dir && Math.sign(g) === dir &&
+             Math.abs(r - g) <= Math.abs(g) * 0.25 && Math.abs(r) <= RATE_BAND_LB;
+    },
+    text: (d, u) => { const r = d.f('weight.rateWk'); return (r < 0 ? 'Down ' : 'Up ') + labelRate(Math.abs(r), u) + ' a week, right on pace.'; },
+    why: (d, u) => 'against the ' + labelRate(Math.abs(d.f('weight.goalRateWk')), u) + ' a week you set'
+  },
+  {
+    id: 'hype_target_progress', category: 'progression', aims: ['strength', 'powerlifting'], facts: ['lift.goalRead'],
+    gate: d => { const v = d.f('lift.goalRead');
+                 return v.logged && !!v.pace && !v.pace.reached && v.closed != null && v.closed >= 0.5 && v.closed < 1; },
+    text: d => 'Past halfway to your ' + d.f('lift.goalRead').name + ' target.',
+    why: (d, u) => { const v = d.f('lift.goalRead');
+                     return 'estimated max ' + labelW(v.pace.current, u) + ' of the ' + labelW(v.target, u) + ' it takes'; }
+  },
+  {
+    id: 'hype_protein_streak', category: 'fuel', aims: ['muscle', 'cut', 'recomp'], facts: ['fuel.proteinStreak'],
+    gate: d => d.f('fuel.proteinStreak') >= 5,
+    text: d => 'Protein target hit ' + d.f('fuel.proteinStreak') + ' days running.',
+    why: d => 'your ' + int(d.f('fuel.proteinTarget')) + ' g a day, from your food log'
+  },
+  {
+    id: 'hype_back', category: 'recency', aims: null, facts: ['session.back'],
+    gate: d => d.f('session.back').daysAgo <= BACK_SHOW_DAYS,
+    text: () => 'Good to have you back.',
+    why: d => 'first session in ' + plural(d.f('session.back').gap, 'day')
+  },
+  {
+    id: 'hype_milestone', category: 'volume', aims: null, facts: ['session.milestone'],
+    gate: () => true,
+    text: d => 'That’s workout ' + d.f('session.milestone').n + ' logged.',
+    why: () => 'every session in your log, counted'
+  },
+  {
+    id: 'hype_logging', category: 'fuel', aims: null, facts: ['fuel.loggingStreak'],
+    gate: d => d.f('fuel.loggingStreak') >= 14,
+    text: d => { const n = d.f('fuel.loggingStreak');
+                 return n < 21 ? 'Two weeks of food logged straight.' : n < 28 ? 'Three weeks of food logged straight.'
+                      : n + ' days of food logged straight.'; },
+    why: () => 'every day up to yesterday'
+  },
+  {
+    /* Micah's decision #16, in house style and inside nine words. "Great
+       session" is left out: Coach cannot know it was. Shown on its own gate
+       even while a lighter week is suggested — it is the same advice. */
+    id: 'hype_recovery', category: 'rest', aims: null, facts: ['session.streak'],
+    gate: d => d.f('session.streak') >= 3,
+    text: d => { const n = d.f('session.streak'); return (WORD_NUM[n] || String(n)) + ' straight days. A rest day is well earned.'; },
+    why: d => 'a session on each of the last ' + plural(d.f('session.streak'), 'day') + ', today included'
+  }
+]);
+
+/* The rendered line's limits: nine words, one number, no exclamation mark. */
+function fitsCard(t) {
+  return !!t && t.trim().split(/\s+/).length <= HYPE_WORDS && (t.match(/\d+(?:[.,]\d+)*/g) || []).length <= HYPE_NUMBERS &&
+         !t.includes('!');
+}
+
+/* Every line that qualifies today, in the order the card walks them: the
+   ones suited to his aim first, then the most recent evidence, then the id. */
+function hypePool(d, u, opening) {
+  const aim = d.f('coach.aim');
+  const lighter = d.f('session.lighterWeek') != null;
+  const caution = opening && opening.tone === 'caution' ? (INTENT_BY_ID[opening.id] || {}).factsNeeded || [] : [];
+  const out = [];
+  HYPE.forEach(h => {
+    if (isMuted(d.input.settings, h.category)) return;
+    if (h.facts.some(f => d.f(f) == null)) return;
+    if (lighter && h.category === 'volume') return;
+    if (h.facts.some(f => caution.includes(f))) return;
+    let ok = false, text = '', why = '';
+    try { ok = !!h.gate(d); } catch { ok = false; }
+    if (!ok) return;
+    try { text = String(h.text(d, u) || ''); why = String(h.why(d, u) || ''); } catch { return; }
+    if (!fitsCard(text)) return;
+    const ages = h.facts.map(f => d.age(f)).filter(n => n != null);
+    out.push({ id: h.id, category: h.category, text, why,
+               suits: h.aims == null || (aim != null && h.aims.includes(aim)) ? 0 : 1,
+               age: ages.length ? Math.min(...ages) : 999 });
+  });
+  return out.sort((a, b) => a.suits - b.suits || a.age - b.age || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+}
+
+/* The walk, and pickGreeting's cap copied exactly: the counter walks the
+   pool, and the device's memory of the last lines shown only ever pushes it
+   forward, reading at most one short of the pool — so a pool of two or more
+   always has a free line and the one just shown never shows twice running. */
+function pickHype(pool, recent, opens) {
+  if (!pool.length) return null;
+  const memory = recent.slice(0, Math.max(1, pool.length - 1));
+  const start = rotate(opens, pool.length);
+  for (let step = 0; step < pool.length; step++) {
+    const cand = pool[(start + step) % pool.length];
+    if (!memory.includes(cand.id)) return cand;
+  }
+  return pool[start];
+}
+
+/* ================================================================
    8.  THE SHEET'S TOPICS
    ================================================================
    One bubble per tab that has something to answer — Train, Fuel, Weight. Steps
@@ -2520,6 +3252,41 @@ export const TRAIN_TOPICS = Object.freeze([
   { id: 'ask_volume',  label: 'How’s my week going?',       category: 'volume' }
 ]);
 
+/* v49: THE SHEET ADAPTS TO THE MOMENT (spec §9.1). The topics are a flat
+   list per surface and state, in the order they are offered; the sheet shows
+   the first four and puts the rest under "More". Only ids that answer are
+   kept (the shipped filter), and Patterns stays last on You. Train's `pre`
+   list is TRAIN_TOPICS above, his decided order first; `live` is the shipped
+   behaviour — Train's own table, and You's general three. */
+const TOPIC_BY_ID = Object.freeze(Object.fromEntries(
+  TOPICS.concat(TRAIN_TOPICS, [
+    { id: 'ask_compare', label: 'How did today compare?',           category: 'progression' },
+    { id: 'ask_next',    label: 'What’s next time?',                 category: 'targets' },
+    { id: 'ask_goal',    label: 'How am I tracking toward my goal?', category: 'progression' }
+  ]).map(t => [t.id, Object.freeze(t)])));
+export const STATE_TOPICS = Object.freeze({
+  train: Object.freeze({
+    pre:        Object.freeze(TRAIN_TOPICS.map(t => t.id)),
+    post:       Object.freeze(['ask_compare', 'ask_next', 'ask_lifts', 'ask_build']),
+    done_today: Object.freeze(['ask_compare', 'ask_shape', 'ask_build', 'ask_lifts']),
+    live:       Object.freeze(TRAIN_TOPICS.map(t => t.id))
+  }),
+  you: Object.freeze({
+    pre:        Object.freeze(['topic_train', 'topic_fuel', 'topic_weight', 'ask_goal', 'ask_lifts']),
+    post:       Object.freeze(['ask_compare', 'topic_fuel', 'topic_weight', 'ask_goal']),
+    done_today: Object.freeze(['ask_compare', 'topic_train', 'topic_fuel', 'topic_weight', 'ask_goal', 'ask_lifts']),
+    live:       Object.freeze(['topic_train', 'topic_fuel', 'topic_weight'])
+  })
+});
+// Every topic any sheet may offer, for a verifier that recognises them by
+// label (and for the next surface that needs one list rather than three).
+export const ALL_TOPICS = Object.freeze(Object.values(TOPIC_BY_ID));
+// Once today's session is done, "What should I train today?" is asked as what
+// it has become — the same route, relabelled.
+const DONE_LABELS = Object.freeze({ ask_shape: 'What should I train next?' });
+// How many bubbles show before "More".
+export const TOPICS_SHOWN = 4;
+
 // The router's whole map: a button id to the ordered intents it will try. The
 // first one whose gate passes and whose condition fires is the answer.
 const ROUTES = Object.freeze({
@@ -2539,6 +3306,9 @@ const ROUTES = Object.freeze({
   ask_lifts:    ['lift_status'],
   ask_record_day: ['record_day'],
   ask_lighter:  ['lighter_week'],
+  ask_compare:  ['session_compare'],
+  ask_next:     ['next_targets'],
+  ask_goal:     ['goal_pace'],
   ask_stall:    ['stalled_lift', 'pr_proximity'],
   ask_records:  ['recent_pr', 'pr_proximity'],
   ask_volume:   ['group_under_weekly_normal', 'weekly_sessions_vs_trailing'],
@@ -2584,6 +3354,9 @@ const FOLLOWUPS = Object.freeze({
   ask_lifts:    ['ask_record_day', 'ask_targets', 'ask_lighter'],
   ask_record_day: ['ask_targets', 'ask_lifts'],
   ask_lighter:  ['ask_volume', 'ask_lifts'],
+  ask_compare:  ['ask_next', 'ask_lifts'],
+  ask_next:     ['ask_compare', 'ask_lifts'],
+  ask_goal:     ['ask_lifts', 'ask_rate'],
   // Nothing: the answer is already every pattern that clears its bar.
   ask_patterns: [],
   injury:       []
@@ -2616,6 +3389,9 @@ const ASK_LABELS = Object.freeze({
   ask_lifts:    'How are my lifts moving?',
   ask_record_day: 'Good day for a record?',
   ask_lighter:  'Should I go lighter?',
+  ask_compare:  'How did today compare?',
+  ask_next:     'What’s next time?',
+  ask_goal:     'How am I tracking toward my goal?',
   ask_overdue:  'What’s overdue?',
   ask_shape:    'Which session is due?',
   ask_stall:    'Anything stalled?',
@@ -2722,6 +3498,17 @@ function factStore(input) {
     }
     return reads.get(exId);
   };
+  // The latest session by when it ended, as a shaped session.
+  let latestV;
+  d.latestAny = () => {
+    if (latestV === undefined) {
+      const a = d.all();
+      latestV = a.length ? a.reduce((x, y) => (sessionEnd(y.session) > sessionEnd(x.session) ||
+        (sessionEnd(y.session) === sessionEnd(x.session) && y.startedAt > x.startedAt) ? y : x)) : null;
+    }
+    return latestV;
+  };
+  d.latest = d.latestAny;
   let lighterV, recordV;
   d.lighterWeek = () => (lighterV !== undefined ? lighterV : (lighterV = lighterWeek(d.overlap(), d.now)));
   d.recordDay = () => (recordV !== undefined ? recordV : (recordV = recordDay(d.overlap(), d.now)));
@@ -2964,15 +3751,26 @@ function answerable(d, routeId) {
    with no way to ask anything is a worse answer than a broader question. */
 function topicsFor(d, surface) {
   const general = TOPICS.filter(t => liveTopics(d).includes(t.id));
-  if (surface !== 'train') return answerable(d, PATTERN_TOPIC.id) ? general.concat(PATTERN_TOPIC) : general;
-  const mine = TRAIN_TOPICS.filter(t => answerable(d, t.id));
-  return mine.length ? mine : general;
+  const state = d.f('coach.state') || 'pre';
+  const live = liveTopics(d);
+  // The general three keep their shipped test (the domain has data); every
+  // narrower id is offered only when its own route answers.
+  const offered = id => (TOPICS.some(t => t.id === id) ? live.includes(id) : answerable(d, id));
+  const label = t => (state === 'done_today' && DONE_LABELS[t.id] ? { ...t, label: DONE_LABELS[t.id] } : t);
+  const list = (STATE_TOPICS[surface === 'train' ? 'train' : 'you'][state] || [])
+    .filter(offered).map(id => label(TOPIC_BY_ID[id]));
+  if (surface !== 'train') return answerable(d, PATTERN_TOPIC.id) ? list.concat(PATTERN_TOPIC) : list;
+  return list.length ? list : general;
 }
 
 function leadQuestion(d, finding) {
   const live = liveTopics(d);
   if (!live.length) return null;
-  const topics = TOPICS.filter(t => live.includes(t.id));
+  // v49: only a general topic the sheet offers in this state — after a
+  // workout "How's my training?" gives way to "How did today compare?", and
+  // the card must not prompt a question the sheet it opens does not have.
+  const offered = topicsFor(d, 'you').map(t => t.id);
+  const topics = TOPICS.filter(t => live.includes(t.id) && offered.includes(t.id));
   if (!topics.length) return null;
   // Offer something the card is not already showing.
   const other = finding ? topics.filter(t => t.category !== finding.category) : topics;
@@ -2988,10 +3786,13 @@ function pendingQuestion(d) {
   if (muted.questions === true) return null;
   if (d.f('coach.openQuestion')) return null;
   const answers = (d.input.settings && d.input.settings.answers) || {};
+  const asked = (d.input.settings && d.input.settings.asked) || {};
   for (const q of QUESTIONS) {
     // Asked somewhere else — under the answer it refines — and never here.
     if (q.where) continue;
-    if (answers[q.id] != null) continue;
+    // Answered, unless the answer has gone stale (v49: the goal-change
+    // questions' "temporary" lasts four weeks from when it was asked).
+    if (answers[q.id] != null && !isStale(q, answers[q.id], asked[q.id], d)) continue;
     let ok = false;
     try { ok = !!q.when(d); } catch { ok = false; }
     if (ok) return q;
@@ -3020,7 +3821,20 @@ function questionUnder(d, where) {
 
 // What the sheet is handed of a question: its words, its chips, and what it
 // says once answered.
-const questionView = q => (q ? { id: q.id, text: q.text, options: q.options, ack: q.ack || null } : null);
+/* v49: a question's text may be a function of the log, so it can carry his
+   numbers through units.js ("your weight has come down about 4 lb"); it is
+   resolved here, the one place a question is handed to the sheet. */
+const questionView = (q, d, u) => {
+  if (!q) return null;
+  let text = q.text;
+  if (typeof text === 'function') { try { text = String(text(d, u) || ''); } catch { text = ''; } }
+  return text ? { id: q.id, text, options: q.options, ack: q.ack || null } : null;
+};
+// An answered question whose answer has gone stale counts as unanswered.
+function isStale(q, answer, askedAt, d) {
+  if (typeof q.stale !== 'function') return false;
+  try { return !!q.stale(answer, askedAt, d); } catch { return false; }
+}
 
 /* ---------- the public face ----------
 
@@ -3070,15 +3884,54 @@ export function coach(input) {
   const lead = leadQuestion(d, you.state === 'finding' ? you : null);
   const question = pendingQuestion(d);
 
+  /* v49: WHAT EACH CARD SHOWS. The blocking states as they are; otherwise
+     one earned line when one qualifies (both tiers — encouragement is not a
+     Pro feature); otherwise Basic's locked state, then thin or clear. The
+     Train card takes a training line the You card is not already showing. */
+  const pool = blocked ? [] : hypePool(d, u, you.state === 'finding' ? you : null);
+  const recentHype = d.f('coach.recentHype') || [];
+  function cardView(surface, claimed) {
+    if (blocked) return { ...blocked, state: blocked.id };
+    const mine = pool.filter(h => (surface === 'you' || TRAIN_HYPE.includes(h.category)) && h.id !== claimed);
+    const h = pickHype(mine, recentHype, d.input.opens);
+    if (h) return { id: h.id, kind: 'hype', state: 'earned', category: h.category, tone: 'good', text: h.text, reason: h.why };
+    if (!pro && lockedCount > 0) {
+      const it = INTENT_BY_ID.card_state_locked;
+      return { ...renderIntent(it, d, u), state: it.id };
+    }
+    const thin = d.f('session.count') < 3 || d.f('session.windowCount') < 3;
+    const it = INTENT_BY_ID[thin ? 'card_state_thin' : 'card_state_clear'];
+    return { ...renderIntent(it, d, u), state: it.id };
+  }
+  const cardYou = cardView('you', null);
+  const card = { you: cardYou, train: cardView('train', cardYou.state === 'earned' ? cardYou.id : null) };
+
+  /* v49: THE BASIC TEASER (Micah's decision #15). One real target — the
+     first that names a weight on the workout "Build it" would make, worked
+     out by the same engine — and nothing else about targets. */
+  let teaser = null;
+  if (!pro && !blocked && !isMuted(d.input.settings, 'targets')) {
+    const p = d.build({});
+    const e = p ? p.exercises.find(x => x.target && x.target.loadLb != null) : null;
+    if (e) teaser = { text: 'One of your targets: ' + e.name + ' — ' + e.target.line, reason: e.target.why[0] || '' };
+  }
+
   return {
     u,
     you, train, greet, lead,
+    card, state: d.f('coach.state'), teaser,
+    /* The lifts a Lift target may be set on (v49): his own, logged in the
+       last half year, most-logged first, thirty at most. */
+    goalChoices: () => (d.f('log.confidence') !== 'readable' ? [] : d.overlap().lifts
+      .filter(l => l.equipment !== 'cardio')
+      .map(l => ({ exId: l.exId, name: l.name, n: l.exposures.length }))
+      .sort((a, b) => b.n - a.n || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)).slice(0, GOAL_CHOICES)),
     pro, lockedCount,
     /* The sheet asks for the set belonging to the card that opened it. It is a
        function rather than an array because the two surfaces draw the same
        component and the card is the only thing that knows which one it is. */
     topicsFor: surface => topicsFor(d, surface === 'train' ? 'train' : 'you'),
-    question: questionView(question),
+    question: questionView(question, d, u),
     // The opening bubble: the same finding the You card is showing, so the
     // sheet does not contradict the card that opened it.
     opening: you,
@@ -3146,10 +3999,12 @@ function ask(d, u, id) {
     if (!gate(it, d)) continue;
     if (!fires(it, d)) continue;
     const v = renderIntent(it, d, u);
-    // The targets answer carries the goal question it refines — this route only.
+    // The targets answer carries the goal question it refines, and (v49) the
+    // goal answer carries the focus question — these two routes only.
     if (v) {
+      const where = v.id === 'lift_targets' ? 'targets' : v.id === 'goal_pace' ? 'goal' : null;
       return { ...v, followups: followupsFor(d, u, id, v.id),
-               ...(v.id === 'lift_targets' ? { question: questionView(questionUnder(d, 'targets')) } : null) };
+               ...(where ? { question: questionView(questionUnder(d, where), d, u) } : null) };
     }
   }
   return {
@@ -3214,9 +4069,14 @@ export function normSettings(v) {
      two later, so the one usage pattern that needed the value remembered was
      the one that lost it. It is device storage now — see coach-data.js — and a
      stored key left over from v42 is simply dropped on the way through here. */
+  /* v49: the lift target, whole or not at all — coach-goal.js's
+     normGoalLift() fails safe on every junk value, and an absent or invalid
+     one adds no key, so a node without one keeps the shipped shape. */
+  const goalLift = normGoalLift(o.goalLift);
   return {
     v: COACH_SETTINGS_VERSION,
-    mute, on, answers, asked
+    mute, on, answers, asked,
+    ...(goalLift ? { goalLift } : null)
   };
 }
 

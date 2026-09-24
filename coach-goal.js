@@ -138,6 +138,128 @@ export function volumeFloor(aim, normal) {
   return VOLUME_FLOOR[AIMS.includes(aim) ? aim : 'none'];
 }
 
+/* ================================================================
+   STAGE THREE (v49): the goal made useful
+   ================================================================ */
+
+/* Which way each aim wants his bodyweight to go: down, up, steady, or no
+   opinion. Get stronger and Powerlifting have none — a weight class is a
+   later option — so a weight line never celebrates either direction on them. */
+export const AIM_DIR = Object.freeze({
+  strength: null, powerlifting: null, muscle: 1, cut: -1, recomp: 0, maintain: 0
+});
+
+/* THE LIFT TARGET — settings/coach.goalLift = { exId, lb, reps, at }. Stored
+   in pounds like every other weight, reps 1 to 20 (a target at one rep is the
+   weight itself), `at` the moment it was set. FAILS SAFE on every junk value:
+   an id that is not an exercise id's shape, a weight that is not a positive
+   number, or a moment that is not one, and there is no target at all; reps out
+   of range read as one. Null means absent, and absent is never written. */
+export const GOAL_REPS_MAX = 20;
+export const GOAL_LB_MAX = 2000;
+export function normGoalLift(v) {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
+  const exId = typeof v.exId === 'string' && /^[a-z0-9][a-z0-9-]{0,119}$/.test(v.exId) ? v.exId : null;
+  const lb = typeof v.lb === 'number' && Number.isFinite(v.lb) && v.lb > 0 && v.lb <= GOAL_LB_MAX
+    ? Math.round(v.lb * 100) / 100 : null;
+  const reps = Number.isInteger(v.reps) && v.reps >= 1 && v.reps <= GOAL_REPS_MAX ? v.reps : 1;
+  const at = typeof v.at === 'number' && Number.isFinite(v.at) && v.at > 0 ? v.at : null;
+  if (!exId || lb == null || at == null) return null;
+  return { exId, lb, reps, at };
+}
+
+/* PACE toward a lift target, in pounds a week. The Theil–Sen slope of his
+   estimated-max points (the median of every pairwise slope, so one great day
+   or one bad one does not bend it) and, as the pessimistic pace, the 25th
+   percentile of the same slopes: strength gains slow down, so a straight line
+   over-promises further out and a range admits it. Six points at least.
+     points  [{ t, y }] — y an estimated max in pounds, t epoch ms
+     target  the target's estimated max in pounds
+   Returns { current, reached, perWk, lowWk, weeks: [fast, slow] | null, over }
+   — `weeks` only when the pessimistic pace is above zero, in whole weeks
+   rounded up; `over` when the slow end passes six months. Never a date. */
+export const PACE_MIN_POINTS = 6;
+export const PACE_MAX_WEEKS = 26;
+export const PACE_Q = 0.25;
+export function paceFor(points, target) {
+  const pts = (Array.isArray(points) ? points : [])
+    .filter(p => p && Number.isFinite(p.t) && Number.isFinite(p.y) && p.y > 0).slice().sort((a, b) => a.t - b.t);
+  if (!pts.length || !(target > 0)) return null;
+  const last2 = pts.slice(-2).map(p => p.y);
+  const current = last2.length === 2 ? (last2[0] + last2[1]) / 2 : last2[0];
+  const reached = current >= target;
+  if (pts.length < PACE_MIN_POINTS) return { current, reached, perWk: null, lowWk: null, weeks: null, over: false };
+  const slopes = [];
+  for (let i = 0; i < pts.length; i++) {
+    for (let j = i + 1; j < pts.length; j++) {
+      const days = (pts[j].t - pts[i].t) / 864e5;
+      if (days >= 0.5) slopes.push((pts[j].y - pts[i].y) / days * 7);
+    }
+  }
+  if (!slopes.length) return { current, reached, perWk: null, lowWk: null, weeks: null, over: false };
+  slopes.sort((a, b) => a - b);
+  const at = q => { const pos = (slopes.length - 1) * q, lo = Math.floor(pos), hi = Math.ceil(pos);
+                    return slopes[lo] + (slopes[hi] - slopes[lo]) * (pos - lo); };
+  const perWk = at(0.5), lowWk = at(PACE_Q);
+  let weeks = null, over = false;
+  if (!reached && lowWk > 0) {
+    const gap = target - current;
+    const fast = Math.max(1, Math.ceil(gap / perWk - 1e-9));
+    const slow = Math.max(fast, Math.ceil(gap / lowWk - 1e-9));
+    weeks = [fast, slow];
+    over = slow > PACE_MAX_WEEKS;
+  }
+  return { current, reached, perWk, lowWk, weeks, over };
+}
+
+/* THE GOAL-CHANGE CHECK on the scale: the last three seven-day blocks back
+   from `now`, each block's change in % of bodyweight read at its two ends by
+   bwAt() and banded by energyBand() — the same bars as everything else.
+   Null when any end has too few weigh-ins to read. */
+export const CHECK_WEEKS = 3;
+export const CHECK_FAST_PCT = 0.5;
+export function weeklyBands(weighIns, now) {
+  if (!Number.isFinite(now)) return null;
+  const out = [];
+  for (let k = 0; k < CHECK_WEEKS; k++) {
+    const end = now - k * 7 * 864e5, start = end - 7 * 864e5;
+    const a = bwAt(weighIns, start), b = bwAt(weighIns, end);
+    if (a == null || b == null) return null;
+    const pct = (b - a) / a * 100;
+    out.push({ start, end, from: a, to: b, pct, band: energyBand(pct) });
+  }
+  return out.reverse();
+}
+
+/* Does what he is doing contradict what he said he is training for? Two
+   checks, each a question and never a verdict (coach.js asks them):
+     weight   three weeks running of the scale going the wrong way for the
+              aim — a deficit on a building aim, a surplus on a cut, or more
+              than half a percent a week either way on Recomp or Stay
+              consistent
+     targets  his own food targets pointing the other way: set to lose on
+              Build muscle, set to gain on a cut
+   Needs three weeks of weigh-ins; the fourteen days since the aim was set
+   are the question's to count. */
+export function goalChecks(o) {
+  const x = o && typeof o === 'object' ? o : {};
+  const aim = AIMS.includes(x.aim) ? x.aim : null;
+  if (!aim) return { weight: false, targets: false, weeks: null };
+  const ins = (Array.isArray(x.weighIns) ? x.weighIns : []).filter(w => w && Number.isFinite(w.t) && Number.isFinite(w.lb));
+  const ts = ins.map(w => w.t);
+  const enough = ts.length >= 2 && Math.max(...ts) - Math.min(...ts) >= 21 * 864e5;
+  const weeks = enough ? weeklyBands(ins, x.now) : null;
+  const all = f => !!weeks && weeks.every(f);
+  const down = w => w.band === 'deficit' || w.band === 'deep';
+  const weight = !!weeks && (
+    (['muscle', 'strength', 'powerlifting', 'recomp'].includes(aim) && all(down)) ||
+    (aim === 'cut' && all(w => w.band === 'surplus')) ||
+    (['recomp', 'maintain'].includes(aim) && all(w => Math.abs(w.pct) > CHECK_FAST_PCT)));
+  const g = x.goalRateWk;
+  const targets = Number.isFinite(g) && ((aim === 'muscle' && g < 0) || (aim === 'cut' && g > 0));
+  return { weight, targets, weeks };
+}
+
 /* The dials for one account right now: the aim's row, then what the energy
    context and the lift's own rate of progress do to it. A fresh object every
    call, so no caller can edit the table through what it was handed. */

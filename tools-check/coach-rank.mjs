@@ -359,9 +359,16 @@ section('F. the You card claims first, and the Train card takes what is left');
         oneOnly.you.state !== 'finding' && oneOnly.train.state !== 'finding',
         oneOnly.you.state + ' / ' + oneOnly.train.state);
 
-  // The sheet opens on the same sentence the card that opened it was showing.
-  check('the sheet’s opening bubble is the You card’s own finding',
+  /* v49 (updated deliberately): the sheet still opens on the ranked finding,
+     c.you — but the CARD reads c.card now, which is an earned line or a
+     state and never a finding. So the card encourages and the sheet opens on
+     the finding, and the two no longer show the same line. */
+  check('the sheet’s opening bubble is the ranked finding, c.you, exactly as v48 computed it',
         c.opening.id === c.you.id && c.opening.text === c.you.text);
+  check('and neither card shows a finding any more — c.card is an earned line or a state',
+        c.card.you.state !== 'finding' && c.card.train.state !== 'finding' &&
+        (c.card.you.state === 'earned' || /^card_|^guard_/.test(c.card.you.state)),
+        c.card.you.state + ' / ' + c.card.train.state);
 }
 
 /* ================= G. THE LEAD QUESTION ================= */
@@ -369,7 +376,12 @@ section('G. the lead question only offers topics that have data behind them');
 {
   const you = c => c.topicsFor('you');
   const full = on({});
-  check('a full account is offered one of the three topics', full.lead && you(full).length === 3,
+  /* v49: the You sheet's topics are the pre-workout table now — the general
+     three, then the goal and the lifts — but the card's lead question is
+     still drawn from the general three alone (updated deliberately). */
+  check('a full account is offered one of the three general topics as its lead',
+        full.lead && C.TOPICS.some(t => t.id === full.lead.id) &&
+        you(full).slice(0, 3).map(t => t.id).join(',') === C.TOPICS.map(t => t.id).join(','),
         full.lead && full.lead.id);
   check('and never the one the card is already showing',
         !full.lead || !(full.you.state === 'finding' && full.lead.category === full.you.category),
@@ -405,7 +417,12 @@ section('G2. the topic set belongs to the surface that opened the sheet');
   const youSet   = full.topicsFor('you').map(t => t.id);
   const trainSet = full.topicsFor('train').map(t => t.id);
 
-  check('You still gets the general three', youSet.join(',') === 'topic_train,topic_fuel,topic_weight',
+  /* Updated deliberately in v49 (SHIP-V49-PROMPT §6): before a workout the
+     You sheet offers the general three, then "How am I tracking toward my
+     goal?" and "How are my lifts moving?" — each only when it answers. */
+  check('You gets the general three first, then the goal and the lifts (v49’s pre table)',
+        youSet.join(',') === ['topic_train', 'topic_fuel', 'topic_weight'].concat(
+          ['ask_goal', 'ask_lifts'].filter(id => full.ask(id).id !== id)).join(','),
         list(youSet));
   check('Train gets a different set, and a training-first one',
         trainSet.join(',') !== youSet.join(',') &&

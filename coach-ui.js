@@ -25,9 +25,10 @@
 
 import { el, sheet, noteEl, segmented, toast } from './ui.js';
 import { GROUPS } from './exercises.js';
-import { coach, CATEGORIES, QUESTIONS, PRO_ADDS, LIVE_NONE, isMuted } from './coach.js';
-import { coachInput, coachReady, coachLogKnown, rememberGreeting, coachSettings, coachSettingsKnown,
-         setCategoryMuted, answerQuestion, markAsked, liveSessionOnDevice, coachPro } from './coach-data.js';
+import { coach, CATEGORIES, QUESTIONS, PRO_ADDS, LIVE_NONE, isMuted, TOPICS_SHOWN } from './coach.js';
+import { coachInput, coachReady, coachLogKnown, rememberGreeting, rememberHype, coachSettings, coachSettingsKnown,
+         setCategoryMuted, answerQuestion, markAsked, liveSessionOnDevice, coachPro, setAim, setGoalLift } from './coach-data.js';
+import { wIn, fmtW, unitW } from './units.js';
 
 /* The two marks. Inline rather than in a sprite because there are two of them
    and the app has no icon system — the gear on You is written out the same way. */
@@ -121,7 +122,12 @@ export function coachCard(opts = {}) {
     return card;
   }
 
-  let view = opts.tight ? c.train : c.you;
+  /* v49: THE CARD ONLY ENCOURAGES (Micah's decision #3). It reads c.card —
+     one earned line from his own log, or the shipped blocking and
+     fall-through states — while the sheet still opens on c.opening, the
+     ranked finding. So the card encourages, the sheet opens on the finding,
+     and the two no longer show the same line. */
+  let view = opts.tight ? c.card.train : c.card.you;
 
   /* The one substitution the half-loaded state needs. "Nothing notable" is a
      claim about everything Coach checked, and on a card painted before the
@@ -158,6 +164,9 @@ export function coachCard(opts = {}) {
   if (!opts.tight && c.greet && c.greet.id && !shownGreet) shownGreet = c.greet;
   const greet = opts.tight ? null : (shownGreet || c.greet);
   if (greet && greet.id) rememberGreeting(greet.id);
+  // The earned line the You card showed, written once per open like the
+  // greeting, so the next open steps past it.
+  if (!opts.tight && view.state === 'earned') rememberHype(view.id);
 
   card.appendChild(header(c.pro));
   card.appendChild(el('div', 'coach-greet', greet ? greet.text : ''));
@@ -306,15 +315,23 @@ export function openCoachSheet(opts = {}) {
     return b;
   }
 
+  /* v49: four chips show, and the rest wait under "More", which reveals
+     them in place — no new sheet, nothing moves above it. */
   function showButtons(list) {
     chipList = list;
     if (buttons) buttons.remove();
     buttons = el('div', 'coach-chips');
-    list.forEach(item => {
+    const chip = item => {
       const b = el('button', 'coach-chip', item.label);
       b.onclick = () => run(item.id, item.label);
       buttons.appendChild(b);
-    });
+    };
+    list.slice(0, TOPICS_SHOWN).forEach(chip);
+    if (list.length > TOPICS_SHOWN) {
+      const more = el('button', 'coach-chip', 'More');
+      more.onclick = () => { more.remove(); list.slice(TOPICS_SHOWN).forEach(chip); scroll(); };
+      buttons.appendChild(more);
+    }
     if (list.length) thread.appendChild(buttons);
     else buttons = null;
   }
@@ -529,10 +546,15 @@ export function openCoachSheet(opts = {}) {
       b.onclick = () => {
         row.remove();
         bubble('you', op.label);
-        answerQuestion(question.id, op.value).catch(() => {});
+        // The aim goes through setAim(), which clears the goal-change answers
+        // in the same write (v49); every other answer is just an answer.
+        (question.id === 'q_goal_aim' ? setAim(op.value) : answerQuestion(question.id, op.value)).catch(() => {});
         bubble('coach', question.ack || 'Noted. That changes how Coach reads your weight.',
           'Nothing else about it is stored, and you can change it any time from Settings → Coach.');
         scroll();
+        // "Yes, update my goal" opens Your goal, and afterwards reads like
+        // "temporary" — the engine's stale rule, from this answer's stamp.
+        if (op.value === 'update' && /^q_goal_check_/.test(question.id)) openGoalSheet();
       };
       row.appendChild(b);
     });
@@ -551,6 +573,9 @@ export function openCoachSheet(opts = {}) {
      nothing per use — no model call, no network, no per-account cost — so the
      worst case of somebody defeating it is a person seeing sentences that were
      free to produce. It is not pretended otherwise anywhere in this file. */
+  /* v49: THE BASIC TEASER (Micah's decision #15) — one real target, worked
+     out by the same engine, above the Pro panel. Nothing else about targets. */
+  if (!c.pro && c.teaser) bubble('coach', c.teaser.text, c.teaser.reason);
   if (c.pro) showButtons(topics.slice());
   else thread.appendChild(proPanel());
 
@@ -816,13 +841,15 @@ function toggle(cat, onChange) {
    three is drawn as the vertical choice rows Settings' own goal sheet uses. */
 export function coachAnswerRows(host, onChange) {
   const answers = coachSettings().answers || {};
-  const given = QUESTIONS.filter(q => !q.always && answers[q.id] != null);
+  // v49: the goal-change questions are marked `settings: false` — three-way
+  // answers to a question about a moment, not a setting to switch.
+  const given = QUESTIONS.filter(q => !q.always && q.settings !== false && answers[q.id] != null);
   let pro = false;
   try { pro = coachPro() === true; } catch { pro = false; }
   const goal = pro ? QUESTIONS.filter(q => q.always) : [];
   if (!given.length && !goal.length) return null;
 
-  const save = (q, v) => answerQuestion(q.id, v)
+  const save = (q, v) => (q.id === 'q_goal_aim' ? setAim(v) : answerQuestion(q.id, v))
     .then(ok => {
       toast(ok === false ? 'Couldn’t save that' : 'Saved');
       if (ok !== false && onChange) onChange();
@@ -860,8 +887,88 @@ export function coachAnswerRows(host, onChange) {
     h.style.marginTop = '18px';
     host.appendChild(h);
     goal.forEach(draw);
+    liftTargetRow(host, onChange);
   }
   return given.length + goal.length;
+}
+
+/* v49: LIFT TARGET, under Your goal (Pro). One of his own lifts from the last
+   half year, a weight in his unit, and reps — stored in pounds through
+   units.js, replaced whole on Save and removed on Clear. How Coach tracks it
+   is "How am I tracking toward my goal?". */
+function liftTargetRow(host, onChange) {
+  let c = null;
+  try { c = coach(coachInput({})); } catch { c = null; }
+  const u = c ? c.u : 'lb';
+  const cur = coachSettings().goalLift || null;
+  const f = el('div', 'field');
+  f.style.marginTop = '14px';
+  f.appendChild(el('label', null, 'Lift target'));
+  const choices = c ? c.goalChoices() : [];
+  if (!choices.length && !cur) {
+    f.appendChild(noteEl('Log a lift and it can be your target here.'));
+    host.appendChild(f);
+    return f;
+  }
+  const sel = el('select');
+  sel.setAttribute('aria-label', 'Lift');
+  const opt = (label, value) => { const o = el('option', null, label); o.value = value; sel.appendChild(o); };
+  opt('Choose a lift', '');
+  choices.forEach(x => opt(x.name, x.exId));
+  if (cur && !choices.some(x => x.exId === cur.exId)) opt(cur.exId, cur.exId);
+  sel.value = cur ? cur.exId : '';
+  f.appendChild(sel);
+  const pair = el('div', 'row-split');
+  pair.style.marginTop = '8px';
+  const w = el('input');
+  w.type = 'number'; w.inputMode = 'decimal'; w.min = '0'; w.step = 'any';
+  w.placeholder = 'Weight (' + unitW(u) + ')';
+  w.setAttribute('aria-label', 'Target weight in ' + unitW(u));
+  if (cur) w.value = fmtW(cur.lb, u);
+  const r = el('input');
+  r.type = 'number'; r.inputMode = 'numeric'; r.min = '1'; r.max = '20'; r.step = '1';
+  r.placeholder = 'Reps';
+  r.setAttribute('aria-label', 'Target reps, 1 to 20');
+  r.value = cur ? String(cur.reps) : '1';
+  pair.append(w, r);
+  f.appendChild(pair);
+  const saveBtn = el('button', 'btn btn-primary btn-block', 'Save lift target');
+  saveBtn.style.marginTop = '8px';
+  saveBtn.onclick = () => {
+    const exId = sel.value, lbs = parseFloat(w.value), reps = parseInt(r.value, 10);
+    if (!exId || !(lbs > 0) || !(reps >= 1 && reps <= 20)) { toast('Pick a lift, a weight and 1 to 20 reps'); return; }
+    setGoalLift({ exId, lb: wIn(lbs, u), reps, at: Date.now() })
+      .then(ok => { toast(ok === false ? 'Couldn’t save that' : 'Saved'); if (ok !== false && onChange) onChange(); })
+      .catch(() => toast('Couldn’t save that'));
+  };
+  f.appendChild(saveBtn);
+  if (cur) {
+    const clearBtn = el('button', 'btn btn-ghost btn-block', 'Clear lift target');
+    clearBtn.style.marginTop = '8px';
+    clearBtn.onclick = () => setGoalLift(null)
+      .then(ok => { toast(ok === false ? 'Couldn’t clear that' : 'Cleared'); if (ok !== false && onChange) onChange(); })
+      .catch(() => toast('Couldn’t clear that'));
+    f.appendChild(clearBtn);
+  }
+  f.appendChild(noteEl('Coach tracks your estimated max on it against the target’s, as a range of weeks — never a date.'));
+  host.appendChild(f);
+  return f;
+}
+
+/* v49: YOUR GOAL, as a sheet of its own — what "Yes, update my goal" opens
+   from the sheet. The same rows Settings → Coach draws, because settings.js
+   imports this file and not the other way round. */
+export function openGoalSheet(onChange) {
+  const { sh, close } = sheet();
+  sh.appendChild(el('div', 'eyebrow', 'Coach'));
+  sh.appendChild(el('h2', null, 'Your goal'));
+  const host = el('div');
+  sh.appendChild(host);
+  if (!coachAnswerRows(host, onChange)) host.appendChild(noteEl('Your goal is part of Pro.'));
+  const done = el('button', 'btn btn-ghost btn-block', 'Close');
+  done.style.marginTop = '10px';
+  done.onclick = close;
+  sh.appendChild(done);
 }
 
 /* ================= IN THE GYM =================

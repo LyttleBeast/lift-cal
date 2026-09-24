@@ -326,7 +326,16 @@ export function todayKey(d = new Date()) {
   check('questions switched off: none under the answer either, and the targets are still there',
         C.coach(input(settings({}, {}, { questions: true }))).ask('ask_targets').question === null &&
         C.coach(input(settings({}, {}, { questions: true }))).ask('ask_targets').id === 'lift_targets');
-  check('no other route carries a question', C.ROUTE_IDS.filter(r => r !== 'ask_targets').every(r => !('question' in none.ask(r))));
+  /* Updated deliberately in v49 (SHIP-V49-PROMPT §7.2): "How am I tracking
+     toward my goal?" carries the focus-group question under its answer, the
+     way the targets answer carries the aim. Those two, and no other route. */
+  check('no route but ask_targets and ask_goal carries a question',
+        C.ROUTE_IDS.filter(r => r !== 'ask_targets' && r !== 'ask_goal').every(r => !('question' in none.ask(r))));
+  const focusQ = C.coach(input(settings({ q_goal_aim: 'muscle', q_experience: 'some' }))).ask('ask_goal').question;
+  check('and the goal answer carries the focus question, once the aim is set and the focus is not',
+        !!focusQ && focusQ.id === 'q_focus_group' && focusQ.options.length === 7 &&
+        C.coach(input(settings({ q_goal_aim: 'muscle', q_focus_group: 'chest' }))).ask('ask_goal').question === null &&
+        !C.coach(input({})).ask('ask_goal').question, focusQ && focusQ.id);
   check('targets switched off: no answer, no bubble',
         C.coach(input(settings({}, {}, { targets: true }))).ask('ask_targets').id !== 'lift_targets' &&
         !C.coach(input(settings({}, {}, { targets: true }))).topicsFor('train').some(t => t.id === 'ask_targets'));

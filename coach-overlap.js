@@ -52,7 +52,7 @@
 // this; nothing imports back.
 
 import { baselines, prescribe, exposuresFor } from './coach-prog.js';
-import { bwAt, energyBand, volumeFloor } from './coach-goal.js';
+import { bwAt, energyBand, volumeFloor, paceFor } from './coach-goal.js';
 import { labelW, labelRate, wOut } from './units.js';
 import { GROUPS, GROUP_ORDER } from './exercises.js';
 import { tagsFor } from './coach-tags.js';
@@ -801,4 +801,254 @@ function restOf(shaped, g, now) {
 function ctxOf(i, now) {
   return { now, u: i.u === 'kg' ? 'kg' : 'lb', aim: i.aim || null, exp: i.exp || null,
            energy: i.energy || null, rateWk: Number.isFinite(i.rateWk) ? i.rateWk : null };
+}
+
+/* ================================================================
+   5.  STAGE THREE (v49) — after a workout, and the goal
+   ================================================================
+   The reads that need coach-prog.js — a target replayed as it stood before a
+   session, a lift's status, its estimated-max series — live here beside the
+   stage-two reads, because coach.js reaches coach-prog.js only through this
+   file and the builder. Same rules: pure, the clock an argument, every weight
+   through units.js. */
+
+// The lifts in one shaped session, the way coach-prog.js counts an exposure
+// (the merge invariant, working sets only), as the lift entries coach.js
+// handed over — so each has its library name and group.
+function liftsIn(i, session) {
+  return i.lifts.filter(l => !isCardio(l) && exposuresFor([session], l.exId).length);
+}
+
+// A group's days since as of a moment: the last session BEFORE it with a
+// working set for the group. What coach.js's group.daysSince would have said
+// that morning.
+function groupDaysAt(shaped, g, at) {
+  if (!g) return null;
+  let last = null;
+  shaped.forEach(s => {
+    if (s && Number.isFinite(s.startedAt) && s.startedAt < at && s.sets && s.sets[g] > 0 &&
+        (last == null || s.startedAt > last)) last = s.startedAt;
+  });
+  return last == null ? null : daysBetween(last, at);
+}
+
+/* THE TARGETS, REPLAYED. Targets are stripped from the record when a session
+   is saved, so the only way to know what Coach would have set before a
+   session is to ask prescribe() again as it stood then: that lift's
+   exposures before it, `now` at its start, its group's days-since as of that
+   morning (miss that and a comeback replays as a re-entry while the builder
+   showed a hold), and today's aim, experience and energy — three days is too
+   short for any of them to move. A lift counts when its target named a
+   number, and is met when its top sets reached the target's load and reps. */
+export function targetsReplay(input, session) {
+  try {
+    const i = prepare(input || {});
+    if (!session || !Number.isFinite(session.startedAt)) return null;
+    const at = session.startedAt;
+    const before = i.shaped.filter(s => s && Number.isFinite(s.startedAt) && s.startedAt < at);
+    const ctx = { ...ctxOf(i, at) };
+    const lifts = [];
+    liftsIn(i, session).forEach(l => {
+      const exposures = exposuresFor(before, l.exId);
+      const ex = { ...l, exposures, groupDaysSince: groupDaysAt(i.shaped, l.group, at) };
+      const b = baselines(ex, ctx);
+      if (b && b.assisted) return;
+      const t = prescribe(ex, ctx);
+      if (!t || t.loadLb == null) return;
+      const want = t.sets.filter(x => x.type !== 'W' && Math.abs(parseFloat(x.tw) - t.loadLb) < TOL)
+        .map(x => parseInt(x.tr, 10)).filter(Number.isFinite).sort((a, b2) => b2 - a);
+      if (!want.length) return;
+      const did = exposuresFor([session], l.exId)[0].sets
+        .filter(x => x.type !== 'D' && parseFloat(x.w) >= t.loadLb - TOL)
+        .map(x => parseInt(x.r, 10)).sort((a, b2) => b2 - a);
+      const met = did.length >= want.length && want.every((r, k) => did[k] >= r);
+      lifts.push({ exId: l.exId, name: String(l.name || l.exId), met, line: t.line });
+    });
+    return { n: lifts.length, met: lifts.filter(x => x.met).length, lifts };
+  } catch {
+    return null;
+  }
+}
+
+/* "HOW DID TODAY COMPARE?" — each lift with three sessions behind it: the
+   session's best estimated max against the middle of its last three, in the
+   lift's own session-to-session swing (σ, as coach-prog.js measures it).
+   A whole swing or more either way is above or below; inside it is his usual.
+   No attribution: Coach cannot see sleep, stress or soreness, and says so.
+   If the numbers were usual, it says they were usual, whatever the day felt. */
+const COMPARE_MIN_PRIOR = 3;
+export function compareSession(input, session, now) {
+  try {
+    const i = prepare(input || {});
+    if (!session || !Number.isFinite(session.startedAt)) return null;
+    const u = i.u === 'kg' ? 'kg' : 'lb';
+    const at = session.startedAt;
+    const before = i.shaped.filter(s => s && Number.isFinite(s.startedAt) && s.startedAt < at);
+    const ctx = ctxOf(i, at);
+    const rows = [];
+    liftsIn(i, session).forEach(l => {
+      const b0 = baselines({ ...l, exposures: exposuresFor(before, l.exId) }, ctx);
+      if (!b0 || b0.assisted || b0.series.length < COMPARE_MIN_PRIOR) return;
+      const b1 = baselines({ ...l, exposures: exposuresFor([session], l.exId) }, ctx);
+      if (!b1 || !(b1.best > 0)) return;
+      const usual = Math.round(median(b0.series.slice(-COMPARE_MIN_PRIOR).map(p => p.y)));
+      const sigma = Number.isFinite(b0.sigma) && b0.sigma > 0 ? b0.sigma : 3;
+      const z = (b1.best - usual) / usual * 100 / sigma;
+      const verdict = z >= 1 ? 'above' : z <= -1 ? 'below' : 'usual';
+      const name = String(l.name || l.exId);
+      rows.push({ exId: l.exId, name, verdict, now: b1.best, usual,
+        text: name + ': ' + (verdict === 'usual' ? 'about your usual' : verdict + ' your usual') + ', an estimated max of ' +
+              labelW(b1.best, u) + ' against ' + labelW(usual, u) + '.' });
+    });
+    if (!rows.length) return null;
+    const above = rows.filter(r => r.verdict === 'above').length, below = rows.filter(r => r.verdict === 'below').length;
+    const summary = rows.length < 2 ? null
+      : above * 2 > rows.length ? 'above' : below * 2 > rows.length ? 'below' : 'usual';
+    return { summary, above, below, rows, day: daysBetween(at, now) };
+  } catch {
+    return null;
+  }
+}
+
+/* "WHAT'S NEXT TIME?" — for each lift in the session, prescribe() as it
+   stands now, exactly as the builder would ask it: the lift's exposures, its
+   group's days-since today, today's aim and energy. */
+export function nextTargets(input, session, now) {
+  try {
+    const i = prepare(input || {});
+    if (!session || !Number.isFinite(now)) return [];
+    const ctx = ctxOf(i, now);
+    const out = [];
+    liftsIn(i, session).forEach(l => {
+      const t = prescribe(l, ctx);
+      if (!t) return;
+      const what = t.line.replace(/^Target: /, '');
+      out.push({ exId: l.exId, mode: t.mode, text: 'Next time on ' + String(l.name || l.exId) + ': ' +
+        what.charAt(0).toLowerCase() + what.slice(1), reason: (t.why && t.why[0]) || '' });
+    });
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+/* A LIFT THAT HAS CLIMBED, for the card: progressing, a series six weeks long
+   at least, and up by twice his own session-to-session swing or more — well
+   past noise. The biggest climb in its own terms wins; ties by id. */
+const TREND_DAYS = 42;
+export function liftTrend(input, now) {
+  try {
+    const i = prepare(input || {});
+    const ctx = ctxOf(i, now);
+    let best = null;
+    i.lifts.forEach(l => {
+      if (isCardio(l)) return;
+      const b = baselines(l, ctx);
+      if (!b || b.assisted || b.status !== 'progressing' || b.series.length < 4) return;
+      const S = b.series;
+      const days = daysBetween(S[0].startedAt, S[S.length - 1].startedAt);
+      if (days < TREND_DAYS) return;
+      const first = median([S[0].y, S[1].y]), last = median([S[S.length - 2].y, S[S.length - 1].y]);
+      const gain = last - first, mid = median(S.map(p => p.y));
+      const sigma = Number.isFinite(b.sigma) ? b.sigma : 3;
+      if (!(gain >= 2 * sigma / 100 * mid)) return;
+      const cand = { exId: l.exId, name: String(l.name || l.exId), gainLb: Math.round(gain), share: gain / first,
+                     weeks: Math.round(days / 7), lastAt: S[S.length - 1].startedAt };
+      if (!best || cand.share > best.share || (cand.share === best.share && cand.exId < best.exId)) best = cand;
+    });
+    return best;
+  } catch {
+    return null;
+  }
+}
+
+/* THE LIFT TARGET, read. Its estimated max (reps capped at twelve, like every
+   estimated max Coach reads, so a 225 × 15 target is reached when 225 × 15 is
+   logged), where he is now, his pace over the window, and how far the gap has
+   closed since the target was set. The pace maths is coach-goal.js's. */
+export function goalLiftRead(input, goalLift, now) {
+  try {
+    const i = prepare(input || {});
+    const g = goalLift;
+    if (!g || !g.exId || !(g.lb > 0)) return null;
+    const ex = i.lifts.find(l => l.exId === g.exId);
+    const target = e1rm(g.lb, Math.min(g.reps || 1, E1RM_MAX_REPS));
+    if (!ex) return { exId: g.exId, target, logged: false };
+    const ctx = ctxOf(i, now);
+    const b = baselines(ex, ctx);
+    if (!b || b.assisted || !b.series.length) return { exId: g.exId, name: ex.name, target, logged: false };
+    const pace = paceForLift(b, target);
+    // Where he stood when the target was set: the middle of his last two
+    // sessions before it.
+    const then = baselines({ ...ex, exposures: ex.exposures.filter(e => e.startedAt <= g.at) }, ctxOf(i, g.at));
+    const e0 = then && then.series.length ? median(then.series.slice(-2).map(p => p.y)) : null;
+    const closed = e0 != null && target > e0 && pace ? (pace.current - e0) / (target - e0) : null;
+    return { exId: g.exId, name: String(ex.name || ex.exId), target, logged: true, pace, e0, closed,
+             read: readLift(ex, ctx, i) };
+  } catch {
+    return null;
+  }
+}
+function paceForLift(b, target) {
+  return paceFor(b.series.map(p => ({ t: p.startedAt, y: p.y })), target);
+}
+
+/* POWERLIFTING'S BIG THREE, estimated: the most-logged squat, bench and
+   deadlift variant each (twelve weeks), its estimated max now — the middle of
+   its last two sessions — and its status; and the total when all three are
+   there. */
+const BIG_THREE = Object.freeze([
+  ['squat', ['back-squat-low-bar', 'back-squat-high-bar']],
+  ['bench', ['barbell-bench-press', 'barbell-bench-press-paused']],
+  ['deadlift', ['conventional-deadlift', 'sumo-deadlift']]
+]);
+export function bigThree(input, now) {
+  try {
+    const i = prepare(input || {});
+    const ctx = ctxOf(i, now);
+    const out = BIG_THREE.map(([which, ids]) => {
+      let pick = null;
+      ids.forEach(id => {
+        const l = i.lifts.find(x => x.exId === id);
+        if (!l) return;
+        const b = baselines(l, ctx);
+        if (!b || !b.series.length) return;
+        const n = b.tops.filter(t => t.daysAgo >= 0 && t.daysAgo < WINDOW_DAYS).length;
+        if (!n) return;
+        if (!pick || n > pick.n) pick = { which, exId: id, name: String(l.name || id), n, b };
+      });
+      if (!pick) return { which, lift: null };
+      const S = pick.b.series;
+      return { which, lift: { exId: pick.exId, name: pick.name, status: pick.b.status,
+        e1: Math.round(median(S.slice(-2).map(p => p.y))) } };
+    });
+    const total = out.every(x => x.lift) ? out.reduce((a, x) => a + x.lift.e1, 0) : null;
+    return { lifts: out, total };
+  } catch {
+    return null;
+  }
+}
+
+/* THE FOCUS GROUP, read: its weekly hard sets over the last four weeks
+   against weeks five to twelve (the shipped count, light weeks out), and its
+   two most-logged lifts' statuses. */
+export function focusRead(input, group, now) {
+  try {
+    const i = prepare(input || {});
+    if (!GROUPS[group]) return null;
+    const blocks = blocksOf(i.shaped, now);
+    const { light } = lightOf(blocks);
+    const recent4 = sum([0, 1, 2, 3].map(k => blocks[k].by[group] || 0)) / 4;
+    const normal = weeklyOf(blocks, light, 4, 11, group);
+    const ctx = ctxOf(i, now);
+    const lifts = i.lifts.filter(l => l.group === group && !isCardio(l)).map(l => {
+      const b = baselines(l, ctx);
+      const n = b ? b.tops.filter(t => t.daysAgo >= 0 && t.daysAgo < WINDOW_DAYS).length : 0;
+      return { exId: l.exId, name: String(l.name || l.exId), n, status: b && !b.assisted && b.series.length ? b.status : null };
+    }).filter(x => x.n > 0 && x.status)
+      .sort((a, b) => b.n - a.n || (a.exId < b.exId ? -1 : a.exId > b.exId ? 1 : 0)).slice(0, 2);
+    return { group, recent4, normal, lifts };
+  } catch {
+    return null;
+  }
 }

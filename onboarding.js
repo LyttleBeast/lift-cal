@@ -30,6 +30,11 @@ import { el, noteEl, segmented, sheet, r1, toast, LIMITS, within } from './ui.js
 import { isStandalone, platform } from './usage.js';
 import { wIn, fmtW, unitW, fmtRate, fmtPer, hIn as inchesFrom, fmtH, unitH,
          limW, limH, labelRate } from './units.js';
+// v49: the training goal. Coach's own question supplies the six aims, so the
+// choices here and the ones in Settings → Coach cannot drift; coach-data.js's
+// setAim() is the one way an aim is written.
+import { QUESTIONS } from './coach.js';
+import { setAim } from './coach-data.js';
 
 // Stays 1 on purpose. onboardingState() below reads `done` and never reads
 // `version`, so bumping this re-runs nothing for anybody — it would only look
@@ -239,7 +244,9 @@ export function runSetup(user) {
       name: (user && user.displayName) || '',
       sex: 'm', heightIn: 70, birthYear: new Date().getFullYear() - 25,
       lb: 0, goal: 'cut', activity: 'light', units: 'lb',
-      cal: 0, p: 0, f: 0, maint: 0
+      cal: 0, p: 0, f: 0, maint: 0,
+      // What he is training for — Coach's aim, or null for "Skip for now".
+      aim: null
     };
 
     const card = el('div', 'ob-card');
@@ -258,7 +265,7 @@ export function runSetup(user) {
     // unitsStep comes BEFORE the height and weight questions on purpose: both
     // of those are asked in the unit chosen here, and asking afterwards would
     // be asking somebody to re-enter what they just typed.
-    const steps = [welcome, unitsStep, aboutYou, weighIn, goalStep, activityStep,
+    const steps = [welcome, unitsStep, aboutYou, weighIn, goalStep, aimStep, activityStep,
                    ...(isStandalone() ? [] : [installStep]), numbers];
     let i = 0;
     draw();
@@ -447,6 +454,27 @@ export function runSetup(user) {
       nav({});
     }
 
+    /* ---- 4b. what he trains for (v49) ----
+       After the weight goal, because the two are different questions: that one
+       sets calories, this one turns how Coach sets weight and rep targets.
+       Nothing here goes into the onboarding node; the aim is written to
+       settings/coach through setAim() when setup finishes. */
+    function aimStep() {
+      body.appendChild(el('div', 'ob-kicker', 'Training'));
+      body.appendChild(el('h1', 'ob-title', 'What are you training for?'));
+      const q = QUESTIONS.find(x => x.id === 'q_goal_aim');
+      const wrap = el('div', 'ob-choices');
+      (q ? q.options : []).forEach(op => {
+        const b = el('button', 'ob-choice' + (a.aim === op.value ? ' on' : ''));
+        b.appendChild(el('div', 'ob-choice-t', op.label));
+        b.onclick = () => { a.aim = op.value; wrap.querySelectorAll('.ob-choice').forEach(x => x.classList.remove('on')); b.classList.add('on'); };
+        wrap.appendChild(b);
+      });
+      body.appendChild(wrap);
+      body.appendChild(noteEl('It turns how Coach sets your weight and rep targets. Change it any time in Settings → Coach.'));
+      nav({ skip: { label: 'Skip for now', onClick: () => { a.aim = null; i = Math.min(steps.length - 1, i + 1); draw(); } } });
+    }
+
     /* ---- 5. activity ---- */
     function activityStep() {
       body.appendChild(el('div', 'ob-kicker', 'Day to day'));
@@ -610,6 +638,9 @@ export function runSetup(user) {
           await setUnits(a.units === 'kg'
             ? { weight: 'kg', height: 'cm' }
             : { weight: 'lb', height: 'in' });
+          // The training goal, when one was picked. Its own try: a failure
+          // here is not setup failing — Coach asks the same question later.
+          if (a.aim) { try { await setAim(a.aim); } catch {} }
         } else if (a.name.trim()) {
           await write('profile', { name: a.name.trim().slice(0, 60), createdAt: Date.now() });
         }
