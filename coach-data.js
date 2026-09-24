@@ -117,7 +117,17 @@ function readRotation() {
   const g = LS.get(LS_GREETS, []);
   recentGreets = Array.isArray(g) ? g.filter(x => typeof x === 'string' && x).slice(0, 3) : [];
   const h = LS.get(LS_HYPE, []);
-  recentHype = Array.isArray(h) ? h.filter(x => typeof x === 'string' && x).slice(0, 3) : [];
+  recentHype = Array.isArray(h) ? h.map(hypeEntry).filter(Boolean).slice(0, 8) : [];
+}
+
+/* v53: an entry of the card's memory, { id, key, at } — the line, the fact
+   value it quoted, and when it was shown. A v49 entry was the id alone, and
+   reads as { id, key: id, at: 0 }, which the 24-hour rule never matches. */
+function hypeEntry(x) {
+  if (typeof x === 'string' && x) return { id: x, key: x, at: 0 };
+  if (!x || typeof x !== 'object' || typeof x.id !== 'string' || !x.id) return null;
+  return { id: x.id, key: typeof x.key === 'string' && x.key ? x.key : x.id,
+           at: Number.isFinite(x.at) && x.at > 0 ? x.at : 0 };
 }
 
 export function coachReady() { return ready; }
@@ -675,15 +685,24 @@ export function rememberGreeting(id) {
   LS.set(LS_GREETS, recentGreets);
 }
 
-/* v49: the card's earned line, the same way and for the same reasons — at
-   most once per app open, synchronously, to the device. */
-let hypeWritten = false;
-export function rememberHype(id) {
-  if (hypeWritten || !id) return;
-  hypeWritten = true;
-  if (recentHype[0] === id) return;
-  recentHype = [id].concat(recentHype.filter(x => x !== id)).slice(0, 3);
-  LS.set(LS_HYPE, recentHype);
+/* v49: the card's earned line, the same way and for the same reasons —
+   synchronously, to the device.
+
+   v53: { id, key, at }, newest first, eight deep, one entry per fact value.
+   ONE ENTRY PER APP OPEN, AND THE LAST ONE DRAWN: the line is not pinned the
+   way the greeting is, and it can change as food and weight land, so the
+   entry is replaced while the open lasts rather than written once — the
+   line remembered is the line he read. And the memory the ENGINE reads is
+   the one read at open, never this open's own entry: with the 24-hour rule,
+   a memory that moved on a paint would take the line off the card on the
+   very next repaint. */
+let hypeShown = null;
+export function rememberHype(id, key) {
+  if (!id) return;
+  const k = typeof key === 'string' && key ? key : id;
+  if (hypeShown && hypeShown.id === id && hypeShown.key === k) return;
+  hypeShown = { id, key: k, at: Date.now() };
+  LS.set(LS_HYPE, [hypeShown].concat(recentHype.filter(x => x.key !== k)).slice(0, 8));
 }
 
 /* The live session, read from the device rather than from the database. A

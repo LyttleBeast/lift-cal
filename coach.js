@@ -1565,12 +1565,21 @@ export const FACTS = Object.freeze([
   },
   {
     /* v49: the card's last few earned lines, newest first — device storage,
-       like the greeting's, written once per app open (coach-data.js). */
+       like the greeting's, written once per app open (coach-data.js).
+       v53: each is { id, key, at } — the line, the fact value it quoted and
+       when it was shown — eight deep, for the 24-hour rule (spec §9.4 rule
+       6). A v49 string entry reads as { id, key: id, at: 0 }: its key matches
+       no line's key and its moment is never inside the last day, so an old
+       memory only ever feeds the rotation, as it did. */
     id: 'coach.recentHype', unit: null, requires: [],
     compute: d => {
       const list = d.input.recentHype;
       if (!Array.isArray(list)) return [];
-      return list.filter(x => typeof x === 'string' && x).slice(0, 3);
+      return list.map(x => (typeof x === 'string' && x ? { id: x, key: x, at: 0 }
+        : x && typeof x === 'object' && typeof x.id === 'string' && x.id
+          ? { id: x.id, key: typeof x.key === 'string' && x.key ? x.key : x.id,
+              at: Number.isFinite(x.at) && x.at > 0 ? x.at : 0 }
+          : null)).filter(Boolean).slice(0, HYPE_MEMORY);
     },
     because: () => 'the lines the card showed last time'
   },
@@ -3465,6 +3474,12 @@ function rotate(counter, n) {
    is dropped. */
 const HYPE_WORDS = 9;
 const HYPE_NUMBERS = 1;
+/* v53: the 24-hour rule (spec §9.4 rule 6) — a fact value shown on the card
+   is not shown again inside a day, under any id — and the memory it reads,
+   eight deep. The rotation still reads only the last three ids. */
+const HYPE_REPEAT_MS = 24 * 3600e3;
+const HYPE_MEMORY = 8;
+const HYPE_ROTATION = 3;
 const TRAIN_HYPE = Object.freeze(['volume', 'progression', 'targets', 'recency', 'rest']);
 const weekday = key => {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(key || ''));
@@ -3480,6 +3495,7 @@ export const HYPE = Object.freeze([
     // Rolling words for a rolling count: never "this week" (the defect v43
     // fixed). The brief's own wording ran to ten words; this is nine.
     text: d => d.f('session.weekBest').n + ' sessions in seven days, most in five weeks.',
+    key: d => 'week:' + d.f('session.weekBest').n,
     why: d => FACT_BY_ID['session.weekBest'].because(d.f('session.weekBest'), d)
   },
   {
@@ -3487,6 +3503,7 @@ export const HYPE = Object.freeze([
     // A heavier set or a higher estimated max: the kinds that carry a weight.
     gate: d => { const v = d.f('lift.recentPr'); return v.daysAgo <= HYPE_DAYS && (v.kind === 'e1rm' || v.kind === 'weight'); },
     text: d => 'New best on ' + d.f('lift.recentPr').name + '.',
+    key: d => { const v = d.f('lift.recentPr'); return 'pr:' + v.exId + ':' + v.value; },
     why: (d, u) => { const v = d.f('lift.recentPr');
                      return (v.kind === 'weight' ? 'heaviest set, ' : 'estimated max, ') + labelW(v.value, u); }
   },
@@ -3494,6 +3511,7 @@ export const HYPE = Object.freeze([
     id: 'hype_e1rm_trend', category: 'progression', aims: ['strength', 'powerlifting', 'recomp'], facts: ['lift.trend'],
     gate: d => d.f('lift.trend').gainLb > 0,
     text: (d, u) => { const v = d.f('lift.trend'); return v.name + ' is up about ' + labelW(v.gainLb, u) + '.'; },
+    key: d => { const v = d.f('lift.trend'); return 'trend:' + v.exId + ':' + v.gainLb; },
     why: d => 'estimated max, over ' + plural(d.f('lift.trend').weeks, 'week')
   },
   {
@@ -3503,6 +3521,7 @@ export const HYPE = Object.freeze([
     gate: d => { const v = d.f('session.targetsMet'); return d.f('meta.tierPro') === true && v.n >= 2 && v.met === v.n; },
     text: d => { const v = d.f('session.targetsMet');
                  return 'Every Coach target met ' + (v.daysAgo === 0 ? 'today' : v.daysAgo === 1 ? 'yesterday' : 'on ' + weekday(v.date)) + '.'; },
+    key: d => 'targets:' + d.f('session.targetsMet').date,
     why: d => plural(d.f('session.targetsMet').n, 'lift') + ', each at its target weight and reps'
   },
   {
@@ -3511,6 +3530,7 @@ export const HYPE = Object.freeze([
     id: 'hype_holding_cut', category: 'progression', aims: ['cut', 'recomp'], facts: ['lift.holdingCut'],
     gate: d => ['cut', 'recomp'].includes(d.f('coach.aim')) || d.f('weight.goalDir') === -1,
     text: d => d.f('lift.holdingCut').name + ' is holding through your cut.',
+    key: d => { const v = d.f('lift.holdingCut'); return 'holding:' + (v.exId || v.name); },
     why: (d, u) => { const v = d.f('lift.holdingCut'), rs = Math.round(v.rs * 100);
                      return labelW(v.bwS - v.bwE, u) + ' down, estimated max for your bodyweight ' + (rs >= 1 ? 'up ' + rs + '%' : 'level'); }
   },
@@ -3522,6 +3542,7 @@ export const HYPE = Object.freeze([
              Math.abs(r - g) <= Math.abs(g) * 0.25 && Math.abs(r) <= RATE_BAND_LB;
     },
     text: (d, u) => { const r = d.f('weight.rateWk'); return (r < 0 ? 'Down ' : 'Up ') + labelRate(Math.abs(r), u) + ' a week, right on pace.'; },
+    key: d => 'pace:' + Math.round(d.f('weight.rateWk') * 100) / 100,
     why: (d, u) => 'against the ' + labelRate(Math.abs(d.f('weight.goalRateWk')), u) + ' a week you set'
   },
   {
@@ -3529,6 +3550,7 @@ export const HYPE = Object.freeze([
     gate: d => { const v = d.f('lift.goalRead');
                  return v.logged && !!v.pace && !v.pace.reached && v.closed != null && v.closed >= 0.5 && v.closed < 1; },
     text: d => 'Past halfway to your ' + d.f('lift.goalRead').name + ' target.',
+    key: d => { const v = d.f('lift.goalRead'); return 'goal:' + (v.exId || v.name) + ':' + v.target; },
     why: (d, u) => { const v = d.f('lift.goalRead');
                      return 'estimated max ' + labelW(v.pace.current, u) + ' of the ' + labelW(v.target, u) + ' it takes'; }
   },
@@ -3536,18 +3558,21 @@ export const HYPE = Object.freeze([
     id: 'hype_protein_streak', category: 'fuel', aims: ['muscle', 'cut', 'recomp'], facts: ['fuel.proteinStreak'],
     gate: d => d.f('fuel.proteinStreak') >= 5,
     text: d => 'Protein target hit ' + d.f('fuel.proteinStreak') + ' days running.',
+    key: d => 'protein:' + d.f('fuel.proteinStreak'),
     why: d => 'your ' + int(d.f('fuel.proteinTarget')) + ' g a day, from your food log'
   },
   {
     id: 'hype_back', category: 'recency', aims: null, facts: ['session.back'],
     gate: d => d.f('session.back').daysAgo <= BACK_SHOW_DAYS,
     text: () => 'Good to have you back.',
+    key: d => { const v = d.f('session.back'); return 'back:' + v.gap + ':' + dayKey(d.now - v.daysAgo * DAY); },
     why: d => 'first session in ' + plural(d.f('session.back').gap, 'day')
   },
   {
     id: 'hype_milestone', category: 'volume', aims: null, facts: ['session.milestone'],
     gate: () => true,
     text: d => 'That’s workout ' + d.f('session.milestone').n + ' logged.',
+    key: d => 'milestone:' + d.f('session.milestone').n,
     why: () => 'every session in your log, counted'
   },
   {
@@ -3556,6 +3581,7 @@ export const HYPE = Object.freeze([
     text: d => { const n = d.f('fuel.loggingStreak');
                  return n < 21 ? 'Two weeks of food logged straight.' : n < 28 ? 'Three weeks of food logged straight.'
                       : n + ' days of food logged straight.'; },
+    key: d => 'logging:' + d.f('fuel.loggingStreak'),
     why: () => 'every day up to yesterday'
   },
   {
@@ -3569,6 +3595,7 @@ export const HYPE = Object.freeze([
     gate: d => { const n = d.f('session.streak'), u = d.f('session.usualRun');
                  return n >= 3 && (u == null || n >= u); },
     text: d => { const n = d.f('session.streak'); return (WORD_NUM[n] || String(n)) + ' straight days. A rest day is well earned.'; },
+    key: d => 'streak:' + d.f('session.streak'),
     why: d => 'a session on each of the last ' + plural(d.f('session.streak'), 'day') + ', today included'
   }
 ]);
@@ -3596,10 +3623,11 @@ function hypePool(d, u, opening) {
     let ok = false, text = '', why = '';
     try { ok = !!h.gate(d); } catch { ok = false; }
     if (!ok) return;
-    try { text = String(h.text(d, u) || ''); why = String(h.why(d, u) || ''); } catch { return; }
+    let key = '';
+    try { text = String(h.text(d, u) || ''); why = String(h.why(d, u) || ''); key = String(h.key(d) || h.id); } catch { return; }
     if (!fitsCard(text)) return;
     const ages = h.facts.map(f => d.age(f)).filter(n => n != null);
-    out.push({ id: h.id, category: h.category, text, why,
+    out.push({ id: h.id, category: h.category, text, why, key,
                suits: h.aims == null || (aim != null && h.aims.includes(aim)) ? 0 : 1,
                age: ages.length ? Math.min(...ages) : 999 });
   });
@@ -3609,16 +3637,55 @@ function hypePool(d, u, opening) {
 /* The walk, and pickGreeting's cap copied exactly: the counter walks the
    pool, and the device's memory of the last lines shown only ever pushes it
    forward, reading at most one short of the pool — so a pool of two or more
-   always has a free line and the one just shown never shows twice running. */
-function pickHype(pool, recent, opens) {
-  if (!pool.length) return null;
-  const memory = recent.slice(0, Math.max(1, pool.length - 1));
-  const start = rotate(opens, pool.length);
-  for (let step = 0; step < pool.length; step++) {
-    const cand = pool[(start + step) % pool.length];
+   always has a free line and the one just shown never shows twice running.
+
+   v53: first, every line whose fact value (its `key`) was shown in the 24
+   hours before `now` leaves the pool, whatever id showed it — with one line
+   in the pool, v49 put "48 days of food logged straight" on every open. When
+   that empties the pool the answer is null, and the card draws a WARM line.
+   `keep(h)` exempts a line from the skip (the finish line on the day of the
+   workout, §4.4 of SHIP-V53-PROMPT). */
+function shownWithin(recent, key, now) {
+  return recent.some(r => r.key === key && r.at > 0 && r.at <= now && now - r.at < HYPE_REPEAT_MS);
+}
+function pickHype(pool, recent, opens, now, keep) {
+  const fresh = pool.filter(h => (keep && keep(h)) || !shownWithin(recent, h.key, now));
+  if (!fresh.length) return null;
+  const ids = [...new Set(recent.map(r => r.id))];
+  const memory = ids.slice(0, Math.min(HYPE_ROTATION, Math.max(1, fresh.length - 1)));
+  const start = rotate(opens, fresh.length);
+  for (let step = 0; step < fresh.length; step++) {
+    const cand = fresh[(start + step) % fresh.length];
     if (!memory.includes(cand.id)) return cand;
   }
-  return pool[start];
+  return fresh[start];
+}
+
+/* v53: THE WARM LINES — what the card draws when no earned line is left,
+   where it used to say "Nothing stands out today." (which stays, as a sheet
+   answer, where it answers a question). Micah wants encouragement, and a
+   card that shrugs on a good day is not that; a line that claims nothing
+   about his data is honest where a finding would not be. None is a shipped
+   greeting's sentence — the greeting is drawn directly above — and each is
+   held to the card ban (coach-voice.mjs). They rotate on the open counter,
+   like the greeting, and are not written to the card's memory: a warm line
+   quotes no fact value, and eight of them would push the ones that do out
+   of the day's memory. */
+export const WARM = Object.freeze([
+  { id: 'w_good_day',  text: () => 'A good day to get something done.' },
+  { id: 'w_here',      text: () => 'Coach is here whenever you want it.' },
+  { id: 'w_day_ready', text: d => weekday(dayKey(d.now)) + '. Coach is ready when you are.' },
+  { id: 'w_one_set',   text: () => 'One set at a time.' },
+  { id: 'w_add_up',    text: () => 'Small steps add up.' },
+  { id: 'w_day_page',  text: d => 'A new ' + weekday(dayKey(d.now)) + ', a fresh page.' },
+  { id: 'w_one_tap',   text: () => 'Coach is one tap away.' },
+  { id: 'w_day_happy', text: d => 'Happy ' + weekday(dayKey(d.now)) + '.' }
+]);
+function pickWarm(d, opens, greetText, not) {
+  const lines = WARM.map(w => ({ id: w.id, text: String(w.text(d) || '') }))
+    .filter(w => fitsCard(w.text) && w.text !== greetText && w.id !== not);
+  if (!lines.length) return null;
+  return lines[rotate(opens, lines.length)];
 }
 
 /* ================================================================
@@ -4490,18 +4557,23 @@ export function coach(input) {
   function cardView(surface, claimed) {
     if (blocked) return { ...blocked, state: blocked.id };
     const mine = pool.filter(h => (surface === 'you' || TRAIN_HYPE.includes(h.category)) && h.id !== claimed);
-    const h = pickHype(mine, recentHype, d.input.opens);
-    if (h) return { id: h.id, kind: 'hype', state: 'earned', category: h.category, tone: 'good', text: h.text, reason: h.why };
+    const h = pickHype(mine, recentHype, d.input.opens, d.now);
+    if (h) return { id: h.id, kind: 'hype', state: 'earned', category: h.category, tone: 'good', text: h.text, reason: h.why, key: h.key };
     if (!pro && lockedCount > 0) {
       const it = INTENT_BY_ID.card_state_locked;
       return { ...renderIntent(it, d, u), state: it.id };
     }
     const thin = d.f('session.count') < 3 || d.f('session.windowCount') < 3;
-    const it = INTENT_BY_ID[thin ? 'card_state_thin' : 'card_state_clear'];
+    if (thin) { const it = INTENT_BY_ID.card_state_thin; return { ...renderIntent(it, d, u), state: it.id }; }
+    // v53: where "Nothing stands out today." was — a warm line, never the
+    // greeting's sentence, and on Train never the You card's.
+    const w = pickWarm(d, d.input.opens + (surface === 'train' ? 1 : 0), greet ? greet.text : null, claimed);
+    if (w) return { id: w.id, kind: 'warm', state: 'warm', tone: 'good', text: w.text, reason: '' };
+    const it = INTENT_BY_ID.card_state_clear;
     return { ...renderIntent(it, d, u), state: it.id };
   }
   const cardYou = cardView('you', null);
-  const card = { you: cardYou, train: cardView('train', cardYou.state === 'earned' ? cardYou.id : null) };
+  const card = { you: cardYou, train: cardView('train', cardYou.state === 'earned' || cardYou.state === 'warm' ? cardYou.id : null) };
 
   /* v49: THE BASIC TEASER (Micah's decision #15). One real target — the
      first that names a weight on the workout "Build it" would make, worked

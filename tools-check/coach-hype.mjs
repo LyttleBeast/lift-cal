@@ -513,6 +513,77 @@ section('F. v52 — the recovery line at his usual run, the rest bias, and a car
   check('and "Am I fueled?" does reach coach-fuel.js — the spy is watching the right module', (FSPY.calls.fueledRead || 0) > 0, JSON.stringify(FSPY.calls));
 }
 
+/* ================= G. v53 — THE 24-HOUR RULE, AND THE WARM LINES ================= */
+section('G. v53 — a fact value shown once in 24 hours under any id, then warm lines that claim nothing');
+{
+  const HOUR = 3600e3;
+  const one = input({ sessions: sortS(steady()), summaries: food(15, 100) });                     // a pool of one: logging
+  const two = { ...one, targets: { cal: 2300, p: 90, f: 70 }, targetsSet: true };                  // + protein
+  check('the pool of one really is one line, and the pool of two two', poolOf(one).length === 1 && poolOf(two).length === 2,
+        list(poolOf(one)) + ' / ' + list(poolOf(two)));
+  const logLine = C.coach(one).card.you;
+  check('every earned line carries the fact value it quotes', logLine.key === 'logging:15', logLine.key);
+
+  // A pool of one: shown, then warm for 24 hours of opens, then shown again.
+  const at = ago => [{ id: logLine.id, key: logLine.key, at: NOW - ago }];
+  const within = [1, 6, 12, 23.9].map(h => C.coach({ ...one, opens: 7, recentHype: at(h * HOUR) }).card.you);
+  check('a pool of one: inside 24 hours of showing it, every open draws a warm line',
+        within.every(v => v.state === 'warm'), within.map(v => v.state + ':' + v.text).join(' | '));
+  const after = C.coach({ ...one, opens: 7, recentHype: at(24 * HOUR) }).card.you;
+  check('and 24 hours on, it is shown again', after.state === 'earned' && after.id === logLine.id, after.state);
+
+  // Opens through a day, memory carried as coach-data.js keeps it: each line once.
+  const day = (fx, n) => {
+    let mem = [];
+    const seen = [];
+    for (let k = 0; k < n; k++) {
+      const now = NOW;                       // the clock held: every open inside the same day
+      const v = C.coach({ ...fx, opens: k, recentHype: mem, now }).card.you;
+      seen.push(v);
+      if (v.state === 'earned') mem = [{ id: v.id, key: v.key, at: now - (n - k) * 60e3 }].concat(mem.filter(x => x.key !== v.key)).slice(0, 8);
+    }
+    return seen;
+  };
+  const d1 = day(one, 6);
+  check('a pool of one over six opens in a day: shown once, then warm',
+        d1[0].state === 'earned' && d1.slice(1).every(v => v.state === 'warm'), d1.map(v => v.state).join(','));
+  const d2 = day(two, 6);
+  const earned2 = d2.filter(v => v.state === 'earned').map(v => v.id);
+  check('a pool of two: each shows once in the day, then warm',
+        earned2.length === 2 && new Set(earned2).size === 2 && d2.slice(2).every(v => v.state === 'warm'), d2.map(v => v.state + ':' + v.id).join(','));
+
+  // The same fact value under another id counts as shown.
+  const other = C.coach({ ...one, opens: 3, recentHype: [{ id: 'hype_somewhere_else', key: logLine.key, at: NOW - HOUR }] }).card.you;
+  check('the same fact value under a different id is not shown twice', other.state === 'warm', other.state + ' ' + other.id);
+
+  // Old memory: v49 kept bare ids.
+  const old = C.coach({ ...one, opens: 3, recentHype: ['hype_logging', 'hype_pr', 42, null, { junk: true }] }).card.you;
+  check('old string memory reads cleanly: a bare id matches no fact value, so the line shows as it did',
+        old.state === 'earned' && old.id === 'hype_logging', old.state);
+
+  // The warm lines themselves.
+  const greetTexts = C.GREETINGS.filter(g => g.kind === 'generic').map(g => g.text());
+  const warmTexts = [];
+  for (let k = 0; k < 7; k++) C.WARM.forEach(w => warmTexts.push(w.text({ now: NOW + k * DAY })));
+  const warmBad = warmTexts.filter(t => CARD_BAN.some(re => re.test(t)) || t.includes('!') || t.split(/\s+/).length > 9 ||
+                                        (t.match(/\d+/g) || []).length > 1 || greetTexts.includes(t));
+  check('about eight warm lines, every one through the card ban on every weekday, none a shipped greeting (' + warmTexts.length + ' strings)',
+        C.WARM.length >= 7 && C.WARM.length <= 10 && !warmBad.length, list(warmBad));
+  const both = [];
+  ['lb', 'kg'].forEach(u => { for (let k = 0; k < 16; k++) {
+    const c = C.coach({ ...one, u, opens: k, recentHype: at(HOUR) });
+    both.push({ u, you: c.card.you, train: c.card.train, greet: c.greet ? c.greet.text : null });
+  } });
+  check('in both units every warm card passes the card ban and is never the greeting drawn above it',
+        both.every(x => x.you.state === 'warm' && !CARD_BAN.some(re => re.test(x.you.text)) && x.you.text !== x.greet),
+        both.filter(x => x.you.text === x.greet).map(x => x.you.text).join(' | '));
+  const walk = both.filter(x => x.u === 'lb').map(x => x.you.id);
+  check('the warm lines rotate on the open counter: never the same one twice running',
+        walk.every((id, i) => i === 0 || id !== walk[i - 1]) && new Set(walk).size >= 7, list(walk));
+  check('and the Train card never draws the You card’s warm line', both.every(x => x.train.state !== 'warm' || x.train.id !== x.you.id));
+  check('"Nothing stands out today." is no longer a card line', both.every(x => x.you.text !== 'Nothing stands out today.' && x.train.text !== 'Nothing stands out today.'));
+}
+
 console.log('\nthe card only says what he has earned\n');
 console.log(results.join('\n'));
 console.log('\n' + pass + ' passed, ' + fail + ' failed\n');

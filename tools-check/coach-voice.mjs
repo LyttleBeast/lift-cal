@@ -1083,6 +1083,8 @@ section('K. v49 — the card ban over every string a card can draw, and the new 
   const srcBad = [];
   C.HYPE.forEach(h => ['text', 'why'].forEach(k => copyOf(h[k]).forEach(t => { const w = cardBan(t); if (w.length) srcBad.push(h.id + '.' + k + ' “' + w + '” in: ' + t); })));
   C.GREETINGS.forEach(g => copyOf(g.text).forEach(t => { const w = cardBan(t); if (w.length) srcBad.push(g.id + ' “' + w + '” in: ' + t); }));
+  // v53: the warm lines took card_state_clear's place on the card, under the same ban.
+  C.WARM.forEach(g => copyOf(g.text).forEach(t => { const w = cardBan(t); if (w.length) srcBad.push(g.id + ' “' + w + '” in: ' + t); }));
   ['resp_state_thin', 'resp_state_clear', 'resp_state_locked', 'resp_log_unreadable', 'resp_first_run', 'resp_live_session']
     .forEach(r => ['text', 'reason'].forEach(k => copyOf(C.RESPONSES[r][k]).forEach(t => { const w = cardBan(t); if (w.length) srcBad.push(r + '.' + k + ' “' + w + '” in: ' + t); })));
   const UI = decomment(src('coach-ui.js'));
@@ -1093,7 +1095,9 @@ section('K. v49 — the card ban over every string a card can draw, and the new 
     return '';
   }).join('\n');
   literals(cardFns).filter(t => /\s/.test(t) && /[a-z]{3}/.test(t)).forEach(t => { const w = cardBan(t); if (w.length) srcBad.push('coach-ui.js “' + w + '” in: ' + t); });
-  check('and none in the source of any earned line, greeting, card state or the card’s own copy in coach-ui.js',
+  check('the paints drew warm lines too, and they were read (' + drawn.filter(x => x.state === 'warm').length + ')',
+        drawn.some(x => x.state === 'warm'));
+  check('and none in the source of any earned line, warm line, greeting, card state or the card’s own copy in coach-ui.js',
         !srcBad.length, list(srcBad));
   check('"N days since chest" and "N days since a session" are gone from the greetings — they read as "you haven’t"',
         !C.GREETINGS.some(g => g.id === 'g_since_group' || g.id === 'g_away') && C.GREETINGS.length >= 4);

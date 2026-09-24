@@ -386,9 +386,11 @@ section('F. the You card claims first, and the Train card takes what is left');
      the finding, and the two no longer show the same line. */
   check('the sheet’s opening bubble is the ranked finding, c.you, exactly as v48 computed it',
         c.opening.id === c.you.id && c.opening.text === c.you.text);
-  check('and neither card shows a finding any more — c.card is an earned line or a state',
+  // v53 (on purpose): or a warm line, which took card_state_clear's place on
+  // the card (SHIP-V53-PROMPT §3.2) — still never a finding.
+  check('and neither card shows a finding any more — c.card is an earned line, a warm line or a state',
         c.card.you.state !== 'finding' && c.card.train.state !== 'finding' &&
-        (c.card.you.state === 'earned' || /^card_|^guard_/.test(c.card.you.state)),
+        (c.card.you.state === 'earned' || c.card.you.state === 'warm' || /^card_|^guard_/.test(c.card.you.state)),
         c.card.you.state + ' / ' + c.card.train.state);
 }
 

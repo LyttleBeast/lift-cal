@@ -138,7 +138,9 @@ export function coachCard(opts = {}) {
      new account, a live session, a thin log and a real finding all read only
      the log — so this is the single case that has to wait, and it waits by
      saying so rather than by going back to a spinner. */
-  if (!coachReady() && view.state === 'card_state_clear') {
+  // v53: and the same for a warm line, which took card_state_clear's place on
+  // the card — a half-loaded paint says why rather than flash one.
+  if (!coachReady() && (view.state === 'card_state_clear' || view.state === 'warm')) {
     view = { ...view, tone: 'neutral',
              text: 'Your training is in. Food and weight have not landed yet.',
              reason: 'Coach would rather say nothing than read half a number.' };
@@ -168,7 +170,8 @@ export function coachCard(opts = {}) {
   if (greet && greet.id) rememberGreeting(greet.id);
   // The earned line the You card showed, written once per open like the
   // greeting, so the next open steps past it.
-  if (!opts.tight && view.state === 'earned') rememberHype(view.id);
+  // v53: with the fact value it quoted, for the 24-hour rule.
+  if (!opts.tight && view.state === 'earned') rememberHype(view.id, view.key);
 
   card.appendChild(header(c.pro));
   card.appendChild(el('div', 'coach-greet', greet ? greet.text : ''));
