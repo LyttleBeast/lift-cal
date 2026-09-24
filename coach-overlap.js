@@ -173,10 +173,48 @@ function perWeek(f) {
    once per coach() call; a lift handed in with its exposures keeps them. */
 export function prepare(input) {
   const i = input && typeof input === 'object' ? input : {};
+  if (i._memo) return i;
   const shaped = Array.isArray(i.shaped) ? i.shaped : [];
+  // Each lift counted over only the sessions that hold it — the same answer
+  // exposuresFor() gives over every session, at a fraction of the merges.
+  const holding = new Map();
+  shaped.forEach(s => {
+    const rec = s && s.session && typeof s.session === 'object' ? s.session : s;
+    ((rec && rec.exercises) || []).forEach(e => {
+      if (!e || !e.exId) return;
+      const list = holding.get(e.exId) || [];
+      if (list[list.length - 1] !== s) list.push(s);
+      holding.set(e.exId, list);
+    });
+  });
   const lifts = (Array.isArray(i.lifts) ? i.lifts : []).filter(l => l && l.exId)
-    .map(l => (Array.isArray(l.exposures) ? l : { ...l, exposures: exposuresFor(shaped, l.exId) }));
-  return { ...i, shaped, lifts };
+    .map(l => (Array.isArray(l.exposures) ? l : { ...l, exposures: exposuresFor(holding.get(l.exId) || [], l.exId) }));
+  const out = { ...i, shaped, lifts };
+  /* A memo that rides on this one prepared input and dies with it: the
+     readers below ask for the same lift's baselines and the same weeks many
+     times over in one coach() call. Not module state — nothing outlives the
+     argument, and a fresh input is a fresh memo. Not enumerable, so the
+     input still serialises as it always did. */
+  Object.defineProperty(out, '_memo', { value: new Map(), enumerable: false });
+  return out;
+}
+
+// Memoised on the prepared input, when there is one.
+function memo(i, k, fn) {
+  const m = i && i._memo;
+  if (!m) return fn();
+  if (!m.has(k)) m.set(k, fn());
+  return m.get(k);
+}
+const ctxKey = c => [c.now, c.u, c.aim, c.exp, c.energy].join('|');
+// A lift's baselines, memoised when the lift is the prepared input's own.
+function baselinesOf(i, ex, c) {
+  const own = i && Array.isArray(i.lifts) && i.lifts.find(l => l.exId === ex.exId) === ex;
+  return own ? memo(i, 'b|' + ex.exId + '|' + ctxKey(c), () => baselines(ex, c)) : baselines(ex, c);
+}
+// The weeks and the light ones, once per moment.
+function weeksOf(i, now) {
+  return memo(i, 'w|' + now, () => { const blocks = blocksOf(i.shaped, now); return { blocks, ...lightOf(blocks) }; });
 }
 
 /* ================================================================
@@ -275,7 +313,10 @@ function fatigueOf(blocks, light, g) {
    whatever the status says); `thin` is too few sessions in the window to read. */
 export function readLift(ex, ctx, input) {
   try {
-    return readOne(ex || {}, ctx || {}, input || {});
+    const i = input || {}, e = ex || {}, c = ctx || {};
+    const own = Array.isArray(i.lifts) && i.lifts.find(l => l.exId === e.exId) === e;
+    return own ? memo(i, 'r|' + e.exId + '|' + ctxKey(c) + '|' + i.goalDir + '|' + i.goalRateWk + '|' + i.targetsOn,
+                      () => readOne(e, c, i)) : readOne(e, c, i);
   } catch {
     return { call: 'none', because: 'nobase' };
   }
@@ -287,13 +328,12 @@ function readOne(ex0, c, i) {
   const u = c.u === 'kg' ? 'kg' : 'lb';
   const none = (because, extra) => ({ call: 'none', because, exId: ex.exId || null, ...(extra || null) });
   if (!Number.isFinite(now) || isCardio(ex)) return none('nobase');
-  const b = baselines(ex, c);
+  const b = ex === ex0 ? baselinesOf(i, ex0, c) : baselines(ex, c);
   // Assistance runs backwards: an assisted lift's estimated max means nothing.
   if (!b || b.assisted || !b.series.length) return none('nobase');
   if (b.status === 'progressing') return none('progressing', { b });
 
-  const blocks = blocksOf(i.shaped, now);
-  const { light } = lightOf(blocks);
+  const { blocks, light } = weeksOf(i, now);
   const inLight = ms => light.has(Math.floor(daysBetween(ms, now) / 7));
 
   const S = b.series;
@@ -463,8 +503,7 @@ function words(r, ex, c, i, u, b) {
     const goal = Number.isFinite(i.goalRateWk) && i.goalRateWk < 0 ? -i.goalRateWk : null;
     const vs = goal == null ? '' : lossWk > goal * 1.0 + 1e-9
       ? ', faster than the ' + labelRate(goal, u) + ' a week you set' : ', against the ' + labelRate(goal, u) + ' a week you set';
-    const blocks = blocksOf(i.shaped, c.now);
-    const { light } = lightOf(blocks);
+    const { blocks, light } = weeksOf(i, c.now);
     const g = r.group;
     const recent4 = g ? sum([0, 1, 2, 3].map(k => blocks[k].by[g] || 0)) / 4 : null;
     const normal12 = g ? weeklyOf(blocks, light, 4, 11, g) : null;
@@ -542,7 +581,7 @@ function moving(i0, now) {
   const rows = [];
   i.lifts.forEach(ex => {
     if (isCardio(ex)) return;
-    const b = baselines(ex, ctx);
+    const b = baselinesOf(i, ex, ctx);
     if (!b || b.assisted || !b.series.length) return;
     const n84 = b.tops.filter(t => t.daysAgo >= 0 && t.daysAgo < WINDOW_DAYS).length;
     if (!n84) return;
@@ -616,7 +655,7 @@ function dayLabel(key) {
    training blocks; this is only ever an answer to what the log shows. */
 export function lighterWeek(input, now) {
   try {
-    return lighter(input || {}, now);
+    return lighter(prepare(input || {}), now);
   } catch {
     return null;
   }
@@ -626,14 +665,13 @@ function lighter(i, now) {
   if (!Number.isFinite(now)) return null;
   const u = i.u === 'kg' ? 'kg' : 'lb';
   const ctx = ctxOf(i, now);
-  const blocks = blocksOf(i.shaped, now);
-  const { usual, light } = lightOf(blocks);
+  const { blocks, usual, light } = weeksOf(i, now);
 
   // 1. Lifts declining, among those with a session in the last twelve weeks.
   const declining = [];
-  prepare(i).lifts.forEach(ex => {
+  i.lifts.forEach(ex => {
     if (!ex || isCardio(ex) || !Number.isFinite(ex.lastAt) || daysBetween(ex.lastAt, now) >= WINDOW_DAYS) return;
-    const b = baselines(ex, ctx);
+    const b = baselinesOf(i, ex, ctx);
     if (b && !b.assisted && b.status === 'declining') declining.push(String(ex.name || ex.exId));
   });
   const c1 = declining.length >= 2;
@@ -698,7 +736,7 @@ function lighter(i, now) {
    reason against it. Every gate must pass; see the constants above. */
 export function recordDay(input, now) {
   try {
-    return record(input || {}, now);
+    return record(prepare(input || {}), now);
   } catch {
     return null;
   }
@@ -710,14 +748,13 @@ function record(i, now) {
   // A hard cut squeezes recovery hardest: no record prompt at all.
   if (i.energy === 'deep') return null;
   const ctx = ctxOf(i, now);
-  const blocks = blocksOf(i.shaped, now);
-  const { light } = lightOf(blocks);
+  const { light } = weeksOf(i, now);
   if (light.has(0)) return null;
 
   const cands = [];
-  prepare(i).lifts.forEach(ex => {
+  i.lifts.forEach(ex => {
     if (!ex || isCardio(ex)) return;
-    const b = baselines(ex, ctx);
+    const b = baselinesOf(i, ex, ctx);
     if (!b || b.assisted || b.exposures < RECORD_MIN_EXPOSURES || b.status === 'declining') return;
     const tops = b.tops;
     const last = tops[tops.length - 1];
@@ -845,11 +882,12 @@ export function targetsReplay(input, session) {
     const i = prepare(input || {});
     if (!session || !Number.isFinite(session.startedAt)) return null;
     const at = session.startedAt;
-    const before = i.shaped.filter(s => s && Number.isFinite(s.startedAt) && s.startedAt < at);
     const ctx = { ...ctxOf(i, at) };
     const lifts = [];
     liftsIn(i, session).forEach(l => {
-      const exposures = exposuresFor(before, l.exId);
+      // Its exposures before the session: the same as exposuresFor() over
+      // every earlier session, without merging them all again.
+      const exposures = l.exposures.filter(e => e.startedAt < at);
       const ex = { ...l, exposures, groupDaysSince: groupDaysAt(i.shaped, l.group, at) };
       const b = baselines(ex, ctx);
       if (b && b.assisted) return;
@@ -883,11 +921,10 @@ export function compareSession(input, session, now) {
     if (!session || !Number.isFinite(session.startedAt)) return null;
     const u = i.u === 'kg' ? 'kg' : 'lb';
     const at = session.startedAt;
-    const before = i.shaped.filter(s => s && Number.isFinite(s.startedAt) && s.startedAt < at);
     const ctx = ctxOf(i, at);
     const rows = [];
     liftsIn(i, session).forEach(l => {
-      const b0 = baselines({ ...l, exposures: exposuresFor(before, l.exId) }, ctx);
+      const b0 = baselines({ ...l, exposures: l.exposures.filter(e => e.startedAt < at) }, ctx);
       if (!b0 || b0.assisted || b0.series.length < COMPARE_MIN_PRIOR) return;
       const b1 = baselines({ ...l, exposures: exposuresFor([session], l.exId) }, ctx);
       if (!b1 || !(b1.best > 0)) return;
@@ -943,7 +980,7 @@ export function liftTrend(input, now) {
     let best = null;
     i.lifts.forEach(l => {
       if (isCardio(l)) return;
-      const b = baselines(l, ctx);
+      const b = baselinesOf(i, l, ctx);
       if (!b || b.assisted || b.status !== 'progressing' || b.series.length < 4) return;
       const S = b.series;
       const days = daysBetween(S[0].startedAt, S[S.length - 1].startedAt);
