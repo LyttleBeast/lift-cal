@@ -1,5 +1,11 @@
 # COACH — what got built, what changed, and what did not
 
+> **rack-v48 (Coach trainer, stage one — targets): read §40 first.** It is the
+> one place that run changed a rule of the brief's algorithm — sets past twelve
+> reps count as twelve in the estimated-max series, because leaving them out let
+> one rep fewer turn a hold into a jump — and what it did not finish. The v48
+> section is at the end of this file.
+
 Written at the end of the ship-one run in `~/dev/ship-v42`, against
 `COACH-PROMPT.md`. Shipped as `rack-v42`.
 
@@ -1865,3 +1871,404 @@ tap, the list of swappable lifts, and `swapTo`'s own refusals and opts shape)
 each turn a verifier red. `frequent.mjs`'s pins on the picker's `touched` guard
 still hold: a picker opened on a group counts as a chip already tapped, so the
 late Frequent counts never move it.
+
+---
+
+# COACH TRAINER — stage one: targets (rack-v48)
+
+A sixth run, in `~/dev/ship-v48` (a fenced, full clone at rack-v47, `124d33a`),
+against `SHIP-V48-PROMPT.md` (the build brief) and `COACH-TRAINER-SPEC.md` (the
+design record, §0, §3 and §8 read first as instructed). Both are committed with
+the docs. Everything above this line is unchanged; where this section
+contradicts it, it says so rather than editing it.
+
+Coach could read the log, build a workout from it and say what comes next in
+the gym. Tonight it learned the thing every paid lifting app does: **what weight
+and reps to do next time**, per lift, from the account's own history. Two pure
+modules (`coach-prog.js`, `coach-goal.js`), wired into the builder: a target line
+under every exercise, **Start with Coach’s targets** as the main button, **What
+should I lift today?** on Train, and **Your goal** in Settings → Coach. No new
+read, no new database node, no rules change, no change to any logged record.
+
+Every priority in the brief's §14 got built. Nothing in scope was dropped.
+Verifiers at the start: **32**, all exit 0. At the end: **34**, all exit 0 under
+`TZ=America/New_York`, `TZ=UTC` and `TZ=Pacific/Auckland`. The battery prints
+**ok 57, miss 0, wrong 0**.
+
+---
+
+## 40. READ THIS FIRST — the one rule I changed, and what is not done
+
+### 40a. The case that moved a rule
+
+The brief (§6): *"If you find a case where following it literally produces an
+unsafe or silly target, stop, write the case at the top of COACH-REPORT.md, and
+choose the more conservative answer."* One such case turned up, and it is here
+first.
+
+**The case.** The property sweep in `tools-check/coach-prog.mjs` found a kilo
+back squat, twelve sessions, learned range 10–12, whose last session was
+**13, 14 and 15 reps at 130 kg**. Following §6.8 literally, Coach said *"Target:
+130 kg for 13, 14, 15 again"* — hold, confirm. Take **one rep off the first
+set** — 12, 14, 15 — and the same log said *"Target: 3 × 10 at 135 kg"*. Fewer
+reps, heavier target: exactly what the brief's own property ("lowering any rep
+count in the last exposure never makes the target heavier") forbids.
+
+**Why.** §6.8 builds the estimated-max series from sets of **1 to 12 reps** and
+skips an exposure with none. A session of 13, 14 and 15 therefore contributes no
+point at all; the slope is read over the sessions before it, comes out under
+0.25%/wk, and the slow-slope dial asks to see the top twice. Drop one set to 12
+and the session joins the series with a high estimate, the slope clears the
+bar, the dial lets go, and the target jumps. The session he did best on was
+invisible to the dial precisely because it was good.
+
+**What I did.** A set past twelve reps now **counts as twelve** in that series
+(`coach-prog.js` `progressOf`, commented in place). Twelve reps at a weight is a
+floor under what a 15-rep set shows he can do, so the estimate stays
+conservative — the spec's reason for the twelve-rep cap ("a 20-rep set's
+estimated max is the least reliable number in the app") is kept, because a
+twenty-rep set now contributes its twelve-rep floor, never its own estimate.
+With it, the series is monotone in every rep count, and the property holds
+across the whole sweep. The case is pinned by name in the battery; against the
+literal rule it fails, with the clamp it passes (checked both ways).
+
+**Was it the more conservative answer?** Honestly: not in that one case. With
+the clamp the case reads ADD in both variants, because the session now counts —
+a jump of one 5-kg step after three sets above the top of his own range, which
+is ordinary double progression and not an unsafe target. The alternative I
+tried keeps the session being judged out of its own dial (the way the rep range
+already excludes it), which makes the case HOLD in both variants. I built it
+and ran the battery: **it turns A34 from hold into add** — the slow lifter the
+dial exists for loses his second look, because the slope is then read over a
+different eight sessions (the ones before the last) and on A34's log those
+climb just fast enough to clear the bar. It also needs nine sessions before the
+dial works at all, and it makes the dial blind to the most recent session in
+every case. Neither fix is more conservative everywhere; the clamp
+changes the least (one line of the estimate, every row of the brief's table
+unchanged) and closes the hole completely. If you would rather have the other
+trade — the case holds, A34-shaped logs jump — it is a two-line change, and
+`coach-prog.mjs` will say which rows move.
+
+### 40b. Smaller departures, each on purpose
+
+1. **The experience answers are spelled out** — *Under six months*, *Six months
+   to two years*, *Two years or more* — not "6 months" and "2 years".
+   `coach-units.mjs`, which must pass unedited, refuses any typed digit in
+   `coach.js` copy other than a count of days or weeks ("every figure is
+   computed"). The values stored are unchanged: `new`, `some`, `years`.
+2. **Your goal shows on Pro only.** §4.1 says Settings shows the goal questions
+   unanswered; §4.4 says a basic account sees no change except the Pro panel's
+   new line. The goal turns nothing but the Pro targets, so for Basic it would be
+   a survey. The *Weight and rep targets* switch does appear for Basic — every
+   mutable category's switch always has (Workout builder and In the gym do too).
+3. **The off-grid sentence no longer says "entered in pounds."** A kilo account
+   can type 101.3 kg as easily as a switched account's old 225 lb shows up as
+   102.06; both are off the half-kilo grid and only one was typed in pounds. It
+   reads: *"Last time’s weight doesn’t land on a half-kilo step, so Coach won’t
+   work a new number out from it."* (and *half-pound* on pounds).
+4. **"the two lighter sets" reads "the two lowest sets".** Every set in a
+   reps target is at the same weight; "lighter" suggested the wrong thing.
+5. **A default range is named, not just used**: *"Inside 6–10 at 185 lb last
+   time (10, 9, 9). 6–10 is a common starting range."* — the spec's T3 label.
+   When a big jump stretches the top by two (§6.5 micro), it says so.
+6. **A deferral's quote reads the way somebody says it**: *"405 lb for 1, then
+   315 lb for 5"*, *"185 lb for 12, 5, 11"*, *"3 × 8 at 185 lb"*. §6.7 asks only
+   that it goes through `fmtSetLoad`; every range deferral quotes too.
+7. **An assisted lift says what its number is**: *"Target: 3 × 8 with 45 lb of
+   assistance."* The set row stores assistance as the weight; "at 45 lb" on an
+   assisted pull-up is ambiguous.
+8. **The targets answer names each lift once** — a lift in a duplicated block is
+   one lift with one target — so its bubbles are per lift, not per row. Six at
+   most, as the brief says.
+
+### 40c. What is not done, and what nobody has seen
+
+1. **Nothing in this ship has been seen on a screen.** The target line, its
+   evidence opening and closing, the five-button row, the six aim chips under
+   the targets answer, the Your goal rows. `coach-surface.mjs` drives every one
+   through the DOM shim — which has no box model and never loads `rack.css` — so
+   what it proves is what is drawn, never how it looks. §45 has the arithmetic.
+2. **No mid-session targets, no card change, no status sentence, no lift target,
+   no focus group, no onboarding step** — the brief's §4.5, all by instruction.
+   `coach-live.js` is byte-identical to rack-v47, and `coach-live.mjs`'s "a
+   number to put on the bar must be a quote" passes unchanged.
+3. **Native was not read** — the run was fenced — so `NEXT-NATIVE-V48.md` carries
+   its native paths from V46, and says so.
+
+---
+
+## 41. WHAT GOT BUILT
+
+```
+coach-goal.js    118 lines   NEW, PURE. AIMS, EXPERIENCE, DIALS, the energy thresholds,
+                             energyContext(), dialsFor(). Imports nothing.
+coach-prog.js    887 lines   NEW, PURE. exposuresFor(), baselines(), prescribe(),
+                             sessionDay(). The gates, the learned range and step, the
+                             decision, status and slope, and every sentence a target says.
+coach.js       3,058 lines   was 2,872. Category `targets`; facts coach.aim,
+                             coach.experience, weight.energy, lift.targets; questions
+                             q_goal_aim, q_experience (always, where, ack) and an ack on
+                             q_goal_direction; pendingQuestion() skips a `where`;
+                             questionUnder(); intent lift_targets, resp_lift_targets,
+                             route ask_targets (third on Train), its follow-ups;
+                             builderInput gains goal, energy, targetsOn.
+coach-build.js   729 lines   was 649. A `target` on every row, the `targets` view, the
+                             header and nudge() comments rewritten (§2 of the brief).
+coach-ui.js                  The target line and its evidence; Start with Coach’s targets;
+                             askQuestion() shared by the opener and the goal question;
+                             each question's own ack; Your goal in coachAnswerRows().
+rack.css                     One rule: .coach-build-target.
+sw.js, usage.js              rack-v48.
+```
+
+Commits, each of which passes every verifier: `coach-goal.js` + its verifier →
+`coach-prog.js` + the battery → `coach.js` wiring (with the staging edit and the
+purity fences) → `coach-build.js` → UI + CSS → the goal end to end → the pinned
+case → `rack-v48` → docs.
+
+**The algorithm is §6 of the brief**, section for section, with the one change in
+§40a. Where §6 left a choice open, §44 says what I chose.
+
+**What the dials do, on the brief's own rows**: no aim — confirm once, one jump,
+6–10 / 10–15; *Lose fat, keep strength* and *Stay consistent* confirm twice
+(A25, A26); a hard cut on the trend confirms twice and caps one jump (A27);
+Get stronger and Powerlifting may earn two jumps on a lower-body barbell lift
+two reps clear of the top, climbing fast and past six months (A35, A45; A37 is
+the new lifter who does not); Powerlifting's 3–5 band makes 3×5 the top where Get
+stronger's 3–6 does not (A44 against A39b).
+
+---
+
+## 42. THE BATTERY — every row, and the rows I corrected
+
+**No row was corrected.** All 57 rows scored **ok** on the first run of the
+finished engine, and have since: `A1`–`A45` (A43 does not exist in the brief),
+`A7b`, `A10b`, `A14b`, `A15b`–`A15d`, `A23b`, `A34b`, `A39b`, plus four of mine,
+**B1–B4**, which the brief's table does not have and which exist so the sweep
+reaches the words the table never makes: the *unassisted* target (B1), a
+bodyweight re-entry (B2), an off-grid reps target (B3) and a stepped kilo
+re-entry (B4).
+
+Where a row left a detail open, the fixture chose it, and these are the choices:
+
+- **Dates.** A row with no dates is spaced four days apart, ending three days
+  ago, so no layoff clock can fire. A1, A13–A15d, A36 and A40 use the row's own.
+- **A26** is A1's log four days older, with the extra 3×12@185 three days ago.
+- **A31**'s two sessions are yesterday at 08:00 and 18:00 local, built in the
+  verifier's own time zone.
+- **A34**'s reps (`[9,8,8] … [10,9,9], [10,10,10]`, weekly) keep the estimated max
+  flat and never repeat one rep count three times in four, so the range is the
+  default band, as the row implies.
+- **A42** reads "A24's climb to 50" as A24 without its final 3×12@50, so the
+  fixture stays at seven sessions.
+- **A15**'s re-entry reps are 6 — the default band's bottom, because two
+  sessions are one pair and no learned range (the row names no reps).
+
+**The properties** (§10.1), over 4,400 seeded histories — 2,200 per unit, a
+mulberry32 generator, the real record shape, pounds stored on kilo accounts and
+about one load in eight typed in pounds on them — all hold: deterministic;
+order-blind; an F never heavier and never a number from none; one rep fewer
+never heavier; every number logged or within two steps (six below on re-entry)
+and on the grid; never from an off-grid load; no number on an assisted
+reduction or re-entry; no blank ghost where a weight was logged; every new kilo
+ghost printing back through `fmtSetW` as the number in the line; nothing at or
+below zero; nothing on cardio; no sets on a defer or a first. The generator is
+deliberately messy, so the sweep's answers are mostly careful: of 4,400, 2,384
+defer, 351 hold, 532 reps, 273 re-enter, 192 add, 186 bodyweight, 128 first, 31
+reduce and 323 null (cardio, and the lift never logged); 1,045 name a number.
+The must-never scan read 13,377 strings, 6,581 of them in kilos: no banned word,
+no max attempt, no cause, no pound on a kilo account, no straight apostrophe.
+
+**`wrong: 0` is fatal-on-change**, not a snapshot: the battery exits non-zero on
+any wrong, and a miss (Coach deferring where a row expects a target) is reported
+but not fatal.
+
+---
+
+## 43. WHERE THE BRIEF, OR THE SPEC, WAS WRONG ABOUT THE CODE
+
+1. **"The shipped `pendingQuestion()` skips any question that carries a
+   `where`."** It did not — nothing had a `where` until tonight. I added the
+   skip (one line, commented). Without it the goal questions would have opened
+   the sheet on every account and broken the rank, silence and surface checks
+   the brief says they keep true.
+2. **The experience labels as written fail `coach-units.mjs`**, which must pass
+   unedited (§40b.1).
+3. **The spec's §8.1 says each aim changes at least one dial differently from
+   every other**, "or it's a label and not a goal." Tonight's `DIALS` (the
+   brief's own table) gives *Build muscle*, *Recomp* and no aim the same row —
+   what tells them apart (volume targets, the contradiction checks) is stage
+   three's. `coach-goal.mjs` holds apart the pair Micah decided on (Powerlifting
+   and Get stronger) instead.
+4. **"Twelve verifiers … all twelve die with ERR_MODULE_NOT_FOUND"** was true to
+   the letter, and one of them, `coach-boot.mjs`, stages through its own
+   `swap()` helper rather than `.replace` chains, so its edit looks different.
+   The eight the brief said must pass unedited differ from rack-v47 in staging
+   lines only — checked by diff, line by line.
+5. **The DOM shim `coach-surface.mjs` drives has no `.after()`**, so the target's
+   evidence is appended inside a small wrapper around the line rather than
+   inserted after it. Same on screen; the shim can see it.
+6. **§10.3 asks `coach-voice.mjs` to read "every target.line and target.why the
+   A-battery produces."** The battery lives in `coach-prog.mjs`, a script that
+   exits. It now exports its rows and staging and runs its checks only when
+   invoked directly, so `coach-voice.mjs` imports the very same targets instead
+   of building a second battery — and `coach-prog.mjs` reads the shipped BANNED
+   list out of `coach-voice.mjs`'s source rather than keeping a copy.
+7. **"Byte-identical to today's for every existing fixture"** needed a "today" to
+   compare against. `coach-build.mjs` section M stages rack-v47's own `coach.js`
+   and `coach-build.js` out of git (`124d33a`) and compares 70 proposals: the
+   three views byte for byte, and the whole proposal bar `target` and `targets`.
+   It needs a full clone, like `estimate-origin.mjs`.
+8. Confirmed true, for the next brief: `d.build({})` is memoised; `normSettings()`
+   needed no change (driven in `coach-goal.mjs` E); `units.mjs`'s classification
+   was at the line the brief said; the tick path (`tickSet`) adopts `tw`/`tr` with
+   no change.
+
+---
+
+## 44. EVERY ASSUMPTION I MADE
+
+**The engine**
+
+- An exposure whose every working set is a drop set has no top load and is left
+  out of the reading.
+- Two sessions with the same `startedAt` are ordered by session id, so a shuffled
+  log is the same answer.
+- "The last 84 days" is `daysAgo < 84`, the window every other Coach derivation
+  uses. "A gap of more than 21 days" is noon-anchored whole days.
+- An assisted lift whose last top load is 0 (unassisted) takes the bodyweight
+  path — the spec's §3.5 ("the read switches to the bodyweight path").
+- A weighted bodyweight lift with some sets at 0: the loaded sets are the top;
+  the 0-load sets are back-offs and keep last time's numbers.
+- A bodyweight target's stage is `yours` (it is his reps and nothing else); a
+  defer's and a first's is `none`; a range or step that is a labelled default,
+  or a step that is unknown, is `learning`.
+- **Reps target**: the weakest half is chosen first, and a set typed F among them
+  keeps its reps without passing its +1 to another set. If nothing can rise, no
+  "one more rep" sentence is printed.
+- **Hold (miss)**: every top set targets the bottom of the range.
+- **The slope** is Theil–Sen over noon-anchored day numbers; two sessions on one
+  day are zero days apart, and that pair is skipped. The slow-slope
+  sentence prints the fitted move across the window, and "held about level" when
+  it rounds to under one unit.
+- **σ** is taken over the last ten points of the whole series and needs five
+  changes; a decline needs six points in the window.
+- **"Since you last trained chest"** is said only when the group's clock is the
+  one in play (`groupDaysSince` known and the smaller); otherwise *"since you last
+  did this lift"*. *"Your chest work has kept going"* only when the group was
+  trained after the lift.
+
+**The wiring**
+
+- `lift.targets` is non-null with at least one target of any mode, so *What should
+  I lift today?* answers even when every lift defers — the brief's "at least one
+  entry", literally. BACKLOG has it.
+- The goal question under the answer uses the opener's gates, including
+  `coach.openQuestion` — so an unanswered goal question holds every question for
+  the week, and an unanswered direction question holds the goal's. One at a time.
+- The step line rides on every target that names a number (§9's "any target with
+  a number"), reps and holds included.
+- The builder computes targets on every `build()` — the menu's and "Train
+  something else"'s checks included — with each lift's exposures read once per
+  build. A whole `coach()` on a twelve-week, 33-session log answered in tens of
+  milliseconds in node.
+- "Built from a different day" compares dates; two sessions on one day with the
+  same lift get no note (the target's own why names the day).
+- In the targets view, a lift in a duplicated block whose last session had a
+  different number of sets keeps its placeholder sets — the merged sets cannot
+  be split back without guessing whose set is whose.
+
+---
+
+## 45. THE 375-PIXEL CHECK — reasoned from `rack.css`, not measured
+
+The brief asks that six options wrap cleanly on a 375-pixel screen, and says the
+shim will not tell me. It will not; this is arithmetic from the stylesheet.
+
+**The six aim chips, under the targets answer.** The sheet is full width with
+`--pad` 16px each side: 343px. A Coach bubble is `max-width: 90%` (308.7px) with
+13px padding each side: **≈ 283px** for its chip row. `.coach-chips` is
+`flex-wrap: wrap` with an 8px gap, and a chip is 13px Archivo (wdth 94, wght 600)
+with 13px padding and a 1px border each side — about 6.8px a character plus
+28px. So roughly: *Get stronger* 110, *Powerlifting* ≈ 105, *Build muscle* 110,
+*Lose fat, keep strength* ≈ 184, *Recomp* ≈ 69, *Stay consistent* ≈ 130. They
+wrap as whole chips onto **four rows** (2, 1, 2, 1), the widest is two thirds of
+the row, and nothing truncates or runs out of the bubble. Each chip is one line.
+
+**Your goal, in Settings.** The six aims are the onboarding choice rows —
+full-width, 13px × 14px padding, 15px titles — which fit at any phone width. The
+three experience answers keep the segmented control (the brief: more than three
+options become rows). At 375 each segment is ≈ 110px, ≈ 101px of text after
+padding, and the labels are 11px uppercase with .06em tracking (≈ 7.3px a
+character): **each wraps to two lines** — *UNDER SIX / MONTHS*, *SIX MONTHS TO /
+TWO YEARS*, *TWO YEARS / OR MORE*. Legible, and uniform, but the pills grow to
+two lines. It is the one thing I would look at first on the phone; drawing that
+question as choice rows too is a one-condition change in `coachAnswerRows`.
+
+**The target line** is the note's own size (11px, 1.4) in the body colour, and
+wraps like the note does. The five-button column is the four's column with one
+more `.btn`, each a 44px minimum (`touch-target.mjs` resolves every class list
+a `.btn` is built with, the new one included).
+
+---
+
+## 46. THINGS I FOUND AND DID NOT FIX
+
+The brief's §11, all in BACKLOG.md under *What v48 left open*:
+
+- `lift.stalled` and the new per-lift status disagree about "stalled" — stage two.
+- `coach-live.js` never names a weight — stage five, under a replaced fence.
+- Grey last-time numbers on hand-added exercises (Micah's 23 Sep request) —
+  stage five, through `coach-prog.js`.
+- A second session on the same day is invisible to the live facts; `record.groups`
+  counts warm-ups — both already in BACKLOG (v42), both untouched.
+- Basic sees no target at all — the one-real-target teaser is stage three.
+
+And mine, also in BACKLOG: assisted lifts near unassisted are mostly silent (the
+15% rules are relative, and 10 → 5 lb of help is 50%); an assisted lift's
+estimated max runs backwards (the weight is assistance), which reads its slope
+as slow and confirms twice — conservative, and its status is meaningless; the
+step line under same-weight targets is noise; kilo and pound accounts can get
+different targets from one log, by design.
+
+---
+
+## 47. MICAH'S DECISIONS, 23 SEP 2026 — carried forward
+
+The brief's §15, so the next stage's brief starts from it. Rows marked TONIGHT
+are built; the rest are recorded, not built.
+
+| # | Question | Answer | Where it lands |
+|---|---|---|---|
+| 1 | Labelled training-science starting points before Coach knows you? | **Yes, training only.** Food and body stay own-data only | TONIGHT: default bands and default steps, always labelled |
+| 2 | The goal set | **The five, plus Powerlifting** as its own goal | TONIGHT: six aims in `q_goal_aim` and `DIALS`. Powerlifting differs by its bands tonight; later stages give it the big three |
+| 3 | Card becomes encouragement only? | **Yes.** Findings move to the sheet's opening | Stage 3 (v50) |
+| 4 | Coming back after time off | *"I like the more cautious holding but not from any workout, it should be an individual timer for each muscle group … I like 12 days for a timer."* Then: the muscle group's clock sets how far back to start; a lift not done in 12+ days on its own still gets no jump its first time back. Hold from 12 days, ~90% at 15–30 days, ~80% past 30, **one jump at a time** back up | TONIGHT: gate 6, BODYWEIGHT, no two-step catch-up; rows A13–A15d, A36 |
+| 5 | When to want two sessions at the top before adding weight | **As proposed:** twice when cutting or Stay consistent, in a hard cut, on doubles and triples, or when progress has been slow; once otherwise | TONIGHT: `DIALS`, `dialsFor()`, the decision |
+| 6 | No targets for singles or lone heavy top sets (until RIR) | **Yes** | TONIGHT: gates 4–5 |
+| 7 | General nutrition science in fuel answers? | **No. Own data only** | Stage 4 (v51) |
+| 8 | Learning whether rest advice was taken | *"Pick whats best"* → **replay, save nothing.** Plus: a per-group recovery window that grows after a hard day for that group, checked when he asks what to train **and** when he picks a group in *Make me a workout* (a caution with *Build it anyway* / *Train something recovered*, never a refusal) | Stage 4 (v51). Spec §9.2 |
+| 9 | Save answers about how you feel? | *"A mix of both."* A session that came in below usual can be **marked** (Slept badly / Stressed / Sore / Didn't feel well); a marked session never counts as a miss and never drags down his normal. Marks live in `settings/coach`, keyed by session, cleared after 6 months. "Have you eaten?" stays use-once | Stage 4 (v51). Spec §10.3, §12. `prescribe()` needs nothing for it yet |
+| 10 | Cut-speed thresholds | **As proposed:** hard cut ≤ −0.75 %/wk, cut ≤ −0.25 %/wk, surplus ≥ +0.25 %/wk | TONIGHT: `ENERGY_*` |
+| 11 | Say "carb-loaded"? | **No.** The bubble is "Am I fueled?" | Stage 4 (v51) |
+| 12 | Stage order | **As proposed:** targets → plateau/cut → card & goals → fuel & rest → in-gym & volume | The plan |
+| 13 | Coach reads the water log? | **Not yet, decide later** | Revisit after stage 4 |
+| 14 | Which Start button leads the builder | *"I like the targets as the main button, because this coach should be at the level where I can trust it. Once this is built, I should be able to only ever use my app for my workout and in following it, I should see my data of my lifts going up. I have to be able to trust it."* | TONIGHT: *Start with Coach’s targets* is first and primary whenever there are targets. **The bar for the whole ship** |
+| 15 | Targets Pro only? | **Pro, with one teaser later** (Basic sees one real target plus the lock in stage 3) | TONIGHT: `tier: 'pro'`. Teaser: stage 3 |
+| 16 | When rest comes up | Rest is answered when asked **and** a gentle, positive card line appears after three or more training days in a row (house style: no exclamation mark, no body claim), switchable with the rest-day setting | Stage 4 (v51); the card line in the stage-3 pool |
+
+Two things tonight's build adds for the next brief to decide: whether the
+**§40a trade** is the right one, and whether **Your goal** should reach Basic
+once the stage-three teaser gives Basic a target to turn.
+
+---
+
+## 48. IF THE NEXT RUN READS ONE THING
+
+`tools-check/coach-prog.mjs` is the contract now, more than §6 of any brief. It
+found the one real hole in tonight's algorithm by generating histories nobody
+wrote down, and it will find the next one the same way. Stage two changes what
+the targets *mean* (the plateau-vs-dip call, the stall ladder) — run the battery
+after every rule you touch, keep `wrong: 0`, and when a property fails, read
+§40a before you reach for the rule the failure points at: the obvious fix and
+the conservative one were not the same fix.

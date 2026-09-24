@@ -519,17 +519,20 @@ inside it. A step term would count the same walking twice.
 
 ```json
 { "v": 1,
-  "mute":    { "fuel": true },
+  "mute":    { "fuel": true, "targets": true },
   "on":      { "patterns": true },
-  "answers": { "q_goal_direction": "down" },
-  "asked":   { "q_goal_direction": 1789307130123 } }
+  "answers": { "q_goal_direction": "down", "q_goal_aim": "strength", "q_experience": "some" },
+  "asked":   { "q_goal_direction": 1789307130123, "q_goal_aim": 1789307130123 } }
 ```
 
 Everything Coach remembers, and it is deliberately almost nothing: the user's
 data is the only state Coach has. `mute` holds the categories switched off under
 Settings → Coach, **absent means on**, so a fresh account has every switch on
 without a byte having been written. Since v46 that includes `live` — "In the
-gym", the chip and the one quiet line in a live workout.
+gym", the chip and the one quiet line in a live workout. Since v48 it includes
+`targets` — "Weight and rep targets", the target line under each exercise in a
+proposal, *Start with Coach’s targets* and the *What should I lift today?*
+bubble. Off, the proposal carries no targets at all.
 
 `on` is the reverse, and it exists for one category: **Patterns** (v46), the
 eight comparisons between two groups of the account's own days. It is OFF until
@@ -542,10 +545,27 @@ it needed no rules change for the same reason `settings/coach` itself did not.
 Turned on, Coach reads `food/log/{date}` for the days its first comparison needs
 (when a session's day began) — reads only, and only for an account that has
 switched it on. `answers` holds the replies to Coach's own
-questions — one exists, `q_goal_direction`, and it exists only because
-`weight_rate_vs_goal` and the stall readout are both silent or different without
-a direction and the data genuinely cannot supply one. `asked` stamps when each
-was put, so nothing is asked twice.
+questions. `q_goal_direction` exists because `weight_rate_vs_goal` and the stall
+readout are both silent or different without a direction and the data genuinely
+cannot supply one. `asked` stamps when each was put, so nothing is asked twice.
+
+**The goal IS two answers** (v48): `q_goal_aim` — `strength`, `powerlifting`,
+`muscle`, `cut`, `recomp` or `maintain` — and `q_experience` — `new`, `some` or
+`years`. There is no `goal` key and there must not be one: the answers already
+validate against their options in `normSettings()`, stamp when they were given
+and show in Settings, and a second record of the same fact is the one that goes
+stale. **`asked.q_goal_aim` is when the goal was set** (`answerQuestion()`
+stamps `asked` with every answer); nothing reads it yet, and stage three does.
+Both questions carry `always: true` in `coach.js`, which is what Settings →
+Coach reads: they are shown under **Your goal**, answered or not (on Pro, since
+the goal turns the Pro targets); every other question is shown only once
+answered. They also carry `where: 'targets'`, so they are never the sheet's
+opening question: they are asked one at a time under the *What should I lift
+today?* answer, behind the same gates and the same week's cooldown. Unanswered,
+the targets use the no-aim dials — the goal refines them, it never gates them.
+No new key and no new node, so no rules change: both are children of the
+already-granted `settings/coach`. The longest answer value is `powerlifting`,
+twelve characters.
 
 **`lastGreet` was here in v42 and is not any more.** The rotating greeting and
 its open counter are DEVICE state, in `localStorage` under the account's own
@@ -614,6 +634,15 @@ lifting block through its check box. A box that was typed in is
 never overwritten, unticking clears nothing, and `collectFrom` strips `tw` / `tr`
 from the record as before. A ticked set that still has no reps is counted at
 Finish and named before anything is saved.
+
+The same `tw` / `tr` carry **Coach's targets** (v48): *Start with Coach’s
+targets* starts a proposal's `targets` view, whose ghosts are `coach-prog.js`'s
+numbers rather than last time's, by the same tick rule and stripped the same
+way — nothing about a target is ever stored. `tw` is stored pounds as a string
+exactly like `w`; on a kilo account it is the kilo target converted once
+(102.5 kg is `"225.97"`, which prints back as 102.5). Where a target names no
+number ("the next setting up"), its `tw` is last time's weight and never blank,
+because a blank weight box is recorded as `'0'`, a bodyweight set.
 
 A lifting block is stored here exactly as it is in a workout record: `block: 1`
 on the exercise objects, and nothing else. A routine **never** carries a

@@ -7,7 +7,7 @@ Two things this file is not. It is not a design document — where a shape was
 already decided, the decision stays where it was written and this only points at
 it. And it is not a port brief: `NEXT-NATIVE.md`, `NEXT-NATIVE-UNITS.md`,
 `NEXT-NATIVE-V40.md`, `NEXT-NATIVE-V41.md`, `NEXT-NATIVE-V42.md`,
-`NEXT-NATIVE-V43.md`, `NEXT-NATIVE-V45.md` and `NEXT-NATIVE-V46.md` are the instructions for copying
+`NEXT-NATIVE-V43.md`, `NEXT-NATIVE-V45.md`, `NEXT-NATIVE-V46.md` and `NEXT-NATIVE-V48.md` are the instructions for copying
 work into `~/dev/rack-mobile`, and they stay. What is below is the list of
 things nobody has done yet.
 
@@ -194,6 +194,82 @@ Carried from `NEXT-NATIVE.md` §7 so it survives that file. Do not "fix" these:
   last one is quoted against does convert.
 
 ---
+
+## What v48 left open in its own work
+
+v48 is Coach trainer, stage one: **targets** — per lift, the weight and reps for
+next time, from his own history (`coach-prog.js`), turned by a goal that is two
+answers to Coach's own questions (`coach-goal.js`), shown as a line under each
+exercise in a proposal, started with *Start with Coach’s targets*, asked for
+with *What should I lift today?*, and set in Settings → Coach → Your goal. It is
+the first of five stages (`COACH-TRAINER-SPEC.md` §13). Everything below is
+written up in `COACH-REPORT.md` §40–§48.
+
+**Deliberately left for later stages** (SHIP-V48-PROMPT.md §11), not fixed:
+
+- **`lift.stalled` and the new per-lift status disagree about "stalled".** The
+  shipped fact calls a lift stalled when its last three entries do not beat the
+  best before them; `coach-prog.js` computes progressing / holding / stalled /
+  declining over a window with a time span and his own noise. Status is
+  computed and never printed tonight. Stage two reconciles the two, beside the
+  context (plateau vs dip) that interprets them.
+- **`coach-live.js` still never names a weight**, mid-session. Stage five
+  replaces its fence ("a number to put on the bar must be a quote") with one
+  that allows a `coach-prog.js` target — not a deletion of it.
+- **Grey last-time numbers on a hand-added exercise** (Micah's 23 Sep request):
+  an exercise added from the picker mid-session opens with blank boxes. Stage
+  five, through `coach-prog.js`'s `exposuresFor` and `prescribe`.
+- **A second session on the same day is invisible to the live-session facts**
+  and **`record.groups` counts warm-ups** — both already listed under v42 below,
+  both untouched by v48.
+- **Basic accounts see no target at all.** The Pro panel names "Weight and rep
+  targets" and that is the whole change. The one-real-target teaser is stage
+  three.
+
+**Left open in v48's own work:**
+
+- **Nothing in this ship has been seen on a screen.** The target line under
+  each exercise, its evidence opening and closing, the five-button row with the
+  targets button in yellow, the goal question's six chips under the targets
+  answer, and Your goal in Settings. The chips were reasoned from `rack.css` at
+  375 px (§45): they wrap as whole chips onto four rows and none truncates. The
+  **experience question's three answers sit on the segmented control and each
+  label wraps to two lines** at 375 px — legible, but the pills grow; switching
+  that question to the choice rows is a one-line change in `coachAnswerRows`.
+- **One departure from the brief's algorithm** (§40): a set past twelve reps
+  counts as twelve in the estimated-max series instead of being left out,
+  because leaving it out let one rep fewer turn a hold into a jump.
+- **The targets ignore how hard a set was.** There is no effort rating yet, so
+  singles and lone heavy top sets get no target (by decision), and an F set is
+  the only signal of "nothing left". The RIR tap is the first thing that would
+  unlock more.
+- **Assisted lifts near the bottom are mostly silent.** The 15% rules (a new
+  programme; the largest learnable step) are relative, and 10 → 5 lb of
+  assistance is a 50% change, so a lifter close to unassisted gets "No target
+  this time" more often than not. Silence, never a wrong number; worth a rule of
+  its own when assisted work is common.
+- **An assisted lift's estimated max runs backwards** — the stored weight is
+  assistance — so its slope reads progress as slow and the dial confirms twice.
+  Conservative, and its status (not shown) is meaningless. A real fix is an
+  estimate of bodyweight minus assistance, which needs the bodyweight.
+- **A lift in a duplicated block whose last session had a different number of
+  sets** keeps its placeholder sets in the targets view (the line still says
+  the target): the merged sets cannot be split back without guessing which is
+  whose.
+- **"What should I lift today?" answers even when every lift defers**, per the
+  brief ("at least one entry"): the answer is then a list of "No target this
+  time". Honest, and a candidate for its own gate.
+- **The step line rides on every target that names a number**, reps and holds
+  included, per §9 — "5 lb is a common starting jump for this kind of lift" under
+  a same-weight target reads as noise. Limiting it to add, reduce and re-entry is
+  a one-condition change in `finish()`.
+- **Kilo and pound accounts can get different targets from the same log** — a
+  pound dumbbell has a default step and a kilo one does not, and pound-typed
+  loads are off the grid in kilos — by design (SHIP-V48-PROMPT.md §10.1).
+- **Nothing counts use of the targets**, the fifth button or the goal. A usage
+  event would be a new stored key.
+- **Native was not read** — the run was fenced — so every native path in
+  `NEXT-NATIVE-V48.md` is carried from V46, unverified.
 
 ## What v46 left open in its own work
 

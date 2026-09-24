@@ -9,7 +9,7 @@ steps, and no account can see or touch another's. New people get in with an
 invite code, or by asking the owner and being approved. See *Access* below.
 
 - **You** — the tab the app opens on. A read-only summary of the other four and of how their numbers pull on each other: this week against the last, intake against targets, the scale against maintenance, printed as arithmetic rather than asserted. Nothing on it writes anything. The gear in its header is where every setting in the app now lives.
-- **Coach** — a card at the top of You and above Start workout on Train that says one true thing about your own log and shows the arithmetic under it: which muscle group is furthest past its own usual gap, which of your recurring sessions has waited longest, how this week's sets compare with your own trailing normal. No AI, no network, no per-use cost — it is arithmetic over the log, and a rule whose data is thin stays silent. Tap it for **COACH ME** — from You a sheet you can ask about Train, Fuel or Weight, and from Train one that asks the training questions first. In a live workout a **Coach** chip answers *what should I do next?* from your own sessions — and a quiet line under a finished exercise says it once. **Patterns in your data**, off until you switch it on, sets two groups of your own days side by side as numbers. Part of Pro; the readouts are free.
+- **Coach** — a card at the top of You and above Start workout on Train that says one true thing about your own log and shows the arithmetic under it: which muscle group is furthest past its own usual gap, which of your recurring sessions has waited longest, how this week's sets compare with your own trailing normal. No AI, no network, no per-use cost — it is arithmetic over the log, and a rule whose data is thin stays silent. Tap it for **COACH ME** — from You a sheet you can ask about Train, Fuel or Weight, and from Train one that asks the training questions first. In a live workout a **Coach** chip answers *what should I do next?* from your own sessions — and a quiet line under a finished exercise says it once. **Targets**: for every lift in a workout Coach builds, the weight and reps for next time, worked out from your own sessions and your own jumps — never a percentage, never a plate combination you did not choose, and no number at all when it does not know your step. **Patterns in your data**, off until you switch it on, sets two groups of your own days side by side as numbers. Part of Pro; the readouts are free.
 - **Train** — full workout tracker: saved routines, plate-colored calendar, session timer, W/F/D set tags, 231-exercise library, last-time numbers, rest timer, per-side plate math, e1RM, swipe-to-delete sets, editable history, a post-workout recap with personal records, and a full statistics page.
 - **Fuel** — nutrition: **photograph a plate and Claude reads the macros off it**, or just describe what you ate. Plus macro targets, saved-food library, barcode scanning via Open Food Facts, manual entry, saved meals, one-tap portion multiplying, micronutrient floors, paste import.
 - **Weight** — body-weight log: 7-day moving average chart, weekly rate, a learned time-of-day curve, and a maintenance (TDEE) estimate built on normalised weigh-ins with a stated confidence interval.
@@ -96,7 +96,9 @@ node in the database. See *Access* below for what replaced them, and why.
 | `you.js` | You tab — the screen the app opens on. Read-only; every number is re-derived |
 | `insights.js` | What Rack makes of the data — wins, slips, insights, the weekly review, the goal pace. Pure functions over what `you.js` loaded |
 | `coach.js` | **Coach's engine.** Facts, intents, responses, router — four tables and a sort. Pure: no clock, no DOM, no reads, no module state. Copied into the native tree verbatim |
-| `coach-build.js` | **The workout builder** — "Make me a workout" on Train. Turns the shape that has waited longest into a workout made out of his own log: the most recent such session, its exercises, blocks and logged numbers, never an invented weight. Pure, and copied into the native tree verbatim like `coach.js` |
+| `coach-build.js` | **The workout builder** — "Make me a workout" on Train. Turns the shape that has waited longest into a workout made out of his own log: the most recent such session, its exercises, blocks and logged numbers, never an invented weight — and beside each exercise its target from `coach-prog.js`. Pure, and copied into the native tree verbatim like `coach.js` |
+| `coach-prog.js` | **The targets** — per lift, the weight and reps for next time: his rep range learned from where he moves up, his step learned from his own jumps, a hold, a jump, a reduction or a way back after a layoff, each with its evidence. Every weight is one he logged or at most two of his own steps away (coming back, a whole number of steps below). Pure; copied verbatim. `tools-check/coach-prog.mjs` is its battery |
+| `coach-goal.js` | **The goal's dials** — the six aims and three experience answers, what each turns (confirm twice before a jump, one jump or two, the starting rep band), and the energy context read off the weight trend. Pure; imports nothing; copied verbatim |
 | `coach-tags.js` | Movement pattern, angle, load and side for every built-in exercise. A sidecar keyed on `exercises.js`'s ids, so a tagging mistake can never reach the picker. Pure; imports nothing. The builder reads it: pattern for "Swap one", load for "Fewer exercises" |
 | `coach-live.js` | **Coach in the gym** — during a live workout, what usually comes next, one more set, the next group, or "you're probably good for today", read off the session in progress against his own sessions of that shape. Never a weight. Pure, and copied into the native tree verbatim like `coach.js` |
 | `coach-data.js` | The impure half — the one file the native port rewrites. Reads once per app open and never on a paint |
@@ -140,7 +142,9 @@ Import direction is strictly one-way, no cycles:
 ```
 app.js → you.js       → coach-ui.js  → coach.js   → analytics.js ──→ ui.js
                                                  → coach-build.js → blocks.js  coach-tags.js
+                                                                  → coach-prog.js → coach-goal.js
                                                  → coach-live.js
+                                                 → coach-goal.js
                                     → coach-data.js → picker.js
                                                     → tdee.js  insights.js
                                                     → access.js → store.js
@@ -192,7 +196,7 @@ close a loop, and `bump()` is one line at a call site that already has real work
 to do.
 
 `coach.js` is at the bottom of the graph with `units.js` and `blocks.js`: it
-imports `exercises.js`, `units.js`, `coach-build.js`, `coach-live.js` and the SESSION MATH from
+imports `exercises.js`, `units.js`, `coach-build.js`, `coach-live.js`, `coach-goal.js` and the SESSION MATH from
 `analytics.js` (`e1rm`, `isWorking`, `mergeSessionExercises`, `exerciseIndex`)
 and nothing else — never `loadAll`/`allSessions`, which are that file's impure
 half. It holds no state and takes its clock as an argument, so two renders
@@ -202,8 +206,10 @@ inside one app open cannot disagree about which greeting is showing.
 `coach-build.js` sits under it and never imports it back. It derives nothing
 about the log on its own — the recurring shapes, the window, the gate and the
 layoff are `coach.js`'s facts, handed over by `builderInput()` — and it decides
-everything that goes into a proposal. It writes nothing either: the sheet's
-four buttons end in `startWorkout(preset)` and `saveSessionAsRoutine(record)`,
+everything that goes into a proposal — its targets through `coach-prog.js`,
+which sits under it on the same terms and never imports it back. It writes
+nothing either: the sheet's buttons end in `startWorkout(preset)` and
+`saveSessionAsRoutine(record)`,
 which the Train card hands to `coach-ui.js` as callbacks, the way it hands
 `startWorkout` to Routines, because `coach-ui.js` cannot import `workout.js`
 without closing a ring. The You card hands in neither, so the builder is on
@@ -408,7 +414,7 @@ the app. The card at the bottom of the Weight tab is gone.
 | **You** | Your details — name, sex, height, birth year — **Units** (Imperial / Metric), and which tab the app opens on |
 | **Fuel** | Daily targets · Water goal and sizes · AI estimator · Food memory · Paste food JSON |
 | **Train** | Default rest · Exercise library · Import workout history |
-| **Coach** | One switch per category of thing Coach may bring up, whatever it has been told, and a way into the COACH ME sheet |
+| **Coach** | One switch per category of thing Coach may bring up, whatever it has been told, **Your goal** (Pro), and a way into the COACH ME sheet |
 | **Steps** | Step goal |
 | **App** | Add to Home Screen · Replay the walkthrough · Sign out · Sign out and erase this device's copy |
 
@@ -544,21 +550,55 @@ session of that kind, its exercises in the order you did them, your lifting bloc
 you actually lifted — never a weight you did not. It says which session it was
 built from, offers your own routine for that shape by your name if you have one,
 and says what it left out (an exercise you hid, one no longer in your library)
-rather than quietly substituting. Then four buttons: **Start it** (your numbers
-as ghost text), **Start with my last numbers** (filled in, nothing ticked),
-**Save as routine**, and **Change something** — train something else, fewer
-exercises, or swap one for another of yours in the same group and movement,
-or for **Something else…** — the exercise picker, opened on that lift's group,
-one tap to pick.
+rather than quietly substituting. Under each exercise, its **target** for next
+time (see *Targets* below). Then the buttons: **Start with Coach’s targets**
+first and yellow whenever there are targets (Coach's numbers as ghost text),
+**Start it** (your last numbers as ghost text), **Start with my last numbers**
+(filled in, nothing ticked), **Save as routine**, and **Change something** —
+train something else, fewer exercises, or swap one for another of yours in the
+same group and movement, or for **Something else…** — the exercise picker,
+opened on that lift's group, one tap to pick. With targets switched off, the
+row is the four it always was.
 
 Three refusals, each where the obvious answer would be a confident wrong one:
-after a layoff there are no pre-filled numbers, only targets, and it says how
+after a layoff there are no pre-filled numbers, only ghost text, and it says how
 long it has been — never a percentage off; before your exercise library has
 loaded there is no proposal, because a custom exercise would look deleted; and
 during a live session there is none either, because starting one would replace
 it. `coach-build.js` decides all of it and writes nothing: the buttons end in
 the same `startWorkout` and `saveSessionAsRoutine` a routine and a finished
 session already use. `tools-check/coach-build.mjs` is its fence.
+
+### Targets
+
+On Pro, every exercise in a workout Coach builds carries a line — *Target: 3 × 8
+at 190 lb.* — and a tap on it shows the evidence: the reps every set reached
+and the day, the jump Coach used and how many times it has seen you take it.
+**Start with Coach’s targets** starts the workout with the targets as grey
+ghost text; ticking a set adopts them, and nothing is logged until you tick.
+*What should I lift today?* on Train's sheet lists them.
+
+The rep range is learned from where you move up, and the jump from your own
+jumps — the smallest one you have taken at least twice. Until your log shows
+them, Coach uses a labelled starting range and, for barbells and pound
+dumbbells, a labelled starting jump; with no jump it knows (a machine, a cable
+stack, a kilo dumbbell rack) it says *the next setting up* and prints no
+number. Every weight it names is one you have logged or at most two of your own
+jumps away; coming back after time off, the muscle group's clock decides how
+far back to start (a weight you have logged, or a whole number of your jumps
+below your last top set), and a lift not done in twelve days gets no jump its
+first time back. Singles and lone heavy top sets get no target, a set taken to
+failure never earns two jumps, and a session that does not carry a safe answer
+gets *No target this time* with last time quoted.
+
+Settings → Coach → **Your goal** sets what you are training for (*Get stronger*,
+*Powerlifting*, *Build muscle*, *Lose fat, keep strength*, *Recomp*, *Stay
+consistent*) and how long you have lifted; each turns how many times Coach wants to see the
+top of your range and how big a jump it will suggest. Unset, the targets still
+work. Settings → Coach → **Weight and rep targets** switches them off.
+`coach-prog.js` decides; `tools-check/coach-prog.mjs` scores every case in the
+brief ok / miss / wrong (wrong must be 0) and sweeps thousands of generated
+histories in both units.
 
 ### In the gym
 
