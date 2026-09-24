@@ -46,6 +46,15 @@ writeFileSync(join(dir, 'analytics.mjs'), src('analytics.js')
   .replace("from './exercises.js'", 'from ' + real('exercises.js'))
   .replace("from './ui.js'", 'from ' + real('ui.js'))
   .replace("from './units.js'", 'from ' + real('units.js')));
+/* coach-goal.js and coach-prog.js — v48's targets — are staged the same way:
+   coach-build.js imports coach-prog.js, which takes the same session math
+   through the stub, and coach-goal.js imports nothing at all. */
+writeFileSync(join(dir, 'coach-prog.mjs'), src('coach-prog.js')
+  .replace("from './exercises.js'", 'from ' + real('exercises.js'))
+  .replace("from './units.js'", 'from ' + real('units.js'))
+  .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
+  .replace("from './coach-goal.js'", 'from ' + real('coach-goal.js'))
+  .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href)));
 /* coach-build.js, the workout builder, is staged the same way: coach.js
    imports it, and it takes analytics.js's session math through the same stub. */
 writeFileSync(join(dir, 'coach-build.mjs'), src('coach-build.js')
@@ -53,6 +62,7 @@ writeFileSync(join(dir, 'coach-build.mjs'), src('coach-build.js')
   .replace("from './units.js'", 'from ' + real('units.js'))
   .replace("from './blocks.js'", 'from ' + real('blocks.js'))
   .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
+  .replace("from './coach-prog.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-prog.mjs')).href))
   .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href)));
 /* coach-live.js, the in-session read (ship three), is staged the same way:
    coach.js imports it too, and it takes the same session math through the stub. */
@@ -65,6 +75,8 @@ writeFileSync(join(dir, 'coach.mjs'), src('coach.js')
   .replace("from './units.js'", 'from ' + real('units.js'))
   .replace("from './coach-build.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-build.mjs')).href))
   .replace("from './coach-live.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-live.mjs')).href))
+  .replace("from './coach-goal.js'", 'from ' + real('coach-goal.js'))
+  .replace("from './coach-prog.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-prog.mjs')).href))
   .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href)));
 const C = await import(pathToFileURL(join(dir, 'coach.mjs')).href);
 

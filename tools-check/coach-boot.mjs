@@ -214,16 +214,22 @@ async function rig({ data = {}, slow = [], fail = [] } = {}) {
   const ACCESS = put('access.mjs', swap(src('access.js'), [
     ['./store.js', STORE], ['./firebase-config.js', real('firebase-config.js')],
     ['./accounts.js', real('accounts.js')], ['./ui.js', real('ui.js')]]));
+  // v48's targets: coach-build.js imports coach-prog.js, which takes the same
+  // session math, and coach-goal.js imports nothing.
+  const PROG   = put('coach-prog.mjs', swap(src('coach-prog.js'), [
+    ['./analytics.js', ANALY], ['./units.js', real('units.js')], ['./exercises.js', real('exercises.js')],
+    ['./coach-tags.js', real('coach-tags.js')], ['./coach-goal.js', real('coach-goal.js')]]));
   const BUILD  = put('coach-build.mjs', swap(src('coach-build.js'), [
     ['./exercises.js', real('exercises.js')], ['./analytics.js', ANALY],
     ['./units.js', real('units.js')], ['./blocks.js', real('blocks.js')],
-    ['./coach-tags.js', real('coach-tags.js')]]));
+    ['./coach-tags.js', real('coach-tags.js')], ['./coach-prog.js', PROG]]));
   const LIVE   = put('coach-live.mjs', swap(src('coach-live.js'), [
     ['./exercises.js', real('exercises.js')], ['./analytics.js', ANALY],
     ['./units.js', real('units.js')]]));
   const COACH  = put('coach.mjs', swap(src('coach.js'), [
     ['./exercises.js', real('exercises.js')], ['./analytics.js', ANALY],
-    ['./units.js', real('units.js')], ['./coach-build.js', BUILD], ['./coach-live.js', LIVE]]));
+    ['./units.js', real('units.js')], ['./coach-build.js', BUILD], ['./coach-live.js', LIVE],
+    ['./coach-goal.js', real('coach-goal.js')], ['./coach-prog.js', PROG]]));
   const DATA_  = put('coach-data.mjs', swap(src('coach-data.js'), [
     ['./store.js', STORE], ['./exercises.js', real('exercises.js')],
     ['./picker.js', PICK], ['./tdee.js', TDEE], ['./insights.js', INSI],

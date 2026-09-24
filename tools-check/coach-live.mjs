@@ -55,11 +55,21 @@ writeFileSync(join(dir, 'analytics.mjs'), src('analytics.js')
   .replace("from './exercises.js'", 'from ' + real('exercises.js'))
   .replace("from './ui.js'", 'from ' + real('ui.js'))
   .replace("from './units.js'", 'from ' + real('units.js')));
+/* coach-goal.js and coach-prog.js — v48's targets — are staged the same way:
+   coach-build.js imports coach-prog.js, which takes the same session math
+   through the stub, and coach-goal.js imports nothing at all. */
+writeFileSync(join(dir, 'coach-prog.mjs'), src('coach-prog.js')
+  .replace("from './exercises.js'", 'from ' + real('exercises.js'))
+  .replace("from './units.js'", 'from ' + real('units.js'))
+  .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
+  .replace("from './coach-goal.js'", 'from ' + real('coach-goal.js'))
+  .replace("from './analytics.js'", 'from ' + at('analytics.mjs')));
 writeFileSync(join(dir, 'coach-build.mjs'), src('coach-build.js')
   .replace("from './exercises.js'", 'from ' + real('exercises.js'))
   .replace("from './units.js'", 'from ' + real('units.js'))
   .replace("from './blocks.js'", 'from ' + real('blocks.js'))
   .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
+  .replace("from './coach-prog.js'", 'from ' + at('coach-prog.mjs'))
   .replace("from './analytics.js'", 'from ' + at('analytics.mjs')));
 writeFileSync(join(dir, 'coach-live.mjs'), src('coach-live.js')
   .replace("from './exercises.js'", 'from ' + real('exercises.js'))
@@ -70,6 +80,8 @@ writeFileSync(join(dir, 'coach.mjs'), src('coach.js')
   .replace("from './units.js'", 'from ' + real('units.js'))
   .replace("from './coach-build.js'", 'from ' + at('coach-build.mjs'))
   .replace("from './coach-live.js'", 'from ' + at('coach-live.mjs'))
+  .replace("from './coach-goal.js'", 'from ' + real('coach-goal.js'))
+  .replace("from './coach-prog.js'", 'from ' + at('coach-prog.mjs'))
   .replace("from './analytics.js'", 'from ' + at('analytics.mjs')));
 const C = await import(pathToFileURL(join(dir, 'coach.mjs')).href);
 const L = await import(pathToFileURL(join(dir, 'coach-live.mjs')).href);

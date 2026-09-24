@@ -53,6 +53,15 @@ writeFileSync(join(dir, 'analytics.mjs'), src('analytics.js')
   .replace("from './exercises.js'", 'from ' + real('exercises.js'))
   .replace("from './ui.js'", 'from ' + real('ui.js'))
   .replace("from './units.js'", 'from ' + real('units.js')));
+/* coach-goal.js and coach-prog.js — v48's targets — are staged the same way:
+   coach-build.js imports coach-prog.js, which takes the same session math
+   through the stub, and coach-goal.js imports nothing at all. */
+writeFileSync(join(dir, 'coach-prog.mjs'), src('coach-prog.js')
+  .replace("from './exercises.js'", 'from ' + real('exercises.js'))
+  .replace("from './units.js'", 'from ' + real('units.js'))
+  .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
+  .replace("from './coach-goal.js'", 'from ' + real('coach-goal.js'))
+  .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href)));
 /* coach-build.js, the workout builder, is staged the same way: coach.js
    imports it, and it takes analytics.js's session math through the same stub. */
 writeFileSync(join(dir, 'coach-build.mjs'), src('coach-build.js')
@@ -60,6 +69,7 @@ writeFileSync(join(dir, 'coach-build.mjs'), src('coach-build.js')
   .replace("from './units.js'", 'from ' + real('units.js'))
   .replace("from './blocks.js'", 'from ' + real('blocks.js'))
   .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
+  .replace("from './coach-prog.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-prog.mjs')).href))
   .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href)));
 /* coach-live.js, the in-session read (ship three), is staged the same way:
    coach.js imports it too, and it takes the same session math through the stub. */
@@ -72,6 +82,8 @@ writeFileSync(join(dir, 'coach.mjs'), src('coach.js')
   .replace("from './units.js'", 'from ' + real('units.js'))
   .replace("from './coach-build.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-build.mjs')).href))
   .replace("from './coach-live.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-live.mjs')).href))
+  .replace("from './coach-goal.js'", 'from ' + real('coach-goal.js'))
+  .replace("from './coach-prog.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-prog.mjs')).href))
   .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href)));
 const C = await import(pathToFileURL(join(dir, 'coach.mjs')).href);
 
@@ -101,10 +113,13 @@ section('A. three imports, and the analytics one is a closed list');
   // coach-build.js is the fourth and coach-live.js the fifth, and each is held
   // to this file's own rules in sections F and G below — a pure module
   // importing another pure module is still a pure module, and only while that
-  // stays true.
-  const ALLOWED = ['./exercises.js', './analytics.js', './units.js', './coach-build.js', './coach-live.js'];
+  // stays true. coach-goal.js is the sixth (v48): the goal's facts read its
+  // aims and its energy context, and section I holds it to the same rules.
+  // coach-prog.js is reached through the builder, never from here.
+  const ALLOWED = ['./exercises.js', './analytics.js', './units.js', './coach-build.js', './coach-live.js',
+                   './coach-goal.js'];
   const extra = imports.map(i => i.from).filter(f => !ALLOWED.includes(f));
-  check('coach.js imports nothing outside exercises.js, analytics.js, units.js, coach-build.js and coach-live.js',
+  check('coach.js imports nothing outside exercises.js, analytics.js, units.js, coach-build.js, coach-live.js and coach-goal.js',
         !extra.length, list(extra));
   check('and imports none of them twice',
         new Set(imports.map(i => i.from)).size === imports.length);
@@ -371,9 +386,12 @@ section('F. coach-build.js — the builder is copied byte for byte as well');
     .split('\n').map(l => l.replace(/(^|[^:'"\\])\/\/.*$/, '$1')).join('\n');
   const imports = [...BRAW.matchAll(/^import\s+(?:([^;]*?)\s+from\s+)?['"]([^'"]+)['"];?$/gm)]
     .map(m => ({ names: (m[1] || '').trim(), from: m[2] }));
-  const ALLOWED = ['./exercises.js', './analytics.js', './units.js', './blocks.js', './coach-tags.js'];
+  // coach-prog.js is the sixth (v48): the targets on each row are its
+  // prescribe(), and section H holds it to these same rules.
+  const ALLOWED = ['./exercises.js', './analytics.js', './units.js', './blocks.js', './coach-tags.js',
+                   './coach-prog.js'];
   const extra = imports.map(i => i.from).filter(f => !ALLOWED.includes(f));
-  check('it imports nothing outside the five pure modules it needs', !extra.length, list(extra));
+  check('it imports nothing outside the six pure modules it needs', !extra.length, list(extra));
   check('and never coach.js — coach.js imports it, and a ring is a load order',
         !imports.some(i => i.from === './coach.js') && !/coach\.js'/.test(BCODE.replace(/coach-(build|tags)\.js'/g, '')));
   const a = imports.find(i => i.from === './analytics.js');
@@ -448,6 +466,90 @@ section('G. coach-live.js — the in-session read is copied byte for byte as wel
         !/\bsession\.[\w.]+\s*=[^=]/.test(LCODE) && !/\.sets\s*=[^=]/.test(LCODE) &&
         !/\.(push|splice|pop|shift|unshift|sort|reverse)\(/.test(
           (LCODE.match(/i\.session[^\n]*/g) || []).join('\n')));
+}
+
+/* ================= H. COACH-PROG.JS IS HELD TO THE SAME FENCE =================
+   v48's targets are the fourth file the native port copies verbatim
+   (src/pure/coach-prog.js), and the one that names a weight to put on a bar —
+   so a clock or a cache here is a target that changes between two paints. It
+   may reach coach-goal.js, units.js, exercises.js, coach-tags.js and the pure
+   half of analytics.js, and nothing else; coach-build.js imports it, and
+   nothing reaches back. */
+section('H. coach-prog.js — the targets are copied byte for byte as well');
+{
+  const PRAW = src('coach-prog.js');
+  const PCODE = PRAW.replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n').map(l => l.replace(/(^|[^:'"\\])\/\/.*$/, '$1')).join('\n');
+  const imports = [...PRAW.matchAll(/^import\s+(?:([^;]*?)\s+from\s+)?['"]([^'"]+)['"];?$/gm)]
+    .map(m => ({ names: (m[1] || '').trim(), from: m[2] }));
+  const ALLOWED = ['./coach-goal.js', './units.js', './exercises.js', './coach-tags.js', './analytics.js'];
+  const extra = imports.map(i => i.from).filter(f => !ALLOWED.includes(f));
+  check('it imports nothing outside coach-goal.js, units.js, exercises.js, coach-tags.js and analytics.js',
+        !extra.length, list(extra));
+  check('and never coach.js, coach-build.js or coach-live.js — the builder imports IT',
+        !imports.some(i => /coach(-build|-live)?\.js$/.test(i.from)));
+  const a = imports.find(i => i.from === './analytics.js');
+  const named = a ? a.names.replace(/[{}]/g, '').split(',').map(s => s.trim()).filter(Boolean) : [];
+  check('it takes only the pure half of analytics.js — e1rm, isWorking, mergeSessionExercises',
+        named.length > 0 && named.every(n => ['e1rm', 'isWorking', 'mergeSessionExercises'].includes(n)), list(named));
+  check('and never names store.js, reads or writes',
+        !/store\.js/.test(PCODE) && !/\bread\s*\(|\breadExact\s*\(|\bwrite\s*\(/.test(PCODE) &&
+        !/\b(loadAll|allSessions)\s*\(/.test(PCODE));
+  check('no clock of its own — no Date.now(), no argless new Date(), no performance.now()',
+        !/Date\.now\s*\(/.test(PCODE) && ![...PCODE.matchAll(/new\s+Date\s*\(\s*\)/g)].length &&
+        !/performance\s*\.\s*now/.test(PCODE));
+  check('`now` arrives on the context rather than being taken', /c\.now/.test(PCODE));
+  check('no Math.random() — the same log has to name the same weight on both clients',
+        !/Math\s*\.\s*random/.test(PCODE));
+  ['document', 'window', 'navigator', 'localStorage', 'sessionStorage', 'fetch', 'XMLHttpRequest']
+    .forEach(g => check('no ' + g, !new RegExp('\\b' + g + '\\b').test(PCODE),
+                        (PCODE.match(new RegExp('.*\\b' + g + '\\b.*')) || [''])[0].trim()));
+  check('no console, no timers', !/\bconsole\s*\./.test(PCODE) && !/\bset(Timeout|Interval)\s*\(/.test(PCODE));
+  const topLevel = PCODE.split('\n').filter(l => /^(export\s+)?(let|var)\s/.test(l));
+  check('no top-level let or var — nothing remembered between targets', !topLevel.length, list(topLevel.map(l => l.trim())));
+  check('no default export — the port copies named functions', !/export\s+default/.test(PCODE));
+  check('prescribe() and exposuresFor() are what it exports',
+        /export function prescribe\(ex, ctx\)/.test(PRAW) && /export function exposuresFor\(sessions, exId\)/.test(PRAW));
+
+  // Driven: the same log is the same target, the wall clock moves nothing,
+  // and `now` does.
+  const P = await import(pathToFileURL(join(dir, 'coach-prog.mjs')).href);
+  const DAY = 864e5, NOW = 1789307130123;
+  const set = (w, r) => ({ w: String(w), r: String(r), type: 'N', done: true });
+  const log = [175, 180, 180, 185, 185].map((w, i) => ({ id: 'p' + i, startedAt: NOW - (19 - 4 * i) * DAY,
+    exercises: [{ exId: 'barbell-bench-press', name: 'Barbell Bench Press', group: 'chest', equipment: 'barbell',
+                  sets: [set(w, i % 2 ? 8 : 12), set(w, i % 2 ? 8 : 12), set(w, i % 2 ? 8 : 12)] }] }));
+  const ex = { exId: 'barbell-bench-press', name: 'Barbell Bench Press', group: 'chest', equipment: 'barbell',
+               exposures: P.exposuresFor(log, 'barbell-bench-press'), groupDaysSince: 3 };
+  const shot = now => JSON.stringify(P.prescribe(ex, { now, u: 'lb' }));
+  const one = shot(NOW);
+  check('the engine names a target on a real log', /Target:/.test(one), one.slice(0, 120));
+  const before = Date.now();
+  while (Date.now() === before) { /* spin past a millisecond of real time */ }
+  check('and the same one again after the real clock has moved', one === shot(NOW));
+  check('moving `now` three weeks moves it — the clock it reads is the argument',
+        one !== shot(NOW + 21 * DAY));
+}
+
+/* ================= I. COACH-GOAL.JS — THE DIALS, AND NOTHING ELSE ================= */
+section('I. coach-goal.js — imports nothing, remembers nothing, and its tables cannot be edited');
+{
+  const GRAW = src('coach-goal.js');
+  const GCODE = GRAW.replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n').map(l => l.replace(/(^|[^:'"\\])\/\/.*$/, '$1')).join('\n');
+  const imports = [...GRAW.matchAll(/^import\s+(?:([^;]*?)\s+from\s+)?['"]([^'"]+)['"];?$/gm)].map(m => m[2]);
+  check('it imports nothing, or units.js at most', imports.every(f => f === './units.js'), list(imports));
+  check('no clock at all, no dice, no DOM, no storage, no console',
+        !/Date\.|new\s+Date|performance\s*\.|Math\s*\.\s*random|\b(document|window|navigator|localStorage|sessionStorage|fetch)\b|\bconsole\s*\./.test(GCODE));
+  check('no top-level let or var', !GCODE.split('\n').some(l => /^(export\s+)?(let|var)\s/.test(l)));
+  check('no default export', !/export\s+default/.test(GCODE));
+  const G = await import(pathToFileURL(join(ROOT, 'coach-goal.js')).href);
+  const tables = Object.keys(G).filter(k => typeof G[k] === 'object' && G[k] !== null);
+  check('every exported table is frozen (' + tables.join(', ') + ')',
+        tables.length >= 3 && tables.every(k => Object.isFrozen(G[k])), list(tables.filter(k => !Object.isFrozen(G[k]))));
+  check('and the only modules importing it are coach.js and coach-prog.js — nothing it imports reaches back',
+        /from '\.\/coach-goal\.js'/.test(src('coach.js')) && /from '\.\/coach-goal\.js'/.test(src('coach-prog.js')) &&
+        !/from '\.\/coach-goal\.js'/.test(src('coach-build.js')) && !/from '\.\/coach-goal\.js'/.test(src('coach-live.js')));
 }
 
 /* ---------- report ---------- */

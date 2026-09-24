@@ -38,13 +38,16 @@
 // Imports units.js, exercises.js, the pure half of analytics.js, coach-build.js
 // — the workout builder, which decides what goes into a proposal — and
 // coach-live.js, which reads a workout in progress. Both take everything they
-// know about the log from here. Nothing imports back.
+// know about the log from here. And coach-goal.js, whose aims and energy
+// context the goal's facts read (the targets themselves are coach-prog.js's,
+// reached through the builder). Nothing imports back.
 
 import { GROUPS, GROUP_ORDER } from './exercises.js';
 import { e1rm, isWorking, mergeSessionExercises, exerciseIndex } from './analytics.js';
 import { labelW, labelRate, unitW, fmtW } from './units.js';
 import { propose, liveRefusal, buildMenu, swapTo, BUILD_ASK } from './coach-build.js';
 import { liveRead, LIVE_NONE } from './coach-live.js';
+import { AIMS, EXPERIENCE, energyContext } from './coach-goal.js';
 
 const DAY = 864e5;
 
@@ -180,6 +183,12 @@ export const CATEGORIES = Object.freeze([
      existing finding: the builder is a selector, it never competes for a card,
      and every category that does keeps its order relative to the others. */
   { id: 'build',       label: 'Workout builder',     mutable: true,  note: 'Offering to put a workout together from your log.' },
+  /* v48's, directly after the builder because it lives on the builder's
+     proposal. Every later category moves down one and keeps its order, so no
+     finding's rank moves — nothing in this one competes for a card. Absent
+     means on, like every switch but Patterns. */
+  { id: 'targets',     label: 'Weight and rep targets', mutable: true,
+    note: 'What to put on the bar next time, worked out from your own sessions.' },
   /* Ship three's in-session read: the chip in a live workout's header row and
      the one quiet line under a finished exercise. On unless switched off, like
      every category but Patterns. After the builder because it is the other
@@ -822,6 +831,19 @@ export const FACTS = Object.freeze([
                        ', from ' + plural(v.reps, 'rep') + ' at that load',
     age: v => v.daysAgo
   },
+  {
+    /* The targets on the default proposal — the workout "Build it" would
+       make — one per exercise that has one, as coach-prog.js wrote them.
+       d.build({}) is memoised, so reading them costs no second proposal. Null
+       while there is no proposal, and while targets are switched off. */
+    id: 'lift.targets', unit: null, requires: [],
+    compute: d => {
+      const p = d.build({});
+      const list = p ? p.exercises.map(e => e.target).filter(Boolean) : [];
+      return list.length ? list : null;
+    },
+    because: v => 'each of ' + plural(v.length, 'target') + ' worked out from your own sessions of that lift'
+  },
 
   /* ---------- fuel ----------
      The guard comes first in this family and it is not optional. Onboarding is
@@ -994,6 +1016,20 @@ export const FACTS = Object.freeze([
       return Number.isFinite(r) && r !== 0 ? r : null;
     },
     because: () => 'the weekly rate your own goal is set to'
+  },
+  {
+    /* The energy context: the weight trend as a share of bodyweight a week —
+       a hard cut, a deficit, holding or a surplus — read by coach-goal.js and
+       handed to the targets, which confirm twice and jump once in a hard cut.
+       From the trend alone: no food is read for it. Null when the trend cannot
+       carry a reading, which is also what the targets do without. */
+    id: 'weight.energy', unit: null, requires: [],
+    compute: d => energyContext(d.input.weight || {}),
+    because: (v, d) => {
+      const n = (d.input.weight || {}).rateDays;
+      return 'your weight trend against your bodyweight' +
+             (Number.isFinite(n) ? ', over your last ' + plural(n, 'day') + ' of weigh-ins' : '');
+    }
   },
 
   /* ---------- steps ---------- */
@@ -1224,6 +1260,30 @@ export const FACTS = Object.freeze([
       return live.length ? live[0].id : null;
     },
     because: () => 'Coach already has a question waiting'
+  },
+  /* THE GOAL, as the answers to Coach's own two questions and nothing else —
+     no `goal` key, because a second record of the same fact is the one that
+     goes stale. Each reads its answer straight off settings/coach, so the
+     registry's drive (write the answer, watch the fact move) proves the link.
+     Unanswered is null, and the targets then use the no-aim dials: the aim
+     turns them, it never gates them. */
+  {
+    id: 'coach.aim', unit: null, requires: [],
+    compute: d => {
+      const a = ((d.input.settings && d.input.settings.answers) || {}).q_goal_aim;
+      return AIMS.includes(a) ? a : null;
+    },
+    because: () => 'what you told Coach you are training for',
+    usesAnswers: ['q_goal_aim']
+  },
+  {
+    id: 'coach.experience', unit: null, requires: [],
+    compute: d => {
+      const a = ((d.input.settings && d.input.settings.answers) || {}).q_experience;
+      return EXPERIENCE.includes(a) ? a : null;
+    },
+    because: () => 'how long you told Coach you have been lifting',
+    usesAnswers: ['q_experience']
   }
 ]);
 
@@ -1249,7 +1309,17 @@ export const PATTERN_FACTS = Object.freeze([
    unknown (a rate with no stated direction has no reading), and this is the one
    thing the data genuinely cannot supply: an account with no auto goal and a
    calorie target within a rounding of maintenance has not said which way it
-   means to go. */
+   means to go.
+
+   v48 adds the goal's two, and they are asked somewhere else. A question with
+   a `where` is never the sheet's opening question — pendingQuestion() skips it
+   — and is asked instead under the answer it refines: `where: 'targets'` under
+   "What should I lift today?", the moment the answer changes something he can
+   see, behind the Pro gate and the targets switch by construction. `always`
+   is what Settings reads: those rows are shown before they are answered, under
+   Your goal. `ack` is what the sheet says once an answer is in — each question
+   its own, because "that changes how Coach reads your weight" is false of an
+   aim. */
 export const QUESTIONS = Object.freeze([
   {
     id: 'q_goal_direction',
@@ -1264,9 +1334,45 @@ export const QUESTIONS = Object.freeze([
     // unlocks or the list stops being true.
     changes: Object.freeze(['weight_rate_vs_goal', 'stalled_lift']),
     fact: 'weight.goalDir',
+    ack: 'Noted. That changes how Coach reads your weight.',
     // Only worth asking when the answer would really unlock something: there is
     // a rate to read and no direction to read it against.
     when: d => d.f('weight.rateWk') != null && d.f('weight.goalDir') == null
+  },
+  {
+    id: 'q_goal_aim',
+    text: 'What are you training for right now?',
+    options: Object.freeze([
+      { value: 'strength',     label: 'Get stronger' },
+      { value: 'powerlifting', label: 'Powerlifting' },
+      { value: 'muscle',       label: 'Build muscle' },
+      { value: 'cut',          label: 'Lose fat, keep strength' },
+      { value: 'recomp',       label: 'Recomp' },
+      { value: 'maintain',     label: 'Stay consistent' }
+    ]),
+    changes: Object.freeze(['lift_targets']),
+    fact: 'coach.aim',
+    always: true,
+    where: 'targets',
+    ack: 'Noted. Coach sets your targets with that in mind.',
+    when: d => d.f('coach.aim') == null
+  },
+  {
+    id: 'q_experience',
+    text: 'How long have you been lifting consistently?',
+    // Spelled out: every figure in this file's copy is computed from the log,
+    // and tools-check/coach-units.mjs refuses a typed one.
+    options: Object.freeze([
+      { value: 'new',   label: 'Under six months' },
+      { value: 'some',  label: 'Six months to two years' },
+      { value: 'years', label: 'Two years or more' }
+    ]),
+    changes: Object.freeze(['lift_targets']),
+    fact: 'coach.experience',
+    always: true,
+    where: 'targets',
+    ack: 'Noted. That sets how big a jump Coach will suggest.',
+    when: d => d.f('coach.aim') != null && d.f('coach.experience') == null
   }
 ]);
 
@@ -1604,6 +1710,20 @@ export const INTENTS = Object.freeze([
     minData: d => !isMuted(d.input.settings, 'build'),
     when: d => d.build({}) != null && d.buildMenu().length > 0,
     response: 'resp_build_menu'
+  },
+  {
+    /* WHAT TO LIFT — v48. The targets on the workout "Build it" would make,
+       one bubble per lift, each worked out by coach-prog.js from his own
+       sessions. A selector: it picks the workout's targets rather than finding
+       something, so it never competes for a card. Pro, because the builder is.
+       Switched off in Settings → Coach → Weight and rep targets, and then the
+       proposal carries none either (builderInput's targetsOn). */
+    id: 'lift_targets', kind: 'selector', priorityBand: 5, severity: 1,
+    category: 'targets', tier: 'pro', surfaces: ['sheet'],
+    factsNeeded: ['lift.targets'], supersedes: [],
+    minData: d => !isMuted(d.input.settings, 'targets'),
+    when: d => (d.f('lift.targets') || []).length > 0,
+    response: 'resp_lift_targets'
   },
   {
     /* THE IN-SESSION READ, registered so its switch is a category like any
@@ -2004,6 +2124,25 @@ export const RESPONSES = Object.freeze({
     text: () => BUILD_ASK,
     reason: () => 'Every choice here is built from a session in your log.'
   },
+  /* The targets, one lift to a bubble: its line and, underneath, the first
+     piece of its evidence. Every word of both is coach-prog.js's and is fenced
+     there (tools-check/coach-prog.mjs) and in coach-voice.mjs. A lift in a
+     duplicated block is one lift with one target, so it is said once. Six at
+     most: past that it is the proposal, which is one tap away. */
+  resp_lift_targets: {
+    text: d => {
+      const v = d.f('session.shapeOverdue');
+      return v ? 'Targets for your ' + v.name + '.' : '';
+    },
+    reason: () => 'Each one is worked out from your own sessions of that lift. Nothing is logged until you tick a set.',
+    more: d => {
+      const p = d.build({});
+      const seen = new Set();
+      return (p ? p.exercises : []).filter(e => e.target && !seen.has(e.exId) && seen.add(e.exId))
+        .slice(0, 6)
+        .map(e => ({ text: e.name + ' — ' + e.target.line, reason: e.target.why[0] || '' }));
+    }
+  },
   // Never rendered through the router — see live_read.
   resp_live:     { text: () => '' },
   resp_question: {
@@ -2245,10 +2384,16 @@ export const PATTERN_TOPIC = Object.freeze({ id: 'ask_patterns', label: 'Pattern
    away; "Make me a workout" asks what to train and builds from the choice.
    Like every other bubble here the builder is offered only when its route
    answers — a proposal really exists — so the chip that says it is never a
-   chip that cannot do it. */
+   chip that cannot do it.
+
+   "What should I lift today?" is third (v48): the targets on that same
+   workout. His decided order keeps the first two places. The label is his
+   voice, beside "What should I train today?", and is not bound by the ban on
+   Coach's own sentences. */
 export const TRAIN_TOPICS = Object.freeze([
   { id: 'ask_shape',   label: 'What should I train today?', category: 'recency' },
   { id: 'ask_build',   label: 'Make me a workout',          category: 'build' },
+  { id: 'ask_targets', label: 'What should I lift today?',  category: 'targets' },
   { id: 'ask_overdue', label: 'What’s waited longest?',     category: 'recency' },
   { id: 'ask_volume',  label: 'How’s my week going?',       category: 'volume' }
 ]);
@@ -2268,6 +2413,7 @@ const ROUTES = Object.freeze({
   ask_shape:    ['session_shape_most_overdue', 'train_today_recommendation'],
   ask_build:    ['build_menu'],
   ask_build_now: ['build_workout'],
+  ask_targets:  ['lift_targets'],
   ask_stall:    ['stalled_lift', 'pr_proximity'],
   ask_records:  ['recent_pr', 'pr_proximity'],
   ask_volume:   ['group_under_weekly_normal', 'weekly_sessions_vs_trailing'],
@@ -2292,7 +2438,7 @@ const FOLLOWUPS = Object.freeze({
   topic_weight: ['ask_rate', 'ask_weighin', 'ask_steps'],
   topic_steps:  ['ask_rate', 'ask_weighin'],
   ask_overdue:  ['ask_shape', 'ask_volume'],
-  ask_shape:    ['ask_build_now', 'ask_overdue', 'ask_rest'],
+  ask_shape:    ['ask_build_now', 'ask_targets', 'ask_overdue', 'ask_rest'],
   ask_stall:    ['ask_records', 'ask_volume'],
   ask_records:  ['ask_stall', 'ask_overdue'],
   ask_volume:   ['ask_overdue', 'ask_rest'],
@@ -2308,6 +2454,8 @@ const FOLLOWUPS = Object.freeze({
   // chips under either would be one too many.
   ask_build:    [],
   ask_build_now: [],
+  // The workout the targets are on, one tap away.
+  ask_targets:  ['ask_build_now'],
   // Nothing: the answer is already every pattern that clears its bar.
   ask_patterns: [],
   injury:       []
@@ -2336,6 +2484,7 @@ export const ROUTE_IDS = Object.freeze(Object.keys(ROUTES));
 const ASK_LABELS = Object.freeze({
   ask_build:    'Make me a workout',
   ask_build_now: 'Build it',
+  ask_targets:  'What should I lift today?',
   ask_overdue:  'What’s overdue?',
   ask_shape:    'Which session is due?',
   ask_stall:    'Anything stalled?',
@@ -2438,7 +2587,12 @@ function factStore(input) {
    is train_today_recommendation's min-data gate, because the brief's rule is
    "the same gate", and a restated gate is a gate that stops being the same the
    first time one of them is tuned. `layoffDays` is set exactly when
-   returning_from_layoff would fire. */
+   returning_from_layoff would fire.
+
+   And v48's three, which the builder hands straight to coach-prog.js: the
+   goal (his two answers), the energy context with the rate it was read from
+   (the sentence that quotes it needs the number), and whether targets are on
+   at all — off, every row's target is null and there is no targets view. */
 function builderInput(d) {
   const back = INTENT_BY_ID.returning_from_layoff;
   return {
@@ -2455,7 +2609,10 @@ function builderInput(d) {
     layoffDays: gate(back, d) && fires(back, d) ? d.f('session.lastDaysAgo') : null,
     lib: d.lib,
     hidden: Array.isArray(d.input.hidden) ? d.input.hidden : [],
-    libReady: d.input.libReady === true
+    libReady: d.input.libReady === true,
+    goal: { aim: d.f('coach.aim'), exp: d.f('coach.experience') },
+    energy: { context: d.f('weight.energy'), rateWk: d.f('weight.rateWk') },
+    targetsOn: !isMuted(d.input.settings, 'targets')
   };
 }
 
@@ -2645,6 +2802,8 @@ function pendingQuestion(d) {
   if (d.f('coach.openQuestion')) return null;
   const answers = (d.input.settings && d.input.settings.answers) || {};
   for (const q of QUESTIONS) {
+    // Asked somewhere else — under the answer it refines — and never here.
+    if (q.where) continue;
     if (answers[q.id] != null) continue;
     let ok = false;
     try { ok = !!q.when(d); } catch { ok = false; }
@@ -2652,6 +2811,29 @@ function pendingQuestion(d) {
   }
   return null;
 }
+
+/* The question asked UNDER an answer rather than as the sheet's opener: the
+   first unanswered one whose `where` is that answer's, under the same three
+   gates as the opener — questions not switched off, nothing already waiting
+   (the shipped week's cooldown, which is what makes them one at a time), and
+   an answer that would change something. Never a gate on the answer itself:
+   the targets are there either way. */
+function questionUnder(d, where) {
+  if (isMuted(d.input.settings, 'questions')) return null;
+  if (d.f('coach.openQuestion')) return null;
+  const answers = (d.input.settings && d.input.settings.answers) || {};
+  for (const q of QUESTIONS) {
+    if (q.where !== where || answers[q.id] != null) continue;
+    let ok = false;
+    try { ok = !!q.when(d); } catch { ok = false; }
+    if (ok) return q;
+  }
+  return null;
+}
+
+// What the sheet is handed of a question: its words, its chips, and what it
+// says once answered.
+const questionView = q => (q ? { id: q.id, text: q.text, options: q.options, ack: q.ack || null } : null);
 
 /* ---------- the public face ----------
 
@@ -2709,7 +2891,7 @@ export function coach(input) {
        function rather than an array because the two surfaces draw the same
        component and the card is the only thing that knows which one it is. */
     topicsFor: surface => topicsFor(d, surface === 'train' ? 'train' : 'you'),
-    question: question ? { id: question.id, text: question.text, options: question.options } : null,
+    question: questionView(question),
     // The opening bubble: the same finding the You card is showing, so the
     // sheet does not contradict the card that opened it.
     opening: you,
@@ -2777,7 +2959,11 @@ function ask(d, u, id) {
     if (!gate(it, d)) continue;
     if (!fires(it, d)) continue;
     const v = renderIntent(it, d, u);
-    if (v) return { ...v, followups: followupsFor(d, u, id, v.id) };
+    // The targets answer carries the goal question it refines — this route only.
+    if (v) {
+      return { ...v, followups: followupsFor(d, u, id, v.id),
+               ...(v.id === 'lift_targets' ? { question: questionView(questionUnder(d, 'targets')) } : null) };
+    }
   }
   return {
     id,
