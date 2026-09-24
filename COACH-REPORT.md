@@ -2719,3 +2719,544 @@ both on the goal screens, and both are fixed.
   a line (climbing, level, level lately, coming down, holding steady, too soon
   to call), and the focus line counts whole sets ("9.8 sets a week" read as a
   typo). `coach-pace.mjs` section C is updated deliberately and pins both.
+
+---
+
+# COACH TRAINER — stage four: rest, recovery and fuel (rack-v52)
+
+## 59. READ THIS FIRST — rack-v52, and what is not done
+
+Written at the end of an unattended run in `~/dev/ship-v52` (a fenced, full
+clone at rack-v51, `99b49ea`), against `SHIP-V52-PROMPT.md`, with
+`COACH-TRAINER-SPEC.md` §0, §1, §4, §6.4, §9.2, §9.3, §10.3 and §12 read first
+as the brief asked. The fence was proved before anything else: `echo GUARDTEST
+ping` was refused. Shipped as `rack-v52`. **Not pushed.**
+
+**Both phases are built, in the brief's order.** Phase A (with its groundwork,
+`targetFor()`) was built, verified in three time zones and committed before a
+line of Phase B was written. Every verifier exits 0 under
+`TZ=America/New_York`, `UTC` and `Pacific/Auckland`: **40 of them, two new**
+(`coach-ready.mjs`, `coach-fuel.mjs`).
+
+- `coach-prog.mjs` **57 / 0 / 0**; `coach-overlap.mjs` **24 / 0 / 0**.
+- `coach-ready.mjs` **ok 46, miss 0, wrong 0**; `coach-fuel.mjs` **ok 16, miss
+  0, wrong 0**.
+- With no marks stored, `prescribe()` and `targetFor()` are byte-identical to
+  rack-v51's `prescribe()` on all 57 rows and on 4,400 generated histories
+  (`coach-prog.mjs` D, against v51's own file read out of git).
+- A card paint on the year-long, 200-session fixture: v51 **3.6 ms** Pro /
+  **9.9 ms** Basic, v52 **3.9 ms** / **10.4 ms** — +0.3 and +0.5 ms against a
+  +1 ms budget. The paint spy is green (§66).
+- The replay, which runs only inside an answer: **about 55 ms** median on the
+  same log, against the brief's 150.
+- `database.rules.json` is byte-identical to rack-v51. `sw.js` and `usage.js`
+  read `rack-v52`.
+- The §9 spy counts hold (§61.3).
+
+**What nobody has seen.** Nothing in this ship has been on a phone or in a
+browser. The caution bubble and its two chips, the rest and lighter answers,
+the readiness list, the mark chips and *Clear the mark*, the "Reading your food
+log…" bubble giving way to the answer, and the two fed chips were driven
+through `coach-surface.mjs`'s DOM shim (section N), which has no box model and
+never loads `rack.css`. The food reads ran against a stubbed store
+(`coach-boot.mjs` H), never against Firebase. No CSS was written: every new
+thing is an existing `.coach-chip`, `.coach-chips` or bubble.
+
+**Four places where I departed from the brief's rules.** Each one was forced by
+a case, and §62 has the case:
+
+1. **`coach-overlap.js` is not "exports only".** The brief says so in §2, and
+   §5.2 says "nothing calls `prescribe()` for a target directly any more".
+   Three bodies in that file called it, so they now call `targetFor()`. The
+   four newly exported functions are byte for byte.
+2. **A reduce may not span a mark.** Dropping a marked session in the middle
+   of a lift's log can join two misses on either side of it into "two misses
+   in a row". That would make the mark count against him.
+3. **The stage-`none` window sentence** read "you usually give them 2 days",
+   which is a habit Coach has not seen. It now reads "Coach gives them 2 days
+   or more (a common starting point until Coach knows your gaps)."
+4. **A marked target's line** says "before your marked session" where it said
+   "last time". On a lift whose only session is marked there is no target
+   before it, so none is given.
+
+**What is not done**, all of it in BACKLOG.md under *What v52 left open*: the
+brief's §12 list, the replay's learning (decision 17), and the small calls in
+§64.
+
+---
+
+## 60. WHAT GOT BUILT
+
+```
+coach-ready.js     899 lines  NEW, PURE. Recovery windows and the big day (lifting sets only),
+                              streaks and the usual run, the fatigue flag, the rest read and its
+                              pick, the replay, readiness's training rows, what was different
+                              about a session, every rest sentence. Never imports coach-fuel.js.
+coach-fuel.js      453 lines  NEW, PURE. Complete days, the food phase, day and by-hour
+                              baselines, logging style, the fueled read and its five states, the
+                              food rows for readiness and a session, fuelDates(). Imports
+                              coach-goal.js and units.js only.
+coach-prog.js    1,004 lines  was 926. ADDITIVE: targetFor(ex, ctx, mark). prescribe() untouched.
+coach-overlap.js 1,155 lines  was 1,122. quantile, blocksOf, lightOf, groupDaysAt exported (bodies
+                              byte for byte); rungOf, nextTargets and targetsReplay name targets
+                              through targetFor(), with markBefore() for a replayed morning.
+coach.js         4,787 lines  was 4,111. The marks and the two logs; lsets/lfsets/ldrop on the
+                              shaped session; the readiness category; seven selectors, one
+                              question, routes, topics, follow-ups; the rest-aware pick and
+                              buildFocus; c.buildCaution; the mark on the compare answer; the
+                              fuel input and fuelDays(); normSettings() keeps marks.
+coach-build.js     743 lines  was 729. Focus falls back to the rest read's default; targets
+                              through targetFor(); two reason lines.
+coach-data.js      699 lines  was 617. markSession(); patchNow() merges and prunes marks;
+                              loadFuel(), fuelNeedsRead(), foodLog into coachInput().
+coach-ui.js      1,276 lines  was 1,171. The caution before a proposal; the mark chips; the fuel
+                              wait; an answer's `more` drawn after repeats too.
+sw.js, usage.js               rack-v52.
+report/coach-paint/bench.mjs  NEW. The paint benchmark, v51 against the tree; not a verifier.
+```
+
+Commits, each passing every verifier in three time zones:
+
+```
+a585805  coach-prog.js: targetFor() — a marked session never counts against him;
+         coach-overlap.js names every target through it
+1afc978  Stage four, Phase A: coach-ready.js — rest, recovery, readiness, what was
+         different, and the bad-day mark
+0e9e705  Stage four, Phase B: coach-fuel.js — "Am I fueled?", and the food rows beside
+         readiness and a session
+ed2b45b  rack-v52
+         docs
+```
+
+**Phase A: rest, recovery and the bad day.** `restRead()` is §4.4 row for row.
+A group's window is the 25th percentile of his gaps between training it
+(rounded up). After a day that was big against his own normal, the window is
+one more than that, or his median gap if longer. Until a group has four
+training dates, the window is the labelled starting point of 2 days (3 after a
+big day). The call is one of four:
+
+- `rest`: nothing he usually trains is recovered.
+- `lighter`: two fatigue signs.
+- `group`: none of his shapes is recovered but a group is.
+- `shape`: the shipped pick among the recovered shapes, with `.skipped` when
+  the stalest one is not recovered.
+
+`session.shapeOverdue` is that pick, or null on a rest or group call, so no
+answer names an unrecovered shape as the one to train. `buildFocus` is the one
+builder default. *Build it*, *Tell me what to train*, the targets and the
+teaser all read it.
+
+The replay walks the last 84 mornings. It reports what he did on the flagged
+ones and moves nothing. Readiness is the §4.6 list, and it stays silent under
+three rows with data.
+
+A mark is `settings/coach/marks/{id} = { r, d }`. `coach.js` builds two logs
+from the marks in one place: the full log (when, how much) and the performance
+log (how strong). `targetFor()` reads the mark, and the compare answer asks for
+one when a session came in below his usual.
+
+**Phase B: "Am I fueled?"** `fueledRead()` answers in one of five states:
+
+- `thin`: under five recent days of food;
+- `empty`: nothing logged today;
+- `unread`: today's summary shows food but the read failed or came back empty;
+- `day`: batch logger, or no usable by-hour read;
+- `read`: today so far against his by-hour curve on training days.
+
+Its day lines say which days were complete, and which were "not fully logged".
+It never says a day was low. The food rows join readiness (the `fuel` row) and
+*How did today compare?* (up to two food rows among the three kept). With
+Patterns on, the compare answer adds one T2 line from the eight registered
+comparisons.
+
+The reads are lazy (§61.3). "I ate, it’s not logged" and "I haven’t eaten" are
+chips that store nothing. `q_log_timing` is asked once, and only of an account
+whose entries look batch-logged.
+
+---
+
+## 61. THE BATTERIES — every row
+
+### 61.1 `tools-check/coach-ready.mjs` — Phase A
+
+**No row's expectation was changed.** Five fixtures were, each because it did
+not state the row's facts (§62). Every row's reading, as the engine says it:
+
+| # | the reading |
+|---|---|
+| R1 | Of the 2 session shapes that recur for you, chest, back and shoulders day has waited longest. *Build it* builds that shape |
+| R1b | … chest, back and shoulders day has waited longest of what’s recovered. / Your legs and core day has waited longer, but legs are inside their recovery time. |
+| R2 | the 24 leg sets were treadmill and bike: legs ready (window 3, since 5), no caution, the shipped pick |
+| R3 | Today looks like a rest day. Chest, back, legs and shoulders were all trained today and yesterday, and you’ve trained 4 days straight (your usual longest run is 2). Chips: *Train anyway*, *What should I lift today?*, and no *Build it* |
+| R4 | Today looks like a lighter day, or a rest. / 5 days straight; your usual longest run is 3. / Back Squat (High Bar) and Barbell Bench Press are coming down lately. / 51 sets in the last 7 days; usually about 39 a week. / A common approach on a lighter day: the same weights, fewer sets. / If you train, your arms and core day is recovered. / Of the 24 days your log looked like this, you rested on 23. / Coach can’t see sleep, stress or soreness. |
+| R4b | the pick is a group: *Build it* builds `group:core` |
+| R5 | the streak sign alone: call `shape`, the normal pick |
+| R6 | `rest` muted: every Phase A answer silent; ask_shape, the builder and the targets identical to v51's |
+| R7 | five sessions: `restRead` null; "Nothing to say about your training yet." |
+| R8 | Arms was trained yesterday; Coach gives them 2 days or more (a common starting point until Coach knows your gaps). |
+| R9 | Legs had a big day yesterday: 24 sets against a usual 12. Coach would give them another day. Chips *Build legs anyway* and *Train something recovered* |
+| R10 | a recovered pick: no caution |
+| R11 | Legs is recovered. Chest, back, shoulders and core were trained yesterday. *Build it* builds `group:legs`; the targets answer reads "Targets for your legs day." |
+| R12 | Of the 6 days your log looked like this, you rested on 2. / You’ve trained through days like this 4 times and held your numbers on 4. |
+| R13 | … you rested on 0. / You’ve trained through days like this 5 times and held your numbers on 4. The call, windows and pick equal the same log without the replay |
+| R14 | The last 4 times you trained through a day like this, your top sets came in under your usual on 3. |
+| R15 | on `group` and `rest`, `session.shapeOverdue` is null and nothing names the unrecovered shape |
+| R16 | streak 3 against a usual run of 4: no recovery line on the card; at 4, the line |
+| R17 | two sessions on one date are one day in every streak and window |
+| R18 | Targets for your legs day. · Today looks like a rest day. These targets keep until your next session. / Several things in your log are off your normal today. If the first set moves slowly, staying at last time’s weight is a common approach. / (the four targets, each identical to v51's) |
+| R19 | on `rest`/`lighter`, *Good day for a record?* is silent and `hype_week_best` is off the card |
+| R20 | always to failure (three F sets every leg day): a normal leg day is not big (window 3) |
+| R21 | no recurring shapes, every group ready: the recovery row reads "None of your usual sessions is fully recovered today." unflagged; call `group` |
+| R22 | Legs was trained yesterday; you usually give them 3 days or more. (the caution, when *Tell me what to train* builds the shipped, unrecovered shape) |
+| D1 | Nothing in your log is off your normal today. / Coach can’t see sleep, stress or soreness, and those count most on a day like this. |
+| D2 | Two things are different today: / 5 days straight; your usual longest run is 3. / 51 sets in the last 7 days; usually about 39 a week. / (the unseen line) |
+| D3 | Several things in your log point to a lighter day. / 5 days straight; your usual longest run is 3. / 17 sets taken to failure in the last 7 days; usually none. / A common approach on a lighter day: the same weights, fewer sets. / (the unseen line) |
+| D4 | two rows with data: readiness silent, *Should I rest or go lighter?* not offered |
+| D5 | This morning’s weigh-in is 4 lb under your last week. A drop that size is usually water, which Coach can’t see. (kilos: 1.8 kg) |
+| D6 | `readiness` muted, `rest` on: *Should I rest or go lighter?* answers with the rest answers only |
+| D7 | 2 of your last session’s targets weren’t reached. |
+| D8 | It’s 1:45 pm; you usually start between 9 am and 10:30 am. |
+| X1 | Below your usual today, across 3 lifts: 3 of them. / (three lift rows) / 0 of 3 Coach targets met. / Nothing in your log was off your normal. / Coach can’t see sleep, stress or soreness. + `a.mark` |
+| X2 | Above your usual today … / What was different in your log: / It started at 6 am; you usually start between 4 pm and 6 pm. / 46 sets in the 7 days before it; usually about 37. / These are differences, not causes. / Coach can’t see sleep, stress or soreness. |
+| X3 | five components past the bar (rest 5.4, week −8.3, start −7.4, length −5.4, weigh-in −1.5): the three kept are week, start, rest, by \|z\| |
+| X4 | a component with seven reference values is skipped |
+| X5 | About your usual today, across 3 lifts. — no `a.mark` |
+| M1 | the target from before: add, 3 × 8 at 190 lb, never 185 and never a reduce. Why: "Your last session is marked (slept badly), so this is the target from before it." / "That session doesn’t count against your numbers." Builder: "Worked out from before your marked session." |
+| M2 | two misses at 185, the second marked: hold, 3 × 8 at 185 lb, with the two mark lines |
+| M3 | two unmarked misses: reduce, 3 × 8 at 180 lb (A5) |
+| M4 | declining on the full log; holding on the performance log |
+| M5 | the marked session still counts for days since, streaks, sets and windows: "Built from yesterday’s session — your most recent chest, back and shoulders day." |
+| M6 | a mark 183 days old: ignored (hold / add) |
+| M7 | no marks: identical |
+| M8 | each ack word for word; *Nothing* writes nothing; one write of `{ r, d }` per mark to `settings/coach`; *Clear the mark* removes the key; every write prunes past 182 days |
+| M9 | a marked session in the middle: the target from the later sessions (add at 190, hold at 185), the marked one neither a miss nor a success |
+
+**The properties**, over 2,000 generated histories across both units:
+
+- Every call occurs: 1,071 rest, 81 lighter, 168 group and 673 shape reads.
+- Deterministic.
+- Order-blind.
+- Cardio: adding cardio sets under any group moves no window, no big day and no
+  readiness row, and never what is recovered.
+- Food-blind.
+- One builder default, with every answer in voice and a way on from every rest.
+- Silence: 400 thin histories give no rest read, no readiness and no row.
+- Mark safety: the rule holds on 1,736 lifts marked latest, and no reduce
+  appears on 8,597 lifts marked earlier on.
+- Performance: the replay stays under its budget on every sampled history.
+
+### 61.2 `tools-check/coach-fuel.mjs` — Phase B
+
+| # | the reading |
+|---|---|
+| F1 | Coach reads fuel from your food log, and there isn’t enough in it yet (0 days). |
+| F2 | Coach reads your food by the day, not the hour. / Yesterday was in your usual range. / Most of your entries go in together, later, so the hours they were logged say nothing about the day’s timing. — `q_log_timing` under it, once; *As I go* turns the by-hour read on |
+| F3 | Lighter than usual so far today. You’ve logged 560 kcal and 60 g of carbs; by now on a training day you usually have about 1,400 and 150 (14 days). |
+| F4 | About usual so far today. … / Yesterday wasn’t fully logged. |
+| F5 | Nothing logged today yet. — chips *I ate, it’s not logged* and *I haven’t eaten* |
+| F6 | Above your usual today … / What was different in your log: / You’d logged about 540 kcal before it; usually about 1,800. / About 60 g of carbs logged before it; usually about 200 g. / These are differences, not causes. / Coach can’t see sleep, stress or soreness. |
+| F7 | Below your usual today … / Nothing in your log was off your normal. — and `a.mark` |
+| F8 | Food muted: 0 dates, 0 reads, no fuel line in readiness or compare |
+| F9 | Basic: 0 reads, no bubble; the Pro panel lists every category, `readiness` among them |
+| F10 | … by now on a training day you usually have about 1,232 and 132 (14 days). / Yesterday was in your usual range. / Coach is learning your new normal, 13 days in. |
+| F11 | … / The last two days were lower-carb than your usual: 492 g against about 628 g. / Coach is learning your new normal, 9 days in. |
+| F12 | Heavier than usual so far today. You’ve logged 2,100 kcal and 225 g of carbs; by now on a training day you usually have about 1,400 and 150 (14 days). |
+| F13 | Coach couldn’t read today’s food log just now. (a failed read, an empty read against a summary with food, and a stale mirror) |
+| F14 | the back-filled dinner: yesterday's total 3,400 (was 2,500); today's curve and "so far" unmoved at 1,400 |
+| F15 | the same food numbers on kilos; "Your weight is coming down about 0.45 kg a week." |
+| F16 | three flags only with the fuel row: readiness says "Several things…", and the targets answer carries no "Several things" line |
+
+**The properties**, over 1,500 generated months:
+
+- Every state occurs: 231 thin, 307 empty, 534 read, 331 day and 97 unread.
+- Deterministic.
+- Order-blind (entries, days and sessions).
+- A part-logged day moves no day median.
+- With no log read, not one "so far", "by now" or before-a-session sentence.
+- Food never changes training: with every day of food gone, the targets, the
+  rest read, the lifts and the targets answer are identical.
+
+**The must-never scan** read 6,183 strings in both units and found none of the
+brief's ten patterns. It also read every sentence written into
+`coach-fuel.js`, whether a fixture reached it or not. `coach-fuel.js` never
+reads an entry's name.
+
+### 61.3 The spy counts (`coach-boot.mjs` H)
+
+| When | Reads by `loadFuel()` |
+|---|---|
+| At boot, and on five paints | 0 |
+| The first *Am I fueled?* of an open | more than 2 and at most 15, in one wave |
+| A second ask, nothing changed | 0 |
+| After today's summary changes | exactly 1 |
+| Basic, Food muted, or an unreadable log | 0 |
+
+### 61.4 Changed on purpose, each with its reason in place
+
+| Verifier | What changed |
+|---|---|
+| `coach-prog` | E (`targetFor()`); D extended to rack-v51 |
+| `coach-pure` | K (`coach-ready.js`, which never reads food), L (the four overlap bodies byte for byte against v51), M (`coach-fuel.js`, which imports two files only) |
+| `coach-hype` | F: the recovery gate, the rest bias, the paint spy over both new modules |
+| `coach-state` | D: the final topic tables, and Train `live` equal to v51's list, read out of git |
+| `coach-registry` | J and K: the selectors, `q_log_timing` and its fact, `a.mark` not a question; v51's finding count read out of git |
+| `coach-rank` | J: category order |
+| `coach-voice` | L: every new string, both units; the card ban unchanged |
+| `coach-surface` | N: the caution, the mark chips, the fuel wait and chips, the relabelled bubble |
+| `coach-boot` | H: the `loadFuel` spy |
+| `coach-patterns` | H: still eight |
+| `coach-overlap`, `coach-silence`, `coach-goal` | route and fixture updates, each explained |
+
+The staging edit went into seventeen verifiers. `coach-build` and
+`coach-rotation` needed no fixture change: the rest-aware pick moved none of
+their picks.
+
+---
+
+## 62. WHAT I CORRECTED, AND WHY
+
+In the order they were found.
+
+1. **`targetFor()` everywhere a target is named, `coach-overlap.js` included.**
+   `rungOf()` (the stall ladder's "Coach’s target keeps the weight"),
+   `nextTargets()` and `targetsReplay()` each called `prescribe()` directly.
+   Left alone, a marked bad day would still read as a miss in *What’s next
+   time?* and in the targets met on the card. For a replay, `markBefore(l, at)`
+   builds the mark as it stood that morning.
+2. **A reduce may not span a mark.** The property "a mark never produces a
+   reduce the unmarked log would not" failed on generated histories of this
+   shape: a miss, the marked session, then another miss. Leaving the marked
+   one out made the two misses consecutive, which is a reduce the real log
+   never had. When the kept log's reduce is made of two exposures with a mark
+   between them, `targetFor()` returns the whole log's target if that is not
+   a reduce. 8,597 marked-earlier lifts now pass.
+3. **A marked target's line.** §5.2 keeps the replayed target's line, but a
+   hold's line can end "same as last time", and a lighter one "lighter than
+   last time (…)". Both are relative to the morning before the marked
+   session. `line` replaces "last time" with "before your marked session".
+   `from.daysAgo` is recounted from today.
+4. **A mark on a lift's only session gives no target** (`null`). There is no
+   "before" to replay, and the brief's rule would otherwise be read over an
+   empty log.
+5. **The stage-`none` sentence** (§59). R8's group has three dates, and "you
+   usually give them 2 days" claims a habit the log has not shown.
+6. **"were both".** "Legs and chest were all trained yesterday" is not English
+   for two groups.
+7. **"today and yesterday".** When the unrecovered groups were trained across
+   both days, the brief's `{today | yesterday | in the last n days}` offers
+   "yesterday" (false of the group trained today) or "in the last 1 days".
+8. **A session's weigh-in week ends at that day's midnight.** Mine first ended
+   at the session's start, so a morning weigh-in before an evening session was
+   read as its own baseline.
+9. **The group read's field is `win`, never `window`.** In a browser a local
+   named `window` shadows the global, and `coach-pure.mjs` fences the name.
+10. **Date keys are counted, not parsed** (`dnum()`). A card paint reads a
+    few hundred of them, and a `Date` parsed per key was most of what the rest
+    read cost. The runs are memoised on the input (`runsNow`), so `usualRun()`
+    and `restRead()` share one count on a paint.
+11. **Five fixtures of mine did not state their rows.**
+    - X3's weigh-ins sat outside the week `bwAt()` reads.
+    - X1's "week" component read high against its reference.
+    - F2's entry times needed the batch spread.
+    - F6 and F7 had no spread for a z to read.
+    - F10 needed a steeper turn (§63.4).
+
+    No expectation moved.
+
+---
+
+## 63. WHERE THE BRIEF WAS WRONG ABOUT THE CODE
+
+1. **§2's "`coach-overlap.js` CHANGED, exports only … bodies byte for byte"**
+   contradicts §5.2's "nothing calls `prescribe()` for a target directly any
+   more". Three `coach-overlap.js` bodies did (§62.1). I followed §5.2 and
+   §15's first rule, since §5.2 is the invariant. The four newly exported
+   functions are byte for byte, and `coach-pure.mjs` L proves it against v51.
+2. **§2 lists "normSettings keeps `marks`" under `coach-data.js`.**
+   `normSettings()` lives in `coach.js`, where it now keeps them.
+   `coach-data.js` merges and prunes in `patchNow()`.
+3. **§2's import list for `coach-ready.js`** names `analytics.js` and not
+   `targetsReplay`. It needs no analytics (every e1RM it reads comes through
+   `baselines()` and `compareSession()`), and it does need `targetsReplay()`
+   for readiness's `lifts` row and for the replay's outcomes.
+4. **F10: "three weeks of loss after three of gain"** is a turn §8.2 cannot
+   see. The rule compares the last two weekly bands with the two before them.
+   A turn three weeks back puts the third week in the loss band too, so no
+   turn is read. Through `bwAt()`'s seven-day median, about 18 days is the
+   furthest back a turn can be and still be seen. The fixture turns there, and
+   the row is ok on the brief's expectations. The limit this leaves is in
+   BACKLOG.
+5. **§7's cardio property** says adding cardio "changes no … rest call". It
+   can, because a cardio session is a trained day. It lengthens the streak,
+   which is the shipped `trainedDays()` rule and the card's streak, and it adds
+   to the shipped `sets` the load sign reads (decision 2 keeps those), so a
+   cardio-heavy week can move `rest` to `lighter`. The property is therefore:
+   no group's window, big day or readiness moves, and never whether anything
+   is recovered. That is what §3.2 is about.
+6. **§11's "partial days never lower a median"** holds as stated only when the
+   day added leaves the completeness bar where it was. The bar is half of his
+   median day, so a partial day can move which other days count as complete.
+   The property adds a day under the bar and, wherever the bar did not move,
+   asserts that no day median moved.
+7. **"`readiness` … never in any intent's `when`."** The readiness selector's
+   gate needs three rows with data. It counts them with `readinessHas()`, the
+   `has` tests alone, with no flag, no status and no replayed target. It never
+   runs on a paint, because `ask_lighter` is not in You's topic lists; the
+   paint spy confirms it. The count is training rows only, because the fuel
+   row needs a read that is not allowed in a `when`.
+8. **§5.2's "coach-build.js:591"** is the "Worked out from" line, which is at
+   594 in rack-v51.
+9. Confirmed true, for the next brief:
+   - `workouts` records carry `id`.
+   - `refreshCoachSessions()` coalesces, and `loadFuel()` does the same.
+   - The Pro panel is derived from `CATEGORIES`, so *Readiness* appeared by
+     itself.
+
+---
+
+## 64. EVERY ASSUMPTION I MADE
+
+**Rest and recovery**
+
+- A group's training date is a date with at least one lifting set of it as the
+  primary group. Two sessions on one date are one day, with their sets added.
+- The window's quick end is `ceil(q25)` of his gaps, never under 1. After a big
+  day it is the larger of that plus one and `ceil(median gap)`.
+- A trained date for the streak is any session with a working set, cardio
+  included. That is the shipped rule, so the card's streak is one number.
+- `usualRun` is `ceil(q90)` of his runs in 84 days. It needs five runs and 56
+  days of log, and is null before that.
+- The fatigue flag's load sign is the shipped `sets` over the last seven days
+  against his usual whole week (four whole weeks). The failure sign is his F
+  share over eight whole weeks. Two lifts declining over 28 days is a sign.
+  The run sign is a streak past his usual run.
+- His usual groups are those of his recurring shapes. With no shapes, they
+  are the groups with four or more training days in the window. The rest read
+  is null under six sessions in the window or with no usual groups.
+- In the replay, a day he trained through "held" when that session compared
+  about or above his usual, and was "under" when it compared below. The held
+  line needs 75% of those days held, and the under line needs half of them
+  under. The rested line needs three flagged days, and each of the other two
+  needs four days trained through. A marked session is not counted as
+  trained through.
+- The time row needs twelve sessions, and reads his 10th to 90th percentile
+  start, printed to five minutes rounded outward.
+
+**The mark**
+
+- The engine ignores a mark by its own clock argument at 183 days. The
+  gatherer prunes at the same count, noon to noon.
+- A mark on a session whose id does not match `/^[A-Za-z0-9_-]{1,40}$/` is
+  never offered.
+- The "below" that asks for a mark is `compareSession()`'s summary, or its one
+  row when it has no summary.
+- `readLift`'s irregular and frequency counts come from the performance log
+  like the rest of it. A marked session therefore does not count toward "done
+  3 times in 4 weeks". That is rare and in BACKLOG.
+- A record day's "best" is over the performance log, so it could quote a best
+  that a marked session exceeded. A mark says the numbers were not
+  representative, in either direction.
+
+**Food**
+
+- A complete day is at least 50% of his median day over the last 28 days,
+  among days with food. Five such dates are needed before there is a median.
+- The phase rule is §8.2 read literally: weeks 0–3 back, two against two, from
+  seven-day medians. An aim changed inside 28 days starts a phase at its
+  `asked` stamp.
+- Logging style is judged over the dates read (at least six). A day's entries
+  spread over four hours or more is real-time, and all within the hour is
+  batch.
+- `unread` is today's summary showing food while the read failed or came back
+  empty. It never says "nothing logged".
+- `fuelDates()` lists today, the latest session's date, then the most recent
+  complete training dates in the 28 before today: fifteen at most.
+
+---
+
+## 65. WHAT IS NOT DONE, AND WHAT NOBODY HAS SEEN
+
+1. **Nothing has been seen on a screen** (§59). Look at these first:
+   - the caution bubble with two chips inside it, at 375 px;
+   - R4's lighter answer, which is eight bubbles long;
+   - the mark question's five chips.
+2. **The replay's learning** (decision 17): the extra day on the streak sign
+   and a day off a group's window. Both wait for a per-open cache that the
+   card, the builder default and the sheet all read.
+3. **The brief's §12 list**, in BACKLOG as the brief asked.
+4. **Native was not read**, as the brief ordered. `NEXT-NATIVE-V52.md` is the
+   delta.
+
+---
+
+## 66. THE PAINT, AND THE REPLAY
+
+`node report/coach-paint/bench.mjs` times a card paint: one `coach()` call and
+everything it works out for the two cards, the greeting, the lead question and
+Basic's teaser. The log is a 200-session year with food and weigh-ins, and the
+number is the median of many warm paints.
+
+```
+rack-v51 (99b49ea)   Pro 3.62 ms (p90 5.29)   Basic  9.93 ms (p90 10.83)
+rack-v52             Pro 3.90 ms (p90 5.63)   Basic 10.44 ms (p90 11.29)
+the replay (an answer, not a paint): 54.6 ms median, 57.6 ms slowest of 20
+```
+
+Across repeated runs Pro moved +0.3 to +0.4 ms. Basic read +1.0 ms once. Timed
+side by side, the same paint came in +0.4 to +0.5 ms, and at v51's own time with
+Rest muted. The whole addition is the rest read, which is the one thing the
+brief allows on a paint. The spy in
+`coach-hype.mjs` F shows that 200 paints call nothing in `coach-ready.js` but
+`restRead` and `usualRun`, and nothing in `coach-fuel.js`.
+
+---
+
+## 67. MICAH'S DECISIONS, 23 SEP 2026 — carried forward
+
+| # | Question | Answer | What landed tonight |
+|---|---|---|---|
+| 7 | General nutrition science in fuel answers? | No, own data only | **BUILT**: `coach-fuel.js` compares his logged days with his own medians and nothing else. The must-never scan fences it |
+| 8 | Learning whether rest advice was taken | Replay, save nothing; a per-group recovery window | **BUILT**: per-group windows from his own gaps; the replay as a readout with its counts. **Not built**: the replay adjusting anything (decision 17, BACKLOG) |
+| 9 | Save answers about how you feel? | A mark on a bad session | **BUILT**: `settings/coach/marks`, six months; the two logs; `targetFor()`; the question under *How did today compare?* and *Clear the mark* |
+| 11 | Say "carb-loaded"? | No | **BUILT**: no sentence says it; the scan's eating pattern refuses it in every food string |
+| 13 | Coach reads the water log? | Not yet | Nothing reads water. BACKLOG: revisit after this stage |
+| 16 | When rest comes up | Answered when asked, and a gentle card line after three days running | **BUILT**: the rest and lighter answers under *What should I train today?* and *Should I rest or go lighter?*. The v49 card line now also waits for his own usual run when the log knows one (R16) |
+
+**This brief's §3, recorded as decided and not open:**
+
+1. There are two modules, and the training side never imports the food side.
+2. Recovery counts whole lifting sets (`lsets`). Every other reader keeps
+   `sets`.
+3. A big day is big against his own normal, with floors.
+4. A mark stops a session counting against him, and never lets it count for
+   him. A marked latest session gives the target from before it.
+5. *Train anyway* opens the builder's menu, and unrecovered choices carry the
+   caution.
+6. Your-data links come only from the eight registered Patterns, and only with
+   Patterns on.
+7. There is no intake-against-trend cross-check.
+8. "Your log doesn't show that lighter days go with lighter sessions — yet" is
+   dropped.
+9. Readiness's first component is recovery.
+10. *Should I rest or go lighter?* keeps the route id `ask_lighter`.
+11. "Have you eaten?" is two chips that store nothing.
+12. There is a new `readiness` switch, and the rest answers ride `rest`.
+13. Readiness under three rows with data is silent.
+14. Logging style is judged from the dates read, at least six.
+15. Today's food log is read on ask.
+16. The replay uses today's recurring shapes for every past morning.
+17. The replay reports and adjusts nothing.
+18. Old marks are pruned on every `settings/coach` write.
+
+---
+
+## 68. IF THE NEXT RUN READS ONE THING
+
+`targetFor()` in `coach-prog.js`, and the property that found its second rule:
+**leaving a session out is not neutral.** A mark was meant to make one bad day
+not count against him. Removing it from the log joined the misses on either
+side into a streak that never happened, and that would have taken weight off
+his bar because he told Coach he slept badly. The two logs in `coach.js`
+(`perf`, `markOf`) are the only place the filter is written. Any future reader
+of "how strong" should take the performance log from there, and should check
+whether a gap it creates says something the full log does not.

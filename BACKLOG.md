@@ -7,7 +7,7 @@ Two things this file is not. It is not a design document — where a shape was
 already decided, the decision stays where it was written and this only points at
 it. And it is not a port brief: `NEXT-NATIVE.md`, `NEXT-NATIVE-UNITS.md`,
 `NEXT-NATIVE-V40.md`, `NEXT-NATIVE-V41.md`, `NEXT-NATIVE-V42.md`,
-`NEXT-NATIVE-V43.md`, `NEXT-NATIVE-V45.md`, `NEXT-NATIVE-V46.md`, `NEXT-NATIVE-V48.md` and `NEXT-NATIVE-V49.md` are the instructions for copying
+`NEXT-NATIVE-V43.md`, `NEXT-NATIVE-V45.md`, `NEXT-NATIVE-V46.md`, `NEXT-NATIVE-V48.md`, `NEXT-NATIVE-V49.md` and `NEXT-NATIVE-V52.md` are the instructions for copying
 work into `~/dev/rack-mobile`, and they stay. What is below is the list of
 things nobody has done yet.
 
@@ -134,6 +134,9 @@ twice. `AGENTS.md` (`steps/{date}`) says the same thing.
 
 `~/dev/rack-mobile`. Four briefs, each still partly open, plus Coach's:
 
+- **`NEXT-NATIVE-V48.md`, `NEXT-NATIVE-V49.md` and `NEXT-NATIVE-V52.md`** —
+  Coach trainer, stages one to four, each a delta on the one before. V52's §8
+  has the PROPOSED `marks` rule native's `settings/coach` validation needs.
 - **`NEXT-NATIVE-V45.md`** — the workout builder, all of it open. At `13f6b80`
   native has Coach (`src/pure/coach.js`, `src/ui/coach/`) and no
   `src/pure/coach-build.js`. Read it with `NEXT-NATIVE-V42.md` and
@@ -203,6 +206,84 @@ Carried from `NEXT-NATIVE.md` §7 so it survives that file. Do not "fix" these:
 
 ---
 
+## What v52 left open in its own work
+
+v52 is Coach trainer, stage four. **Rest, recovery and the bad day**
+(`coach-ready.js`) adds:
+
+- per-group recovery windows from his own gaps;
+- *What should I train today?* saying rest or go lighter;
+- the builder's caution on a group that has not recovered;
+- the replayed readout of what he did on days like this;
+- readiness;
+- *How did today compare?* listing what was different;
+- the bad-day mark.
+
+**"Am I fueled?"** (`coach-fuel.js`) reads his food against his own normal,
+with lazy food reads for Pro. It is written up in `COACH-REPORT.md` §59–§68.
+
+**Found and deliberately not fixed** (SHIP-V52-PROMPT.md §12):
+
+- **The card's paint cost.** v49 made a paint about 8 ms against v48's 2–3.
+  v52 adds only its own +0.3 ms (Pro) and +0.5 ms (Basic) (`COACH-REPORT.md`
+  §66). The fix, a per-open cache in `coach-data.js`, is its own change.
+- **"Hard sets" still include cardio** everywhere except recovery (the brief's
+  decision 2). The fix belongs in `shapeSession()`, for every reader at once,
+  and it would move shipped numbers.
+- **The greeting can echo the card's line.**
+- **Goal pace sits in "Stalls and records".**
+- **A second session on the same day is invisible to the live-session facts.**
+- **Stage five:** mid-session targets, `coach-volume.js` (weekly volume bands
+  and balance), grey last-time targets on a hand-added exercise, and the focus
+  group's builder effects.
+- **Micah's drop-set request** (a sub-list of the sets that make up a drop set)
+  is a Train UI change, not a Coach one.
+- **Water in readiness**: decided "not yet", to be revisited after this stage.
+- **The marked-vs-unmarked comparison** waits for a decision on a ninth
+  Pattern. `coach-patterns.mjs` fails on anything but eight.
+- **The replay's learning** (an extra day on the streak sign, a day off a
+  group's window) waits for a per-open cache that the card, the builder
+  default and the sheet all read (decision 17). Without that cache the three
+  can disagree. Tonight the replay reports and adjusts nothing.
+- **Anything in native.** See `NEXT-NATIVE-V52.md`, including the PROPOSED
+  `marks` rule. Native's PROPOSED rules refuse every mark until it is added.
+
+**Left open in v52's own work:**
+
+- **Nothing in this ship has been seen on a screen.** The following were all
+  driven through the DOM shim (`coach-surface.mjs` N), which has no box model
+  and never loads `rack.css`:
+  - the caution bubble with its two chips;
+  - the rest, lighter and readiness answers (a lighter answer can be eight
+    bubbles long);
+  - the mark's five chips and *Clear the mark*;
+  - the "Reading your food log…" bubble;
+  - the two fed chips.
+
+  The food reads have only met a stubbed store.
+- **The food phase is seen only while the turn is young.** §8.2 compares the
+  last two weekly weight bands with the two before them, so a turn is read
+  only while it is about one to two and a half weeks old. After that the
+  28-day normal mixes both phases for about ten more days. A phase that
+  outlasted the window would need its own stored start, which is a decision
+  (`COACH-REPORT.md` §63.4).
+- **A marked session leaves every "how strong" read**, including
+  `readLift`'s irregular and frequency counts. "Done 3 times in 4 weeks" does
+  not count a marked session, though "when" and "how much" do.
+- **A record day's "best" is over the performance log**, so on a rare day it
+  could quote a best that a marked session beat. A mark says the numbers were
+  not representative in either direction; that is the brief's rule.
+- **A lift whose only session is marked has no target** until it is done
+  again. There is no "before" to replay.
+- **Readiness's gate counts training rows only.** The fuel row needs a read,
+  which is not allowed in a `when`. So a log with two training rows and a
+  food row is not offered readiness.
+- **The replay holds today's recurring shapes fixed for every past morning**
+  (decision 16). Windows and fatigue are recomputed per morning, but "which
+  groups are usual" is not.
+- **Native was not read.** The run was fenced, so `NEXT-NATIVE-V52.md` carries
+  its native paths from V49, unverified.
+
 ## What v49 left open in its own work
 
 v49 is Coach trainer, stages two and three: **plateau or cut?**
@@ -216,9 +297,10 @@ goal step in onboarding, one target for Basic). Written up in `COACH-REPORT.md`
 
 **Deliberately left for later stages** (SHIP-V49-PROMPT.md §9), not fixed:
 
-- **Stage four**: the fueling brain, readiness, the rest-day answer to *What
-  should I train today?*, and the bad-day marks. *How did today compare?* says
-  what the numbers were and nothing about why.
+- **Stage four** (built in rack-v52; see *What v52 left open* above): the
+  fueling brain, readiness, the rest-day answer to *What should I train
+  today?*, and the bad-day marks. *How did today compare?* says what the
+  numbers were and nothing about why.
 - **Stage five**: mid-session targets, weekly volume bands and neglect, and the
   focus group's volume and builder effects (tonight it is read by goal pace
   only).

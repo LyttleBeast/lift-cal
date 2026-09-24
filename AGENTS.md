@@ -519,13 +519,14 @@ inside it. A step term would count the same walking twice.
 
 ```json
 { "v": 1,
-  "mute":    { "fuel": true, "targets": true, "rest": true },
+  "mute":    { "fuel": true, "targets": true, "rest": true, "readiness": true },
   "on":      { "patterns": true },
   "answers": { "q_goal_direction": "down", "q_goal_aim": "strength", "q_experience": "some",
-               "q_focus_group": "chest", "q_goal_check_weight": "temp" },
+               "q_focus_group": "chest", "q_goal_check_weight": "temp", "q_log_timing": "later" },
   "asked":   { "q_goal_direction": 1789307130123, "q_goal_aim": 1789307130123,
-               "q_goal_check_weight": 1789307130123 },
-  "goalLift": { "exId": "barbell-bench-press", "lb": 315, "reps": 1, "at": 1789307130123 } }
+               "q_goal_check_weight": 1789307130123, "q_log_timing": 1789307130123 },
+  "goalLift": { "exId": "barbell-bench-press", "lb": 315, "reps": 1, "at": 1789307130123 },
+  "marks":   { "wm3k9x2": { "r": "sleep", "d": "2026-09-22" } } }
 ```
 
 Everything Coach remembers, and it is deliberately almost nothing: the user's
@@ -536,8 +537,12 @@ gym", the chip and the one quiet line in a live workout. Since v48 it includes
 `targets` — "Weight and rep targets", the target line under each exercise in a
 proposal, *Start with Coach’s targets* and the *What should I lift today?*
 bubble. Off, the proposal carries no targets at all. Since v49 it includes
-`rest` — "Rest and lighter weeks", *Should I go lighter?* and the card's "a rest
-day is well earned" line.
+`rest` — "Rest and lighter weeks": since v52 the rest and lighter answers
+under *What should I train today?* and *Should I rest or go lighter?*, the
+builder's caution on a group that has not recovered, and the card's "a rest day
+is well earned" line. Since v52 it includes `readiness` — "Readiness", the list
+of what in the log is off his normal today under *Should I rest or go
+lighter?*.
 
 `on` is the reverse, and it exists for one category: **Patterns** (v46), the
 eight comparisons between two groups of the account's own days. It is OFF until
@@ -598,6 +603,56 @@ twelve characters.
   that is not a positive number, a bad `at` → no target at all; reps out of
   range → 1), and `normSettings()` adds the key only when it is valid, so a
   node without one keeps the shipped shape.
+
+**v52 adds one key and one answer, both children of the already-granted
+`settings/coach`, so no rules change:**
+
+- `marks` — `{ sessionId: { r, d } }`, the bad-day marks (Micah's decision #9).
+  - `sessionId` is the workout record's own `id`, matching
+    `/^[A-Za-z0-9_-]{1,40}$/`.
+  - `r` is `sleep`, `stress`, `sore` or `unwell`.
+  - `d` is the session's own `YYYY-MM-DD`.
+  - One is written only by the answer to *Anything Coach can’t see?* under a
+    below-usual *How did today compare?*, through `coach-data.js`
+    `markSession()`. *Nothing* writes nothing, and *Clear the mark* writes the
+    key to `null`.
+  - `patchNow()` merges `marks` like `answers`, and on **every**
+    `settings/coach` write it nulls each mark more than 182 days old (the six
+    months Micah decided). The engine ignores those by its own clock
+    argument, so an unwritten node still reads right.
+  - `normSettings()` keeps a mark only when all three parts are valid, and adds
+    the key only when one survives. A node with no marks keeps the shipped
+    shape.
+  - **A mark takes a session out of "how strong" and never out of "when" or
+    "how much".** It still counts for days since, streaks, sets and recovery.
+    It leaves every lift reading, the compare's "usual" and the targets, where
+    the next target after a marked session is the one from before it.
+    `coach.js` `derive()` is the one place the filter is written.
+- `q_log_timing` — `live` ("As I go") or `later` ("Later"), with its `asked`
+  stamp. It is asked once under *Am I fueled?*, and only when his entries look
+  batch-logged. `later` turns the time-of-day food reads off, and `live` turns
+  them on.
+
+The native tree's PROPOSED rules validate `settings/coach` key by key and end
+in `$other: false`, so they refuse `marks` until `NEXT-NATIVE-V52.md` §8 is
+added to them. The published rules take it today.
+
+**v52's food reads — when, how many, and for whom.** *Am I fueled?*, *Should I
+rest or go lighter?* and *How did today compare?* read `food/log/{date}`
+through `coach-data.js` `loadFuel()`, reads only.
+
+- **When:** on the ask. Never at boot, never on a card paint.
+- **For whom:** a **Pro** account, with the **Food** switch on and a readable
+  log, and nobody else. Basic and Food-off read nothing.
+- **How many:** at most **fifteen** on the first ask of an app open. The dates
+  come from `coach.js` `fuelDays()`: today, the latest session's date, then the
+  most recent complete training dates in the four weeks before. After that,
+  one more read of today only when `food/daySummaries/{today}` has changed, and
+  none otherwise. A past day is read once per open.
+- The sheet waits at most four seconds for them, under "Reading your food
+  log…", then answers with what it has. A failed read is a day Coach leaves
+  out, never an empty one.
+- Separate from Patterns' own boot read above, which is unchanged.
 
 The card's earned line (v49) keeps a device-local memory beside the greeting's,
 `rack:{uid}:coachHype` — the last three lines the card showed, written once per
