@@ -48,6 +48,15 @@
 // Every weight goes through units.js; every sentence and its evidence are
 // fenced by tools-check/coach-overlap.mjs and coach-voice.mjs.
 //
+// v52: THE PERFORMANCE LOG. coach.js hands each lift over with its exposures
+// read from the performance log — sessions he marked as a bad day left out —
+// and its marks beside them (`mark`), while `shaped` stays every session, so
+// "how strong" is read without the marked days and "when" and "how much" with
+// them. Every target this file names goes through coach-prog.js's
+// targetFor(), which honours a mark exactly as the builder does. quantile,
+// blocksOf, lightOf and groupDaysAt are exported for coach-ready.js, their
+// bodies unchanged: one weeks rule, one group clock.
+//
 // PURE, and copied into the native tree verbatim (src/pure/coach-overlap.js).
 // No reads, no DOM, no module state, no clock: `now` is an argument. Imports
 // coach-prog.js (baselines and the target it describes), coach-goal.js (the
@@ -56,7 +65,7 @@
 // session MATH of analytics.js (the e1rm the set row prints). coach.js imports
 // this; nothing imports back.
 
-import { baselines, prescribe, exposuresFor } from './coach-prog.js';
+import { baselines, exposuresFor, targetFor } from './coach-prog.js';
 import { bwAt, energyBand, volumeFloor, paceFor } from './coach-goal.js';
 import { labelW, labelRate, wOut } from './units.js';
 import { GROUPS, GROUP_ORDER } from './exercises.js';
@@ -150,7 +159,7 @@ function median(xs) {
   const m = v.length >> 1;
   return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2;
 }
-function quantile(xs, q) {
+export function quantile(xs, q) {
   const v = xs.filter(Number.isFinite).slice().sort((a, b) => a - b);
   if (!v.length) return null;
   const pos = (v.length - 1) * q, lo = Math.floor(pos), hi = Math.ceil(pos);
@@ -233,7 +242,7 @@ function weeksOf(i, now) {
    week: neither is ever counted into a normal or called light. Counted as
    zeros, an eight-week-old log divided by eight weeks of "normal" reads every
    ordinary fortnight as a spike. */
-function blocksOf(shaped, now) {
+export function blocksOf(shaped, now) {
   const out = Array.from({ length: BLOCKS }, () => ({ sessions: 0, hard: 0, f: 0, by: {}, fBy: {}, full: false }));
   let first = -1;
   (Array.isArray(shaped) ? shaped : []).forEach(s => {
@@ -258,7 +267,7 @@ function blocksOf(shaped, now) {
    at 60% or less of his usual week (the median of weeks three to ten that had
    a session). A light week is left out of every normal below and never counts
    as a decline. */
-function lightOf(blocks) {
+export function lightOf(blocks) {
   const ref = blocks.slice(2, 10).filter(b => b.full && b.sessions > 0).map(b => b.hard);
   if (ref.length < LIGHT_MIN_WEEKS) return { usual: null, light: new Set() };
   const usual = median(ref);
@@ -413,7 +422,8 @@ function rungOf(ex, c, i, b, blocks, light, weeksFlat) {
     const grinding = b.range && b.topReps.filter(t => Math.abs(t.load - lastLoad) < TOL &&
       Math.min(...t.reps) < b.range.lo).length >= 2;
     if (grinding && i.targetsOn !== false) {
-      const t = prescribe(ex, c);
+      // v52: what Coach's target does, so the target — marks honoured.
+      const t = targetFor(ex, c, ex.mark || null);
       if (t && (t.mode === 'reduce' || t.mode === 'hold')) return { rung: 'reset', targetMode: t.mode, volume, variation: null };
     }
     return { rung: 'wait', volume, variation: null };
@@ -884,10 +894,29 @@ function liftsIn(i, session) {
   return i.lifts.filter(l => !isCardio(l) && exposuresFor([session], l.exId).length);
 }
 
+/* v52: a lift's marks as they stood before a moment, for a target replayed
+   as of a session. coach.js decides which sessions are marked and hands the
+   answer over on each lift (`mark`: every marked exposure's startedAt, the
+   exposures themselves, and `byAt`, the target-from-before record for each);
+   this only reads which of them came before `at`, and whether the latest of
+   the lift's exposures before `at` is one of them. The lift's own exposures
+   here are the performance log, the marked ones already out. */
+function markBefore(l, at) {
+  const m = l && l.mark;
+  if (!m || !(m.markedAt instanceof Set)) return null;
+  const markedAt = new Set([...m.markedAt].filter(t => t < at));
+  if (!markedAt.size) return null;
+  const kept = (l.exposures || []).filter(e => e.startedAt < at).map(e => e.startedAt);
+  const lastKept = kept.length ? Math.max(...kept) : -Infinity;
+  const lastMarked = Math.max(...markedAt);
+  const latest = lastMarked > lastKept && m.byAt instanceof Map ? m.byAt.get(lastMarked) || null : null;
+  return { markedAt, exposures: (m.exposures || []).filter(e => e.startedAt < at), latest };
+}
+
 // A group's days since as of a moment: the last session BEFORE it with a
 // working set for the group. What coach.js's group.daysSince would have said
 // that morning.
-function groupDaysAt(shaped, g, at) {
+export function groupDaysAt(shaped, g, at) {
   if (!g) return null;
   let last = null;
   shaped.forEach(s => {
@@ -904,7 +933,10 @@ function groupDaysAt(shaped, g, at) {
    morning (miss that and a comeback replays as a re-entry while the builder
    showed a hold), and today's aim, experience and energy — three days is too
    short for any of them to move. A lift counts when its target named a
-   number, and is met when its top sets reached the target's load and reps. */
+   number, and is met when its top sets reached the target's load and reps.
+   v52: through coach-prog.js's targetFor(), with his marks as they stood
+   before that session (markBefore, below) — so a session after a marked one
+   is held to the target from before the marked one, the target he was shown. */
 export function targetsReplay(input, session) {
   try {
     const i = prepare(input || {});
@@ -919,7 +951,7 @@ export function targetsReplay(input, session) {
       const ex = { ...l, exposures, groupDaysSince: groupDaysAt(i.shaped, l.group, at) };
       const b = baselines(ex, ctx);
       if (b && b.assisted) return;
-      const t = prescribe(ex, ctx);
+      const t = targetFor(ex, ctx, markBefore(l, at));
       if (!t || t.loadLb == null) return;
       const want = t.sets.filter(x => x.type !== 'W' && Math.abs(parseFloat(x.tw) - t.loadLb) < TOL)
         .map(x => parseInt(x.tr, 10)).filter(Number.isFinite).sort((a, b2) => b2 - a);
@@ -975,9 +1007,10 @@ export function compareSession(input, session, now) {
   }
 }
 
-/* "WHAT'S NEXT TIME?" — for each lift in the session, prescribe() as it
+/* "WHAT'S NEXT TIME?" — for each lift in the session, the target as it
    stands now, exactly as the builder would ask it: the lift's exposures, its
-   group's days-since today, today's aim and energy. */
+   group's days-since today, today's aim and energy — and (v52) his marks,
+   through targetFor(), which coach.js hands over on each lift as `mark`. */
 export function nextTargets(input, session, now) {
   try {
     const i = prepare(input || {});
@@ -985,7 +1018,7 @@ export function nextTargets(input, session, now) {
     const ctx = ctxOf(i, now);
     const out = [];
     liftsIn(i, session).forEach(l => {
-      const t = prescribe(l, ctx);
+      const t = targetFor(l, ctx, l.mark || null);
       if (!t) return;
       const what = t.line.replace(/^Target: /, '');
       out.push({ exId: l.exId, mode: t.mode, text: 'Next time on ' + String(l.name || l.exId) + ': ' +

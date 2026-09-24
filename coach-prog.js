@@ -924,3 +924,81 @@ function weakestHalf(tops) {
     .slice(0, Math.ceil(tops.length / 2))
     .map(x => x.j);
 }
+
+/* ================================================================
+   5.  A MARKED SESSION (v52, Micah's decision #9)
+   ================================================================
+   targetFor(ex, ctx, mark) -> the target, with his bad-day marks honoured.
+   ADDITIVE: with no mark it IS prescribe(), byte for byte, and every caller
+   that names a target comes through here — the builder, "What's next time?",
+   a target replayed before a session, the stall ladder's reset.
+
+   A MARK STOPS A SESSION COUNTING AGAINST HIM, AND NEVER LETS IT COUNT FOR
+   HIM. It says the numbers that day were not representative; it does not say
+   the session did not happen. This file imports nothing new for it, so the
+   caller (coach.js, the one place the two logs are built) hands everything
+   over as data:
+
+     mark = null | {
+       markedAt  Set of the lift's marked exposures' startedAt
+       exposures those marked exposures themselves, so the log's own target
+                 can be read when an exposure list arrives with them already
+                 taken out (the overlap's lifts are the performance log)
+       latest    null, or — when the lift's MOST RECENT exposure is marked —
+                 { word, exposures (the ones before it, other marks out),
+                   groupDaysSince (the group clock as of its start), now (its
+                   startedAt) }
+     }
+
+   THE LATEST EXPOSURE MARKED: the target Coach would have set BEFORE that
+   session — the same attempt again. Not the target from dropping it: that
+   quotes the session before as "last time" and can step lighter than he was
+   already lifting. The decision and its numbers are kept (mode, load, the
+   per-set targets); its whole `why` is replaced, because every line of it is
+   worded from that morning ("yesterday", "last time (8, 7, 7)"), and "last
+   time" in the target line itself says "before your marked session" — last
+   time, today, is the marked session. A marked first-ever exposure has no
+   target from before it, and the answer is silence rather than "first time on
+   this lift", which would be false.
+
+   MARKED EXPOSURES EARLIER ON are left out of what prescribe() reads: never a
+   miss, never a success, never a point in the series. One rule more: two
+   misses at one weight are "two sessions in a row" only when nothing sat
+   between them, so a reduce read across a marked session — which the log
+   without the mark would not make — gives way to the log's own target. A mark
+   never produces a reduce. */
+export function targetFor(ex, ctx, mark) {
+  if (!mark) return prescribe(ex, ctx);
+  try {
+    const e = ex || {}, c = ctx || {};
+    const markedAt = mark.markedAt instanceof Set ? mark.markedAt : new Set();
+    const L = mark.latest;
+    if (L && Array.isArray(L.exposures) && Number.isFinite(L.now)) {
+      if (!L.exposures.length) return null;
+      const t = prescribe({ ...e, exposures: L.exposures, groupDaysSince: L.groupDaysSince }, { ...c, now: L.now });
+      if (!t) return null;
+      const before = Math.max(...L.exposures.map(x => x.startedAt));
+      const from = t.from && Number.isFinite(c.now) ? { ...t.from, daysAgo: daysBetween(before, c.now) } : t.from;
+      return {
+        ...t, from, marked: true,
+        line: t.line.replace(/last time/g, 'before your marked session'),
+        why: ['Your last session is marked (' + String(L.word || 'marked') + '), so this is the target from before it.',
+              'That session doesn’t count against your numbers.']
+      };
+    }
+    const all = Array.isArray(e.exposures) ? e.exposures : [];
+    const kept = all.filter(x => !markedAt.has(x.startedAt));
+    const t = prescribe(kept.length === all.length ? e : { ...e, exposures: kept }, c);
+    if (t && t.mode === 'reduce' && kept.length >= 2) {
+      const a = kept[kept.length - 2].startedAt, b = kept[kept.length - 1].startedAt;
+      if ([...markedAt].some(m => m > a && m < b)) {
+        const back = (Array.isArray(mark.exposures) ? mark.exposures : []).filter(x => !kept.some(k => k.startedAt === x.startedAt));
+        const whole = prescribe({ ...e, exposures: kept.concat(back).sort((x, y) => x.startedAt - y.startedAt) }, c);
+        if (whole && whole.mode !== 'reduce') return whole;
+      }
+    }
+    return t;
+  } catch {
+    return null;
+  }
+}

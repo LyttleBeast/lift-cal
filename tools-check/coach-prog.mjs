@@ -582,6 +582,10 @@ if (MAIN) {
        staged against the same stub. A copy of v48's output typed in here
        would prove only that the copy agrees with itself. */
     const P48 = await stageProg('ca5c677');
+    // v52 (SHIP-V52-PROMPT §1): and rack-v51's own coach-prog.js — with no
+    // mark, prescribe() AND targetFor() are its prescribe(), byte for byte.
+    const P51 = await stageProg('99b49ea');
+    const rows51 = [];
     const OLD = ['exposures', 'range', 'step', 'status', 'slope', 'sigma'];
     const pick = (b, keys) => (b ? Object.fromEntries(keys.map(k => [k, b[k]])) : null);
     const rowsMoved = [], basesMoved = [], inconsistent = [];
@@ -594,6 +598,8 @@ if (MAIN) {
       const ex = { ...meta, exposures, groupDaysSince: group };
       const now = JSON.stringify(P.prescribe(ex, ctx)), then = JSON.stringify(P48.prescribe(ex, ctx));
       if (now !== then) rowsMoved.push(label);
+      const v51 = JSON.stringify(P51.prescribe(ex, ctx));
+      if (now !== v51 || JSON.stringify(P.targetFor(ex, ctx, null)) !== v51) rows51.push(label);
       const b = P.baselines(ex, ctx), b48 = P48.baselines(ex, ctx);
       if (JSON.stringify(pick(b, OLD)) !== JSON.stringify(pick(b48, OLD))) basesMoved.push(label);
       if (!b) return;
@@ -635,9 +641,90 @@ if (MAIN) {
     check('prescribe() is byte-identical to rack-v48’s on every battery row (' + rows + ') and every swept history (' + swept + ')',
           rows >= 57 && !rowsMoved.length, list(rowsMoved));
     check('and every field baselines() already returned is too', !basesMoved.length, list(basesMoved));
+    check('v52: prescribe() and targetFor() with no mark are rack-v51’s prescribe(), byte for byte, on every row (' + rows + ') and every swept history (' + swept + ')',
+          rows >= 57 && !rows51.length, list(rows51));
     check('the new fields agree with the status beside them — a best in the last three is progressing, ' +
           'a stall has none in its last four, the series is the window after the last layoff, oldest first',
           !inconsistent.length, list(inconsistent));
+  }
+
+  /* ================= E. v52 — targetFor(): A BAD DAY STOPS COUNTING AGAINST HIM ================= */
+  section('E. v52 — targetFor(): a marked session never counts against him, and never for him');
+  {
+    const DAYS = 864e5, NOW0 = NOW;
+    const set = (w, r) => ({ w: String(w), r: String(r), type: 'N', done: true });
+    // Bench at 3 × 8, five pounds a session, every four days, then the tail.
+    const log = tail => {
+      const out = [];
+      const head = [165, 170, 175, 180, 185];
+      let ago = 4 * (head.length + tail.length);
+      head.concat(tail.map(t => t[0])).forEach((w, k) => {
+        const reps = k < head.length ? [8, 8, 8] : tail[k - head.length][1];
+        out.push({ id: 'e' + k, startedAt: NOW0 - ago * DAYS, exercises: [{ exId: 'barbell-bench-press', name: 'Barbell Bench Press',
+          group: 'chest', equipment: 'barbell', sets: reps.map(r => set(w, r)) }] });
+        ago -= 4;
+      });
+      return out;
+    };
+    const meta = { exId: 'barbell-bench-press', name: 'Barbell Bench Press', group: 'chest', equipment: 'barbell' };
+    const ctx = { now: NOW0, u: 'lb' };
+    const markOf = (sessions, idx, word) => {
+      const xs = P.exposuresFor(sessions, meta.exId);
+      const marked = idx.map(i => xs[i]);
+      const kept = xs.filter((x, i) => !idx.includes(i));
+      const lastMarked = Math.max(...marked.map(x => x.startedAt));
+      const latest = lastMarked > Math.max(...kept.map(x => x.startedAt))
+        ? { word, exposures: kept.filter(x => x.startedAt < lastMarked), groupDaysSince: 4, now: lastMarked } : null;
+      return { ex: { ...meta, exposures: xs, groupDaysSince: 4 }, mark: { markedAt: new Set(marked.map(x => x.startedAt)), exposures: marked, latest } };
+    };
+    // The latest exposure marked: the target from before it, worded from today.
+    const s1 = log([[185, [8, 8, 8]], [190, [6, 5, 5]]]);
+    const m1 = markOf(s1, [6], 'slept badly');
+    const t1 = P.targetFor(m1.ex, ctx, m1.mark);
+    const was = P.prescribe({ ...meta, exposures: m1.mark.latest.exposures, groupDaysSince: 4 }, { ...ctx, now: m1.mark.latest.now });
+    check('a marked latest exposure: the target from before it — mode, load and every set’s numbers',
+          t1 && was && t1.mode === was.mode && t1.loadLb === was.loadLb && JSON.stringify(t1.sets) === JSON.stringify(was.sets) &&
+          t1.mode === 'add' && t1.loadLb === 190, t1 && t1.line);
+    check('with its whole why replaced by the two lines, worded from today',
+          JSON.stringify(t1.why) === JSON.stringify(['Your last session is marked (slept badly), so this is the target from before it.',
+                                                   'That session doesn’t count against your numbers.']), t1.why.join(' / '));
+    check('never lighter than he was set, and never a reduce on the bad day’s numbers — which the log without the mark reads as a miss',
+          P.prescribe(m1.ex, ctx).mode === 'hold' && t1.mode !== 'reduce' && t1.loadLb >= 190);
+    check('`from` is still the session before, its days counted from today', t1.from && t1.from.daysAgo === 8, JSON.stringify(t1.from));
+    // A layoff-style hold replayed: "last time" in its line would name the
+    // marked session, so it says "before your marked session".
+    const s2 = log([[185, [8, 8, 8]]]).map((x, k, a) => (k === a.length - 1 ? { ...x, startedAt: x.startedAt } : x));
+    s2.push({ id: 'late', startedAt: s2[s2.length - 1].startedAt + 14 * DAYS,
+              exercises: [{ ...meta, sets: [set(185, 5), set(185, 5), set(185, 4)] }] });
+    const xs2 = P.exposuresFor(s2, meta.exId);
+    const late = xs2[xs2.length - 1];
+    const t2 = P.targetFor({ ...meta, exposures: xs2, groupDaysSince: 1 }, { now: late.startedAt + 2 * DAYS, u: 'lb' },
+      { markedAt: new Set([late.startedAt]), exposures: [late], latest: { word: 'sore', exposures: xs2.slice(0, -1), groupDaysSince: 14, now: late.startedAt } });
+    check('a target line that said "last time" says "before your marked session" — last time, today, IS the marked session',
+          t2 && !/last time/.test(t2.line) && (/before your marked session/.test(t2.line) || t2.mode !== 'hold'), t2 && t2.line);
+    // Earlier marks: left out — never a miss, never a success, never a point.
+    const s3 = log([[185, [8, 8, 8]], [185, [5, 5, 5]], [185, [8, 8, 8]]]);
+    const m3 = markOf(s3, [6], 'stressed');
+    const t3 = P.targetFor(m3.ex, { ...ctx, aim: 'cut' }, m3.mark);
+    const t3u = P.prescribe(m3.ex, { ...ctx, aim: 'cut' });
+    check('a marked miss between two sessions at the top is not a miss: on a cut, the second look is had, and weight goes on',
+          t3 && t3.mode === 'add' && t3u.mode === 'hold', (t3 && t3.line) + ' / unmarked ' + t3u.line);
+    // Two misses around a marked good session are not "two in a row".
+    const s4 = log([[185, [6, 6, 6]], [185, [8, 8, 8]], [185, [6, 6, 6]]]);
+    const m4 = markOf(s4, [6], 'sore');
+    const t4 = P.targetFor(m4.ex, ctx, m4.mark);
+    const kept4 = P.prescribe({ ...m4.ex, exposures: m4.ex.exposures.filter((x, i) => i !== 6) }, ctx);
+    check('two misses with a marked session between them are not two in a row — the mark never produces a reduce',
+          kept4.mode === 'reduce' && t4 && t4.mode !== 'reduce', kept4.line + ' → ' + (t4 && t4.line));
+    // A mark on the lift's only exposure: there is no target from before it.
+    const s5 = log([]).slice(-1);
+    const xs5 = P.exposuresFor(s5, meta.exId);
+    const t5 = P.targetFor({ ...meta, exposures: xs5, groupDaysSince: 4 }, ctx,
+      { markedAt: new Set([xs5[0].startedAt]), exposures: xs5, latest: { word: 'felt unwell', exposures: [], groupDaysSince: null, now: xs5[0].startedAt } });
+    check('a mark on the lift’s only session: silence, never "first time on this lift"', t5 === null, JSON.stringify(t5));
+    check('and with no mark it is prescribe(), the same object shape and bytes', JSON.stringify(P.targetFor(m1.ex, ctx, null)) === JSON.stringify(P.prescribe(m1.ex, ctx)));
+    check('every target coach-overlap.js names goes through targetFor() — prescribe() is called there for a target nowhere',
+          !/\bprescribe\s*\(/.test(src('coach-overlap.js').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')));
   }
 
   console.log('\nCoach names a weight only when it is one he can load\n');
