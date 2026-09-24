@@ -134,9 +134,11 @@ section('A. one fact, one id — the draft had three definitions of one of them'
   const dupes = factIds.filter((id, i) => factIds.indexOf(id) !== i);
   check('no fact id is registered twice (' + factIds.length + ' facts)', !dupes.length, list([...new Set(dupes)]));
 
-  const NAMESPACES = ['log', 'session', 'group', 'lift', 'fuel', 'weight', 'steps', 'live', 'meta', 'coach'];
+  // v53 (on purpose): `feel`, his own rating after a workout — the three
+  // energy patterns (Micah's decision, 24 Sep 2026) are facts about it.
+  const NAMESPACES = ['log', 'session', 'group', 'lift', 'fuel', 'weight', 'steps', 'live', 'meta', 'coach', 'feel'];
   const off = factIds.filter(id => !NAMESPACES.includes(id.split('.')[0]));
-  check('every id is dot-namespaced into one of the ten families', !off.length, list(off));
+  check('every id is dot-namespaced into one of the eleven families', !off.length, list(off));
   const shape = factIds.filter(id => !/^[a-z]+\.[a-zA-Z0-9]+$/.test(id));
   check('and every id is exactly family.name', !shape.length, list(shape));
 
@@ -260,9 +262,16 @@ section('E. every category maps to exactly one toggle');
 
   // Unused rows are the other direction of the same drift: a toggle in Settings
   // that switches nothing off.
-  const unused = ids.filter(id => !INTENTS.some(i => i.category === id));
+  /* v53, one exemption, on purpose: `feel` is a SURFACE, not an intent — the
+     recap's "How did that feel?" card, which its switch hides — so it
+     switches something off without an intent behind it. It is free, so it
+     adds nothing to PRO_ADDS either. */
+  const SURFACES = ['feel'];
+  const unused = ids.filter(id => !SURFACES.includes(id) && !INTENTS.some(i => i.category === id));
   check('every category is used by at least one intent — no toggle that switches nothing off',
         !unused.length, list(unused));
+  check('and the one that is a surface is really read by one: workout.js draws the check-in behind isMuted(…, \'feel\')',
+        /isMuted\(coachSettings\(\), 'feel'\)/.test(src('workout.js')) && !C.PRO_ADDS.some(a => a.id === 'feel'));
 }
 
 /* ================= F. QUESTIONS ================= */

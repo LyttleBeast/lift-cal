@@ -635,10 +635,28 @@ section('J. v52 — readiness joins the toggle table after rest, and every other
   const was = table ? [...table[1].matchAll(/\{ id: '([a-z]+)'/g)].map(m => m[1]) : [];
   const now = C.CATEGORIES.map(c => c.id);
   check('readiness sits directly after rest', now.indexOf('readiness') === now.indexOf('rest') + 1, now.join(','));
+  // v53 (on purpose): feel is a category v51 did not have either.
   check('and every rack-v51 category keeps its order relative to the others (' + was.length + ' of them)',
-        was.length >= 14 && JSON.stringify(now.filter(id => id !== 'readiness')) === JSON.stringify(was), now.join(','));
+        was.length >= 14 && JSON.stringify(now.filter(id => id !== 'readiness' && id !== 'feel')) === JSON.stringify(was), now.join(','));
   check('nothing in readiness can compete for a card — its one intent is a selector',
         C.INTENTS.filter(i => i.category === 'readiness').every(i => i.kind === 'selector'));
+}
+
+/* ================= K. v53 — FEEL, AFTER LIVE, AND NO FINDING MOVED ================= */
+section('K. v53 — the feel switch joins the table after live, and every other category keeps its order');
+{
+  /* SHIP-V53-PROMPT §6.5. Only the ORDER of categories reaches the ranking,
+     so "no finding's rank moves" is: every category rack-v52 had keeps its
+     order relative to the others. Read against v52's own table, out of git. */
+  const v52 = execFileSync('git', ['show', '6f76c3b:coach.js'], { cwd: ROOT, encoding: 'utf8' });
+  const table = /export const CATEGORIES = Object\.freeze\(\[([\s\S]*?)\n\]\);/.exec(v52);
+  const was = table ? [...table[1].matchAll(/\{ id: '([a-z]+)'/g)].map(m => m[1]) : [];
+  const now = C.CATEGORIES.map(c => c.id);
+  check('feel sits directly after live', now.indexOf('feel') === now.indexOf('live') + 1, now.join(','));
+  check('and every rack-v52 category keeps its order relative to the others (' + was.length + ' of them)',
+        was.length >= 15 && JSON.stringify(now.filter(id => id !== 'feel')) === JSON.stringify(was), now.join(','));
+  check('nothing in feel can compete for a card — it has no intent at all; it is the recap’s check-in',
+        !C.INTENTS.some(i => i.category === 'feel'));
 }
 
 /* ---------- report ---------- */

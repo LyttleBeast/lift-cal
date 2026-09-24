@@ -323,7 +323,15 @@ const BUTTONS = [
   ['Admin', '+7 days', ['admin.js', /'btn btn-ghost btn-sm', '\+7 days'/], 'button.btn.btn-ghost.btn-sm < div.chip-row < div.card < div.sheet', 32],
   ['Sign in', 'Sign in', ['index.html', /class="btn btn-primary btn-block btn-lg" id="authBtn"/], 'button#authBtn.btn.btn-primary.btn-block.btn-lg < div#authBox.auth-box < div#auth', 49],
   ['Access gate', 'Unlock Rack', ['access.js', /'btn btn-primary btn-block'/], 'button.btn.btn-primary.btn-block < div.field < div.gate-body < div.auth-box < div#gate', 39],
-  ['Onboarding', 'Set it up', ['onboarding.js', /'btn btn-primary btn-block btn-lg'/], 'button.btn.btn-primary.btn-block.btn-lg < div.ob-foot < div.ob-card < div#onboard', 49]
+  ['Onboarding', 'Set it up', ['onboarding.js', /'btn btn-primary btn-block btn-lg'/], 'button.btn.btn-primary.btn-block.btn-lg < div.ob-foot < div.ob-card < div#onboard', 49],
+  /* v53, on purpose: the recap's "How did that feel?" — its chips (the
+     sheet's .coach-chip, held to 44px inside the card), and Save and Skip.
+     Never measured in Chrome at v46, so B names them and leaves them to A. */
+  ['Recap · feel', 'Energy 1–10', ['workout.js', /el\('div', 'feel-grid'\)/], `button.coach-chip < div.feel-grid < div.card.feel-card < div.screen-pad.summary-page < ${V}`, null],
+  ['Recap · feel', 'Strength steps', ['workout.js', /'coach-chips feel-steps'/], `button.coach-chip < div.coach-chips.feel-steps < div.card.feel-card < div.screen-pad.summary-page < ${V}`, null],
+  ['Recap · feel', 'Anything Coach can’t see?', ['workout.js', /el\('div', 'feel-mark'\)/], `button.coach-chip < div.coach-chips < div.feel-mark < div.card.feel-card < div.screen-pad.summary-page < ${V}`, null],
+  ['Recap · feel', 'Save', ['workout.js', /el\('button', 'btn btn-primary', 'Save'\)/], `button.btn.btn-primary < div.feel-acts < div.card.feel-card < div.screen-pad.summary-page < ${V}`, null],
+  ['Recap · feel', 'Skip', ['workout.js', /el\('button', 'btn btn-ghost', 'Skip'\)/], `button.btn.btn-ghost < div.feel-acts < div.card.feel-card < div.screen-pad.summary-page < ${V}`, null]
 ];
 
 /* The width snapshot, v46 (12b3a9d), produced by this file's own resolver
@@ -358,6 +366,8 @@ for (const [screen, name, [file, re]] of BUTTONS) check(`${screen} · ${name}: $
 
 section('B. the model, minimum taken out, reproduces the heights Chrome measured at v46');
 for (const [screen, name, , spec, chromeV46, row, kid] of BUTTONS) {
+  // v53's controls postdate the v46 measurement: there is nothing to reproduce.
+  if (chromeV46 == null) { results.push('  · ' + screen + ' · ' + name + ': v53, never measured in Chrome at v46 — A holds its 44px'); continue; }
   const bx = buttonBox(RULES, chain(spec), 390, { withMin: false, kid: kid ? chain(kid + ' < ' + spec) : null });
   if (typeof row === 'number') {
     check(`${screen} · ${name}: ${bx.natural}px of its own, stretched to the row's ${row}px (an input sets it) = Chrome's ${chromeV46}px — over 44 before v47 too`,

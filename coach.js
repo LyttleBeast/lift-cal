@@ -55,7 +55,7 @@ import { readLift, lighterWeek, recordDay, liftsMoving, prepare, targetsReplay, 
          liftTrend, goalLiftRead, bigThree, focusRead, groupDaysAt } from './coach-overlap.js';
 import { restRead, usualRun, replay, readinessRows, readinessHas, readinessAnswer, readinessHeavy, sessionRows,
          mergeRows, groupLine, restAnswer, lighterAnswer, groupAnswer, REST_REASON } from './coach-ready.js';
-import { fueledRead, fuelAnswer, fedUnloggedAnswer, fedNoneAnswer, fuelRow, sessionFoodRows, fuelDates } from './coach-fuel.js';
+import { fueledRead, fuelAnswer, fedUnloggedAnswer, fedNoneAnswer, fuelRow, sessionFoodRows, fuelDates, logStyle } from './coach-fuel.js';
 
 const DAY = 864e5;
 
@@ -124,6 +124,22 @@ export const MARK_ASK = Object.freeze({
   clear: Object.freeze({ label: 'Clear the mark', ack: 'Cleared.' })
 });
 
+/* v53: HIS OWN RATING'S WORDS. The strength step against his normal, as he
+   asked for them — the recap's chips and every sentence that quotes the
+   rating say it the same way. His words, so the percentage is his. */
+export const FEEL_S_WORDS = Object.freeze({ 80: '80% or less', 90: '90%', 100: '100%', 110: '110%', 120: '120%+' });
+
+/* v53: whether a session may be asked "Anything Coach can’t see?" — the
+   gates markView() keeps under "How did today compare?": an id a mark can be
+   kept under, the Questions switch on, and not marked already. The recap asks
+   after a harder rating through the same three. */
+export function canMark(settings, sessionId) {
+  const id = sessionId != null ? String(sessionId) : '';
+  if (!MARK_ID.test(id) || isMuted(settings, 'questions')) return false;
+  const m = settings && settings.marks && settings.marks[id];
+  return !markValid(id, m);
+}
+
 /* How long a question that was put and not answered stays put. Somebody who
    opened the sheet, saw the question and closed it has not refused it — they
    were looking for something else — so asking again later is right and asking
@@ -138,6 +154,9 @@ export const PATTERN_DAYS = 182;
 /* Eight on each side, or the comparison is not made. With fewer, one odd day
    moves a median, and a pattern one day can make is not a pattern. */
 export const PATTERN_MIN = 8;
+/* v53: the most rated sessions' dates the three energy patterns add to the
+   food days Patterns reads — the newest forty, beside the shipped ones. */
+const FEEL_DAYS_MAX = 40;
 /* "Morning" is a session started before noon, on the account's own clock. */
 const PATTERN_NOON = 12;
 /* A busy week against a quieter one, counted in sessions. */
@@ -283,6 +302,12 @@ export const CATEGORIES = Object.freeze([
      thing Coach does with a workout, and it moves no finding's rank: nothing in
      it competes for a card. */
   { id: 'live',        label: 'In the gym',          mutable: true,  note: 'During a workout: the Coach chip, and one quiet line under a finished exercise.' },
+  /* v53's, directly after live because it is the other end of a workout:
+     the recap's "How did that feel?". A surface, not an intent — nothing in
+     it competes for a card, so no finding's rank moves — and free for every
+     tier, because logging how he felt is not a Pro feature. On unless
+     switched off; off, the card is never drawn. */
+  { id: 'feel',        label: 'After a workout: how it felt', mutable: true, note: 'The energy and strength check-in on the recap.' },
   { id: 'fuel',        label: 'Food',                mutable: true,  note: 'Calories and macros against your own targets.' },
   { id: 'weight',      label: 'Weight',              mutable: true,  note: 'Rate of change, and days since a weigh-in.' },
   { id: 'steps',       label: 'Steps',               mutable: true,  note: 'Today against your own trailing average.' },
@@ -656,6 +681,19 @@ function repDrop(sets) {
   if (w.length < 2) return false;
   const load = s => parseFloat(s.w) || 0, reps = s => parseInt(s.r, 10);
   return w.slice(1).some(s => load(s) <= load(w[0]) && reps(s) <= reps(w[0]) * (1 - REP_DROP));
+}
+
+/* v53: the rated sessions in the Patterns window — a session whose recap
+   rating has an energy — and the food logged on its own date, as read
+   (`foodDays`, [{ t, cal }] a day). An entry is that day's when its time is. */
+function ratedSessions(d) {
+  return d.once('rated', () => d.pSessions().map(s => ({ s, f: normFeel(s.session && s.session.feel) }))
+    .filter(x => x.f && x.f.e != null));
+}
+function sameDayFood(d, s) {
+  const es = (d.input.foodDays || {})[s.date];
+  return Array.isArray(es) ? es.filter(e => e && Number.isFinite(e.t) && dayKey(e.t) === s.date)
+    .map(e => ({ t: e.t, cal: Number(e.cal) > 0 ? Number(e.cal) : 0 })) : [];
 }
 
 /* Two groups of numbers, and whether they may be compared at all: eight on
@@ -1541,6 +1579,66 @@ export const FACTS = Object.freeze([
     },
     because: v => 'calories the day before each session of ' + v.lift + ', over the last 26 weeks'
   },
+  /* v53: THREE MORE — Micah's decision, 24 Sep 2026. v52 held Patterns at
+     eight because a ninth is a decision, and he made it: he wants his energy
+     after a workout (his own rating, from the recap) set beside how much he
+     had eaten before it and how long before. The same machinery and the same
+     rules: opt-in, descriptive, eight a side, both counts, never a cause.
+     Each reads the rated sessions' own food logs (`foodDays`), which
+     coach-data.js reads only with Patterns on (patternFoodDays). */
+  {
+    // 9. Energy on rated sessions with food logged before they started,
+    //    against rated sessions on days with food logged, none of it before.
+    id: 'feel.energyFedBefore', unit: null, requires: [],
+    compute: d => {
+      const fed = [], not = [];
+      ratedSessions(d).forEach(({ s, f }) => {
+        const es = sameDayFood(d, s);
+        if (!es.length) return;                       // nothing logged that day says nothing
+        (es.some(e => e.t < s.startedAt) ? fed : not).push(f.e);
+      });
+      return sides(fed, not);
+    },
+    because: () => 'your rated sessions on days with food logged, over the last 26 weeks'
+  },
+  {
+    // 10. Energy at or above his median calories logged before a rated
+    //     session, against below it — rated sessions with food logged before.
+    id: 'feel.energyKcalBefore', unit: 'kcal', requires: [],
+    compute: d => {
+      const rows = [];
+      ratedSessions(d).forEach(({ s, f }) => {
+        const k = sameDayFood(d, s).filter(e => e.t < s.startedAt).reduce((a, e) => a + e.cal, 0);
+        if (k > 0) rows.push({ k, e: f.e });
+      });
+      if (rows.length < PATTERN_MIN * 2) return null;
+      const mid = median(rows.map(r => r.k));
+      const sd = sides(rows.filter(r => r.k >= mid).map(r => r.e), rows.filter(r => r.k < mid).map(r => r.e));
+      return sd ? { median: mid, ...sd } : null;
+    },
+    because: () => 'calories logged before each rated session, over the last 26 weeks'
+  },
+  {
+    // 11. Energy when his last logged food was at or under his median hours
+    //     before a rated session, against longer. Real-time loggers only —
+    //     coach-fuel.js's own logging style — because the hour an entry went
+    //     in says when he ate only for somebody who logs as he goes.
+    id: 'feel.energySinceFood', unit: null, requires: [],
+    compute: d => {
+      if (logStyle({ now: d.now, summaries: d.input.summaries || {}, foodLog: d.input.foodDays || {},
+                     logTiming: d.f('coach.logTiming') }, d.now) !== 'real') return null;
+      const rows = [];
+      ratedSessions(d).forEach(({ s, f }) => {
+        const before = sameDayFood(d, s).filter(e => e.t < s.startedAt);
+        if (before.length) rows.push({ h: (s.startedAt - Math.max(...before.map(e => e.t))) / 3600e3, e: f.e });
+      });
+      if (rows.length < PATTERN_MIN * 2) return null;
+      const mid = median(rows.map(r => r.h));
+      const sd = sides(rows.filter(r => r.h <= mid).map(r => r.e), rows.filter(r => r.h > mid).map(r => r.e));
+      return sd ? { hours: mid, ...sd } : null;
+    },
+    because: () => 'hours from your last logged food to each rated session, over the last 26 weeks'
+  },
 
   /* ---------- coach's own state ---------- */
   {
@@ -1860,12 +1958,14 @@ export const FACTS = Object.freeze([
 
 const FACT_BY_ID = Object.freeze(Object.fromEntries(FACTS.map(f => [f.id, f])));
 
-/* The eight, in the order they were registered in, which is the order they
-   are said in. A ninth is a decision, not a line of code, and
-   tools-check/coach-patterns.mjs fails on anything but eight. */
+/* The eleven, in the order they were registered in, which is the order they
+   are said in. A twelfth is a decision, not a line of code, and
+   tools-check/coach-patterns.mjs fails on anything but eleven. The last
+   three are v53's: Micah's decision of 24 Sep 2026, energy beside food. */
 export const PATTERN_FACTS = Object.freeze([
   'lift.fedBeforeTop', 'session.setsAfterProtein', 'fuel.trainingDayCalories', 'weight.rateBySessions',
-  'lift.morningTop', 'lift.restGapTop', 'steps.trainingDays', 'lift.caloriesBeforeTop'
+  'lift.morningTop', 'lift.restGapTop', 'steps.trainingDays', 'lift.caloriesBeforeTop',
+  'feel.energyFedBefore', 'feel.energyKcalBefore', 'feel.energySinceFood'
 ]);
 
 /* ================================================================
@@ -2939,6 +3039,20 @@ export const RESPONSES = Object.freeze({
         labelW(v.a.med, u) + ' across ' + plural(v.a.n, 'session') + '. After a day below it: ' +
         labelW(v.b.med, u) + ' across ' + v.b.n + '.',
         'Calories the day before each session of your most-logged lift, over the last 26 weeks. A day at the median itself is left out.');
+      // v53: his energy rating beside his food (Micah's decision, 24 Sep 2026).
+      say('feel.energyFedBefore', v =>
+        'On your ' + plural(v.a.n, 'rated session') + ' with food logged beforehand, energy had a median of ' + one(v.a.med) +
+        ' out of ' + FEEL_TOP + '; on the other ' + v.b.n + ', ' + one(v.b.med) + '.',
+        'Your energy rating from the recap, on days with food logged, over the last 26 weeks. A day with nothing logged is left out.');
+      say('feel.energyKcalBefore', v =>
+        'On rated sessions with ' + int(v.median) + ' kcal or more logged beforehand, energy had a median of ' + one(v.a.med) +
+        ' out of ' + FEEL_TOP + ' across ' + plural(v.a.n, 'session') + '; with fewer, ' + one(v.b.med) + ' across ' + v.b.n + '.',
+        'Calories logged before each rated session, split at your median, over the last 26 weeks.');
+      say('feel.energySinceFood', v =>
+        'When your last logged food was ' + one(v.hours) + (Number(one(v.hours)) === 1 ? ' hour' : ' hours') +
+        ' or fewer before a rated session, energy had a median of ' + one(v.a.med) + ' out of ' + FEEL_TOP + ' across ' +
+        plural(v.a.n, 'session') + '; when it was longer, ' + one(v.b.med) + ' across ' + v.b.n + '.',
+        'From the last food logged that day to the start of each rated session, split at your median. Left out when your food goes in all at once, later.');
       return out;
     },
     text: (d, u) => { const l = RESPONSES.resp_patterns.lines(d, u); return l.length ? l[0].text : ''; },
@@ -3025,6 +3139,9 @@ export const RESPONSES = Object.freeze({
       if (t && d.f('meta.tierPro') === true && !isMuted(d.input.settings, 'targets')) {
         out.push({ text: t.met + ' of ' + t.n + ' Coach targets met.', reason: 'Each target as Coach would have set it before the session.' });
       }
+      // v53: his own rating, after the shipped rows — quoted as he gave it.
+      const feel = normFeel(((d.f('session.latest') || {}).session || {}).feel);
+      if (feel) out.push({ text: feelLine(feel, v), reason: 'Your own rating, from the recap. It moves no target and no number.' });
       const diffs = d.f('session.diffs');
       if (diffs && diffs.rows.length) {
         out.push({ text: 'What was different in your log:', reason: 'Each against your own sessions in the twelve weeks before it, whichever way it went.' });
@@ -5018,6 +5135,20 @@ function caution(d, opts) {
   return { text, reason: REST_REASON, anyway: { label: 'Build ' + name + ' anyway', opts: opts || {} }, recovered };
 }
 
+/* "How did today compare?"'s line for his rating. When the rating and the
+   numbers point different ways, both are said and neither is called right:
+   "By the numbers it was your usual; you rated it 110%." */
+function feelLine(f, v) {
+  const e = f.e != null ? 'energy ' + f.e + '/' + FEEL_TOP : null;
+  const verdict = v.summary || (v.rows.length === 1 ? v.rows[0].verdict : null);
+  const rated = f.s == null ? null : f.s >= FEEL_HIGH_S ? 'above' : f.s <= FEEL_LOW_S ? 'below' : 'usual';
+  if (verdict && rated && verdict !== rated) {
+    return 'By the numbers it was ' + (verdict === 'usual' ? 'your usual' : verdict + ' your usual') + '; you rated it ' +
+           FEEL_S_WORDS[f.s] + (e ? ', ' + e : '') + '.';
+  }
+  return 'You rated it: ' + [e, f.s != null ? 'strength ' + FEEL_S_WORDS[f.s] : null].filter(Boolean).join(', ') + '.';
+}
+
 /* v52: the mark under "How did today compare?". Asked when the session came
    in below his usual, has an id, is not already marked, and Questions is on;
    already marked, it says so and offers to clear it. */
@@ -5121,7 +5252,14 @@ export function patternFoodDays(input) {
     if (isMuted(d.input.settings, 'patterns')) return [];
     const L = d.pLift();
     const sums = d.input.summaries || {};
-    return L ? [...new Set(L.rows.map(r => r.date))].filter(k => sums[k] && sums[k].cal > 0).sort() : [];
+    const shipped = L ? [...new Set(L.rows.map(r => r.date))].filter(k => sums[k] && sums[k].cal > 0).sort() : [];
+    /* v53: and the rated sessions' dates, for the three energy patterns —
+       only the ones not already here, newest first, forty at most. The dates
+       the first pattern reads are never trimmed for them. */
+    const have = new Set(shipped);
+    const rated = [...new Set(ratedSessions(d).map(x => x.s.date))]
+      .filter(k => !have.has(k) && sums[k] && sums[k].cal > 0).sort().reverse().slice(0, FEEL_DAYS_MAX);
+    return shipped.concat(rated);
   } catch {
     return [];
   }

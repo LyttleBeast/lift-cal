@@ -62,6 +62,9 @@ let settingsRead = false;      // false means the node has never been read clean
 // first pattern asks about. A day read and found empty is null; a day not read
 // is absent. See loadPatternFood().
 let foodFirst   = {};
+// v53: the same reads, each day kept whole as [{ t, cal }] — the three energy
+// patterns want every entry's time and calories on a rated session's date.
+let foodDays    = {};
 // v52: "Am I fueled?" — the food log days loadFuel() has read this app open,
 // { date: [{ t, cal, p, c }] | null }, null a day that could not be read; and
 // the summary today's was read against, so today is read again only when it
@@ -257,16 +260,22 @@ async function load() {
    here, and both mean the same thing to the pattern — that day is left out.
    Nothing is guessed from a day that could not be read. Once per app open,
    and not awaited by anything: the pattern is silent until its days land, the
-   same silence a thin log gets. */
+   same silence a thin log gets.
+
+   v53: the pure layer's list also names the rated sessions' dates (forty at
+   most), for the three energy patterns, and each day read is kept whole as
+   well — `foodDays`, every entry's time and calories — beside `foodFirst`,
+   which is computed exactly as it was for the shipped patterns. */
 let patternFood = null;
 function loadPatternFood() {
   if (patternFood) return patternFood;
   let days = [];
   try { days = patternFoodDays(coachInput({})); } catch { days = []; }
   patternFood = Promise.all(days.map(k => read('food/log/' + k, null).then(v => {
-    const ts = Object.values(v && typeof v === 'object' ? v : {})
-      .map(e => (e && Number.isFinite(e.t) ? e.t : null)).filter(t => t != null);
+    const es = Object.values(v && typeof v === 'object' ? v : {}).filter(e => e && Number.isFinite(e.t));
+    const ts = es.map(e => e.t);
     foodFirst = { ...foodFirst, [k]: ts.length ? Math.min(...ts) : null };
+    foodDays = { ...foodDays, [k]: es.map(e => ({ t: e.t, cal: Number(e.cal) || 0 })) };
   }, () => {}))).then(() => true, () => false);
   return patternFood;
 }
@@ -386,6 +395,8 @@ export function coachInput(extra) {
     // snapshot below carries only the latest), and foodFirst, above.
     weighIns: safe(() => sortedEntries(entries).map(e => ({ lb: e.lb, t: e.t })), []),
     foodFirst,
+    // v53: the same days, whole, for the three energy patterns.
+    foodDays,
     // v52: the food log days loadFuel() has read, and only those.
     foodLog,
     weight: {

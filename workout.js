@@ -12,7 +12,7 @@ import {
 import {
   allSessions, invalidate, detectPRs, sessionMilestones, sameKindComparison,
   sessionReps, isWorking, groupColor,
-  mergeSessionExercises, prDetail
+  mergeSessionExercises, prDetail, normFeel, FEEL_STRENGTH
 } from './analytics.js';
 // One-way dependency: this file imports stats.js, stats.js never imports back.
 import { openStats, isStatsOpen, renderStats, refresh as refreshStats } from './stats.js';
@@ -21,7 +21,11 @@ import { openStats, isStatsOpen, renderStats, refresh as refreshStats } from './
 import { initPicker, allExercises, openPicker, openExerciseManager } from './picker.js';
 import { initRoutines, openRoutines, saveSessionAsRoutine } from './routines.js';
 import { coachCard, liveChip, openLiveSheet, noteLiveTick, nudgeLine, dismissNudge } from './coach-ui.js';
-import { initCoachData, coachLogReady, refreshCoachSessions, noteCoachData, coachFinishRead } from './coach-data.js';
+import { initCoachData, coachLogReady, refreshCoachSessions, noteCoachData, coachFinishRead,
+         coachSettings, markSession } from './coach-data.js';
+// v53: the check-in's words and gates — pure, and the engine's, so the recap
+// and Coach say his rating the same way and ask the same mark question.
+import { feelHarder, canMark, isMuted, MARK_ASK, FEEL_S_WORDS } from './coach.js';
 import { bump } from './usage.js';
 import { wOut, wIn, fmtSetW, fmtSetLoad, fmtVol, volOut, unitW, limW } from './units.js';
 
@@ -1652,7 +1656,8 @@ async function runFinish(anyway) {
   refreshCoachSessions().catch(() => {});
 
 
-  summary = { record, prs, firsts, milestones, prior: priorSessions };
+  // v53: the day it is filed under, for the rating's own child write.
+  summary = { record, prs, firsts, milestones, prior: priorSessions, dateK };
   session = null;
   peek = false;
   releaseWakeLock();
@@ -1700,6 +1705,12 @@ async function saveEdit() {
     groups: recordGroups(done),
     exercises: done
   };
+  /* v53: THE TRAP. The record is rebuilt from scratch here and PUT with its
+     whole month, so a field it does not carry is a field the edit erases —
+     and "How did that feel?" is stored on the record. It rides over from the
+     record being edited, exactly as it was. Both months were hydrated above. */
+  const edited = ((monthCache[oldMk] || {})[oldDd] || {})[session.id];
+  if (edited && edited.feel != null) record.feel = edited.feel;
 
   // remove from the old slot
   if (monthCache[oldMk] && monthCache[oldMk][oldDd]) {
@@ -1732,6 +1743,120 @@ async function saveEdit() {
 }
 
 
+/* ================= HOW DID THAT FEEL? (v53) =================
+   Micah, 24 Sep 2026: "1–10 how did you feel this workout energy wise, how
+   did you feel strength wise compared to normal (% answer with 100%+ as an
+   option) — that will help with logging energy levels compared to how much
+   and what you eat before you lift and how long ago it was since you ate."
+
+   Energy 1 to 10, strength against his normal in five steps, either or both,
+   saved with the session. The labels are his words, percentages included:
+   the recap's ban on a percentage is about Coach's comparisons, never his
+   own rating. Skip writes nothing. A rating of strength 90% or less, or
+   energy 3 or less, brings up v52's "Anything Coach can’t see?" under the
+   saved line — the same chips, the same acknowledgements, the same gates. */
+function feelCard() {
+  const { record } = summary;
+  const card = el('div', 'card feel-card');
+  const hd = el('div', 'card-hd');
+  hd.appendChild(el('div', 'eyebrow', 'How did that feel?'));
+  card.appendChild(hd);
+
+  const saved = normFeel(record.feel);
+  if (saved) {
+    card.appendChild(el('div', 'feel-line', [saved.e != null ? 'Energy ' + saved.e + '/10' : null,
+      saved.s != null ? 'Strength ' + FEEL_S_WORDS[saved.s] : null].filter(Boolean).join(' · ')));
+    if (summary.markAck) {
+      card.appendChild(el('div', 'feel-ack', summary.markAck));
+    } else if (feelHarder(saved) && canMark(coachSettings(), record.id)) {
+      const box = el('div', 'feel-mark');
+      box.appendChild(el('div', 'feel-ask', MARK_ASK.text));
+      box.appendChild(el('div', 'feel-sub', 'Your answer is kept as a mark on this one session, for six months, and nothing else.'));
+      const row = el('div', 'coach-chips');
+      MARK_ASK.options.forEach(op => {
+        const b = el('button', 'coach-chip', op.label);
+        b.onclick = () => {
+          // "Nothing" writes nothing; every other answer is a mark on this
+          // one session, by the day it is filed under.
+          if (op.value) markSession({ id: record.id, date: summary.dateK }, op.value).catch(() => {});
+          summary.markAck = op.ack;
+          row.remove();
+          box.appendChild(el('div', 'feel-ack', op.ack));
+        };
+        row.appendChild(b);
+      });
+      box.appendChild(row);
+      card.appendChild(box);
+    }
+    return card;
+  }
+
+  const pick = { e: null, s: null };
+  const save = el('button', 'btn btn-primary', 'Save');
+  save.disabled = true;
+  const chip = (host, key, value, label) => {
+    const b = el('button', 'coach-chip', label);
+    b.setAttribute('aria-pressed', 'false');
+    b.onclick = () => {
+      pick[key] = pick[key] === value ? null : value;
+      [...host.children].forEach(x => { const on = x === b && pick[key] === value;
+        x.classList.toggle('on', on); x.setAttribute('aria-pressed', on ? 'true' : 'false'); });
+      save.disabled = pick.e == null && pick.s == null;
+    };
+    host.appendChild(b);
+  };
+  card.appendChild(el('div', 'feel-cap', 'Energy'));
+  const energy = el('div', 'feel-grid');
+  for (let e = 1; e <= 10; e++) chip(energy, 'e', e, String(e));
+  card.appendChild(energy);
+  card.appendChild(el('div', 'feel-cap', 'Strength compared to your normal'));
+  const strength = el('div', 'coach-chips feel-steps');
+  FEEL_STRENGTH.forEach(v => chip(strength, 's', v, FEEL_S_WORDS[v]));
+  card.appendChild(strength);
+
+  const acts = el('div', 'feel-acts');
+  const skip = el('button', 'btn btn-ghost', 'Skip');
+  skip.onclick = () => { summary.feelSkipped = true; card.remove(); };
+  save.onclick = () => {
+    if (pick.e == null && pick.s == null) return;
+    save.disabled = true;
+    saveFeel({ ...(pick.e != null ? { e: pick.e } : {}), ...(pick.s != null ? { s: pick.s } : {}), at: Date.now() })
+      .then(ok => { if (!ok) save.disabled = false; });
+  };
+  acts.append(save, skip);
+  card.appendChild(acts);
+  return card;
+}
+
+/* One child write, `workouts/{mk}/{dd}/{id}/feel`, AFTER the record itself
+   is safe: the record is the session, the rating is extra. The published
+   rules take it — `workouts` carries a section-level .write. Then, and only
+   then, the month cache — straight away, because every later whole-month
+   write (a delete, an edit, a move) PUTs the month from that cache, and a
+   cache without `feel` would erase the rating with nothing to notice it gone
+   — Coach's copy of the log, and the headline, which a rating can earn. */
+async function saveFeel(raw) {
+  const s = summary;
+  const v = normFeel(raw);
+  if (!s || !v || !s.dateK) return false;
+  const { record, dateK } = s;
+  const mk = dateK.slice(0, 7), dd = dateK.slice(8, 10);
+  try {
+    await write(`workouts/${mk}/${dd}/${record.id}/feel`, v);
+  } catch {
+    toast('Not saved \u2014 your rating is still here.');
+    return false;
+  }
+  const cached = ((monthCache[mk] || {})[dd] || {})[record.id];
+  if (cached) cached.feel = v;
+  record.feel = v;
+  invalidate();
+  refreshCoachSessions().catch(() => {});
+  s.finish = coachFinishRead(record, { prs: s.prs, firsts: s.firsts, milestones: s.milestones });
+  if (summary === s) render();
+  return true;
+}
+
 /* ================= POST-WORKOUT SUMMARY =================
    v53, redone after Micah's first workout built by Coach: "After a workout
    the first thing I want to see is like 'Great workout!' … get rid of the %,
@@ -1758,6 +1883,11 @@ function renderSummary() {
   hero.appendChild(el('div', 'summary-date',
     (record.name || 'Workout') + '  ·  ' + fmtDateFull(todayKey(new Date(record.startedAt)))));
   wrap.appendChild(hero);
+
+  /* ---- how did that feel? ----
+     Second, under the win: his own rating, while the session is fresh.
+     Settings → Coach → "After a workout: how it felt" takes it away. */
+  if (!summary.feelSkipped && !isMuted(coachSettings(), 'feel')) wrap.appendChild(feelCard());
 
   /* ---- PRs ---- */
   if (prs.length) {

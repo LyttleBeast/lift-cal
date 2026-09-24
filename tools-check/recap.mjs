@@ -109,7 +109,7 @@ function lift(name) {
 }
 // renderSummary and whatever top-level helpers it calls that live in
 // workout.js (the feel card, from Phase D, when it exists).
-const LIFTED = ['renderSummary'].concat(['feelCard', 'saveFeel', 'markFeel'].filter(n =>
+const LIFTED = ['renderSummary'].concat(['feelCard', 'saveFeel'].filter(n =>
   new RegExp('^(?:async )?function ' + n + '\\(', 'm').test(WSRC)));
 const state = { input: null, u: 'lb', writes: [], marks: [], renders: 0, settings: null };
 const STUBS = {
@@ -122,7 +122,8 @@ const STUBS = {
   // coach-data.js's coachFinishRead(), on this file's snapshot: finishRead()
   // on coachInput() — the one thing the real one does.
   coachFinishRead: (rec, extras) => C.finishRead(state.input, rec, extras),
-  feelHarder: C.feelHarder, MARK_ASK: C.MARK_ASK, isMuted: C.isMuted,
+  feelHarder: C.feelHarder, MARK_ASK: C.MARK_ASK, isMuted: C.isMuted, canMark: C.canMark, FEEL_S_WORDS: C.FEEL_S_WORDS,
+  invalidate: () => {},
   coachSettings: () => state.settings || (state.input && state.input.settings) || {},
   markSession: (s, r) => { state.marks.push([s, r]); return Promise.resolve(true); },
   write: (p, v) => { state.writes.push([p, v]); return Promise.resolve(); },
@@ -289,10 +290,20 @@ section('D. the order, top to bottom — the win, how it felt, the wins, the til
     : c.classList.contains('summary-like') ? 'compared'
     : c.tag === 'button' ? 'button:' + c.textContent
     : (eyebrows(c)[0] || c.className));
-  const want = ['hero'].concat(top.includes('feel') ? ['feel'] : [], ['records', 'Session milestones', 'First time logged', 'tiles', 'What you did',
-    'compared', 'button:Done', 'button:Save as routine', 'button:See statistics']);
+  const want = ['hero', 'feel', 'records', 'Session milestones', 'First time logged', 'tiles', 'What you did',
+    'compared', 'button:Done', 'button:Save as routine', 'button:See statistics'];
   check('§5.1’s order, exactly: ' + top.join(' → '), JSON.stringify(top) === JSON.stringify(want), JSON.stringify(want));
   check('the comparison never leads the page — it is below "What you did"', top.indexOf('compared') > top.indexOf('What you did'));
+  // The Feel switch off: the same page without the check-in, nothing else moved.
+  state.settings = { v: 1, mute: { feel: true }, answers: {}, asked: {} };
+  const off = draw(prior, today).page;
+  state.settings = null;
+  check('with "After a workout: how it felt" switched off, the check-in is never drawn and nothing else moves',
+        !find(off, 'feel-card').length && off.children.length === page.children.length - 1);
+  // The one place a "%" may be: his own strength chips, in his words.
+  const feelTexts = find(page, 'feel-card').flatMap(f => texts(f));
+  check('and the check-in is where his own "%" lives — "80% or less" … "120%+" — which B leaves to him',
+        ['80% or less', '90%', '100%', '110%', '120%+'].every(t => feelTexts.includes(t)), list(feelTexts));
 }
 
 console.log('\nthe first thing after a workout is the win, and there is no percentage on the page\n');

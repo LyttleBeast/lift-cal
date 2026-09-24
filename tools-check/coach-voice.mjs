@@ -1351,6 +1351,31 @@ section('M. v53 — every sentence of the finish line, on the recap, the card an
     .concat(/'/.test(x.t) ? ['a straight apostrophe'] : []) })).filter(x => x.w.length);
   check('not one carries a ban, a cause, "eat", a percentage, "down", "under", "below", "lighter", "only", "still" or "!" — both units',
         !bad.length, list(bad.map(x => x.where + ' “' + x.w.join('/') + '” in: ' + x.t)));
+
+  /* v53's other new sentences, sheet-only: his rating under "How did today
+     compare?" (feelLine) and the three energy patterns. The shipped list, the
+     causal words, "eat", "should", "try" and "must" — never the card ban's
+     "below", which "By the numbers it was below your usual" quotes as
+     compareSession() says it. Source here; rendered in feel.mjs E and
+     coach-patterns.mjs I. */
+  const SHEET = BANNED.concat(CAUSE, [/\beat\b/i, /\beating\b/i, /\bshould\b/i, /\btry\b/i, /\bmust\b/i]);
+  const fl = COACH.indexOf('function feelLine(');
+  const feelSrc = fl > 0 ? decomment(COACH.slice(COACH.lastIndexOf('/*', fl), COACH.indexOf('\n}\n', fl))) : '';
+  const say = [...COACH.matchAll(/say\('feel\.[a-zA-Z]+'[\s\S]*?\);\n/g)].map(m => m[0]).join('\n');
+  const newLits = literals(feelSrc + '\n' + say).filter(t => /[a-z]{3}/i.test(t));
+  const newBad = newLits.filter(t => SHEET.some(re => re.test(t)));
+  check('his rating on "How did today compare?" and the three energy patterns were read (' + newLits.length + ' strings), and none carries a ban',
+        !!feelSrc && (say.match(/say\('feel\./g) || []).length === 3 && newLits.length >= 12 && !newBad.length, list(newBad));
+  const fx = Object.values(FIXTURES).find(x => (x.sessions || []).length >= 6) || null;
+  const ratedSaid = [];
+  if (fx) ['lb', 'kg'].forEach(u => [{ e: 8, s: 110 }, { s: 80, e: 2 }, { e: 5 }, { s: 120 }].forEach(feel => {
+    const ss = fx.sessions.slice();
+    const last = { ...ss[ss.length - 1], id: 'rated', startedAt: NOW - 2 * 36e5, endedAt: NOW - 36e5, _date: key(NOW - 2 * 36e5), feel };
+    const a = C.coach({ ...fx, u, sessions: ss.slice(0, -1).concat([last]) }).ask('ask_compare');
+    (a.more || []).filter(m => /rated it/.test(m.text)).forEach(m => ratedSaid.push(m.text, m.reason));
+  }));
+  check('and as said: his rating beside the numbers, in both units, under the same ban (' + ratedSaid.length + ' strings)',
+        ratedSaid.length >= 8 && !ratedSaid.some(t => SHEET.some(re => re.test(t)) || /!/.test(t)), list(ratedSaid));
 }
 
 /* ---------- report ---------- */

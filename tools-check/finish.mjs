@@ -199,10 +199,14 @@ row('N5', () => {
   const { rec, inp } = n3();
   const f = keep('N5', recap(inp, { ...rec, feel: { s: 90, at: NOW - 60e3 } }));
   const e3 = keep('N5 energy 3', recap(inp, { ...rec, feel: { e: 3, at: NOW - 60e3 } }));
+  // "+ the mark chips": the recap asks through feelHarder() and canMark() —
+  // both yes here — and draws them (feel.mjs D drives the chips themselves).
+  const chips = C.feelHarder({ s: 90 }) && C.canMark(inp.settings, rec.id) &&
+                !C.canMark({ ...inp.settings, mute: { questions: true } }, rec.id);
   const ok = f.headline === 'Good work.' && f.line === 'Showing up on a harder day counts.' && !f.evidence.length &&
              e3.line === 'Showing up on a harder day counts.' && C.feelHarder({ s: 90 }) && C.feelHarder({ e: 3 }) &&
-             !C.feelHarder({ s: 100, e: 4 }) && !C.feelHarder(null);
-  return grade(ok, false, said(f) + ' · energy 3: ' + said(e3));
+             !C.feelHarder({ s: 100, e: 4 }) && !C.feelHarder(null) && chips;
+  return grade(ok, false, said(f) + ' · energy 3: ' + said(e3) + ' · the mark chips: ' + (chips ? 'asked' : 'not asked'));
 });
 
 row('N6', () => {

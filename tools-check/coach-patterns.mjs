@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 //
-// Verifier for Patterns in your data — the eight pre-registered comparisons.
+// Verifier for Patterns in your data — the eleven pre-registered comparisons
+// (eight until v53; the last three are Micah's decision of 24 Sep 2026).
 //
 //   node tools-check/coach-patterns.mjs
 //
@@ -8,9 +9,9 @@
 // and every way it could go wrong is a way of finding something that is not
 // there. So this file fences, in order:
 //
-//   A  EIGHT, AND ONLY EIGHT. The checks are pre-registered: a fixed list of
-//      facts, in the brief's order, answered by one sheet-only intent. A ninth
-//      would be an open search growing one line at a time.
+//   A  ELEVEN, AND ONLY ELEVEN. The checks are pre-registered: a fixed list of
+//      facts, in the briefs' order, answered by one sheet-only intent. A
+//      twelfth would be an open search growing one line at a time.
 //   B  OFF UNTIL SWITCHED ON. Absent means off — the reverse of every other
 //      category — and off means no bubble, no answer, no card, no read.
 //   C  THE NUMBERS ARE RIGHT. A twenty-six-week log built so all eight clear,
@@ -24,6 +25,9 @@
 //      never a card, never the lead question, never Train's own set.
 //   G  coach-data.js reads the extra food days only for an account with
 //      Patterns on, and only the days the pure layer asks for.
+//   I  v53's three — his energy rating beside his food — each true, false and
+//      thin, every number against a second reading, the real-time rule, and
+//      the rated days the read adds, forty at most.
 
 import { mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -280,11 +284,16 @@ function expected(fx) {
 }
 
 /* ================= A. EIGHT, AND ONLY EIGHT ================= */
-section('A. eight pre-registered checks, and one intent that says them');
+section('A. eleven pre-registered checks, and one intent that says them');
 {
+  /* v53, on purpose: eleven. v52 held Patterns at eight because a ninth is a
+     decision, and Micah made it on 24 Sep 2026 — his energy after a workout
+     beside how much he ate before it and how long before (SHIP-V53-PROMPT
+     §6.4). The three are registered last, so the eight keep their order. */
   const IDS = ['lift.fedBeforeTop', 'session.setsAfterProtein', 'fuel.trainingDayCalories', 'weight.rateBySessions',
-               'lift.morningTop', 'lift.restGapTop', 'steps.trainingDays', 'lift.caloriesBeforeTop'];
-  check('exactly eight, in the brief’s order', J(C.PATTERN_FACTS) === J(IDS), J(C.PATTERN_FACTS));
+               'lift.morningTop', 'lift.restGapTop', 'steps.trainingDays', 'lift.caloriesBeforeTop',
+               'feel.energyFedBefore', 'feel.energyKcalBefore', 'feel.energySinceFood'];
+  check('exactly eleven, in the briefs’ order', J(C.PATTERN_FACTS) === J(IDS), J(C.PATTERN_FACTS));
   check('each one a registered fact', IDS.every(id => C.FACTS.some(f => f.id === id)));
   const it = C.INTENTS.filter(i => i.category === 'patterns');
   check('one intent answers for all of them, and it is the only one in the category',
@@ -329,8 +338,12 @@ section('C. every number each sentence prints, against a second reading of the d
 const EXP = expected(F);
 {
   const { lines } = linesOf(input(F));
-  check('all eight clear on the fixture, one line each, in order', lines.length === 8, lines.length + ' lines');
-  C.PATTERN_FACTS.forEach((id, n) => {
+  // v53: nothing on this fixture is rated, so the three energy patterns are
+  // silent here and section I drives them on logs of their own.
+  check('all eight shipped clear on the fixture, one line each, in order — and the three energy ones, with nothing rated, do not',
+        lines.length === 8 && C.PATTERN_FACTS.slice(8).every(id => C.coach(input(F)).ask('ask_patterns').more.every(m => !/rated session/.test(m.text))),
+        lines.length + ' lines');
+  C.PATTERN_FACTS.slice(0, 8).forEach((id, n) => {
     const line = lines[n] || { text: '' };
     const got = nums(line.text);
     check(id + ': ' + EXP[id].join(' / '), J(got) === J(EXP[id]), line.text);
@@ -466,14 +479,17 @@ section('G. the food days are read only for an account that asked, and only the 
 }
 
 /* ================= H. v52 — STILL EIGHT ================= */
-section('H. v52 — stage four quotes Patterns and adds none to them: still eight');
+section('H. v52 — stage four quotes Patterns and adds none to them; v53 adds three, by decision');
 {
   /* SHIP-V52-PROMPT decision 6: a ninth comparison is a decision, not a line
      of code. "Am I fueled?" and "How did today compare?" quote four of the
-     eight, worded as Patterns words them — they register none. */
-  check('PATTERN_FACTS is eight, the same eight, in the same order', C.PATTERN_FACTS.length === 8 &&
+     eight, worded as Patterns words them — they register none. v53: Micah
+     made the decision on 24 Sep 2026, and there are eleven — the eight
+     first, in their order, and his three after them. */
+  check('PATTERN_FACTS is eleven: the same eight in the same order, then v53’s three', C.PATTERN_FACTS.length === 11 &&
         C.PATTERN_FACTS.join(',') === 'lift.fedBeforeTop,session.setsAfterProtein,fuel.trainingDayCalories,weight.rateBySessions,' +
-        'lift.morningTop,lift.restGapTop,steps.trainingDays,lift.caloriesBeforeTop', C.PATTERN_FACTS.join(','));
+        'lift.morningTop,lift.restGapTop,steps.trainingDays,lift.caloriesBeforeTop,' +
+        'feel.energyFedBefore,feel.energyKcalBefore,feel.energySinceFood', C.PATTERN_FACTS.join(','));
   check('the patterns intent answers from those eight and no others', JSON.stringify(C.INTENTS.find(i => i.id === 'patterns_in_data').factsNeeded) ===
         JSON.stringify(C.PATTERN_FACTS));
   check('coach-fuel.js and coach-ready.js compute no comparison of two groups of days — no PATTERN_MIN, no sides()',
@@ -482,8 +498,127 @@ section('H. v52 — stage four quotes Patterns and adds none to them: still eigh
         /isMuted\(s, 'patterns'\) \? null : patternLines\(d\)/.test(src('coach.js')));
 }
 
+/* ================= I. v53 — HIS ENERGY BESIDE HIS FOOD ================= */
+section('I. v53 — three energy patterns: true, false and thin, every number, real-time only, and the days they add');
+{
+  /* The fixture's sessions, each rated with an energy by what he ate that
+     day — every entry on the session's own date, at an hour relative to its
+     start. Even sessions (by position) had food before: 900 kcal an hour
+     before (energy 8) or 400 kcal five hours before (energy 6), and a meal at
+     20:00. Odd ones had nothing before it — food an hour and six hours after
+     (energy 5). Every day's entries spread four hours or more: he logs as he
+     goes. */
+  const at = (s, h) => s.startedAt + h * 3600e3;
+  const rate = (fx, o) => {
+    const opt = { fed: j => j % 2 === 0, near: j => j % 4 === 0, batch: false, ...(o || {}) };
+    const sessions = fx.sessions.map((s, j) => ({ ...s, feel: { e: opt.fed(j) ? (opt.near(j) ? 8 : 6) : 5, at: at(s, 2) } }));
+    const foodDays = {};
+    sessions.forEach((s, j) => {
+      const late = new Date(s.startedAt); late.setHours(20, 0, 0, 0);
+      foodDays[s._date] = opt.batch
+        ? [{ t: late.getTime(), cal: 900 }, { t: late.getTime() + 60e3, cal: 700 }]
+        : opt.fed(j) ? [{ t: at(s, opt.near(j) ? -1 : -5), cal: opt.near(j) ? 900 : 400 }, { t: late.getTime(), cal: 800 }]
+                     : [{ t: at(s, 1), cal: 700 }, { t: at(s, 6), cal: 600 }];
+    });
+    return { ...fx, sessions, foodDays };
+  };
+  const R = rate(F);
+  const inR = (fx, extra) => ({ ...input(fx), foodDays: fx.foodDays, ...(extra || {}) });
+  const said = inp => { const a = C.coach(inp).ask('ask_patterns'); return a.id === 'patterns_in_data' ? [{ text: a.text, reason: a.reason }].concat(a.more || []) : []; };
+  const line = (inp, re) => said(inp).find(l => re.test(l.text));
+  const FED = /^On your \d+ rated sessions with food logged beforehand/, KCAL = /^On rated sessions with [\d,]+ kcal or more/, SINCE = /^When your last logged food was/;
+
+  // The second reading: the brief's three definitions, over the raw fixture.
+  const expect = fx => {
+    const rows = fx.sessions.map(s => ({ s, e: s.feel.e, es: (fx.foodDays[s._date] || []).filter(x => key(x.t) === s._date) }));
+    const fed = rows.filter(r => r.es.length && r.es.some(x => x.t < r.s.startedAt)).map(r => r.e);
+    const not = rows.filter(r => r.es.length && !r.es.some(x => x.t < r.s.startedAt)).map(r => r.e);
+    const kr = rows.map(r => ({ k: r.es.filter(x => x.t < r.s.startedAt).reduce((a, x) => a + x.cal, 0), e: r.e })).filter(r => r.k > 0);
+    const km = med(kr.map(r => r.k));
+    const hr = rows.map(r => { const b = r.es.filter(x => x.t < r.s.startedAt); return b.length ? { h: (r.s.startedAt - Math.max(...b.map(x => x.t))) / 3600e3, e: r.e } : null; }).filter(Boolean);
+    const hm = med(hr.map(r => r.h));
+    const one = x => String(Math.round(x * 10) / 10);
+    return {
+      fed: [fed.length, one(med(fed)), 10, not.length, one(med(not))].map(String),
+      kcal: [Math.round(km).toLocaleString('en-US').replace(/,/g, ''), one(med(kr.filter(r => r.k >= km).map(r => r.e))), '10',
+             kr.filter(r => r.k >= km).length, one(med(kr.filter(r => r.k < km).map(r => r.e))), kr.filter(r => r.k < km).length].map(String),
+      since: [one(hm), one(med(hr.filter(r => r.h <= hm).map(r => r.e))), '10', hr.filter(r => r.h <= hm).length,
+              one(med(hr.filter(r => r.h > hm).map(r => r.e))), hr.filter(r => r.h > hm).length].map(String)
+    };
+  };
+  const E = expect(R);
+  const l1 = line(inR(R), FED), l2 = line(inR(R), KCAL), l3 = line(inR(R), SINCE);
+  check('all three clear on a rated log, after the eight: ' + said(inR(R)).length + ' lines',
+        said(inR(R)).length === 11 && said(inR(R)).slice(-3).every((l, n) => [FED, KCAL, SINCE][n].test(l.text)), said(inR(R)).slice(-3).map(l => l.text).join(' | '));
+  check('feel.energyFedBefore: ' + E.fed.join(' / '), !!l1 && J(nums(l1.text)) === J(E.fed), l1 && l1.text);
+  check('feel.energyKcalBefore: ' + E.kcal.join(' / '), !!l2 && J(nums(l2.text)) === J(E.kcal), l2 && l2.text);
+  check('feel.energySinceFood: ' + E.since.join(' / '), !!l3 && J(nums(l3.text)) === J(E.since), l3 && l3.text);
+  check('the two sides really differ on each, and each clears eight a side',
+        E.fed[1] !== E.fed[4] && E.kcal[1] !== E.kcal[4] && E.since[1] !== E.since[4] &&
+        [E.fed[0], E.fed[3], E.kcal[3], E.kcal[5], E.since[3], E.since[5]].every(n => Number(n) >= 8), J(E));
+  check('the brief’s own example reads as it does: "On your 9 rated sessions with food logged beforehand, energy had a median of 7 out of 10; on the other 8, 5."',
+        /^On your \d+ rated sessions with food logged beforehand, energy had a median of [\d.]+ out of 10; on the other \d+, [\d.]+\.$/.test(l1 && l1.text), l1 && l1.text);
+
+  // False: each fact's own condition missed, on logs where the others hold.
+  const allFed = rate(F, { fed: () => true, near: j => j % 2 === 0 });
+  check('false — every rated session fed: nothing on the other side, so energyFedBefore is silent (and the calorie split still speaks)',
+        !line(inR(allFed), FED) && !!line(inR(allFed), KCAL), said(inR(allFed)).slice(8).map(l => l.text.slice(0, 40)).join(' | '));
+  const batch = rate(F, { batch: true });
+  check('false — a batch logger (every entry within the hour, at 20:00): the hours say nothing, so energySinceFood is silent',
+        !line(inR(batch), SINCE), (line(inR(batch), SINCE) || {}).text);
+  check('and his own "later" answer silences it on a log that looks real-time',
+        !line(inR(R, { settings: { ...ON, answers: { q_log_timing: 'later' } } }), SINCE) && !!line(inR(R), SINCE));
+  const sameKcal = rate(F, { near: () => true });
+  check('false — the same calories before every fed session: nothing below the median, so the calorie split is silent',
+        !line(inR(sameKcal), KCAL), (line(inR(sameKcal), KCAL) || {}).text);
+  // Thin: seven rated sessions.
+  const thin = { ...R, sessions: R.sessions.map((s, j) => (j < R.sessions.length - 7 ? { ...s, feel: undefined } : s)) };
+  check('thin — seven rated sessions: all three silent, the eight untouched',
+        !line(inR(thin), FED) && !line(inR(thin), KCAL) && !line(inR(thin), SINCE) && said(inR(thin)).length === 8);
+  // Unread food days: no foodDays at all is silence, never "no food".
+  check('no rated day’s food read yet: all three silent', !line(inR({ ...R, foodDays: {} }), /rated session/));
+  // A rating with no energy, or junk, is no rating.
+  const junk = { ...R, sessions: R.sessions.map(s => ({ ...s, feel: { e: '8', s: 110 } })) };
+  check('a rating without a valid energy counts for none of them', !line(inR(junk), /rated session/));
+  // Off with Patterns, like the eight.
+  check('Patterns off: none of them', said(inR(R, { settings: { v: 1, mute: {}, answers: {}, asked: {} } })).length === 0);
+
+  // Words, both units.
+  const CAUSAL = [/\bbecause\b/i, /\bhelps?\b/i, /\bmakes?\b/i, /\bleads? to\b/i, /\bboosts?\b/i, /\bso you\b/i,
+                  /\bcauses?\b/i, /\bdue to\b/i, /\bresults? in\b/i, /\bdrives?\b/i, /\bthanks to\b/i,
+                  /\bshould\b/i, /\btry\b/i, /\beat\b/i, /\bbetter\b/i, /\bworse\b/i];
+  const three = ['lb', 'kg'].flatMap(u => said(inR(R, { u })).slice(8)).flatMap(l => [l.text, l.reason]);
+  check('never a cause, never advice, never "eat" — both counts in every line, in both units (' + three.length + ' strings)',
+        three.length === 12 && !three.some(t => CAUSAL.some(re => re.test(t))) &&
+        said(inR(R)).slice(8).every(l => nums(l.text).length >= 5), three.filter(t => CAUSAL.some(re => re.test(t))).join(' | '));
+  check('and the same words on kilos — no weight in any of them to convert',
+        J(said(inR(R, { u: 'kg' })).slice(8).map(l => l.text)) === J(said(inR(R)).slice(8).map(l => l.text)));
+
+  // The read: the rated sessions' dates the shipped list does not hold,
+  // newest first, forty at most, and the shipped dates never trimmed.
+  // Curls on days bench never is: a lift of their own, so bench stays the
+  // lift the first pattern reads and these dates are the rated ones it adds.
+  const CURL = { name: 'Barbell Curl', group: 'arms', equipment: 'barbell' };
+  const extra = [];
+  for (let i = 1; i <= 181; i++) if (i % 7 === 2 || i % 7 === 6) extra.push(i);   // never a training day here
+  const withCurls = { ...R, sessions: R.sessions.concat(extra.map(i => ({ id: 'c' + i, startedAt: hourOn(i, 12), _date: key(NOW - i * DAY),
+    feel: { e: 6, at: hourOn(i, 14) }, exercises: [{ exId: 'curl', ...CURL, sets: setsOf(3, 65, 10) }] }))).sort((a, b) => a.startedAt - b.startedAt) };
+  const shipped = C.patternFoodDays(input(F));
+  const days = C.patternFoodDays(input(withCurls, { lib: { ...PLIB, curl: CURL } }));
+  const added = days.slice(shipped.length);
+  const want = extra.map(i => key(NOW - i * DAY)).sort().reverse().slice(0, 40);
+  check('the read adds the rated sessions’ own dates the first pattern does not read — ' + added.length + ' of ' + extra.length + ', newest first, forty at most',
+        J(days.slice(0, shipped.length)) === J(shipped) && J(added) === J(want) && extra.length > 40, added.length + ' added');
+  check('rated days already on the list add nothing', C.patternFoodDays(inR(R)).length === shipped.length);
+  check('and with Patterns off, no day at all', C.patternFoodDays(input(withCurls, { lib: { ...PLIB, curl: CURL }, settings: { v: 1, mute: {}, answers: {}, asked: {} } })).length === 0);
+  const D = src('coach-data.js');
+  check('coach-data.js keeps each day it reads whole — { t, cal } an entry — beside foodFirst, and hands it over as foodDays',
+        /foodDays = \{ \.\.\.foodDays, \[k\]: es\.map\(e => \(\{ t: e\.t, cal: Number\(e\.cal\) \|\| 0 \}\)\) \};/.test(D) &&
+        /foodFirst = \{ \.\.\.foodFirst, \[k\]: ts\.length \? Math\.min\(\.\.\.ts\) : null \};/.test(D) && /\n    foodDays,\n/.test(D));
+}
+
 /* ---------- report ---------- */
-console.log('\nPatterns: eight comparisons, off until asked for, and never a cause\n');
+console.log('\nPatterns: eleven comparisons, off until asked for, and never a cause\n');
 console.log(results.join('\n'));
 console.log('\n' + pass + ' passed, ' + fail + ' failed\n');
 process.exit(fail ? 1 : 0);

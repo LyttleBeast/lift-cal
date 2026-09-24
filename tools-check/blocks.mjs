@@ -515,9 +515,11 @@ const SET_KEYS = ['w', 'r', 'type', 'done'];
   // stops being true, this is where it surfaces.
   const paths = (WSRC.match(/await write\(([^,]+),/g) || [])
     .map(x => x.replace(/^await write\(/, '').replace(/,$/, '').trim()).sort();
-  check('guards: workout.js still writes exactly the four nodes it always did',
+  // v53, on purpose: and one more, the recap's rating — a child of the one
+  // session's record (workouts/{mk}/{dd}/{id}/feel), never a container.
+  check('guards: workout.js writes the four nodes it always did, and v53’s one child of a record',
         JSON.stringify(paths) === JSON.stringify([
-          "'history'", "'history'", '`workouts/${mk}/${dd}/${session.id}`', '`workouts/${mk}`'
+          "'history'", "'history'", '`workouts/${mk}/${dd}/${record.id}/feel`', '`workouts/${mk}/${dd}/${session.id}`', '`workouts/${mk}`'
         ]), JSON.stringify(paths));
   check('guards: saveMonth still refuses a month this device never read',
         WSRC.includes('if (!hydrated.has(mk)) {') &&

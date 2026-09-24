@@ -226,6 +226,18 @@ function readAll(i, now) {
            training, readDates, style, detected, curve, curveDays, c48, carbs48, sameDate: d => sameDate(i, d) };
 }
 
+/* v53: HOW HE LOGS, on its own — the style readAll() judges, for the one
+   pattern that reads the hour food went in (coach.js, feel.energySinceFood):
+   his q_log_timing answer, or the spread of each complete day's entries.
+   The same rule, not a second copy of it. */
+export function logStyle(input, now) {
+  try {
+    return Number.isFinite(now) ? readAll(input || {}, now).style : 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+
 /* ================================================================
    2.  "AM I FUELED?" (§8.5)
    ================================================================
