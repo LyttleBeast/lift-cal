@@ -458,8 +458,10 @@ section('K. v52, Phase B — "Am I fueled?": four selectors, and q_log_timing wi
         f.compute({ input: { settings: { answers: {} } } }) === null && f.compute({ input: { settings: { answers: { q_log_timing: 'soon' } } } }) === null);
   check('"I haven’t eaten" is a route, never a question — its answer is used once and dropped (decision #9)',
         C.ROUTE_IDS.includes('ask_fed_none') && !QUESTIONS.some(x => x.options.some(o => /eaten/i.test(o.label))));
+  // v53 (on purpose): ask_ready, the readiness list after a lighter-week
+  // answer, whose fuel row reads the same log as ask_lighter's.
   check('the fuel routes are exported, for the sheet that reads first', JSON.stringify(C.FUEL_ROUTES) ===
-        JSON.stringify(['ask_fueled', 'ask_fed_unlogged', 'ask_fed_none', 'ask_lighter', 'ask_compare']));
+        JSON.stringify(['ask_fueled', 'ask_fed_unlogged', 'ask_fed_none', 'ask_lighter', 'ask_compare', 'ask_ready']));
   check('and nothing in the food half stores anything: no new settings key but the mark', JSON.stringify(Object.keys(C.normSettings({
     marks: { a: { r: 'sleep', d: '2026-09-01' } }, fuel: { x: 1 }, fed: true, ate: 'no' })).sort()) === JSON.stringify(['answers', 'asked', 'marks', 'mute', 'on', 'v']));
 }

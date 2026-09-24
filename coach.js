@@ -3808,6 +3808,9 @@ const ROUTES = Object.freeze({
   ask_lifts:    ['lift_status'],
   ask_record_day: ['record_day'],
   ask_lighter:  ['rest_day', 'lighter_week', 'readiness'],
+  // v53: the readiness list on its own, for after a lighter-week answer —
+  // which answers ask_lighter before readiness ever gets a turn.
+  ask_ready:    ['readiness'],
   // v52, Phase B: the empty day first — its answer carries the two chips.
   ask_fueled:       ['fuel_empty', 'fuel_fueled'],
   ask_fed_unlogged: ['fuel_fed_unlogged'],
@@ -3864,6 +3867,8 @@ const FOLLOWUPS = Object.freeze({
   ask_lifts:    ['ask_record_day', 'ask_targets', 'ask_lighter'],
   ask_record_day: ['ask_targets', 'ask_lifts'],
   ask_lighter:  ['ask_volume', 'ask_lifts'],
+  // v53: nothing of its own — the readiness answer's two (FOLLOWUPS_AFTER).
+  ask_ready:    [],
   ask_compare:  ['ask_next', 'ask_lifts'],
   ask_next:     ['ask_compare', 'ask_lifts'],
   ask_goal:     ['ask_lifts', 'ask_rate'],
@@ -3885,6 +3890,9 @@ const FOLLOWUPS_AFTER = Object.freeze({
   rest_day:    ['ask_build_now', 'ask_build_anyway'],
   group_ready: ['ask_build_now'],
   readiness:   ['ask_shape', 'ask_build'],
+  // v53: a lighter week answers "Should I rest or go lighter?" first, so the
+  // readiness list is offered after it — when readiness answers at all.
+  lighter_week: ['ask_ready'],
   // v52, Phase B. The empty day's two chips are offered only when the read
   // itself says the day is empty (followupsFor()).
   fuel_empty:  ['ask_fed_unlogged', 'ask_fed_none'],
@@ -3909,6 +3917,7 @@ const ASK_LABELS = Object.freeze({
   ask_lifts:    'How are my lifts moving?',
   ask_record_day: 'Good day for a record?',
   ask_lighter:  'Should I rest or go lighter?',
+  ask_ready:    'Anything else off today?',
   ask_build_anyway: 'Train anyway',
   ask_fueled:   'Am I fueled?',
   // His voice, like every chip: "I haven’t eaten" is his to say.
@@ -4827,7 +4836,8 @@ export function isMuted(settings, categoryId) {
 /* v52, Phase B: THE ROUTES THAT READ THE FOOD LOG, for the sheet, which
    awaits coach-data.js's loadFuel() before it answers one of them — and never
    before anything else. */
-export const FUEL_ROUTES = Object.freeze(['ask_fueled', 'ask_fed_unlogged', 'ask_fed_none', 'ask_lighter', 'ask_compare']);
+// v53: ask_ready is the readiness list, whose fuel row reads the same log.
+export const FUEL_ROUTES = Object.freeze(['ask_fueled', 'ask_fed_unlogged', 'ask_fed_none', 'ask_lighter', 'ask_compare', 'ask_ready']);
 
 /* Which days' food logs "Am I fueled?" needs — coach-fuel.js's fuelDates(),
    and nothing at all unless the account is Pro, the Food switch is on and the

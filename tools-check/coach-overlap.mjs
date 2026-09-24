@@ -691,6 +691,21 @@ section('D. the wiring — the routes, the topics, the stall reconciled, the swi
   check('and the lighter week itself reads that log exactly as before — its sentence intact',
         !!lwRead && /^A lighter week is a common approach here/.test(lwRead.text), lwRead && lwRead.text);
   check('and not when one does', c(L({ decline: false, volume: true })).ask('ask_lighter').id !== 'lighter_week');
+  /* v53 (SHIP-V53-PROMPT §3.3): when the lighter week answers, the
+     readiness list never got a turn. It is offered after it now, as
+     "Anything else off today?" — and only when readiness answers. The same
+     log three days on: the rest read has nothing to say, the lighter week
+     does. */
+  const lw3 = (() => { const x = L({ failure: true }); return { ...x, now: x.now + 3 * DAY }; })();
+  const lwA = c(lw3).ask('ask_lighter');
+  check('a lighter-week answer offers "Anything else off today?" first, and it answers with the readiness list',
+        lwA.id === 'lighter_week' && (lwA.followups || [])[0] && lwA.followups[0].id === 'ask_ready' &&
+        lwA.followups[0].label === 'Anything else off today?' && c(lw3).ask('ask_ready').id === 'readiness',
+        lwA.id + ' ' + (lwA.followups || []).map(f => f.id).join(','));
+  const lwQuiet = { ...lw3, settings: { ...lw3.settings, mute: { readiness: true } } };
+  check('and with readiness silent, no chip for it — the lighter week’s own two stay',
+        c(lwQuiet).ask('ask_lighter').id === 'lighter_week' &&
+        !(c(lwQuiet).ask('ask_lighter').followups || []).some(f => f.id === 'ask_ready') && c(lwQuiet).ask('ask_ready').id !== 'readiness');
   check('lighter_week is sheet-only, and supersedes the record and near-record findings',
         (() => { const it = C.INTENTS.find(i => i.id === 'lighter_week');
                  return JSON.stringify(it.surfaces) === '["sheet"]' && it.supersedes.includes('recent_pr') && it.supersedes.includes('pr_proximity'); })());
