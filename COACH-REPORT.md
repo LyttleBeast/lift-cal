@@ -1,5 +1,12 @@
 # COACH — what got built, what changed, and what did not
 
+> **rack-v53 (the finish — what to celebrate after a workout, the recap
+> redone, "How did that feel?"): read §69 first.** All four phases are built
+> and verified in three time zones; nothing has been seen on a screen. §73
+> lists where the code overruled the brief, and §78 is the one thing to carry
+> forward: a field on a workout record survives an edit only if the edit
+> carries it. The v53 section is at the end.
+>
 > **rack-v49 (Coach trainer, stages two and three — plateau or cut, the card
 > and the goal): read §49 first.** Both phases are built and verified; nothing
 > has been seen on a screen. §52 lists the rules the build corrected on the
@@ -3260,3 +3267,514 @@ his bar because he told Coach he slept badly. The two logs in `coach.js`
 (`perf`, `markOf`) are the only place the filter is written. Any future reader
 of "how strong" should take the performance log from there, and should check
 whether a gap it creates says something the full log does not.
+
+---
+
+## 69. READ THIS FIRST — rack-v53, and what is not done
+
+Written at the end of an unattended run in `~/dev/ship-v53` (a fenced, full
+clone at rack-v52, `6f76c3b`), against `SHIP-V53-PROMPT.md`, with §59–§68 of
+this report and `COACH-TRAINER-SPEC.md` §9.4 read first, as the brief asked.
+The fence was proved before anything else: `echo GUARDTEST ping` was refused.
+The pre-push hook refuses, and `.claude/` is excluded. Shipped as `rack-v53`.
+**Not pushed.**
+
+**All four phases are built, in the brief's order, each committed and green
+before the next began.** Phase A is five commits, one per fix. Phases B, C and
+D are one each. Then come the version bump and the docs. Every commit passes
+every verifier under `TZ=America/New_York`, `UTC` and `Pacific/Auckland`. At
+the end there are **43 verifiers, three of them new**: `finish.mjs`,
+`recap.mjs` and `feel.mjs`.
+
+- The four shipped batteries are unchanged: `coach-prog` **57 / 0 / 0**,
+  `coach-overlap` **24 / 0 / 0**, `coach-ready` **46 / 0 / 0** and
+  `coach-fuel` **16 / 0 / 0**. The new `finish.mjs` is **ok 12, miss 0,
+  wrong 0**.
+- **No `%` on the recap outside the check-in**, in either unit
+  (`recap.mjs` B).
+- `database.rules.json` is byte-identical to rack-v52. `sw.js` and
+  `usage.js` read `rack-v53`.
+- **The card paint**, interleaved paint for paint against rack-v52 on the
+  200-session year:
+  - after a workout, **+0.43 ms Pro and +0.20 ms Basic**; five hours after,
+    +0.37 and +0.19;
+  - on any other day, ±0.
+  - The budget was +1 ms (§76).
+
+**What nobody has seen.** Nothing in this ship has been on a phone or in a
+browser. The recap's hero, the check-in and its chips, the warm lines, and the
+card and sheet after a workout were driven through DOM shims, which have no box
+model and never load `rack.css`. The check-in's 44px targets are reasoned from
+`rack.css` by `touch-target.mjs`, never measured.
+
+**Five places where I departed from the brief, each forced by the code** (§73):
+
+1. **The card's memory is read as it stood at open.** Without that, the
+   24-hour rule would take the line off the card on the next repaint.
+2. **Warm lines are not written to the memory.** They rotate on the open
+   counter alone.
+3. **The finish line's category is `core`.** A HYPE line needs one, and the
+   thing said after every session should not be a switch. So the Train card
+   never shows it.
+4. **A weight or volume record's line carries its number.** `prDetail`
+   prints only a phrase for those ("heaviest ever").
+5. **The check-in's mark chips are drawn in `workout.js`**, not `coach-ui.js`.
+   The recap lives there. The words and the gates are `coach.js`'s, so they
+   are v52's exactly.
+
+**What is not done** is in BACKLOG.md under *What v53 left open*: the brief's
+§7 list and the small calls in §74.
+
+---
+
+## 70. WHAT GOT BUILT
+
+```
+coach.js        5,266 lines  was 4,787. finishRead() and section 7c; session.finish; hype_finish
+                             and a key on every HYPE line; the 24-hour rule and WARM; the card's order
+                             after a workout; c.opening / c.openingNext; ask_ready; the feel category,
+                             FEEL_S_WORDS, feelHarder(), canMark(), feelLine(); three feel Patterns and
+                             patternFoodDays()'s rated dates; replayOf(), one targets replay a paint.
+coach-data.js     757 lines  was 699. The memory read at open, rememberHype(id, key) replaced per open;
+                             coachFinishRead(); noteCoachFood(); foodDays beside foodFirst.
+coach-ui.js     1,302 lines  was 1,276. The Lift target Save validates first and checks what landed;
+                             the finish bubble first, the finding second; rememberHype's key.
+coach-fuel.js     479 lines  was 453. changedBy / changedDays, the lines that name the change;
+                             logStyle().
+analytics.js    1,014 lines  was 973. normFeel(), FEEL_STRENGTH, sameKindComparison();
+                             sessionComparison() deleted.
+workout.js      2,038 lines  was 1,897. The recap redone; feelCard() and saveFeel(); runFinish keeps
+                             dateK; saveEdit carries feel.
+food.js         3,555 lines  was 3,548. noteCoachFood() after both daySummaries writes.
+rack.css        2,220 lines  was 2,197. .summary-line, .summary-like-row, the check-in's rules.
+sw.js, usage.js              rack-v53.
+report/coach-paint/bench.mjs the three moments, and AB=1 for v52 against the tree, interleaved.
+```
+
+Commits, each passing every verifier in three time zones:
+
+```
+a9aef61  Lift target over 2,000 lb no longer says "Saved" and deletes the target
+9f7a059  The card no longer repeats the same earned line every open
+93c5b60  The readiness list is no longer hidden behind the lighter-week answer
+b25af85  "Your usual here is from before your change" now says which change
+6a3d936  Food logged after the first "Am I fueled?" is now seen by the next ask
+0a1a463  The finish line: finishRead() decides what to celebrate after a workout
+a0d628f  The recap, redone: the win first, the stats under it, no percentage
+b634056  "How did that feel?": energy and strength, saved with the session, heard by Coach
+da13007  rack-v53
+         docs
+```
+
+**Phase A: the five fixes.**
+
+1. **The Lift target.** Save converts the box with `wIn()`. Over `GOAL_LB_MAX`
+   it writes nothing and toasts "Coach takes lift targets up to 2,000 lb." (or
+   "907.18 kg", from `limW()`, rounded inward so the number shown is one the
+   check accepts). Any other value `normGoalLift()` refuses is "Couldn’t save
+   that". After the write, "Saved" appears only when `coachSettings().goalLift`
+   is the target that was sent.
+2. **The 24-hour rule.** Every HYPE line carries `key: d => string`. The device
+   memory is `{ id, key, at }`, eight deep. `pickHype(pool, recent, opens,
+   now, keep)` drops any line whose key was shown in the day before `now`. When
+   the pool empties, the card draws a `WARM` line. The rotation's own memory
+   still reads the last three ids.
+3. **`ask_ready`**, "Anything else off today?", after a lighter-week answer
+   and only when readiness answers.
+4. **The phase lines name the change**: the goal, with its days, or the weight
+   trend, "about 2 weeks ago". The later of the two when both apply.
+5. **`noteCoachFood()`** sets one day's summary and nothing else. `food.js`
+   calls it after both of its summary writes.
+
+**Phase B: the finish line.** `finishRead(input, record, extras)` works out
+the evidence in the brief's order:
+
+1. a record;
+2. every Coach target met, 2+, Pro and targets on;
+3. a milestone;
+4. above his usual, Pro;
+5. his rating;
+6. a comeback of 12+ days.
+
+"Great workout." appears only when that list is not empty. Otherwise it is
+"Good work." with the groups and working sets, or "Showing up on a harder day
+counts." Its three surfaces:
+
+- **the recap**, through `coachFinishRead()`, which hands in the records
+  `runFinish()` already has;
+- **the card**, as `hype_finish`, with the headline and the short evidence
+  when both fit nine words and one number. Otherwise the headline stands alone
+  and the evidence goes in the reason line, whole;
+- **the sheet**, as the first bubble, with the finding second.
+
+**Phase C: the recap.** Top to bottom:
+
+- the hero: "Session complete", the finish line's headline and line, then the
+  session's name and date;
+- the check-in;
+- the wins;
+- the stat row;
+- what you did;
+- "Compared with sessions like this", from `sameKindComparison()`: two plain
+  lines, only with two or more like sessions;
+- the three buttons.
+
+**Phase D: the check-in.**
+
+- Energy 1–10 and strength in his five steps, saved as one child write after
+  the record.
+- The cache takes it the moment that write lands.
+- `saveEdit()` carries it.
+- A low rating asks v52's mark question.
+- The headline recomputes.
+- *How did today compare?* quotes it.
+- The switch *After a workout: how it felt* hides it.
+- Patterns are eleven.
+
+---
+
+## 71. THE BATTERIES — every row
+
+### 71.1 `tools-check/finish.mjs` — ok 12, miss 0, wrong 0
+
+| # | the reading |
+|---|---|
+| N1 | Great workout. New best on Incline Dumbbell Bench Press: 70 x 8. (Your best at 70 lb was 7 reps.) [pr, milestone] |
+| N2 | Great workout. Every Coach target met: 2 of 2. (2 lifts, each at its target weight and reps.) [targets, milestone] · 1 of 1: Good work. Back done: 3 sets. — not the targets evidence · the compare answer's own "2 of 2 Coach targets met." |
+| N3 | Good work. Chest and arms done: 18 sets. (Every working set in the session, warm-ups out.) [] |
+| N4 | Great workout. You rated it 8 out of 10. [rating] |
+| N5 | Good work. Showing up on a harder day counts. (By your own rating, straight after it.) — and at energy 3 the same; the mark chips' gates (`feelHarder`, `canMark`) say yes, and no with Questions off. The chips themselves are `feel.mjs` D |
+| N6 | a marked session with a record: Great workout. New best on Incline Dumbbell Bench Press: 70 x 8. |
+| N7 | Great workout. First session in 20 days. (The session before it was 20 days earlier.) [back] |
+| N8 | Basic, every target met: Great workout. Most working sets ever. [milestone] — never the targets or compare evidence |
+| N9 | kilos: Great workout. New best on Incline Dumbbell Bench Press: 32.5 x 8. (Your best at 32.5 kg was 7 reps.) |
+| N10 | log unreadable: with the recap's records, Great workout. New best on …: 70 x 8. (Your best estimated max before was 86 lb.); with none, Good work. Chest and arms done: 6 sets.; junk record, input and extras: always one of the two headlines |
+| N11 | 13 answers read: no `%`, "down", "under", "below", "lighter", "only", "still" or "!" in a headline or line |
+| N12 | the card in `post`: `hype_finish` on every open, still exempt when shown an hour ago; three days running, `hype_recovery` takes the card and the sheet opens on the finish line; the recovery line shown in the last day, the finish line is next; five hours on it is still first; the next day it is gone |
+
+**Beside the rows:**
+
+- *The agreement* (A): on five logs, `finishRead()` handed the recap's
+  records and `finishRead()` working them out itself say the same thing.
+  The sheet's first bubble is its headline and line, and the card leads with
+  its headline.
+- *The card's form* (A): "Great workout. New best on Incline Dumbbell Bench
+  Press." fits, and a 12-word name leaves "Great workout." alone, with the
+  whole line as the reason.
+- *`repeats` after a workout* (A) is keyed to `openingNext`. No answer equals
+  the finish bubble.
+- *The paint spy* (S): 20 paints. After a workout, `detectPRs` and
+  `sessionMilestones` run once. In `pre`, the next day or mid-session, never.
+- *Properties* (P), over 400 generated histories in both units and tiers:
+  354 "Great workout.", 46 "Good work." (23 on a harder day), and every kind
+  of evidence (pr 304, back 229, milestone 179, rating 32, targets 22,
+  compare 15).
+  - "Great workout." always has evidence, and "Good work." never does.
+  - Every headline is one of the two.
+  - The same history gives the same answer.
+  - None of the banned words appear.
+  - The recap's records and the engine's own agree.
+
+### 71.2 The shipped batteries, unchanged
+
+`coach-prog` 57/0/0, `coach-overlap` 24/0/0, `coach-ready` 46/0/0 and
+`coach-fuel` 16/0/0, in all three zones. Three rows moved on purpose:
+
+| row | what changed, and why |
+|---|---|
+| `coach-fuel` F10 | now "Coach is learning your new normal **since your weight trend changed**, 13 days in." — §3.4 names the change |
+| `coach-fuel` F11 | now "… **since you changed your goal**, 9 days in." — the same |
+| `coach-ready` R15 | reads `c.openingNext` when the fixture is after a workout. It asserts the finish line is first then, so the row still tests the finding it was written for. Before, `c.opening` would have passed it without testing it |
+
+### 71.3 The other verifiers, changed on purpose
+
+| Verifier | What changed |
+|---|---|
+| `recap` | NEW: the hero, no `%` in either unit, like with like by median, the bodyweight day's sets, the order, the switch, and his own `%` left in the check-in |
+| `feel` | NEW, 44 checks: normFeel; the write and its order; the cache only after it lands; a refused write; Skip; the mark chips at exactly s ≤ 90 or e ≤ 3, never with Questions off; the rating through a later whole-month write; `saveEdit` keeping it, moved or not; the compare line; the headline recompute; the switch |
+| `coach-surface` | the Lift target at 2,001 lb, 908 kg, 907.18 kg and 2,000 lb, a failed write, and a write that lands without the key; the sheet's two first bubbles |
+| `coach-hype` | G: a pool of one and two through a day, one value under two ids, old memory, WARM under the ban; fixtures a day earlier, since a session today now leads with the finish line; the pool of five became four |
+| `coach-rotation` | J's RICH and CAUTION read the day before, for the same reason |
+| `coach-voice` | WARM under the card ban; EARN the day before; M: every finish sentence, source and rendered, and the rating line and three energy patterns |
+| `coach-overlap` | the `ask_ready` chip on a lighter-week log, and none with readiness muted (outside the table) |
+| `coach-fuel` | F+: the four phase sentences and the later change |
+| `coach-boot` | H: food logged after an ask, one read, "1,750 kcal"; both `food.js` sites |
+| `coach-patterns` | eleven; I: each energy pattern true, false and thin, a second reading of every number, real-time only, the added days capped at 40 |
+| `coach-registry` | the `feel` fact family; `feel` a surface category, exempt from "used by an intent"; `FUEL_ROUTES` gains `ask_ready` |
+| `coach-rank` | `warm` a card state; K: `feel` after `live`, v52's order kept |
+| `coach-pure` | the PURE list gains `detectPRs`, `sessionMilestones`, `normFeel` |
+| `units` | `coach.js`'s one `fmtSetLoad` display site |
+| `bodyweight-sets` | its comparison checks ported to `sameKindComparison()` |
+| `blocks` | the one new write, a child of a record |
+| `touch-target` | the check-in's five controls: 44px at 390 and 320 wide, widths in the snapshot. Never measured in Chrome at v46, so B names them and skips them |
+
+`month-erasure` and `tick-targets` needed no stub. `runFinish()` and
+`saveEdit()` gained no free name (§73.7).
+
+---
+
+## 72. WHAT I CORRECTED, AND WHY
+
+In the order they were found.
+
+1. **The limit toast is for an over-limit weight only.** `normGoalLift()` also
+   refuses an id of the wrong shape. Telling him the limit then would have
+   been false, so that case says "Couldn’t save that".
+2. **A card fixture with a session today now walks no rotation.** The finish
+   line leads the card all day, so six fixtures moved a day earlier, each with
+   its reason in place. Coverage is the same or better: RICH 2 lines, CAUTION
+   1 where it was 0, and voice K reads 7 of 13.
+3. **The paint.** The first build cost +1.18 ms Pro after a workout, over
+   budget. Two changes brought it to +0.4 ms:
+   - `detectPRs()` is handed only the prior sessions that hold one of the
+     record's lifts. It reads only those lifts' index entries, and a lift's
+     entry is built only from sessions holding it, so the answer is the same.
+     The agreement check proves it on every history.
+   - One targets replay a paint (`replayOf()`), shared with
+     `hype_targets_met`, which replays the same session after a workout.
+4. **The finish line's `why` is a sentence**, as the brief's example is. So
+   `coach-hype.mjs` B's "every clause is not a sentence" exempts
+   `hype_finish`, with the reason.
+5. **`feelLine()` moved out of the finish line's section.** It says "below your
+   usual", quoting `compareSession()`, and the finish line's own ban is right
+   to fence that section.
+6. **Junk `exercises` could make the safe answer throw.** Both `finishSafe()`
+   and `coach-data.js`'s fallback guard with `Array.isArray`.
+7. **`host.children.forEach`** works in the shim and not in a browser, where
+   `children` is an HTMLCollection. It is spread first.
+8. **The `noteCoachFood` check needed its own log at fixed local hours.** On
+   the shared fixture the answer came back in the `day` state at some hours of
+   the day, and that state never states today's total. It is green in eight
+   zones.
+9. **"Said only when…"**: "only" is on the shipped ban list, so the reason
+   line now reads "Left out when your food goes in all at once, later."
+
+---
+
+## 73. WHERE THE BRIEF WAS WRONG ABOUT THE CODE
+
+1. **§3.2's memory.** In v49 the card's line is not pinned per open (the
+   greeting is), and `coachInput()` handed the engine the memory
+   `rememberHype()` had just updated. With a 24-hour skip on top, the second
+   paint of an open would have dropped the line for a warm one. So:
+   - the engine reads the memory as it stood at open;
+   - `rememberHype(id, key)` replaces this open's one entry, so the line
+     remembered is the last one drawn;
+   - the stored list is never what the engine reads mid-open.
+2. **§3.2's "the lines rotate on `input.opens` with the same memory as the
+   greeting".**
+   - Written to the eight-deep memory, eight warm lines in a day would push a
+     fact value out of it inside its 24 hours, and "no repeats within the day"
+     would fail.
+   - Warm lines rotate on the counter alone, which never repeats one on
+     consecutive opens.
+   - The "memory" they share with the greeting is the rule that a warm line
+     is never the greeting on screen.
+3. **§4.2's "the same detail `prDetail` prints".** For a weight or volume
+   record, `prDetail` prints a phrase with no number ("heaviest ever"). The
+   line is "New best on Bench: heaviest ever, 225 lb.", the phrase and its
+   number through `units.js`.
+4. **§4.4's `hype_finish`.**
+   - A HYPE line needs a category, and the brief named none.
+   - `core` is the one that cannot be switched off, and the thing said after
+     every session should not be a switch.
+   - `TRAIN_HYPE` walks training categories only, so the Train card keeps its
+     rotation and never shows the finish line.
+5. **§4.4.3's re-key.** `withRepeat` compares an answer with `you.text`, and
+   `you` is `openingNext` after a workout, so the engine was already keyed to
+   the finding. The sheet's "follow-ups hang on the opening bubble" is what
+   moved: they hang on the finding's bubble now.
+6. **§2 puts "the feel card's mark chips reuse v52's" under `coach-ui.js`.**
+   The recap lives in `workout.js`. So the chips are drawn there with
+   `coach.js`'s `MARK_ASK` and `canMark()`: the same question, labels, acks
+   and gates as v52's, and one write path (`markSession()`).
+7. **§6.6's stubs for `month-erasure` and `tick-targets`.** The brief expected
+   `runFinish()` or `saveEdit()` to gain the feel write, `normFeel` and
+   `coachFinishRead`. None of them did. The write is its own function
+   (`saveFeel()`), the headline is worked out when the recap draws, and
+   `saveEdit()` carries `feel` with no new name. Nothing was stubbed, and
+   nothing those files assert moved.
+8. **§4.1's "added if its id isn't there yet".** A rating saved after
+   `refreshCoachSessions()` has landed would then be judged on the stored
+   record, which does not have it. The record handed in replaces the stored
+   one with the same id.
+9. **§6.2 "touch-target.mjs holds".** Its section B checks each control
+   against the height Chrome measured at v46, and the check-in did not exist
+   then. It holds: A (44px at both widths) and C (the widths snapshot) cover
+   the new controls, and B names them and skips them rather than inventing a
+   measurement. `.coach-chip` is about 36px, so the card sets
+   `.feel-card .coach-chip { min-height: 44px }`.
+10. Confirmed true, for the next brief:
+    - `food.js:119` and `:320` are the two summary writes.
+    - `bodyweight-sets.mjs` was `sessionComparison()`'s only other caller.
+    - `hype_targets_met`'s bar is `n >= 2 && met === n`.
+    - `normSettings()` drops a refused `goalLift`.
+
+---
+
+## 74. EVERY ASSUMPTION I MADE
+
+**The finish line**
+
+- A record's pick is the strongest kind (estimated max, then heaviest, then
+  volume), then the order he did them in.
+- An estimated-max record's `why` names his best reps at that same weight
+  before. With no set at that weight, it names his best estimated max before.
+- Above-usual names up to two lifts, and otherwise counts them ("3 lifts").
+  It needs the Progression switch too, like the answer it quotes.
+- With both parts of the rating high, energy is said first.
+- The comeback's gap is counted in dates, as `session.back` counts it.
+- "Good work."'s names:
+  - his own routine's, when a saved routine covers exactly the session's
+    groups (the builder's test);
+  - otherwise the groups with two or more lifting sets;
+  - five or more is "Whole body";
+  - nothing is "Session".
+- The count is every working set, the stat row's number.
+- With no readable log: no records without the recap's, and no targets,
+  compare or comeback.
+- A blocking state (an unreadable log, a live session) keeps the sheet's
+  opening; the finish line never displaces it.
+
+**The card**
+
+- The recovery line is still under the 24-hour rule in `post` and
+  `done_today`. So it takes the first open of the day and the finish line
+  every open after.
+- A memory entry whose `at` is in the future is not "shown in the last 24
+  hours".
+- The memory keeps one entry per key, and the rotation still reads the last
+  three ids.
+- A warm line has an empty reason line.
+- The half-loaded substitution ("Your training is in. Food and weight have not
+  landed yet.") covers a warm line as it covered "Nothing stands out today.".
+
+**The recap and the comparison**
+
+- A session's kind is read from the group the record stored, not the library,
+  since `analytics.js` does not read it.
+- A group counts toward the kind with two or more working sets across the
+  session.
+- The window is the 56 days before `now`.
+- The sets compared are all working sets, the stat row's number.
+- A usual sets figure prints to one decimal.
+- The headline is worked out when the recap first draws, and again after a
+  rating.
+
+**The check-in**
+
+- `normFeel()` keeps `at` when it is a moment and drops it otherwise.
+- `saveEdit()` carries the stored `feel` as it is whenever it is present.
+- Skip holds for this recap only. A recap is drawn once per session.
+- The mark's `d` is `runFinish()`'s date key.
+- For the compare line, strength 110+ points above, 90 or less below, and 100
+  usual. Energy points nowhere.
+
+**The energy patterns**
+
+- A rated session is one whose rating has an energy.
+- An entry belongs to a session's day when its time falls on that date.
+- The first of the three counts only days with food logged, as the shipped
+  first pattern does.
+- The calorie split is at or above his median against below it. The hours
+  split is at or under against longer.
+- Real-time is `logStyle()` over the rated days read, with the summaries for
+  the complete-day bar.
+- The added dates are days whose summary shows food.
+- Every day read is kept whole, a superset of the rated dates.
+
+**The small fixes**
+
+- "Changed your goal" wins a tie with the weight turn.
+- A goal set today reads "today".
+- The weight turn is always "about 2 weeks ago", because the rule reads it
+  two weeks each way.
+- `ask_ready` has no follow-ups of its own: the readiness answer's two are
+  enough.
+
+---
+
+## 75. WHAT IS NOT DONE, AND WHAT NOBODY HAS SEEN
+
+1. **Nothing has been seen on a screen** (§69). Look at these first:
+   - the check-in at 320 px: ten chips in two rows of five, and the five
+     strength steps wrapping;
+   - the recap's hero with a long line under it ("New best on Incline
+     Dumbbell Bench Press: 70 x 8.");
+   - a warm line on the card after a week of opens.
+2. **The brief's §7 list**, in BACKLOG as the brief asked:
+   - Your goal's layout;
+   - stage five and the effort tap;
+   - the rating moving nothing;
+   - the You tab's weekly volume percentage;
+   - native.
+3. **The energy patterns read food days at boot**, so a session rated in this
+   open is read at the next one.
+4. **Native was not read**, as the brief ordered. `NEXT-NATIVE-V53.md` is the
+   delta, with the PROPOSED `feel` rule.
+
+---
+
+## 76. THE PAINT
+
+`report/coach-paint/bench.mjs` now times three moments on the 200-session year:
+
+- `pre`: no session today;
+- `post`: a session that ended an hour ago;
+- `done_today`: one that ended five hours ago.
+
+`AB=1` runs rack-v52 and the tree interleaved, paint for paint, 1,500 each,
+which cancels the drift two back-to-back runs show on Basic's 9 ms paint:
+
+```
+                  rack-v52     rack-v53
+pre        Pro    3.09 ms      3.13 ms    +0.04
+pre        Basic  8.59 ms      8.51 ms    -0.08
+post       Pro    3.66 ms      4.10 ms    +0.43
+post       Basic  9.11 ms      9.31 ms    +0.20
+done_today Pro    3.59 ms      3.97 ms    +0.37
+done_today Basic  9.21 ms      9.40 ms    +0.19
+```
+
+Sequential runs put Pro at +0.34 to +0.50 ms, and Basic anywhere from +0.03 to
++0.98 ms. That spread is drift between the two runs: interleaved, it is +0.2.
+The whole addition is `finishRead()` in the two moments the brief allows it
+(`finish.mjs` S spies on it). Its first build was +1.18 ms Pro, over budget,
+and §72.3 is what brought it down. The replay, an answer and not a paint, is
+unchanged at about 31 ms.
+
+---
+
+## 77. MICAH'S DECISIONS — this brief's calls, recorded as decided
+
+| # | The call | What landed |
+|---|---|---|
+| 1 | The first thing after a workout is warm, never a number that stings | **BUILT**: the recap's hero, the card and the sheet all lead with "Great workout." or "Good work."; no `%`, no red or grey verdict, no "down" in a headline |
+| 2 | "Great workout." is earned, never automatic | **BUILT**: six kinds of evidence in a fixed order; `finish.mjs` P proves it never appears without one |
+| 3 | Everything said is true | **BUILT**: every line is a fact from the session, his log, or his own rating |
+| 4 | One decision, three surfaces | **BUILT**: `finishRead()`, read by the recap, the card (`hype_finish`) and the sheet's first bubble |
+| 5 | Compare only with sessions like this one, by median, in neutral words, never at the top | **BUILT**: `sameKindComparison()`; `sessionComparison()` deleted |
+| 6 | Energy 1–10 and strength against normal, "120%+" his words | **BUILT**: the check-in, stored as `feel` on the record |
+| 7 | The bad-day mark folded into a low rating | **BUILT**: v52's question, chips, acks and gates under a strength ≤ 90 or energy ≤ 3 rating |
+| 8 | A rating moves nothing tonight | **KEPT**: no target, window or baseline reads it (`feel.mjs` E) |
+| 9 | Three more Patterns: energy beside food (24 Sep) | **BUILT**: eleven, with the shipped rules |
+| 10 | The check-in is free, and switchable | **BUILT**: *After a workout: how it felt*, after *In the gym*, on by default |
+| 11 | A fact value once a day on the card, warm lines otherwise | **BUILT**: the 24-hour rule and `WARM` |
+| 12 | After a workout, the recovery line then the finish line | **BUILT**: the explicit order in `post` and `done_today` |
+
+---
+
+## 78. IF THE NEXT RUN READS ONE THING
+
+`saveEdit()` and the month cache.
+
+- A workout record is rebuilt from scratch when it is edited, and written
+  back with its whole month from `monthCache`.
+- **Any field the rebuild does not carry is erased, and so is any field the
+  cache does not hold.** Nothing on the server can notice, because the
+  whole-month write is a valid write of a smaller record.
+- `feel` is the first field a screen other than the live session writes onto
+  a record. So `saveEdit()` carries it, and the cache takes it the moment its
+  child write lands (`feel.mjs` F).
+- The next thing stored on a record — the effort tap's per-set rating, say —
+  needs the same two lines, or the first edit takes it away.

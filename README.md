@@ -10,7 +10,7 @@ invite code, or by asking the owner and being approved. See *Access* below.
 
 - **You** — the tab the app opens on. A read-only summary of the other four and of how their numbers pull on each other: this week against the last, intake against targets, the scale against maintenance, printed as arithmetic rather than asserted. Nothing on it writes anything. The gear in its header is where every setting in the app now lives.
 - **Coach** — a card at the top of You and above Start workout on Train that says one true thing about your own log and shows the arithmetic under it: which muscle group is furthest past its own usual gap, which of your recurring sessions has waited longest, how this week's sets compare with your own trailing normal. No AI, no network, no per-use cost — it is arithmetic over the log, and a rule whose data is thin stays silent. Tap it for **COACH ME** — from You a sheet you can ask about Train, Fuel or Weight, and from Train one that asks the training questions first. In a live workout a **Coach** chip answers *what should I do next?* from your own sessions — and a quiet line under a finished exercise says it once. **Targets**: for every lift in a workout Coach builds, the weight and reps for next time, worked out from your own sessions and your own jumps — never a percentage, never a plate combination you did not choose, and no number at all when it does not know your step. **Rest and recovery**: each muscle group's recovery time is read off your own gaps between training it. *What should I train today?* picks what has recovered, or says rest or go lighter when the log says so, and *Should I rest or go lighter?* lists what is off your normal today. It is always advice with a way on (*Train anyway*). A bad day can be **marked** so it never counts against your numbers. **Am I fueled?** reads your food log against your own normal and never tells you what to eat. **Patterns in your data**, off until you switch it on, sets two groups of your own days side by side as numbers. Part of Pro; the readouts are free.
-- **Train** — full workout tracker: saved routines, plate-colored calendar, session timer, W/F/D set tags, 231-exercise library, last-time numbers, rest timer, per-side plate math, e1RM, swipe-to-delete sets, editable history, a post-workout recap with personal records, and a full statistics page.
+- **Train** — full workout tracker: saved routines, plate-colored calendar, session timer, W/F/D set tags, 231-exercise library, last-time numbers, rest timer, per-side plate math, e1RM, swipe-to-delete sets, editable history, a post-workout recap that leads with the win — "Great workout." only when your log or your own rating backs it, otherwise "Good work." — with your personal records under it, asks how the session felt (energy and strength, saved with it), and compares it only with sessions like it, never as a percentage, and a full statistics page.
 - **Fuel** — nutrition: **photograph a plate and Claude reads the macros off it**, or just describe what you ate. Plus macro targets, saved-food library, barcode scanning via Open Food Facts, manual entry, saved meals, one-tap portion multiplying, micronutrient floors, paste import.
 - **Weight** — body-weight log: 7-day moving average chart, weekly rate, a learned time-of-day curve, and a maintenance (TDEE) estimate built on normalised weigh-ins with a stated confidence interval.
 - **Pounds or kilos**, app-wide — body weight, set weights, volume, records, trend rates, goal weight, height and per-bodyweight macro targets, all of it. Picked at setup, changeable any time under ⚙ Units. Nothing in the database changes: pounds and inches are the stored unit and the setting converts at the edges.
@@ -95,7 +95,7 @@ node in the database. See *Access* below for what replaced them, and why.
 | `app.js` | Shell — sign-in/sign-up, access gate, boot order, tab router, service worker |
 | `you.js` | You tab — the screen the app opens on. Read-only; every number is re-derived |
 | `insights.js` | What Rack makes of the data — wins, slips, insights, the weekly review, the goal pace. Pure functions over what `you.js` loaded |
-| `coach.js` | **Coach's engine.** Facts, intents, responses, router — four tables and a sort. Pure: no clock, no DOM, no reads, no module state. Copied into the native tree verbatim |
+| `coach.js` | **Coach's engine.** Facts, intents, responses, router — four tables and a sort. Pure: no clock, no DOM, no reads, no module state. Since v53 also `finishRead()`, the finish line the recap, the card and the sheet read after a workout ("Great workout." only with evidence, otherwise "Good work."), and the card's warm lines. Copied into the native tree verbatim |
 | `coach-build.js` | **The workout builder** — "Make me a workout" on Train. Turns the shape that has waited longest into a workout made out of his own log: the most recent such session, its exercises, blocks and logged numbers, never an invented weight — and beside each exercise its target from `coach-prog.js`. Pure, and copied into the native tree verbatim like `coach.js` |
 | `coach-prog.js` | **The targets** — per lift, the weight and reps for next time: his rep range learned from where he moves up, his step learned from his own jumps, a hold, a jump, a reduction or a way back after a layoff, each with its evidence. Every weight is one he logged or at most two of his own steps away (coming back, a whole number of steps below). Since v52 `targetFor()` is the one way a target is named: after a marked session it is the target from before it. Pure; copied verbatim. `tools-check/coach-prog.mjs` is its battery |
 | `coach-goal.js` | **The goal's dials** — the six aims and three experience answers, what each turns (confirm twice before a jump, one jump or two, the starting rep band), and the energy context read off the weight trend. Since v49 also bodyweight at a moment, the energy band, the volume floors, the lift target's shape (`normGoalLift`), its pace (`paceFor`) and the goal-change checks. Pure; imports nothing; copied verbatim |
@@ -104,8 +104,8 @@ node in the database. See *Access* below for what replaced them, and why.
 | `coach-fuel.js` | **Am I fueled?** (v52) — his food against his own normal and never a prescription: complete days, the food phase, his by-hour curve on training days, whether he logs as he goes or later, and the food rows beside readiness and a session. A half-logged day is "not fully logged", never low. Imports `coach-goal.js` and `units.js` only. Pure; copied verbatim. `tools-check/coach-fuel.mjs` is its battery |
 | `coach-tags.js` | Movement pattern, angle, load and side for every built-in exercise. A sidecar keyed on `exercises.js`'s ids, so a tagging mistake can never reach the picker. Pure; imports nothing. The builder reads it: pattern for "Swap one", load for "Fewer exercises" |
 | `coach-live.js` | **Coach in the gym** — during a live workout, what usually comes next, one more set, the next group, or "you're probably good for today", read off the session in progress against his own sessions of that shape. Never a weight. Pure, and copied into the native tree verbatim like `coach.js` |
-| `coach-data.js` | The impure half — the one file the native port rewrites. Reads once per app open and never on a paint, except the food days *Am I fueled?* reads on an ask (v52: Pro, Food on, fifteen at most). Writes `settings/coach`, bad-day marks included |
-| `coach-ui.js` | Coach's card (since v49 one earned line from his own log — the sheet opens on the finding), the COACH ME sheet with "More", the builder's recovery caution and the bad-day mark's chips (v52), the Settings switches and Your goal (aim, experience, focus, Lift target), and the live session's chip, sheet and one-line nudge |
+| `coach-data.js` | The impure half — the one file the native port rewrites. Reads once per app open and never on a paint, except the food days *Am I fueled?* reads on an ask (v52: Pro, Food on, fifteen at most). Writes `settings/coach`, bad-day marks included. Since v53 `coachFinishRead()` for the recap and `noteCoachFood()`, which `food.js` calls after each day-summary write |
+| `coach-ui.js` | Coach's card (since v49 one earned line from his own log — the sheet opens on the finding; since v53 the finish line after a workout, and a warm line when nothing is earned), the COACH ME sheet with "More", the builder's recovery caution and the bad-day mark's chips (v52), the Settings switches and Your goal (aim, experience, focus, Lift target), and the live session's chip, sheet and one-line nudge |
 | `settings.js` | The settings hub behind the You gear, and the profile editor |
 | `admin.js` | Owner-only panel — feature usage, the Accounts page, People & access |
 | `accounts.js` | Account types and what each one may do. Pure, and the single entitlement choke point — every limit and feature check goes through `capabilitiesFor()` |
@@ -118,9 +118,9 @@ node in the database. See *Access* below for what replaced them, and why.
 | `auth.css` | Styles for the sign-in box, waiting screen, onboarding and People |
 | `ui.js` | Shared primitives — sheets, toasts, confirms, swipe, date/number helpers |
 | `units.js` | Pounds/kilos and inches/centimetres. Pure, imports nothing, reads nothing — every function takes the unit as an argument |
-| `analytics.js` | Training aggregates, personal-record detection, SVG chart builders |
+| `analytics.js` | Training aggregates, personal-record detection, SVG chart builders — and (v53) the recap's comparison with sessions of the same kind, and `normFeel()`, the one reader of a session's rating |
 | `stats.js` | The statistics page |
-| `workout.js` | Train tab — calendar, live session, editing, post-workout recap |
+| `workout.js` | Train tab — calendar, live session, editing, post-workout recap (v53: the win first, "How did that feel?", no percentage) |
 | `blocks.js` | Lifting blocks — the pure model, shared by the workout screen and the routine editor. Imports nothing, reads nothing |
 | `picker.js` | Exercise library (static + custom) and the two picking sheets |
 | `routines.js` | Pre-planned routines — list, editor, start, save-a-session-as |
@@ -165,12 +165,14 @@ app.js → you.js       → coach-ui.js  → coach.js   → analytics.js ──�
                       → water.js
                       → onboarding.js
       → workout.js    → coach-ui.js (as above)
+                      → coach.js  coach-data.js (v53: the finish line; the check-in's words and gates)
                       → stats.js ──→ analytics.js ─────────→ ui.js
                       → picker.js ──────────────────────────→ ui.js
                       → blocks.js
                       → routines.js → picker.js
                                     → blocks.js
       → food.js       → water.js ───────────────────────────→ ui.js
+                      → coach-data.js (v53: noteCoachFood, after each day summary)
                       → recall.js ──────────────────────────→ store.js
                       → ai.js → ai-config.js
                               → store.js (idToken only)
@@ -204,7 +206,8 @@ to do.
 
 `coach.js` is at the bottom of the graph with `units.js` and `blocks.js`: it
 imports `exercises.js`, `units.js`, `coach-build.js`, `coach-live.js`, `coach-goal.js`, `coach-overlap.js`, `coach-ready.js`, `coach-fuel.js` and the SESSION MATH from
-`analytics.js` (`e1rm`, `isWorking`, `mergeSessionExercises`, `exerciseIndex`)
+`analytics.js` (`e1rm`, `isWorking`, `mergeSessionExercises`, `exerciseIndex`,
+and since v53 `detectPRs`, `sessionMilestones` and `normFeel` for the finish line)
 and nothing else — never `loadAll`/`allSessions`, which are that file's impure
 half. It holds no state and takes its clock as an argument, so two renders
 inside one app open cannot disagree about which greeting is showing.
@@ -694,7 +697,7 @@ never when the card draws.
 ### Patterns in your data
 
 **Off until you switch it on** (Settings → Coach), the reverse of every other
-switch. Eight comparisons, chosen in advance, each setting two groups of your
+switch. Eleven comparisons, chosen in advance, each setting two groups of your
 own days or sessions over the last 26 weeks side by side — the median or the
 share on each side, and how many are in each — and only when there are eight or
 more on both sides:
@@ -708,6 +711,15 @@ more on both sides:
 6. the same, three or fewer days since that group, against five or more
 7. steps on days you trained, against rest days
 8. the same estimated max after a day above your median calories, against below
+9. your energy rating after a session (v53, from the recap's *How did that
+   feel?*), on sessions with food logged before them, against none before
+10. the same energy, with your median calories or more logged before a session,
+    against less
+11. the same energy, when your last logged food was your median hours or fewer
+    before a session, against longer — only if you log food as you go
+
+The last three are Micah's decision of 24 Sep 2026. They read the food logged
+on your rated sessions' own days, and only with Patterns on.
 
 They are readouts. Two groups that differ say nothing about why, and no
 sentence says one thing helps, causes or leads to another. There is no search

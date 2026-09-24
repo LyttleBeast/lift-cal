@@ -491,6 +491,27 @@ sessions merges a session's exercises by `exId` first
 (`mergeSessionExercises` in `analytics.js`) — one logical entry per exId per
 session, sets concatenated in session order.
 
+**v53: `feel` → `{ e, s, at }`, how the session felt, by his own rating.** The
+recap's *How did that feel?* writes it (Settings → Coach → *After a workout: how
+it felt* hides the card):
+
+- `e` — energy, an integer 1–10. `s` — strength against his normal, one of `80`,
+  `90`, `100`, `110`, `120` (`80` reads "80% or less", `120` "120%+"). `at` —
+  the epoch ms it was rated. Either of `e` and `s` may be absent, never both.
+- Written as **one child write** to `workouts/{mk}/{dd}/{id}/feel`, after the
+  record itself is saved — never a container. The published rules take it:
+  `workouts` carries a section-level `.write`.
+- `analytics.js` `normFeel()` is the one reader and fails safe to null on every
+  junk value. Nothing stores a `feel` it would refuse.
+- **The trap:** `saveEdit()` rebuilds the record from scratch and PUTs its
+  month, so it carries `feel` over from the record being edited, unchanged. The
+  month cache takes `feel` straight after its write resolves, because every
+  later whole-month write is built from that cache.
+- A rating moves no target, window or baseline. Coach reads it three places:
+  the finish line (energy 8+ or strength 110%+ earns "Great workout.", strength
+  90% or less or energy 3 or less is a harder day), a line under *How did today
+  compare?*, and three Patterns (see `settings/coach`).
+
 `history/{exId}` → `[ { date, sets: [ {w,r,type} ] }, … ]`, newest first, 20 max
 — the per-exercise "last time" index.
 
@@ -542,10 +563,14 @@ under *What should I train today?* and *Should I rest or go lighter?*, the
 builder's caution on a group that has not recovered, and the card's "a rest day
 is well earned" line. Since v52 it includes `readiness` — "Readiness", the list
 of what in the log is off his normal today under *Should I rest or go
-lighter?*.
+lighter?*. Since v53 it includes `feel` — "After a workout: how it felt", the
+recap's energy and strength check-in (a surface, not an intent, and free for
+every tier); off, the card is never drawn.
 
 `on` is the reverse, and it exists for one category: **Patterns** (v46), the
-eight comparisons between two groups of the account's own days. It is OFF until
+comparisons between two groups of the account's own days — eight until v53,
+eleven since (Micah's decision of 24 Sep 2026: his energy rating beside what he
+ate before a session, how much, and how long before). It is OFF until
 switched on — **absent means off** — because comparing somebody's days is a
 thing they ask for, not a thing Coach volunteers. Only `true` survives
 `normSettings()`, and only for a category the table in `coach.js` declares
@@ -554,7 +579,12 @@ nothing. It is the one key v46 added, a child of an already granted section, so
 it needed no rules change for the same reason `settings/coach` itself did not.
 Turned on, Coach reads `food/log/{date}` for the days its first comparison needs
 (when a session's day began) — reads only, and only for an account that has
-switched it on. `answers` holds the replies to Coach's own
+switched it on. Since v53 the same read also covers the **rated sessions'
+dates** the three energy patterns need — those not already on the list, the
+newest forty at most, never trimming the first comparison's — and keeps each
+day whole (`foodDays`, every entry's time and calories) beside the first-entry
+time the first comparison reads. Same gate, same one read per day per app open,
+at boot and never on a paint. `answers` holds the replies to Coach's own
 questions. `q_goal_direction` exists because `weight_rate_vs_goal` and the stall
 readout are both silent or different without a direction and the data genuinely
 cannot supply one. `asked` stamps when each was put, so nothing is asked twice.
@@ -648,15 +678,20 @@ through `coach-data.js` `loadFuel()`, reads only.
   come from `coach.js` `fuelDays()`: today, the latest session's date, then the
   most recent complete training dates in the four weeks before. After that,
   one more read of today only when `food/daySummaries/{today}` has changed, and
-  none otherwise. A past day is read once per open.
+  none otherwise. A past day is read once per open. Since v53 `food.js` tells
+  Coach each summary it writes (`coach-data.js` `noteCoachFood()`), so food
+  logged on the Fuel tab after a first ask is seen by the next one.
 - The sheet waits at most four seconds for them, under "Reading your food
   log…", then answers with what it has. A failed read is a day Coach leaves
   out, never an empty one.
 - Separate from Patterns' own boot read above, which is unchanged.
 
 The card's earned line (v49) keeps a device-local memory beside the greeting's,
-`rack:{uid}:coachHype` — the last three lines the card showed, written once per
-app open — for the same reason and in the same namespace.
+`rack:{uid}:coachHype`, for the same reason and in the same namespace. Since v53
+it is `[{ id, key, at }]` — the line, the fact value it quoted and when it was
+shown — newest first, eight deep, one entry per app open (the last line drawn),
+so a fact value is not shown twice inside 24 hours under any id; a v49 entry, a
+bare id, reads as `{ id, key: id, at: 0 }`. Warm lines are not written to it.
 
 **`lastGreet` was here in v42 and is not any more.** The rotating greeting and
 its open counter are DEVICE state, in `localStorage` under the account's own

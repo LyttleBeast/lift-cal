@@ -10,6 +10,13 @@
 // worked out on a paint in two of them only — `post`, an hour after a
 // session, and `done_today`, hours after one — and not at all otherwise.
 //
+//   AB=1 node report/coach-paint/bench.mjs       v52 and the tree INTERLEAVED,
+//                                                paint for paint, 1,500 each
+//
+// Two runs back to back drift by half a millisecond on Basic's 9 ms paint;
+// interleaving cancels the drift, and it is the number COACH-REPORT.md §76
+// quotes.
+//
 // A card paint is what coach-ui.js's coachCard() asks of the engine: one
 // coach() call, then the two cards, the greeting, the lead question and (for
 // Basic) the teaser — all of which coach() works out before it returns. The
@@ -113,6 +120,24 @@ const MOMENTS = [['pre', { ...INPUT, sessions: before }],
                  ['post', { ...INPUT, sessions: before.concat([today(2, 1)]) }],
                  ['done_today', { ...INPUT, sessions: before.concat([today(6, 5)]) }]];
 console.log('\na card paint, ' + sessions.length + ' sessions over ' + Math.round((NOW - sessions[0].startedAt) / DAY) + ' days\n');
+if (process.env.AB) {
+  const A = (await stage(targets[0][1])).C, B = (await stage(targets[1][1])).C;
+  for (const [m, inp0] of MOMENTS) for (const pro of [true, false]) {
+    const inp = { ...inp0, tier: { pro } };
+    for (let i = 0; i < 50; i++) { paint(A, inp); paint(B, inp); }
+    const a = [], b = [];
+    for (let i = 0; i < 1500; i++) {
+      let t = process.hrtime.bigint(); paint(A, inp); a.push(Number(process.hrtime.bigint() - t) / 1e6);
+      t = process.hrtime.bigint(); paint(B, inp); b.push(Number(process.hrtime.bigint() - t) / 1e6);
+    }
+    a.sort((x, y) => x - y); b.sort((x, y) => x - y);
+    const md = v => v[v.length >> 1];
+    console.log('  ' + m.padEnd(10) + (pro ? ' Pro   ' : ' Basic ') + targets[0][0] + ' ' + md(a).toFixed(2) + ' ms   ' +
+                targets[1][0] + ' ' + md(b).toFixed(2) + ' ms   ' + (md(b) - md(a) >= 0 ? '+' : '') + (md(b) - md(a)).toFixed(2) + ' ms');
+  }
+  console.log('');
+  process.exit(0);
+}
 for (const [label, rev] of targets) {
   const { C, R } = await stage(rev);
   for (const [m, inp] of MOMENTS) {

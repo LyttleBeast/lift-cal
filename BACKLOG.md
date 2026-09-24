@@ -7,7 +7,7 @@ Two things this file is not. It is not a design document — where a shape was
 already decided, the decision stays where it was written and this only points at
 it. And it is not a port brief: `NEXT-NATIVE.md`, `NEXT-NATIVE-UNITS.md`,
 `NEXT-NATIVE-V40.md`, `NEXT-NATIVE-V41.md`, `NEXT-NATIVE-V42.md`,
-`NEXT-NATIVE-V43.md`, `NEXT-NATIVE-V45.md`, `NEXT-NATIVE-V46.md`, `NEXT-NATIVE-V48.md`, `NEXT-NATIVE-V49.md` and `NEXT-NATIVE-V52.md` are the instructions for copying
+`NEXT-NATIVE-V43.md`, `NEXT-NATIVE-V45.md`, `NEXT-NATIVE-V46.md`, `NEXT-NATIVE-V48.md`, `NEXT-NATIVE-V49.md`, `NEXT-NATIVE-V52.md` and `NEXT-NATIVE-V53.md` are the instructions for copying
 work into `~/dev/rack-mobile`, and they stay. What is below is the list of
 things nobody has done yet.
 
@@ -193,10 +193,10 @@ Carried from `NEXT-NATIVE.md` §7 so it survives that file. Do not "fix" these:
   only; the picker's list is all-time and counts it.
 - **Bodyweight work produces no estimated 1RM**, because an e1RM needs a weight
   on the bar. `you.js:1203` says so on screen rather than ranking a zero. Since
-  v41 those sets print as `BW × 12` (`units.js fmtSetLoad`), and the recap
-  compares them by REPS rather than by volume (`analytics.js
-  sessionComparison`) — a bodyweight session has no volume, and "-100%" was the
-  old answer to that.
+  v41 those sets print as `BW × 12` (`units.js fmtSetLoad`), and since v53 the
+  recap compares them by WORKING SETS against sessions of the same kind rather
+  than by volume (`analytics.js sameKindComparison`) — a bodyweight session has
+  no volume, and "-100%" was the old answer to that.
 - Three things are left in **pounds on purpose** and labelled as pounds on
   screen, because a wrong number is worse than no number: the plate strip above,
   the workout importer (`importer.js:18` — its file is already in Rack's storage
@@ -205,6 +205,61 @@ Carried from `NEXT-NATIVE.md` §7 so it survives that file. Do not "fix" these:
   last one is quoted against does convert.
 
 ---
+
+## What v53 left open in its own work
+
+v53 is **the finish**: after a workout the first thing is warm and never a
+number that stings. `finishRead()` in `coach.js` decides what to celebrate —
+"Great workout." only with evidence, otherwise "Good work." — and the recap,
+the Coach card and the sheet all read it. The recap was redone (the win first,
+no percentage, a comparison only with sessions like this one), and "How did
+that feel?" saves his energy and strength with the session and feeds three new
+Patterns. Five small fixes came first. It is written up in `COACH-REPORT.md`
+§69–§78.
+
+**Found and deliberately not fixed** (SHIP-V53-PROMPT.md §7):
+
+- **The Your goal screen's layout.** Micah: "looks messy — a later update".
+- **Stage five and the per-set effort tap** are next: mid-session targets,
+  volume bands, and an effort rating per set.
+- **A rating moves no target, window or baseline.** That is the effort tap's
+  job. Tonight it is stated beside the numbers and read by the finish line and
+  three Patterns, and nothing else.
+- **The Stats screen averages nothing across sessions.** Its only percentages
+  are the muscle-group split's shares. **The You tab's weekly review** does
+  compare a week's total training volume with the week before as a percentage
+  (`insights.js:348`, `:496`), across every kind of session. The recap no
+  longer does anything like it. That review was not touched.
+- **Anything in native.** See `NEXT-NATIVE-V53.md`: `feel` and the PROPOSED
+  rule for it, the device memory shape, the summary screen, `noteCoachFood()`.
+
+**Left open in v53's own work:**
+
+- **Nothing in this ship has been seen on a screen.** The recap's hero, the
+  check-in's chips (and their 44px, reasoned from `rack.css` in
+  `touch-target.mjs`, never measured), the warm lines, the card and sheet after
+  a workout were driven through DOM shims with no box model.
+- **The feel card re-renders the Train screen when a rating is saved**, so
+  the recap redraws from the top. It is two cards from the top, so nothing is
+  lost, but a scroll position is not kept.
+- **The energy patterns read food days at boot.** A session rated in this
+  app open has its day read at the next one, like the first pattern's days.
+- **Warm lines are not written to the card's memory.** They rotate on the
+  open counter alone, so two opens in a row never repeat one. A fact value's
+  entry is never pushed out of the day's memory by eight of them.
+- **The card's line is remembered as the last one drawn in an open.** v49
+  pinned the greeting, not the line, and wrote the first line drawn. With the
+  24-hour rule the engine reads the memory as it stood at open, and the entry
+  written is the line he last saw.
+- **The Train card never shows the finish line.** It is category `core`, and
+  the Train card walks training categories only. On the day of a workout the
+  You card leads with it and the Train card keeps its rotation.
+- **The finish line's comparison evidence ("Above your usual on …") needs
+  Pro**, like the answer it quotes. So does "every Coach target met". A Basic
+  account's "Great workout." comes from a record, a milestone, his rating or
+  a comeback.
+- **The three energy patterns read energy only.** Strength against his normal
+  is stored and quoted, and no pattern reads it.
 
 ## What v52 left open in its own work
 
@@ -239,8 +294,10 @@ with lazy food reads for Pro. It is written up in `COACH-REPORT.md` §59–§68.
 - **Micah's drop-set request** (a sub-list of the sets that make up a drop set)
   is a Train UI change, not a Coach one.
 - **Water in readiness**: decided "not yet", to be revisited after this stage.
-- **The marked-vs-unmarked comparison** waits for a decision on a ninth
-  Pattern. `coach-patterns.mjs` fails on anything but eight.
+- **The marked-vs-unmarked comparison** waited for a decision on a ninth
+  Pattern. Micah's decision of 24 Sep 2026 (v53) added three others — his
+  energy rating beside his food — and this one is still not registered.
+  `coach-patterns.mjs` fails on anything but eleven.
 - **The replay's learning** (an extra day on the streak sign, a day off a
   group's window) waits for a per-open cache that the card, the builder
   default and the sheet all read (decision 17). Without that cache the three
