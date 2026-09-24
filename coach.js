@@ -2731,7 +2731,6 @@ export const RESPONSES = Object.freeze({
    slow down and a scale is noisy, so a date would be a promise the numbers
    cannot make. Never "test it" either: Coach does not schedule max attempts.
    And no approving word past RATE_BAND_LB — the figure alone. */
-const STATUS_WORD = Object.freeze({ progressing: 'climbing', holding: 'holding', stalled: 'flat', declining: 'coming down' });
 function weeksRange(lo, hi) {
   if (hi != null && hi > GOAL_MAX_WEEKS) return 'more than six months';
   if (hi == null) return 'at least ' + plural(lo, 'week');
@@ -2823,7 +2822,7 @@ function goalLines(d, u) {
   const bt = aim === 'powerlifting' ? d.f('lift.bigThree') : null;
   if (bt && bt.lifts.some(x => x.lift)) {
     const parts = bt.lifts.filter(x => x.lift)
-      .map(x => x.which + ' ' + labelW(x.lift.e1, u) + ' (' + STATUS_WORD[x.lift.status] + ')');
+      .map(x => x.which + ' ' + labelW(x.lift.e1, u) + ' (' + x.lift.word + ')');
     out.push({ text: 'Your big three, estimated: ' + parts.join(', ') + (bt.total != null ? '. Total ' + labelW(bt.total, u) + '.' : '.'),
                reason: 'Each is your most-logged variant over the last twelve weeks, the middle of its last two sessions.' });
   }
@@ -2831,9 +2830,13 @@ function goalLines(d, u) {
   // The focus group.
   const f = d.f('group.focusRead');
   if (f) {
-    const lifts = f.lifts.map(l => l.name + ' is ' + STATUS_WORD[l.status]);
-    out.push({ text: 'Your focus, ' + groupLabel(f.group) + ': about ' + one(f.recent4) + ' sets a week over the last 4 weeks' +
-                     (f.normal != null ? ', against your usual ' + one(f.normal) : '') + '.' +
+    // v50: each lift's word is coach-overlap.js's wordOf(), never the raw
+    // status; and whole sets — "9.8 sets a week" is a precision a set count
+    // does not have, and it read as a typo on the phone.
+    const lifts = f.lifts.map(l => l.name + ' is ' + l.word);
+    out.push({ text: 'Your focus, ' + groupLabel(f.group) + ': about ' + plural(Math.round(f.recent4), 'set') +
+                     ' a week over the last 4 weeks' +
+                     (f.normal != null ? ', against your usual ' + Math.round(f.normal) : '') + '.' +
                      (lifts.length ? ' ' + lifts.join('; ') + '.' : ''),
                reason: 'Working sets for that group, warm-ups out, against the eight weeks before.' });
   }

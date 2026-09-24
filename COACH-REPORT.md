@@ -2696,3 +2696,26 @@ two weeks before the account existed — and it would have told a lifter who was
 simply level that he was overdoing it. Stage four's readiness and stage five's
 volume bands are built out of exactly these normals. Read `blocksOf()`'s
 comment before writing another one, and keep `wrong: 0` fatal.
+
+## 58. AFTER THE WALK, 24 SEP 2026 — rack-v50 and rack-v51
+
+Micah walked rack-v49 on his phone the morning after. Two things read wrong,
+both on the goal screens, and both are fixed.
+
+- **rack-v50, the Lift target row.** The reps box sat unlabelled beside the
+  weight with a 1 already in it; he read the 1 as the target weight, and "1 to
+  20" as a weight limit. The row now opens with a line saying what it is, each
+  box has a caption ("Target weight (lb)", "Reps at that weight"), and the
+  focus question says what Coach does with it. `coach-ui.js` only.
+- **rack-v51, a raw status word.** "How am I tracking toward my goal?" printed
+  coach-prog.js's status beside each focus-group lift and each of the big
+  three: his bench, trained twice a week, read "Barbell Bench Press is
+  holding". `holding` is the status for "too few sessions spread wide enough to
+  call" — and §3.1 of the v49 brief already said a twice-a-week lift reads it
+  for months — so a reader takes it as "keeping its strength" when it may be
+  flat or falling. v48's rule is that a status is never printed; the v49 brief
+  asked for "statuses" there, which was the brief's error. `coach-overlap.js`
+  gains `wordOf()`, which says in a word what "How are my lifts moving?" says in
+  a line (climbing, level, level lately, coming down, holding steady, too soon
+  to call), and the focus line counts whole sets ("9.8 sets a week" read as a
+  typo). `coach-pace.mjs` section C is updated deliberately and pins both.

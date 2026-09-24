@@ -51,10 +51,10 @@ tdee.js        83c2e76b71cfa2f6c8260fae807182e0682af48459bcd30b7be9eb9c4d48fe3d 
 **The files the port copies verbatim that changed or arrived:**
 
 ```
-coach-overlap.js  39a1e0fbdf90b6c57c8ee97ccf5f179b463834076135e709ca118ba4eb3d703e   NEW — copy to src/pure/, 1,096 lines
+coach-overlap.js  6dd8638300a29badf370e3e883d92578c2d5b5b84113eeaf3820b04f6713b18c   NEW — copy to src/pure/, 1,122 lines (rack-v51: wordOf)
 coach-goal.js     6cd88a72e932ad060fe456121372dc483525ec28ca0c5d067c3aa58f41382048   CHANGED — re-copy, 287 lines (v48: 2cc6950…)
 coach-prog.js     b188e5db37601745b6ccedfc5ca4c0d9372050c9e457d0662fb2836e4bd257f6   CHANGED — re-copy, 926 lines (v48: e5b7e8b…)
-coach.js          37f41bc06da46a446b0d29db546d70614866fa2eb19018dd4743440f59ab43f8   CHANGED — re-copy, 4,108 lines (v48: 3114cc1…)
+coach.js          74fc944eaf56257dbe6f2e9b18c1f8f8e66b97919684812737000b13b29ae703   CHANGED — re-copy, 4,111 lines (v48: 3114cc1…; rack-v51: no raw status word, whole sets)
 ```
 
 `coach-prog.js` changed ADDITIVELY: `baselines()` returns more, and nothing it

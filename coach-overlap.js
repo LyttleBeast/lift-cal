@@ -634,6 +634,29 @@ function lineOf(ex, b, ctx, i, u, now) {
   return { text: name + ': level lately.', reason: 'No new best in the last three weeks, and nothing Coach reads as a plateau or a slide.' };
 }
 
+/* v50: ONE SHORT WORD FOR A LIFT, for the lines that name several at once —
+   the focus group and the big three under "How am I tracking toward my goal?".
+   v49 printed coach-prog.js's raw status there, and v48's rule is that a
+   status is never printed: `holding` is its word for "too few sessions spread
+   wide enough to call", which a reader takes as "keeping its strength", and a
+   lift trained twice a week reads `holding` for months while it is flat or
+   falling. On Micah's phone: "Barbell Bench Press is holding." This says what
+   lineOf() says, short, from the same two readings. */
+function wordOf(ex, b, ctx, i) {
+  if (b.status === 'progressing') return 'climbing';
+  const r = readLift(ex, ctx, i);
+  if (r.call === 'none') {
+    if (r.because === 'rising') return 'climbing';
+    if (r.because === 'thin') return 'too soon to call';
+    return 'level lately';
+  }
+  // Level through a loss of bodyweight, strength for its weight held. Never
+  // "cut" here: this line has no room for §3.3's rule on when Coach may say so.
+  if (r.call === 'holding_cut') return 'holding steady';
+  // Not rising (readLift answered that above), so outside his noise is down.
+  return r.level ? 'level' : 'coming down';
+}
+
 /* A session's date the way the app prints one ("Tue, Sep 16"), worked out in
    UTC from the date KEY, so the day it was filed under is the day this names
    in every time zone — the spelling coach-prog.js and coach-build.js use. */
@@ -1061,7 +1084,8 @@ export function bigThree(input, now) {
       });
       if (!pick) return { which, lift: null };
       const S = pick.b.series;
-      return { which, lift: { exId: pick.exId, name: pick.name, status: pick.b.status,
+      const l = i.lifts.find(x => x.exId === pick.exId);
+      return { which, lift: { exId: pick.exId, name: pick.name, status: pick.b.status, word: wordOf(l, pick.b, ctx, i),
         e1: Math.round(median(S.slice(-2).map(p => p.y))) } };
     });
     const total = out.every(x => x.lift) ? out.reduce((a, x) => a + x.lift.e1, 0) : null;
@@ -1086,7 +1110,9 @@ export function focusRead(input, group, now) {
     const lifts = i.lifts.filter(l => l.group === group && !isCardio(l)).map(l => {
       const b = baselines(l, ctx);
       const n = b ? b.tops.filter(t => t.daysAgo >= 0 && t.daysAgo < WINDOW_DAYS).length : 0;
-      return { exId: l.exId, name: String(l.name || l.exId), n, status: b && !b.assisted && b.series.length ? b.status : null };
+      const ok = b && !b.assisted && b.series.length;
+      return { exId: l.exId, name: String(l.name || l.exId), n, status: ok ? b.status : null,
+               word: ok ? wordOf(l, b, ctx, i) : null };
     }).filter(x => x.n > 0 && x.status)
       .sort((a, b) => b.n - a.n || (a.exId < b.exId ? -1 : a.exId > b.exId ? 1 : 0)).slice(0, 2);
     return { group, recent4, normal, lifts };

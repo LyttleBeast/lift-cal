@@ -221,14 +221,23 @@ section('C. Powerlifting’s big three and their total; the focus group’s sets
   const nums = [...big.matchAll(/(squat|bench|deadlift) ([\d.]+) lb/g)].map(m => +m[2]);
   const total = +((/Total ([\d,.]+) lb/.exec(big) || [, 'NaN'])[1].replace(/,/g, ''));
   check('Powerlifting: squat, bench and deadlift, each estimated with its status, and the total of the three',
-        nums.length === 3 && total === nums.reduce((a, b) => a + b, 0) && /\((climbing|holding|flat|coming down)\)/.test(big), big);
+        nums.length === 3 && total === nums.reduce((a, b) => a + b, 0) && /\((climbing|holding steady|level|level lately|coming down|too soon to call)\)/.test(big), big);
   const two = goalLines(input({ sessions: sortS(log.filter(s => s.exercises[0].exId !== 'conventional-deadlift')), ...settings({ q_goal_aim: 'powerlifting' }) }));
   check('and no total until all three are there', two.some(x => /^Your big three/.test(x)) && !two.some(x => /Total/.test(x)), list(two));
   check('another aim has no big three line', !goalLines({ ...pl, ...settings({ q_goal_aim: 'strength' }) }).some(x => /big three/.test(x)));
   const focus = goalLines({ ...input({ sessions: sortS(benchLog(185, 2.5)) }), ...settings({ q_goal_aim: 'muscle', q_focus_group: 'chest' }) });
   check('the focus group: its sets a week over the last 4 weeks against his usual, and its lifts',
-        focus.some(x => /^Your focus, chest: about [\d.]+ sets a week over the last 4 weeks(, against your usual [\d.]+)?\. Barbell Bench Press is (climbing|holding|flat|coming down)\.$/.test(x)),
+        focus.some(x => /^Your focus, chest: about \d+ sets? a week over the last 4 weeks(, against your usual \d+)?\. Barbell Bench Press is (climbing|holding steady|level|level lately|coming down|too soon to call)\.$/.test(x)),
         list(focus));
+  /* v50, deliberately: v49 printed coach-prog.js's raw status here, and on
+     Micah's phone a bench trained twice a week read "is holding" — the status
+     word for "too soon to call", which reads as "keeping its strength". A
+     twice-a-week bench, level for twelve weeks with no weigh-ins, is "level";
+     no line under this answer ever prints a bare status word; sets are whole. */
+  const flat2 = goalLines({ ...input({ sessions: sortS(benchLog(225, 0)) }), ...settings({ q_goal_aim: 'muscle', q_focus_group: 'chest' }) });
+  check('a twice-a-week bench, level for twelve weeks: "is level", never the raw status "is holding"',
+        flat2.some(x => /Barbell Bench Press is level\./.test(x)) && !flat2.some(x => /\bis holding\b(?! steady)|\bis flat\b|\(holding\)|\(flat\)/.test(x)), list(flat2));
+  check('and the focus line counts whole sets', flat2.filter(x => /^Your focus/.test(x)).every(x => !/\d\.\d+ sets?|usual \d+\.\d/.test(x)), list(flat2));
   check('"No focus" reads no group', !goalLines({ ...input({ sessions: sortS(benchLog(185, 2.5)) }), ...settings({ q_goal_aim: 'muscle', q_focus_group: 'none' }) })
         .some(x => /Your focus/.test(x)));
   const noAim = goalLines(input({ sessions: sortS(benchLog(185, 2.5)) }));
