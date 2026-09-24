@@ -333,6 +333,50 @@ section('H. band 1 belongs to step 0 and nothing else may occupy it');
                .every(i => i.supersedes.length >= 3));
 }
 
+/* ================= I. v49 ================= */
+section('I. v49 — the rest category, the new intents and questions, and the card’s earned lines');
+{
+  const ids = CATEGORIES.map(c => c.id);
+  check('category rest ("Rest and lighter weeks") sits directly after recency, mutable, and Patterns is still last',
+        ids.indexOf('rest') === ids.indexOf('recency') + 1 && CATEGORIES.find(c => c.id === 'rest').mutable === true &&
+        CATEGORIES.find(c => c.id === 'rest').label === 'Rest and lighter weeks' && ids[ids.length - 1] === 'patterns', ids.join(','));
+  const want = { lift_status: 'selector', record_day: 'selector', lighter_week: 'finding', session_compare: 'selector',
+                 next_targets: 'selector', goal_pace: 'selector' };
+  const wrong = Object.entries(want).filter(([id, kind]) => {
+    const i = INTENTS.find(x => x.id === id);
+    return !i || i.kind !== kind || i.tier !== 'pro' || JSON.stringify(i.surfaces) !== '["sheet"]';
+  }).map(([id]) => id);
+  check('the six new intents are registered: Pro, sheet-only, lighter_week the one finding among them', !wrong.length, list(wrong));
+  const lw = INTENTS.find(i => i.id === 'lighter_week');
+  check('lighter_week is in rest and supersedes the record and near-record findings — the stopping bias',
+        lw.category === 'rest' && lw.supersedes.includes('recent_pr') && lw.supersedes.includes('pr_proximity'));
+  const routes = { ask_lifts: 'lift_status', ask_record_day: 'record_day', ask_lighter: 'lighter_week', ask_compare: 'session_compare',
+                   ask_next: 'next_targets', ask_goal: 'goal_pace' };
+  check('each is answered by its own route', Object.keys(routes).every(r => C.ROUTE_IDS.includes(r)));
+  const st = INTENTS.find(i => i.id === 'stalled_lift');
+  check('stalled_lift keeps its id and its fact, and now needs stage two’s reading of the same lift',
+        !!st && st.factsNeeded[0] === 'lift.stalled' && st.factsNeeded.includes('lift.stallRead'));
+  const q = id => QUESTIONS.find(x => x.id === id);
+  const f = q('q_focus_group');
+  check('q_focus_group: asked under the goal answer, shown in Your goal, six groups and "No focus", changing goal_pace',
+        !!f && f.always === true && f.where === 'goal' && f.options.length === 7 && f.options[6].value === 'none' &&
+        f.changes.includes('goal_pace') && f.fact === 'coach.focus');
+  const checks = ['q_goal_check_weight', 'q_goal_check_targets'].map(q);
+  check('the two goal-change questions: the sheet’s opener (no `where`), text a function of the log, stale-able, kept out of Settings',
+        checks.every(x => x && !x.where && typeof x.text === 'function' && typeof x.stale === 'function' && x.settings === false &&
+                          JSON.stringify(x.options.map(o => o.value)) === '["update","temp","keep"]'));
+  // The card's earned lines.
+  const H = C.HYPE;
+  const hids = H.map(h => h.id);
+  check('the HYPE registry: unique ids, all hype_*', new Set(hids).size === hids.length && hids.every(id => /^hype_[a-z0-9_]+$/.test(id)), list(hids));
+  const badH = H.filter(h => !CATEGORIES.some(c => c.id === h.category) || !Array.isArray(h.facts) || !h.facts.length ||
+    h.facts.some(fid => !factSet.has(fid)) || typeof h.gate !== 'function' || typeof h.text !== 'function' || typeof h.why !== 'function' ||
+    !(h.aims === null || (Array.isArray(h.aims) && h.aims.every(a => ['strength', 'powerlifting', 'muscle', 'cut', 'recomp', 'maintain'].includes(a)))))
+    .map(h => h.id);
+  check('every line names a real category, registered facts, the aims it suits (or null), and its gate, text and why', !badH.length, list(badH));
+  check('and the table is frozen', Object.isFrozen(H));
+}
+
 /* ---------- report ---------- */
 console.log('\nCoach’s registries agree with each other\n');
 console.log(results.join('\n'));

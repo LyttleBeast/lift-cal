@@ -2194,7 +2194,9 @@ export const INTENTS = Object.freeze([
     id: 'lift_status', kind: 'selector', priorityBand: 5, severity: 1,
     category: 'progression', tier: 'pro', surfaces: ['sheet'],
     factsNeeded: ['lift.moving'], supersedes: [],
-    minData: d => !isMuted(d.input.settings, 'progression'),
+    // The card's own bar for "thin": three sessions, and three in the window.
+    minData: d => !isMuted(d.input.settings, 'progression') &&
+                  d.f('session.count') >= 3 && d.f('session.windowCount') >= 3,
     when: d => d.f('lift.moving') != null,
     response: 'resp_lift_status'
   },
@@ -3062,8 +3064,9 @@ export const HYPE = Object.freeze([
   {
     id: 'hype_week_best', category: 'volume', aims: null, facts: ['session.weekBest'],
     gate: d => { const v = d.f('session.weekBest'); return v.n >= 3 && v.prev.every(p => v.n > p); },
-    // Rolling words for a rolling count: never "this week" (the defect v43 fixed).
-    text: d => d.f('session.weekBest').n + ' sessions in seven days, your most in five weeks.',
+    // Rolling words for a rolling count: never "this week" (the defect v43
+    // fixed). The brief's own wording ran to ten words; this is nine.
+    text: d => d.f('session.weekBest').n + ' sessions in seven days, most in five weeks.',
     why: d => FACT_BY_ID['session.weekBest'].because(d.f('session.weekBest'), d)
   },
   {

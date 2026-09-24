@@ -149,6 +149,14 @@ const BANNED = [
   /\bstill\b/i, /\bonly\b/i, /\bfailed\b/i,
   /\bno progress\b/i, /\bstopped moving\b/i
 ];
+/* THE CARD BAN (v49). The card only encourages now, so what it may draw is
+   held to more than what arrives uninvited: the shipped list above, plus the
+   corrective vocabulary — the words that turn a readout into a telling-off.
+   coach-hype.mjs reads this list from here rather than keeping a copy. */
+const CARD_BANNED = [
+  /\boverdue\b/i, /\bbehind\b/i, /\bmissed\b/i, /\bunder\b/i, /\bshould\b/i, /\btry\b/i,
+  /\bneed\b/i, /\bskip\b/i, /\blow\b/i, /\bless\b/i, /\bonly\b/i, /\bstill\b/i
+];
 const offence = s => {
   const hit = BANNED.find(re => re.test(s));
   return hit ? (s.match(hit) || [''])[0] : null;
@@ -1006,6 +1014,107 @@ section('J. v48 — every target Coach names, under the ban and the words this s
   check('and no literal in coach-prog.js, nor the builder’s “worked out from” line, carries one either (' +
         (BSRC.length + PSRC.length) + ' read)', PSRC.length >= 40 && BSRC.length >= 1 && !srcBad.length,
         list(srcBad.map(x => x.w.join('/') + ' in: ' + x.t)));
+}
+
+/* ================= K. v49 — THE CARD ONLY ENCOURAGES ================= */
+section('K. v49 — the card ban over every string a card can draw, and the new answers under the ban');
+{
+  /* THE CARD. It draws the earned line and its evidence clause, the greeting,
+     and the blocking and fall-through states — and every one of those is held
+     to the card ban: the shipped list and the corrective vocabulary above
+     (CARD_BANNED), in both units, on the rendered string and on the source,
+     so a branch no log here reaches is under it too. */
+  const cardBan = s => BANNED.concat(CARD_BANNED).filter(re => re.test(s)).map(re => (s.match(re) || [''])[0]);
+  const { EXERCISES } = await import(pathToFileURL(join(ROOT, 'exercises.js')).href);
+  const REAL = {};
+  EXERCISES.forEach(x => { REAL[x.id] = { name: x.name, group: x.group, equipment: x.equipment }; });
+  const rset = (w, r, t) => ({ w: String(w), r: String(r), type: t || 'N', done: true });
+  const rsess = (ago, rows, hour) => { const d = new Date(NOW - ago * DAY); d.setHours(hour || 7, 0, 0, 0); const t = d.getTime();
+    return { id: 'k' + ago + '-' + rows.map(r => r[0]).join(''), startedAt: t, endedAt: t + 36e5, _date: key(t),
+             exercises: rows.map(([id, n, w, r]) => ({ exId: id, name: REAL[id].name, group: REAL[id].group, equipment: REAL[id].equipment,
+                                                     sets: Array.from({ length: n }, () => rset(w, r)) })) }; };
+  const food = n => Object.fromEntries(Array.from({ length: n }, (_, k) => [key(NOW - (k + 1) * DAY), { cal: 2300, p: 190, c: 250, f: 70 }]));
+  // A log that earns most of the card's lines at once: climbing lifts, a new
+  // best yesterday, three days running, a milestone, a fortnight of food, a
+  // gain on pace for Build muscle.
+  const earn = [];
+  for (let k = 0; k < 22; k++) earn.push(rsess(3 + 3 * (21 - k), [['barbell-bench-press', 3, 185 + 2.5 * k, 5], ['barbell-row', 3, 155, 8]]));
+  earn.push(rsess(1, [['barbell-bench-press', 3, 245, 5]]), rsess(0, [['barbell-curl', 3, 65, 10]]), rsess(2, [['back-squat-high-bar', 3, 245, 5]]));
+  const EARN = base({ sessions: sort(earn), lib: REAL, libReady: true, hidden: [], summaries: food(16),
+    targets: { cal: 2300, p: 180, f: 74 }, targetsSet: true,
+    weight: { latestLb: 180, latestAt: NOW, rateWk: 0.5, rateDays: 30, goalDir: 1, goalRateWk: 0.5 },
+    settings: { v: 1, mute: {}, answers: { q_goal_aim: 'muscle' }, asked: {}, lastGreet: '' } });
+  const drawn = [];
+  const logs = Object.entries(FIXTURES).concat([['earn', EARN]]);
+  logs.forEach(([name, fx]) => ['lb', 'kg'].forEach(u => {
+    for (let opens = 0; opens < 12; opens++) {
+      const c = C.coach({ ...fx, u, opens, recentHype: [] });
+      ['you', 'train'].forEach(w => drawn.push({ at: name + '/' + u + '/' + w, id: c.card[w].id, state: c.card[w].state,
+                                                  text: c.card[w].text || '', why: c.card[w].reason || '' }));
+      drawn.push({ at: name + '/' + u + '/greet', id: c.greet.id, state: 'greet', text: c.greet.text, why: '' });
+    }
+  }));
+  const earned = new Set(drawn.filter(x => x.state === 'earned').map(x => x.id));
+  check('the fixtures put earned lines on the card — ' + earned.size + ' of the ' + C.HYPE.length + ' registered',
+        earned.size >= 6, [...earned].join(', '));
+  const bad = drawn.flatMap(x => [x.text, x.why].map(t => ({ ...x, t, w: cardBan(t) }))).filter(x => x.w.length);
+  check('nothing a card draws — earned line, its evidence, greeting or state — carries the card ban, both units (' + drawn.length + ' paints)',
+        !bad.length, list(bad.map(x => x.at + ' (' + x.id + ') “' + x.w.join('/') + '” in: ' + x.t)));
+  const srcBad = [];
+  C.HYPE.forEach(h => ['text', 'why'].forEach(k => copyOf(h[k]).forEach(t => { const w = cardBan(t); if (w.length) srcBad.push(h.id + '.' + k + ' “' + w + '” in: ' + t); })));
+  C.GREETINGS.forEach(g => copyOf(g.text).forEach(t => { const w = cardBan(t); if (w.length) srcBad.push(g.id + ' “' + w + '” in: ' + t); }));
+  ['resp_state_thin', 'resp_state_clear', 'resp_state_locked', 'resp_log_unreadable', 'resp_first_run', 'resp_live_session']
+    .forEach(r => ['text', 'reason'].forEach(k => copyOf(C.RESPONSES[r][k]).forEach(t => { const w = cardBan(t); if (w.length) srcBad.push(r + '.' + k + ' “' + w + '” in: ' + t); })));
+  const UI = decomment(src('coach-ui.js'));
+  const cardFns = ['export function coachCard', 'function leadText', 'function goRow', 'function header'].map(n => {
+    const at = UI.indexOf(n + '('); if (at < 0) return '';
+    let depth = 0;
+    for (let j = UI.indexOf(') {', at) + 2; j < UI.length; j++) { if (UI[j] === '{') depth++; else if (UI[j] === '}' && --depth === 0) return UI.slice(at, j + 1); }
+    return '';
+  }).join('\n');
+  literals(cardFns).filter(t => /\s/.test(t) && /[a-z]{3}/.test(t)).forEach(t => { const w = cardBan(t); if (w.length) srcBad.push('coach-ui.js “' + w + '” in: ' + t); });
+  check('and none in the source of any earned line, greeting, card state or the card’s own copy in coach-ui.js',
+        !srcBad.length, list(srcBad));
+  check('"N days since chest" and "N days since a session" are gone from the greetings — they read as "you haven’t"',
+        !C.GREETINGS.some(g => g.id === 'g_since_group' || g.id === 'g_away') && C.GREETINGS.length >= 4);
+
+  /* THE NEW ANSWERS. Sheet-only, so the card's exemption would let them off —
+     and the plateau-or-cut reading is the most loaded thing Coach says. So
+     every one of them carries the shipped list, the causal words Patterns
+     is held to, "should", "try" and "eat", in both units. */
+  const CAUSE = [/\bbecause\b/i, /\bcaused?\b/i, /\bdue to\b/i, /\bthat'?s why\b/i, /\bso you\b/i, /\bleads? to\b/i,
+                 /\bmakes? you\b/i, /\bresults? in\b/i, /\bthanks to\b/i];
+  const SHEET = BANNED.concat(CAUSE, [/\bshould\b/i, /\btry\b/i, /\beat\b/i, /\beating\b/i, /\bmust\b/i]);
+  const said = [];
+  const ROUTES = ['ask_lifts', 'ask_record_day', 'ask_lighter', 'ask_compare', 'ask_next', 'ask_goal', 'ask_stall'];
+  const postEARN = { ...EARN, now: NOW, sessions: sort(earn.concat([(() => { const x = rsess(0, [['barbell-bench-press', 3, 250, 5]], 1); x.startedAt = NOW - 2 * 36e5; x.endedAt = NOW - 36e5; return x; })()])) };
+  logs.concat([['post', postEARN]]).forEach(([name, fx]) => ['lb', 'kg'].forEach(u => {
+    const c = C.coach({ ...fx, u });
+    ROUTES.forEach(r => {
+      const a = c.ask(r);
+      if (a.id === r) return;
+      [a.text, a.reason].concat((a.more || []).flatMap(m => [m.text, m.reason])).filter(Boolean)
+        .forEach(t => said.push({ at: name + '/' + u + '/' + r, u, t }));
+      if (a.question) said.push({ at: name + '/' + u + '/' + r + '/q', u, t: a.question.text });
+    });
+    if (c.question) said.push({ at: name + '/' + u + '/opener', u, t: c.question.text });
+  }));
+  C.QUESTIONS.filter(q => /^q_(focus_group|goal_check_)/.test(q.id)).forEach(q => {
+    if (typeof q.text === 'string') said.push({ at: q.id, u: 'lb', t: q.text });
+    said.push({ at: q.id + '.ack', u: 'lb', t: q.ack });
+    q.options.forEach(o => said.push({ at: q.id + '.option', u: 'lb', t: o.label }));
+  });
+  const answered = new Set(said.map(x => x.at.split('/')[2]).filter(Boolean));
+  check('the new answers were read, in both units — ' + [...answered].join(', '),
+        ['ask_lifts', 'ask_compare', 'ask_next', 'ask_goal'].every(r => answered.has(r)) && said.some(x => x.u === 'kg'), String(said.length));
+  const sBad = said.map(x => ({ ...x, w: SHEET.filter(re => re.test(x.t)).map(re => (x.t.match(re) || [''])[0])
+    .concat(x.u === 'kg' && /\d ?lb\b/.test(x.t) ? ['lb on a kilo account'] : [])
+    .concat(/'/.test(x.t) ? ['a straight apostrophe'] : []) })).filter(x => x.w.length);
+  check('not one carries a banned word, a cause, "should", "try" or "eat", a pound in kilos or a straight apostrophe',
+        !sBad.length, list(sBad.map(x => x.at + ' “' + x.w.join('/') + '” in: ' + x.t)));
+  check('and every question the goal machinery asks is a question, never a verdict',
+        C.QUESTIONS.filter(q => /^q_goal_check_/.test(q.id)).every(q => typeof q.text === 'function') &&
+        said.filter(x => /opener/.test(x.at)).every(x => /\?$/.test(x.t)));
 }
 
 /* ---------- report ---------- */

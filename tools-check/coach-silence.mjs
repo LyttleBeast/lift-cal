@@ -271,6 +271,29 @@ section('B. a thin account gets card_state_thin and nothing else');
   // as "Coach looked and there was nothing", when Coach could not look at all.
   check('it is never card_state_clear — that would claim a check it could not make',
         thin.you.state !== 'card_state_clear');
+  // v49: the cards read c.card now, and a thin account has earned nothing yet.
+  check('and the cards themselves (c.card) are thin too — no earned line on two sessions',
+        thin.card.you.state === 'card_state_thin' && thin.card.train.state === 'card_state_thin',
+        thin.card.you.state + ' / ' + thin.card.train.state);
+}
+
+/* ================= B2. v49 — EVERY NEW ANSWER IS SILENT UNDER ITS GATE ================= */
+section('B2. v49 — every new answer is silent on an empty account and on a thin one');
+{
+  const NEW = { ask_lifts: 'lift_status', ask_record_day: 'record_day', ask_lighter: 'lighter_week',
+                ask_compare: 'session_compare', ask_next: 'next_targets' };
+  Object.entries(NEW).forEach(([route, id]) => {
+    check(id + ' — silent on an empty account and on two sessions',
+          C.coach(EMPTY).ask(route).id !== id && C.coach(THIN).ask(route).id !== id,
+          C.coach(THIN).ask(route).id + ': ' + C.coach(THIN).ask(route).text);
+  });
+  const g0 = C.coach(EMPTY).ask('ask_goal'), g1 = C.coach(THIN).ask('ask_goal');
+  check('goal_pace — silent on an empty log, and on a thin one with no aim it only says where to set one, with no number',
+        g0.id !== 'goal_pace' && g1.id === 'goal_pace' && !/\d/.test(g1.text) && !(g1.more || []).length, g1.text);
+  check('none of the new topics is offered on a thin account but the goal',
+        !C.coach(THIN).topicsFor('train').concat(C.coach(THIN).topicsFor('you')).some(t => Object.keys(NEW).includes(t.id)));
+  check('and the thin card never earns a line — encouragement needs something logged to be true about',
+        C.coach(EMPTY).card.you.state === 'card_first_run');
 }
 
 /* ================= C. THE EMPTY ACCOUNT ================= */
