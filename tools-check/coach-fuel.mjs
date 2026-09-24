@@ -252,15 +252,17 @@ row('F10', () => {
   const r = F.fueledRead(fuelIn(inp), inp.now);
   const a = ask(inp, 'ask_fueled');
   const line = (a.more || []).find(m => /new normal/.test(m.text));
+  // v53 (on purpose, SHIP-V53-PROMPT §3.4): the line names the change — here the weight trend's turn.
   const ok = r && r.a.phase === 'new' && Math.abs(r.a.dayMed.kcal - 2200) < 1 && !!line &&
-             /^Coach is learning your new normal, \d+ days in\.$/.test(line.text);
+             /^Coach is learning your new normal since your weight trend changed, \d+ days in\.$/.test(line.text);
   return grade(ok, !line, (r && r.a.phase + ' ' + r.a.dayMed.kcal) + ' · ' + said(a));
 });
 row('F11', () => {
   const inp = phaseLog({ weigh: false, turn: 10, extra: { settings: { v: 1, mute: {}, answers: { q_goal_aim: 'cut' }, asked: { q_goal_aim: NOW - 10 * DAY } } } });
   const r = F.fueledRead(fuelIn(inp), inp.now);
   const a = ask(inp, 'ask_fueled');
-  const ok = r && r.a.phase === 'new' && Math.abs(r.a.dayMed.kcal - 2200) < 1 && (a.more || []).some(m => /^Coach is learning your new normal, \d+ days in\.$/.test(m.text));
+  // v53 (on purpose, SHIP-V53-PROMPT §3.4): the line names the change — here his goal, set ten days ago.
+  const ok = r && r.a.phase === 'new' && Math.abs(r.a.dayMed.kcal - 2200) < 1 && (a.more || []).some(m => /^Coach is learning your new normal since you changed your goal, \d+ days in\.$/.test(m.text));
   return grade(ok, !r || r.a.phase !== 'new', (r && r.a.phase + ' ' + r.a.dayMed.kcal) + ' · ' + said(a));
 });
 row('F12', () => {
@@ -369,6 +371,38 @@ function gen(seed) {
 }
 const shuffle = (xs, seed) => { const r = rng(seed * 3 + 1), a = xs.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 const N_GEN = 1500;
+/* ================= v53: THE PHASE LINE NAMES ITS CHANGE =================
+   SHIP-V53-PROMPT §3.4. Not rows — the battery stays sixteen — but each of
+   the four sentences driven, and the later change named when both apply. */
+section('F+. v53 — "your change" says which change');
+{
+  const aimAt = ago => ({ settings: { v: 1, mute: {}, answers: { q_goal_aim: 'cut' }, asked: { q_goal_aim: T13 - ago } } });
+  const linesOf = inp => { const r = F.fueledRead(fuelIn(inp), inp.now); return r ? { r, ls: F.dayLines(fuelIn(inp), r) } : { r: null, ls: [] }; };
+  const has = (x, re) => x.ls.some(t => re.test(t));
+  const aimBefore = linesOf(phaseLog({ weigh: false, extra: aimAt(3 * DAY) }));
+  check('his goal changed three days ago: "Your usual here is from before you changed your goal, 3 days ago."',
+        aimBefore.r && aimBefore.r.a.phase === 'before' && has(aimBefore, /^Your usual here is from before you changed your goal, 3 days ago\.$/),
+        aimBefore.ls.join(' / '));
+  const aimToday = linesOf(phaseLog({ weigh: false, extra: aimAt(0) }));
+  check('changed today: "… before you changed your goal today."', has(aimToday, /^Your usual here is from before you changed your goal today\.$/),
+        aimToday.ls.join(' / '));
+  // The weight turn with too few complete days after it to read a new normal.
+  const thinAfter = (() => { const x = phaseLog({}); const sums = { ...x.summaries };
+    for (let a = 1; a <= 12; a++) delete sums[key(localAt(a, 12))];
+    return { ...x, summaries: sums }; })();
+  const wBefore = linesOf(thinAfter);
+  check('his weight turned, and too little is logged since: "… before your weight trend changed, about 2 weeks ago."',
+        wBefore.r && wBefore.r.a.phase === 'before' && has(wBefore, /^Your usual here is from before your weight trend changed, about 2 weeks ago\.$/),
+        (wBefore.r && wBefore.r.a.phase) + ' · ' + wBefore.ls.join(' / '));
+  const both = linesOf(phaseLog({ extra: aimAt(3 * DAY) }));
+  check('both apply: the later one is named — the goal, three days after the turn was read',
+        both.r && both.r.a.changedBy === 'aim' && has(both, /you changed your goal, 3 days ago\.$/), both.ls.join(' / '));
+  const bothOld = linesOf(phaseLog({ extra: aimAt(20 * DAY) }));
+  check('and a goal set before the turn: the turn is named',
+        bothOld.r && bothOld.r.a.changedBy === 'weight' && has(bothOld, /since your weight trend changed, \d+ days in\.$/), bothOld.ls.join(' / '));
+  check('no line says "your change" any more', ![aimBefore, aimToday, wBefore, both, bothOld].some(x => has(x, /your change\b/)));
+}
+
 section('P. properties — ' + N_GEN + ' generated months, both units');
 {
   const broke = { deterministic: [], order: [], partial: [], noRead: [], training: [] };

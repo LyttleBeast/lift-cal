@@ -170,8 +170,13 @@ function readAll(i, now) {
     cls.push(band == null ? null : band === 'deep' || band === 'deficit' ? 'loss' : band === 'hold' ? 'hold' : 'gain');
   }
   let changedAt = cls[0] && cls[0] === cls[1] && cls[2] && cls[2] === cls[3] && cls[2] !== cls[0] ? now - 14 * DAY : null;
-  if (Number.isFinite(i.aimSetAt) && i.aimSetAt <= now && daysBetween(i.aimSetAt, now) <= AIM_PHASE_DAYS) {
-    changedAt = changedAt == null ? i.aimSetAt : Math.max(changedAt, i.aimSetAt);
+  // v53: and which change it was, so the line can name it — the later of
+  // the two when both apply, his aim on a tie.
+  let changedBy = changedAt == null ? null : 'weight';
+  if (Number.isFinite(i.aimSetAt) && i.aimSetAt <= now && daysBetween(i.aimSetAt, now) <= AIM_PHASE_DAYS &&
+      (changedAt == null || i.aimSetAt >= changedAt)) {
+    changedAt = i.aimSetAt;
+    changedBy = 'aim';
   }
   const phaseDays = changedAt == null ? null : days28.filter(d => dnum(d) > dnum(dayKey(changedAt)));
   const inPhase = !!phaseDays && phaseDays.length >= PHASE_MIN;
@@ -216,7 +221,8 @@ function readAll(i, now) {
   const c48ref = [...training].filter(d => { const a = dnum(today) - dnum(d); return a >= 1 && a <= RECENT_DAYS; }).map(carbs48).filter(v => v != null);
   const c48 = { now: carbs48(today), med: c48ref.length >= CARBS48_MIN ? median(c48ref) : null, n: c48ref.length };
 
-  return { today, sums, cal, recent, bar, complete, partial, days28, changedAt, phase, phaseDays, dayStage, dayMed,
+  const changedDays = changedAt == null ? null : daysBetween(changedAt, now);
+  return { today, sums, cal, recent, bar, complete, partial, days28, changedAt, changedBy, changedDays, phase, phaseDays, dayStage, dayMed,
            training, readDates, style, detected, curve, curveDays, c48, carbs48, sameDate: d => sameDate(i, d) };
 }
 
@@ -287,8 +293,16 @@ export function dayLines(input, read) {
     out.push(cutWord ? 'You’re in a cut, and your weight is coming down about ' + labelRate(-r, u) + ' a week.'
                      : 'Your weight is coming down about ' + labelRate(-r, u) + ' a week.');
   } else if (i.energy === 'surplus' && r != null && r > 0) out.push('Your weight is going up about ' + labelRate(r, u) + ' a week.');
-  if (a.phase === 'new') out.push('Coach is learning your new normal, ' + plural(a.dayMed.n, 'day') + ' in.');
-  else if (a.phase === 'before') out.push('Your usual here is from before your change.');
+  /* v53: the change named — "your change" said nothing about which one. The
+     weight turn is read two weeks each way, so its date is "about 2 weeks
+     ago"; the aim's is the day he set it. */
+  const since = a.changedBy === 'aim' ? 'you changed your goal' : 'your weight trend changed';
+  if (a.phase === 'new') out.push('Coach is learning your new normal since ' + since + ', ' + plural(a.dayMed.n, 'day') + ' in.');
+  else if (a.phase === 'before') {
+    const n = a.changedDays;
+    out.push('Your usual here is from before ' + since + (a.changedBy !== 'aim' ? ', about 2 weeks ago.'
+      : n < 1 ? ' today.' : ', ' + plural(n, 'day') + ' ago.'));
+  }
   else if (a.dayStage === 'learning') out.push('Coach is learning your normal (' + plural(a.dayMed.n, 'day') + ' so far).');
   const p = i.patterns || null;
   const t2 = p ? p.fedBeforeTop || p.caloriesBeforeTop || null : null;
