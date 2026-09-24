@@ -651,9 +651,11 @@ section('I. a recorded set with no load reads BW — on a screen, never in a box
   // coach-build.js is the workout builder's sheet line — "3 × 8 at 185 lb" —
   // which is a sentence, never a box. coach-live.js is the in-session read's
   // quote of the last time a suggested exercise was logged, the same kind of
-  // sentence.
+  // sentence. coach-prog.js is the target's line and its why — "Target: 3 × 8
+  // at 190 lb." — sentences again: its ghosts are stored pounds handed to the
+  // box untouched, never a formatted string.
   const DISPLAY = { 'workout.js': 4, 'stats.js': 2, 'you.js': 1, 'analytics.js': 1, 'coach-build.js': 1,
-                    'coach-live.js': 1 };
+                    'coach-live.js': 1, 'coach-prog.js': 1 };
   const BOXES   = { 'workout.js': 2, 'routines.js': 3 };
   const wrong = [];
   APPJS.forEach(f => {
@@ -661,7 +663,7 @@ section('I. a recorded set with no load reads BW — on a screen, never in a box
     if (d !== (DISPLAY[f] || 0)) wrong.push(f + ' has ' + d + ' fmtSetLoad calls, expected ' + (DISPLAY[f] || 0));
     if (b !== (BOXES[f] || 0))   wrong.push(f + ' has ' + b + ' fmtSetW calls, expected ' + (BOXES[f] || 0));
   });
-  check('10 display sites on fmtSetLoad, 5 box sites on fmtSetW, and nothing unclassified',
+  check('11 display sites on fmtSetLoad, 5 box sites on fmtSetW, and nothing unclassified',
         wrong.length === 0, wrong.join(' | ') +
         ' — a new call site is not a bug, but it has to be added here as display or as box');
 
