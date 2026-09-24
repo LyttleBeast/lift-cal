@@ -18,8 +18,12 @@
 //   B  DIALS: a row for every aim and one for no aim, frozen, well-formed
 //   C  dialsFor over every aim × experience × energy × slope combination
 //   D  every constant is exported, and the file stays pure
+//   E  end to end through coach.js: the goal is two answers that validate and
+//      stamp like every other, its questions never open the sheet, and an
+//      answer really turns a target — through the builder and coach-prog.js
 
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -182,6 +186,139 @@ section('D. every constant exported, and nothing a native copy could not run');
   check('no clock, no dice, no DOM, no storage',
         !/Date\.now|new\s+Date|Math\.random|\bdocument\b|\bwindow\b|localStorage|\bfetch\b|\bconsole\./.test(CODE));
   check('no top-level let or var', !CODE.split('\n').some(l => /^(export\s+)?(let|var)\s/.test(l)));
+}
+
+/* ================= E. END TO END ================= */
+section('E. through coach.js — the goal is answers, asked in their place, and it turns the targets');
+{
+  // coach.js staged the way every Coach verifier stages it.
+  const real = p => JSON.stringify(pathToFileURL(join(ROOT, p)).href);
+  const dir = mkdtempSync(join(tmpdir(), 'rack-coach-goal-'));
+  const at = f => JSON.stringify(pathToFileURL(join(dir, f)).href);
+  writeFileSync(join(dir, 'store-stub.mjs'), `
+export async function read(_p, fallback) { return fallback; }
+export function todayKey(d = new Date()) {
+  const p = n => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+}
+`);
+  writeFileSync(join(dir, 'analytics.mjs'), src('analytics.js')
+    .replace("from './store.js'", "from './store-stub.mjs'")
+    .replace("from './exercises.js'", 'from ' + real('exercises.js'))
+    .replace("from './ui.js'", 'from ' + real('ui.js'))
+    .replace("from './units.js'", 'from ' + real('units.js')));
+  writeFileSync(join(dir, 'coach-prog.mjs'), src('coach-prog.js')
+    .replace("from './exercises.js'", 'from ' + real('exercises.js'))
+    .replace("from './units.js'", 'from ' + real('units.js'))
+    .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
+    .replace("from './coach-goal.js'", 'from ' + real('coach-goal.js'))
+    .replace("from './analytics.js'", 'from ' + at('analytics.mjs')));
+  writeFileSync(join(dir, 'coach-build.mjs'), src('coach-build.js')
+    .replace("from './exercises.js'", 'from ' + real('exercises.js'))
+    .replace("from './units.js'", 'from ' + real('units.js'))
+    .replace("from './blocks.js'", 'from ' + real('blocks.js'))
+    .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
+    .replace("from './coach-prog.js'", 'from ' + at('coach-prog.mjs'))
+    .replace("from './analytics.js'", 'from ' + at('analytics.mjs')));
+  writeFileSync(join(dir, 'coach-live.mjs'), src('coach-live.js')
+    .replace("from './exercises.js'", 'from ' + real('exercises.js'))
+    .replace("from './units.js'", 'from ' + real('units.js'))
+    .replace("from './analytics.js'", 'from ' + at('analytics.mjs')));
+  writeFileSync(join(dir, 'coach.mjs'), src('coach.js')
+    .replace("from './exercises.js'", 'from ' + real('exercises.js'))
+    .replace("from './units.js'", 'from ' + real('units.js'))
+    .replace("from './coach-build.js'", 'from ' + at('coach-build.mjs'))
+    .replace("from './coach-live.js'", 'from ' + at('coach-live.mjs'))
+    .replace("from './coach-goal.js'", 'from ' + real('coach-goal.js'))
+    .replace("from './analytics.js'", 'from ' + at('analytics.mjs')));
+  const C = await import(pathToFileURL(join(dir, 'coach.mjs')).href);
+  const { EXERCISES } = await import(pathToFileURL(join(ROOT, 'exercises.js')).href);
+
+  /* normSettings: its SHAPE does not change, and the two new answers are
+     validated against their own options like every other — confirmed by
+     driving it, as the brief asks, not by reading it. */
+  const n = C.normSettings({ v: 1, mute: { targets: true }, answers: { q_goal_aim: 'powerlifting', q_experience: 'years',
+                                                                         q_goal_direction: 'down', q_other: 'x' },
+                             asked: { q_goal_aim: 5, q_experience: 'soon' } });
+  check('normSettings keeps its shape: v, mute, on, answers, asked — and nothing new',
+        JSON.stringify(Object.keys(n)) === JSON.stringify(['v', 'mute', 'on', 'answers', 'asked']), Object.keys(n).join(','));
+  check('and keeps a valid aim and experience, the same way it keeps the direction',
+        n.answers.q_goal_aim === 'powerlifting' && n.answers.q_experience === 'years' && n.answers.q_goal_direction === 'down' &&
+        !('q_other' in n.answers), JSON.stringify(n.answers));
+  check('and refuses an answer that is not one of the question’s options',
+        JSON.stringify(C.normSettings({ answers: { q_goal_aim: 'bulk', q_experience: 3 } }).answers) === '{}');
+  check('asked.q_goal_aim, the moment the goal was set, survives as a number; junk does not',
+        n.asked.q_goal_aim === 5 && !('q_experience' in n.asked));
+  check('the targets switch is a real, mutable category: off survives, and absent means on',
+        n.mute.targets === true && C.isMuted(n, 'targets') && !C.isMuted(C.normSettings({}), 'targets'));
+  check('every aim and every experience answer is an option of its question, and the other way round',
+        JSON.stringify(C.QUESTIONS.find(q => q.id === 'q_goal_aim').options.map(o => o.value)) === JSON.stringify(G.AIMS) &&
+        JSON.stringify(C.QUESTIONS.find(q => q.id === 'q_experience').options.map(o => o.value)) === JSON.stringify(G.EXPERIENCE));
+
+  // A log whose bench target is a jump when nothing else is said.
+  const DAY = 864e5, NOW = 1789307130123;
+  const key = ms => { const d = new Date(ms), p = x => String(x).padStart(2, '0'); return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()); };
+  const LIB = {};
+  EXERCISES.forEach(x => { LIB[x.id] = { name: x.name, group: x.group, equipment: x.equipment }; });
+  const ex = (id, rows) => ({ exId: id, ...LIB[id], sets: rows.map(([w, r]) => ({ w: String(w), r: String(r), type: 'N', done: true })) });
+  const sess = (id, ago, exs) => ({ id, startedAt: NOW - ago * DAY, _date: key(NOW - ago * DAY), exercises: exs });
+  const LOG = [];
+  for (let k = 0; k < 10; k++) {
+    const w = 185 - 5 * Math.floor(k / 2), r = k % 2 ? 8 : 12;
+    LOG.push(sess('p' + k, 9 + 7 * k, [ex('barbell-bench-press', [[w, r], [w, r], [w, r]]), ex('triceps-pushdown-rope', [[50, 12], [50, 12]])]));
+    LOG.push(sess('b' + k, 4 + 7 * k, [ex('barbell-row', [[155, 8], [155, 8]]), ex('barbell-curl', [[65, 10], [65, 10]])]));
+    LOG.push(sess('l' + k, 6 + 7 * k, [ex('back-squat-high-bar', [[245, 5], [245, 5], [245, 5]])]));
+  }
+  LOG.sort((a, b) => a.startedAt - b.startedAt);
+  const input = extra => ({ now: NOW, opens: 0, recentGreets: [], u: 'lb', log: 'readable', sessions: LOG, lib: LIB, hidden: [],
+    libReady: true, routines: [], live: { active: false }, tier: { pro: true }, targets: null, targetsSet: null, summaries: {},
+    steps: { days: {} }, weight: { latestLb: 190, latestAt: NOW - DAY, rateWk: -0.4, rateDays: 21, goalDir: -1, goalRateWk: null },
+    settings: { v: 1, mute: {}, answers: {}, asked: {} }, ...extra });
+  const settings = (answers, asked, mute) => ({ settings: { v: 1, mute: mute || {}, answers: answers || {}, asked: asked || {} } });
+  const bench = c => (c.build({}) || { exercises: [] }).exercises.find(e => e.exId === 'barbell-bench-press');
+
+  const none = C.coach(input({}));
+  const b0 = bench(none);
+  check('with no aim, the targets are there — the goal is a refinement, never a gate',
+        !!b0 && !!b0.target && b0.target.mode === 'add', b0 && b0.target && b0.target.line);
+  const cut = bench(C.coach(input(settings({ q_goal_aim: 'cut' }))));
+  check('answer "Lose fat, keep strength", and the same log wants the top seen twice — the aim turned the dial, end to end',
+        !!cut && cut.target.mode === 'hold' && cut.target.code === 'confirm' && /You’re cutting/.test(cut.target.why[0]),
+        cut && cut.target.line + ' / ' + cut.target.why[0]);
+  const hard = bench(C.coach(input({ weight: { latestLb: 180, latestAt: NOW - DAY, rateWk: -2.2, rateDays: 21, goalDir: -1, goalRateWk: null } })));
+  check('a hard cut on the weight trend does the same, and says the rate it read — from the trend alone',
+        !!hard && hard.target.code === 'confirm' && /coming down about 2\.2 lb a week/.test(hard.target.why[0]),
+        hard && hard.target.why[0]);
+  check('weight.energy reads the trend: 180 lb losing 2.2 a week over 21 days is a hard cut', (() => {
+    const c = C.coach(input({ weight: { latestLb: 180, latestAt: NOW - DAY, rateWk: -2.2, rateDays: 21, goalDir: -1, goalRateWk: null } }));
+    return c.build({}) && C.FACTS.find(f => f.id === 'weight.energy').compute({ input: { weight: { latestLb: 180, rateWk: -2.2, rateDays: 21 } } }) === 'deep';
+  })());
+
+  /* THE QUESTIONS, in their place. Never the sheet's opener; under the
+     targets answer, one at a time, behind the same gates as the opener. */
+  const logs = [input({}), input(settings({ q_goal_aim: 'muscle' })),
+                input({ weight: { latestLb: 190, latestAt: NOW - DAY, rateWk: -0.8, rateDays: 21, goalDir: null, goalRateWk: null },
+                        targets: { cal: 2300, p: 180, f: 70 } })];
+  check('a goal question is never the sheet’s opening question, on any of them',
+        logs.every(i => { const q = C.coach(i).question; return !q || !['q_goal_aim', 'q_experience'].includes(q.id); }),
+        logs.map(i => (C.coach(i).question || {}).id).join(','));
+  const q0 = none.ask('ask_targets').question;
+  check('the targets answer carries the aim question first, with its six answers and its own acknowledgement',
+        !!q0 && q0.id === 'q_goal_aim' && q0.options.length === 6 && q0.ack === 'Noted. Coach sets your targets with that in mind.');
+  const q1 = C.coach(input(settings({ q_goal_aim: 'muscle' }, { q_goal_aim: NOW - DAY }))).ask('ask_targets').question;
+  check('once the aim is answered, the experience question is next', !!q1 && q1.id === 'q_experience', q1 && q1.id);
+  check('and with both answered, nothing is asked',
+        C.coach(input(settings({ q_goal_aim: 'muscle', q_experience: 'some' }))).ask('ask_targets').question === null);
+  check('asked yesterday and not answered: quiet for the week — one at a time, the shipped cooldown',
+        C.coach(input(settings({}, { q_goal_aim: NOW - DAY }))).ask('ask_targets').question === null &&
+        C.coach(input(settings({}, { q_goal_aim: NOW - 8 * DAY }))).ask('ask_targets').question.id === 'q_goal_aim');
+  check('questions switched off: none under the answer either, and the targets are still there',
+        C.coach(input(settings({}, {}, { questions: true }))).ask('ask_targets').question === null &&
+        C.coach(input(settings({}, {}, { questions: true }))).ask('ask_targets').id === 'lift_targets');
+  check('no other route carries a question', C.ROUTE_IDS.filter(r => r !== 'ask_targets').every(r => !('question' in none.ask(r))));
+  check('targets switched off: no answer, no bubble',
+        C.coach(input(settings({}, {}, { targets: true }))).ask('ask_targets').id !== 'lift_targets' &&
+        !C.coach(input(settings({}, {}, { targets: true }))).topicsFor('train').some(t => t.id === 'ask_targets'));
 }
 
 /* ---------- report ---------- */
