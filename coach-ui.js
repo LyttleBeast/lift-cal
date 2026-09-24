@@ -839,6 +839,14 @@ function toggle(cat, onChange) {
    goal that changes nothing a basic account can see is a survey. Six answers
    do not fit the segmented control on a phone, so a question with more than
    three is drawn as the vertical choice rows Settings' own goal sheet uses. */
+/* v50: one plain line under a Your goal question that needs saying what it is
+   FOR. The focus group shipped in v49 as a bare list of groups, and on the
+   phone it read as a question with no reason behind it. Here rather than in
+   coach.js: this is how Settings words it, and native draws its own. */
+const ROW_NOTES = Object.freeze({
+  q_focus_group: 'Coach reports this group’s weekly sets and its main lifts when you ask how you’re tracking toward your goal.'
+});
+
 export function coachAnswerRows(host, onChange) {
   const answers = coachSettings().answers || {};
   // v49: the goal-change questions are marked `settings: false` — three-way
@@ -859,6 +867,7 @@ export function coachAnswerRows(host, onChange) {
     const f = el('div', 'field');
     f.style.marginTop = '14px';
     f.appendChild(el('label', null, q.text));
+    if (ROW_NOTES[q.id]) f.appendChild(noteEl(ROW_NOTES[q.id]));
     if (q.options.length <= 3) {
       f.appendChild(segmented(q.options.map(op => [op.value, op.label]), answers[q.id], v => save(q, v)));
     } else {
@@ -910,6 +919,10 @@ function liftTargetRow(host, onChange) {
     host.appendChild(f);
     return f;
   }
+  /* v50: say what the row asks before the boxes. In v49 the reps box sat
+     unlabelled beside the weight with a 1 already in it, and on Micah's phone
+     that 1 read as the target weight — then "1 to 20" read as a weight limit. */
+  f.appendChild(noteEl('A lift you want to hit: the weight, and how many reps at that weight. 1 rep is a one-rep max.'));
   const sel = el('select');
   sel.setAttribute('aria-label', 'Lift');
   const opt = (label, value) => { const o = el('option', null, label); o.value = value; sel.appendChild(o); };
@@ -922,7 +935,7 @@ function liftTargetRow(host, onChange) {
   pair.style.marginTop = '8px';
   const w = el('input');
   w.type = 'number'; w.inputMode = 'decimal'; w.min = '0'; w.step = 'any';
-  w.placeholder = 'Weight (' + unitW(u) + ')';
+  w.placeholder = unitW(u);
   w.setAttribute('aria-label', 'Target weight in ' + unitW(u));
   if (cur) w.value = fmtW(cur.lb, u);
   const r = el('input');
@@ -930,7 +943,18 @@ function liftTargetRow(host, onChange) {
   r.placeholder = 'Reps';
   r.setAttribute('aria-label', 'Target reps, 1 to 20');
   r.value = cur ? String(cur.reps) : '1';
-  pair.append(w, r);
+  // v50: a visible caption over each box, the weight's first so the inputs
+  // keep their order (coach-surface.mjs drives them by position).
+  const cell = (id, caption, input) => {
+    const d = el('div');
+    input.id = id;
+    const l = el('label', null, caption);
+    l.htmlFor = id;
+    d.append(l, input);
+    return d;
+  };
+  pair.append(cell('coach-goal-lift-w', 'Target weight (' + unitW(u) + ')', w),
+              cell('coach-goal-lift-r', 'Reps at that weight', r));
   f.appendChild(pair);
   const saveBtn = el('button', 'btn btn-primary btn-block', 'Save lift target');
   saveBtn.style.marginTop = '8px';
