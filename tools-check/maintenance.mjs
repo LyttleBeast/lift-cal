@@ -26,8 +26,13 @@
 //   - v57 (SHIP-V57-PROMPT §B): the note under the calorie bar is true of the
 //     numbers it names — Micah's own case (maintenance 3,220, target 3,470, a
 //     gain) first, then every target across a grid of maintenances, both goals.
+//   - v58 (SHIP-V58-PROMPT §B): the band capped at 200, not 250 — his case
+//     before (rack-v57's tdee.js, from git) and after; every maintenance from
+//     1,500 to 4,500 with Rack's three preset targets, and which of them
+//     change colour; and "Reading the bar"'s two sentences about the yellow,
+//     held to their numbers in pounds and in kilos.
 
-import { mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, readFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -102,19 +107,22 @@ const stub = Array.from(stubbed)
 
 const dir = mkdtempSync(join(tmpdir(), 'rack-maint-'));
 writeFileSync(join(dir, 'stub.mjs'), stub);
-for (const [file, text] of sources) {
-  writeFileSync(join(dir, file.replace(/\.js$/, '.mjs')),
-    text.replace(IMPORT_RE, (whole, q, spec) => {
-      const base = spec.startsWith('./') ? spec.slice(2) : null;
-      return base && REAL.includes(base)
-        ? `from './${base.replace(/\.js$/, '.mjs')}'`
-        : `from './stub.mjs'`;
-    }));
-}
+const repoint = text => text.replace(IMPORT_RE, (whole, q, spec) => {
+  const base = spec.startsWith('./') ? spec.slice(2) : null;
+  return base && REAL.includes(base)
+    ? `from './${base.replace(/\.js$/, '.mjs')}'`
+    : `from './stub.mjs'`;
+});
+for (const [file, text] of sources) writeFileSync(join(dir, file.replace(/\.js$/, '.mjs')), repoint(text));
+// v58: rack-v57's tdee.js beside today's, the band capped at 250 — the before.
+const V57 = 'f985823';
+writeFileSync(join(dir, 'tdee57.mjs'),
+  repoint(execFileSync('git', ['show', V57 + ':tdee.js'], { cwd: SRC('.'), encoding: 'utf8', maxBuffer: 1 << 26 })));
 
 const load = f => import(pathToFileURL(join(dir, f)).href);
 const { effectiveMaint, autoTargets, calorieZones, zoneOf } = await load('tdee.mjs');
-const { maintPatch, autoPlan, targetNote } = await load('food.mjs');
+const { maintPatch, autoPlan, targetNote, holdWords, markWords } = await load('food.mjs');
+const { calorieZones: calorieZones57 } = await load('tdee57.mjs');
 
 /* ---------- harness ---------- */
 
@@ -496,23 +504,31 @@ const GOAL = { on: true, rateWk: -1, pPerLb: 1, fPerLb: 0.35, floor: 0, lastAdj:
     return null;
   };
 
-  // --- his case ---
-  const z = calorieZones(3220);
-  check('Micah’s maintenance, 3,220: the band is ±250, not the brief’s 260 — 8% is 257.6, rounded to a 25 and capped at 250 — so the hold band is 2,970 to 3,470',
-    z.band === 250 && z.cutTop === 2970 && z.gainFrom === 3470, shape(z));
-  const his = targetNote(3470, z, 1);
-  check('his note, a gain goal and a target of 3,470: "' + his + '"',
+  // --- his case: rack-v57's band (tdee.js from git), the before ---
+  const z57 = calorieZones57(3220);
+  check('Micah’s maintenance, 3,220, at rack-v57: the band was ±250 — 8% is 257.6, rounded to a 25 and capped at 250 — so the hold band was 2,970 to 3,470, and his target, 3,470, sat on its top edge: holding',
+    z57.band === 250 && z57.cutTop === 2970 && z57.gainFrom === 3470 && zoneOf(3470, z57) === 'maintain', shape(z57));
+  const his = targetNote(3470, z57, 1);
+  check('and the note fired, in v57’s words, true of v57’s numbers: "' + his + '"',
     his === 'Your target, ' + loc(3470) + ', sits inside your holding range (maintenance ' + loc(3220) + ' ± ' + loc(250) +
-            '), so the calorie bar reads eating to it as holding, not bulking.', his);
-  check('and it is true of the numbers beside it: 3,470 is 3,220 + 250, the top edge, and the bar paints the edge as holding',
-    falsity(his, 3470, z, 1) === null && zoneOf(3470, z) === 'maintain', falsity(his, 3470, z, 1));
+            '), so the calorie bar reads eating to it as holding, not bulking.' && falsity(his, 3470, z57, 1) === null, his);
   const V56 = execFileSync('git', ['show', '04e87cc:food.js'], { cwd: SRC('.'), encoding: 'utf8', maxBuffer: 1 << 26 });
   check('the control: rack-v56 said "at or below your measured maintenance" under the same condition — for him, of a target 250 over it',
     V56.includes("(g < 0 ? 'at or above' : 'at or below') + ' your '") && V56.includes("(g > 0 && targets.cal <= z.gainFrom)") &&
-    3470 <= z.gainFrom && 3470 > z.maint);
+    3470 <= z57.gainFrom && 3470 > z57.maint);
+
+  // --- his case, rack-v58: the band capped at 200, the after ---
+  const z = calorieZones(3220);
+  check('rack-v58: the same 257.6 is capped at 200, so the hold band is 3,020 to 3,420, and 3,470 is 50 past its top: the gain colour, bulking',
+    z.band === 200 && z.cutTop === 3020 && z.gainFrom === 3420 && zoneOf(3470, z) === 'gain', shape(z));
+  check('and the note under the bar does not fire — a gain goal with its target in the gain band, nothing to say — nor does Settings → Goal’s, the same function',
+    targetNote(3470, z, 1) === null);
+  check('Micah’s decision is the cap alone: the 8% and the rounding to 25 are rack-v57’s, and the floor of 150 — every maintenance from 500 to 6,000 gets the same band as rack-v57 where v57’s was 200 or less',
+    (() => { for (let mc = 500; mc <= 6000; mc++) { const a = calorieZones57(mc).band, b = calorieZones(mc).band;
+      if (b !== Math.min(a, 200)) return false; } return true; })());
 
   // --- every target, both goals, a grid of maintenances ---
-  const MAINTS = [1200, 1875, 2000, 2400, 2968, 2969, 2970, 3000, 3220, 3225, 3500, 4200];
+  const MAINTS = [1200, 1875, 2000, 2400, 2656, 2657, 2968, 2969, 2970, 3000, 3220, 3225, 3500, 4200];
   const wrong = [], fired = { inside: 0, below: 0, above: 0 };
   let n = 0;
   MAINTS.forEach(mc => {
@@ -532,28 +548,144 @@ const GOAL = { on: true, rateWk: -1, pPerLb: 1, fPerLb: 0.35, floor: 0, lastAdj:
     !wrong.length && fired.inside > 0 && fired.below > 0 && fired.above > 0, wrong.slice(0, 3).join(' | '));
   check('no goal, no note — a hold has no wrong side, and nothing is known without zones',
     targetNote(3000, z, 0) === null && targetNote(3000, null, 1) === null && targetNote(NaN, z, 1) === null && targetNote(undefined, z, -1) === null);
-  check('the target on the goal’s side says nothing: a gain at 3,480, a cut at 2,960',
-    targetNote(3480, z, 1) === null && targetNote(2960, z, -1) === null);
-  check('and a cut at the band’s bottom edge, 2,970, says so the same way: "' + targetNote(2970, z, -1) + '"',
-    falsity(targetNote(2970, z, -1), 2970, z, -1) === null && /sits inside .* as holding, not cutting\.$/.test(targetNote(2970, z, -1)));
+  check('the target on the goal’s side says nothing: a gain at 3,430, a cut at 3,010 — ten past each edge',
+    targetNote(3430, z, 1) === null && targetNote(3010, z, -1) === null);
+  check('and a cut at the band’s bottom edge, 3,020, says so the same way: "' + targetNote(3020, z, -1) + '"',
+    falsity(targetNote(3020, z, -1), 3020, z, -1) === null && /sits inside .* as holding, not cutting\.$/.test(targetNote(3020, z, -1)));
 
-  // --- the band, in the numbers Micah decides from ---
+  // --- the band, in the numbers Micah decided from ---
   const BULK = { on: true, rateWk: 0.5, pPerLb: 1, fPerLb: 0.35, floor: 0 };
-  check('Bulking is +0.5 lb a week (food.js GOAL_RATE) — 250 kcal a day at 3,500 a pound — and at his maintenance its own target is 3,470, the band’s top edge exactly',
-    /const GOAL_RATE = \{ cut: -1, hold: 0, gain: 0\.5 \};/.test(FOOD) && autoTargets(BULK, 3220, 200).cal === 3470 && autoTargets(BULK, 3220, 200).cal === z.gainFrom);
-  const edge = [];
-  for (let mc = 1500; mc <= 4500; mc += 10) {
-    const zz = calorieZones(mc), t = autoTargets(BULK, mc, 200).cal;
-    if ((zoneOf(t, zz) === 'maintain') !== (mc >= 2970)) edge.push(mc + ': ' + t + ' ' + zoneOf(t, zz));
+  check('Bulking is +0.5 lb a week (food.js GOAL_RATE) — 250 kcal a day at 3,500 a pound — and at his maintenance its own target is 3,470: rack-v57’s top edge exactly, 50 past rack-v58’s',
+    /const GOAL_RATE = \{ cut: -1, hold: 0, gain: 0\.5 \};/.test(FOOD) && autoTargets(BULK, 3220, 200).cal === 3470 &&
+    3470 === z57.gainFrom && 3470 - z.gainFrom === 50);
+  check('and the Goal sheet’s by-hand target is the same arithmetic as autoTargets’: maintenance + rate × 500, to the nearest ten, never under the floor',
+    FOOD.includes('next.cal = Math.max(floor, Math.round((mi.cal + rate * 500) / 10) * 10);'));
+
+  /* Rack's three preset targets — Cutting, Maintaining and Bulking, food.js
+     GOAL_RATE — at every whole maintenance from 1,500 to 4,500: a measured or
+     setup number is a round ten, a typed one can be any. The floor is kept out
+     of reach (no protein or fat, so it is the 100 g of carbs), since this asks
+     what the band does to the presets; a floor that lifts a cut is below. */
+  const PRESETS = [['Cutting', -1, 'cut'], ['Maintaining', 0, 'maintain'], ['Bulking', 0.5, 'gain']];
+  const offColour = [], moved = { Cutting: [], Maintaining: [], Bulking: [] };
+  for (let mc = 1500; mc <= 4500; mc++) PRESETS.forEach(([name, rateWk, own]) => {
+    const t = autoTargets({ on: true, rateWk, pPerLb: 0, fPerLb: 0, floor: 0 }, mc, 200).cal;
+    const was = zoneOf(t, calorieZones57(mc)), now = zoneOf(t, calorieZones(mc));
+    if (now !== own) offColour.push(name + ' ' + mc + ': ' + t + ' ' + now);
+    if (was !== now) moved[name].push([mc, was, now]);
+  });
+  check('rack-v58: at every maintenance from 1,500 to 4,500, each preset lands in its own colour — Cutting cut, Maintaining hold, Bulking gain',
+    !offColour.length, offColour.slice(0, 4).join(' | '));
+  check('Cutting and Maintaining change colour at no maintenance',
+    !moved.Cutting.length && !moved.Maintaining.length, shape([moved.Cutting.slice(0, 2), moved.Maintaining.slice(0, 2)]));
+  const bulkMoved = moved.Bulking.map(m => m[0]);
+  const tens = bulkMoved.filter(mc => mc % 10 === 0);
+  check('Bulking changes at ' + bulkMoved.length + ' of them, every one from holding to gaining: each maintenance from 2,969 up whose target, + 250 to the nearest ten, did not round past v57’s edge — ones digit 0 to 4',
+    moved.Bulking.every(([, was, now]) => was === 'maintain' && now === 'gain') &&
+    shape(bulkMoved) === shape(Array.from({ length: 4500 - 1500 + 1 }, (_, i) => 1500 + i).filter(mc => mc >= 2969 && mc % 10 <= 4)),
+    shape(bulkMoved.slice(0, 6)));
+  check('so for a measured maintenance (a round ten), Bulking read as holding at every one from 2,970 up — ' + tens.length + ' of them to 4,500 — and reads as gaining at all of them now',
+    tens.length === (4500 - 2970) / 10 + 1 && tens[0] === 2970 && tens[tens.length - 1] === 4500);
+
+  /* Any target, not only a preset's: the band moved only where rack-v57's was
+     wider than 200 (225 from 2,657 to 2,968, 250 from 2,969 up), and there it
+     moved exactly the targets more than 200 from maintenance and no further
+     than v57's band — a hold that is a cut or a gain now. That is where a
+     rate typed under Daily targets of 0.45 to 0.5 lb a week lands, and where a
+     floor that lifts a cut up near maintenance can. Nothing else moves. */
+  const other = [];
+  for (let mc = 1500; mc <= 4500; mc++) {
+    const a = calorieZones57(mc), b = calorieZones(mc);
+    for (let d = -300; d <= 300; d++) {
+      const was = zoneOf(mc + d, a), now = zoneOf(mc + d, b);
+      const should = a.band > 200 && Math.abs(d) > 200 && Math.abs(d) <= a.band;
+      if ((was !== now) !== should || (should && (was !== 'maintain' || now !== (d > 0 ? 'gain' : 'cut')))) other.push(mc + '/' + d + ': ' + was + ' → ' + now);
+    }
   }
-  check('for every measured maintenance (a round ten) from 1,500 to 4,500: Bulking’s own target reads as holding exactly from 2,970 up, where the band reaches 250',
-    !edge.length, edge.slice(0, 4).join(' | '));
+  check('any target from 300 under to 300 over every maintenance from 1,500 to 4,500: it changes colour exactly when it is more than 200 from maintenance and within v57’s band — which was wider than 200 only from 2,657 up — and then only from holding to its own side',
+    !other.length, other.slice(0, 4).join(' | '));
+
+  /* The Weight tab's rate colour and the You tab's insights do not read the
+     band: they read insights.js HOLD_RATE_LB, 0.5 lb a week, and RATE_BAND_LB,
+     a separate pair (rate-band.mjs). Moving the band moves neither. */
+  const INS58 = readFileSync(SRC('insights.js'), 'utf8');
+  check('the Weight tab and the You tab do not move: weight.js, you.js and insights.js name neither calorieZones nor zoneOf, insights.js is rack-v57’s byte for byte, and HOLD_RATE_LB is still 0.5',
+    ['weight.js', 'you.js', 'insights.js'].every(f => !/calorieZones|zoneOf/.test(readFileSync(SRC(f), 'utf8'))) &&
+    INS58 === execFileSync('git', ['show', V57 + ':insights.js'], { cwd: SRC('.'), encoding: 'utf8', maxBuffer: 1 << 26 }) &&
+    /export const HOLD_RATE_LB = 0\.5;/.test(INS58));
+  const bandReaders = readdirSync(SRC('.')).filter(f => f.endsWith('.js') && f !== 'tdee.js' && /calorieZones\(/.test(readFileSync(SRC(f), 'utf8')));
+  check('and the band has one reader, food.js — the bar, its note, Reading the bar and Settings → Goal (goalFits, misfitNote) — so they move together: ' + bandReaders.join(', '),
+    shape(bandReaders) === shape(['food.js']) && /goalFits\(goal0\)/.test(SET) && /misfitNote\(goal\)/.test(SET) &&
+    (FOOD.match(/calorieZones\(mi\.cal\)/g) || []).length === 5);
 
   // --- one sentence, two screens ---
   check('the bar says it through targetNote(), and the old words are gone from food.js',
     /const note = targetNote\(targets\.cal, z, g\);/.test(FOOD) && !/holds rather than/.test(FOOD) && !/'at or below'/.test(FOOD));
   check('and Settings → Goal says the same sentence (misfitNote), offering Save only when it would move the target',
     /misfitNote\(goal\)/.test(SET) && /p\.changed \? ' Save to move it to '/.test(SET) && !/'at or below'|'at or above'/.test(SET));
+}
+
+/* ================= v58: READING THE BAR SAYS WHAT THE YELLOW COMES TO =================
+   The sheet said a target in the yellow "holds your weight", and that inside
+   the band "the scale will not move in any direction that matters" — at the
+   edge of v57's 250, half a pound a week. Its two sentences about the yellow
+   are food.js holdWords() and markWords() now, pure, and every sentence either
+   can print is parsed back and held to the numbers: the band's edges and
+   width, the target's distance from maintenance, and the weekly figure at
+   3,500 kcal a pound or 7,716 a kilo, to the rounding the screen shows. */
+{
+  const FOOD = readFileSync(SRC('food.js'), 'utf8');
+  const U = await load('units.mjs');
+  const loc = v => Math.round(v).toLocaleString();
+  const num = s => Number(String(s).replace(/[^\d]/g, ''));
+  const z = calorieZones(3220), z57 = calorieZones57(3220);
+
+  check('his yellow row: "' + holdWords(z, 'lb') + '"',
+    holdWords(z, 'lb') === loc(3020) + ' to ' + loc(3420) + ' kcal: within 200 of maintenance either way, which Rack counts as holding. ' +
+                           'Eating at its edge every day comes to about 0.4 lb a week, up or down.');
+  check('and on a kilo account, the calories unconverted and the week in kilos: "…' + holdWords(z, 'kg').slice(-42) + '"',
+    holdWords(z, 'kg').startsWith(loc(3020) + ' to ' + loc(3420) + ' kcal: within 200 ') && holdWords(z, 'kg').endsWith('comes to about 0.18 kg a week, up or down.'));
+  check('his dashed mark, 3,470: "' + markWords(3470, z, 'lb') + '"',
+    markWords(3470, z, 'lb') === 'it is in the red, so hitting it every day is a bulk.');
+  const OLDFOOD = execFileSync('git', ['show', V57 + ':food.js'], { cwd: SRC('.'), encoding: 'utf8', maxBuffer: 1 << 26 });
+  check('the before: at rack-v57’s band his target sat in the yellow, 250 over maintenance, and the sheet said eating to it "holds your weight"; those numbers would read now: "' + markWords(3470, z57, 'lb') + '"',
+    OLDFOOD.includes("'it is in the yellow, so hitting it every day holds your weight.'") && OLDFOOD.includes('any direction that matters') &&
+    markWords(3470, z57, 'lb') === 'it is in the yellow, 250 over maintenance, so Rack reads hitting it every day as holding — about 0.5 lb a week up.');
+
+  const HOLDS = /^([\d,]+) to ([\d,]+) kcal: within ([\d,]+) of maintenance either way, which Rack counts as holding\. Eating at its edge every day comes to about ([\d.]+) (lb|kg) a week, up or down\.$/;
+  const YELLOW = /^it is in the yellow, ([\d,]+) (over|under) maintenance, so Rack reads hitting it every day as holding(?: — about ([\d.]+) (lb|kg) a week (up|down))?\.$/;
+  const near = (shown, kcal, u) => Math.abs(Number(shown) - kcal * 7 / U.kcalPerUnit(u)) <= (u === 'kg' ? 0.005 : 0.05) + 1e-6;
+  const wrongHold = [], wrongMark = [], seen = { blue: 0, red: 0, at: 0, yellow: 0, silent: 0 };
+  let nh = 0, nm = 0;
+  // An odd step, so typed maintenances off the round tens are in it too.
+  for (let mc = 1200; mc <= 4500; mc += 7) {
+    const zz = calorieZones(mc);
+    for (const u of ['lb', 'kg']) {
+      nh++;
+      const hs = holdWords(zz, u), h = HOLDS.exec(hs);
+      if (!h || num(h[1]) !== zz.cutTop || num(h[2]) !== zz.gainFrom || num(h[3]) !== zz.band || h[5] !== u ||
+          !near(h[4], zz.band, u)) wrongHold.push(mc + ' ' + u + ': ' + hs);
+      for (let t = mc - 400; t <= mc + 400; t += 5) {
+        nm++;
+        const s = markWords(t, zz, u), zone = zoneOf(t, zz), d = Math.round(t - mc);
+        const bad = () => wrongMark.push(mc + '/' + t + ' ' + u + ': ' + s);
+        if (zone === 'cut')  { if (s === 'it is in the blue, so hitting it every day is a cut.') seen.blue++; else bad(); continue; }
+        if (zone === 'gain') { if (s === 'it is in the red, so hitting it every day is a bulk.') seen.red++; else bad(); continue; }
+        if (d === 0) { if (s === 'it is in the yellow, at maintenance itself, so hitting it every day holds your weight.') seen.at++; else bad(); continue; }
+        const m = YELLOW.exec(s);
+        if (!m || num(m[1]) !== Math.abs(d) || m[2] !== (d > 0 ? 'over' : 'under')) { bad(); continue; }
+        if (m[3] === undefined) { if (U.fmtRate(Math.abs(d) * 7 / 3500, u) === '0') seen.silent++; else bad(); continue; }
+        if (m[4] === u && m[5] === (d > 0 ? 'up' : 'down') && near(m[3], Math.abs(d), u)) seen.yellow++; else bad();
+      }
+    }
+  }
+  check('every yellow row, ' + nh + ' of them (maintenance 1,200 to 4,500, pounds and kilos): its edges and width are the band’s, and its weekly figure is the width at the unit’s own kcal, to the rounding shown',
+    !wrongHold.length, wrongHold.slice(0, 3).join(' | '));
+  check('every dashed mark, ' + nm + ' of them (400 either side): blue and red as the bar paints them, and in the yellow the distance, its side, and the week it comes to — ' + shape(seen),
+    !wrongMark.length && Object.values(seen).every(v => v > 0), wrongMark.slice(0, 3).join(' | '));
+  check('the sheet says them — the yellow row is holdWords(), the dashed mark markWords(), both in the account’s unit — and the old words are gone from food.js',
+    FOOD.includes("row('hold', 'Yellow — hold', holdWords(z, wu()));") && FOOD.includes('markWords(targets.cal, z, wu())') &&
+    !FOOD.includes('any direction that matters') && !FOOD.includes("'it is in the yellow, so hitting it every day holds your weight.'"));
 }
 
 /* ---------- report ---------- */

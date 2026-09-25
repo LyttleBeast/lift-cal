@@ -176,13 +176,19 @@ export function effectiveMaint(targets, est) {
 /* ---------- calorie zones ----------
    One maintenance number turns into three bands: under it you're cutting,
    within a collar of it you're holding, over it you're gaining.
-   The collar is ~8% of maintenance, clamped so it never gets silly. Roughly
-   200 kcal a day either way is under half a pound a week — that really is
-   holding, and a narrower band would draw as a sliver you can't read. */
+   The collar is ~8% of maintenance, rounded to 25 and held between 150 and
+   200. At 200 a day, the edge eaten every day is 0.4 lb a week, and a
+   narrower band would draw as a sliver you can't read.
+
+   The cap was 250 until v58 (Micah's decision, 25 Sep). Rack's own Bulking
+   target is maintenance + 250, so from a maintenance of 2,970 up it landed on
+   the band's top edge and the bar called a bulk holding. At 200, Bulking
+   (+250) and Cutting (−500) land in their own colours at every maintenance,
+   unless the floor (protein and fat plus 100 g of carbs) lifts a cut. */
 
 export function calorieZones(maint) {
   if (!maint || maint <= 0) return null;
-  const band = Math.min(250, Math.max(150, Math.round(maint * 0.08 / 25) * 25));
+  const band = Math.min(200, Math.max(150, Math.round(maint * 0.08 / 25) * 25));
   return {
     maint,
     band,

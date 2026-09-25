@@ -31,7 +31,7 @@ import { estimateOrigin, originHeading, EDITED, mealName } from './estimate-orig
 import { readAsk, withPicks, optionText, NONE_LABEL, NONE_NOTE } from './estimate-ask.js';
 import { goalDirection } from './insights.js';
 import { wIn, fmtW, labelW, unitW, rateIn, boxRate, perIn, boxPer,
-         kcalPerUnit, limW, limRate, limPer } from './units.js';
+         kcalPerUnit, limW, limRate, limPer, fmtRate, labelRate } from './units.js';
 
 const MEALS = [
   ['breakfast', 'Breakfast'],
@@ -731,6 +731,31 @@ export function targetNote(tcal, z, g) {
   return 'Your target, ' + n(tcal) + ', sits ' + (zone === 'maintain' ? 'inside' : zone === 'cut' ? 'below' : 'above') +
     ' your holding range (maintenance ' + n(z.maint) + ' ± ' + n(z.band) + '), so the calorie bar reads eating to it as ' +
     (zone === 'maintain' ? 'holding' : zone === 'cut' ? 'cutting' : 'bulking') + ', not ' + (g > 0 ? 'bulking' : 'cutting') + '.';
+}
+
+/* v58: what "Reading the bar" says the yellow band, and a target in it, come
+   to — pure, so tools-check/maintenance.mjs can hold every sentence to its
+   numbers. Until v58 the sheet said eating to a target in the yellow "holds
+   your weight", and that inside the band "the scale will not move in any
+   direction that matters": at the edge of v57's 250 that was half a pound a
+   week. Now each says where it sits in kcal, and what that comes to a week by
+   the sheet's own footnote, 3,500 kcal a pound. `u` is the weight unit:
+   labelRate converts the weight, never the calories. */
+export function holdWords(z, u) {
+  const n = v => Math.round(v).toLocaleString();
+  return n(z.cutTop) + ' to ' + n(z.gainFrom) + ' kcal: within ' + n(z.band) + ' of maintenance either way, ' +
+    'which Rack counts as holding. Eating at its edge every day comes to about ' + labelRate(z.band * 7 / 3500, u) +
+    ' a week, up or down.';
+}
+
+export function markWords(tcal, z, u) {
+  if (tcal < z.cutTop)   return 'it is in the blue, so hitting it every day is a cut.';
+  if (tcal > z.gainFrom) return 'it is in the red, so hitting it every day is a bulk.';
+  const d = Math.round(tcal - z.maint), wk = Math.abs(d) * 7 / 3500;
+  if (!d) return 'it is in the yellow, at maintenance itself, so hitting it every day holds your weight.';
+  return 'it is in the yellow, ' + Math.abs(d).toLocaleString() + (d > 0 ? ' over' : ' under') +
+    ' maintenance, so Rack reads hitting it every day as holding' +
+    (fmtRate(wk, u) === '0' ? '.' : ' — about ' + labelRate(wk, u) + ' a week ' + (d > 0 ? 'up' : 'down') + '.');
 }
 
 function renderCalMeter(cal) {
@@ -3582,18 +3607,14 @@ function openBarGuide(t) {
       :         'you are maintaining, so it stops a little past the gain line.'));
     row('cut', 'Blue — cut',
       'Below ' + n(z.cutTop) + ' kcal. Finish the day here and you are in a deficit: your body makes up the difference from stored fat.');
-    row('hold', 'Yellow — hold',
-      n(z.cutTop) + ' to ' + n(z.gainFrom) + ' kcal. Within ' + n(z.band) + ' either side of maintenance, ' +
-      'which is close enough that the scale will not move in any direction that matters.');
+    row('hold', 'Yellow — hold', holdWords(z, wu()));
     row('gain', 'Red — gain',
       'Above ' + n(z.gainFrom) + ' kcal. A surplus; what the body cannot use it stores, as muscle if you are training for it and as fat otherwise.');
     row('tick', 'The two solid ticks',
       'The edges of the yellow band — ' + n(z.cutTop) + ' and ' + n(z.gainFrom) + '. Maintenance itself is the middle of the band, ' + n(z.maint) + '.');
     row('target', 'The dashed mark',
       'Your daily target, ' + n(targets.cal) + '. Where it falls tells you what eating to it does: ' +
-      (targets.cal < z.cutTop ? 'it is in the blue, so hitting it every day is a cut.'
-      : targets.cal > z.gainFrom ? 'it is in the red, so hitting it every day is a bulk.'
-      :                            'it is in the yellow, so hitting it every day holds your weight.'));
+      markWords(targets.cal, z, wu()));
     row('status', 'The line under the bar',
       'The word for the band you are in, and how far you sit from maintenance right now. ' +
       '“maint ' + n(z.maint) + (
