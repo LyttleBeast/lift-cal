@@ -36,6 +36,10 @@
 //      Archivo's own advance widths, against the chip the same cascade gives
 //      it at 320 and 390 wide: each fits on one line, so nothing wraps or clips.
 //   G. (v56) the same for a custom exercise's Movement and Angle chips.
+//   H. (v58) an estimate's row: the calorie number, Save and the ✕ on the
+//      row's one centre line, the name on two lines before it is cut, and
+//      nothing overlapping at 320 or 390 wide — rack-v57's stylesheet, read
+//      from git, as the before.
 //
 // Two things are restated because node cannot read them off a screen, and
 // both are labelled where they are used: Archivo's vertical metrics (read from
@@ -46,6 +50,7 @@
 // changed anywhere).
 
 import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -374,6 +379,13 @@ const BUTTONS = [
      Chrome at v46, and its widths join the snapshot as they are tonight. */
   ['Fuel · estimate', 'Save (a row as a meal)', ['food.js', /el\('button', 'pe-save', 'Save'\)/],
    'button.pe-save < div.food-entry.pe-row < div.import-list < div < div.sheet', null],
+  /* v58, on purpose: the ✕ on the same row, which removes it (food.js
+     openAiReview; "Found in your log" and the meal builder draw the same one).
+     Not a .btn: until v58 it was its 12px glyph and 12px of padding, 24px
+     tall, and `.pe-x`'s own min-height holds it now. Its widths join the
+     snapshot as they are tonight; H measures the row it sits in. */
+  ['Fuel · estimate', '✕ (remove a row)', ['food.js', /el\('button', 'ex-del pe-x', '✕'\)/],
+   'button.ex-del.pe-x < div.food-entry.pe-row < div.import-list < div < div.sheet', null],
   /* v55, on purpose: "Which one?" — an option, and "None of these", each one of
      onboarding's full-width choice rows held to 44px by .ask-opt (food.js
      openWhichOne). Never measured in Chrome at v46; widths join the snapshot. */
@@ -424,8 +436,8 @@ for (const [screen, name, [file, re]] of BUTTONS) check(`${screen} · ${name}: $
 
 section('B. the model, minimum taken out, reproduces the heights Chrome measured at v46');
 for (const [screen, name, , spec, chromeV46, row, kid] of BUTTONS) {
-  // v53's to v56's controls postdate the v46 measurement: there is nothing to reproduce.
-  if (chromeV46 == null) { results.push('  · ' + screen + ' · ' + name + ': added after v46 (v53–v56), never measured in Chrome — A holds its 44px'); continue; }
+  // v53's to v58's controls postdate the v46 measurement: there is nothing to reproduce.
+  if (chromeV46 == null) { results.push('  · ' + screen + ' · ' + name + ': added after v46 (v53–v58), never measured in Chrome — A holds its 44px'); continue; }
   const bx = buttonBox(RULES, chain(spec), 390, { withMin: false, kid: kid ? chain(kid + ' < ' + spec) : null });
   if (typeof row === 'number') {
     check(`${screen} · ${name}: ${bx.natural}px of its own, stretched to the row's ${row}px (an input sets it) = Chrome's ${chromeV46}px — over 44 before v47 too`,
@@ -695,6 +707,130 @@ section('F. Your goal (v55): every answer’s label fits its chip on one line, a
       check(`${w} · “${l}”: ${(t * HOLD + edge).toFixed(1)}px with the 3% in ${room}px, and ${(t + edge).toFixed(1)}px wide as a target`,
             t * HOLD + edge <= room && t + edge >= 44, 'wider than the row, or narrower than 44px');
     }
+  }
+
+  /* H (v58), inside F's block for its advance widths too: an estimate's row.
+     One `food-entry pe-row` is drawn by food.js openAiReview (the estimate,
+     and the "Which one?" result, which is the same screen), openRecallHit
+     ("Found in your log") and the meal builder's ingredients. Micah, 25 Sep:
+     "the ui is a little off with the calories, they are a little high". The
+     number is a <div>; the row stretched it to its height and its text sat at
+     the top, level with the name, while Save and the ✕ sat on the centre.
+     rack-v57's stylesheet, read from git, is the before. One more thing is
+     restated, from the browsers rather than the font: a <button> centres its
+     content in its own height (Blink, WebKit and Gecko all do), which is how
+     a stretched Save and body put their words on the row's centre line. */
+  section('H. an estimate’s row (v58): the number, Save and ✕ on one centre line, the name on two lines, nothing overlapping — at 320 and 390 wide');
+  const FOOD = CODE['food.js'];
+  const fnBody = name => {
+    const at = FOOD.indexOf('\nfunction ' + name + '(');
+    if (at < 0) return '';
+    const next = FOOD.slice(at + 1).search(/\n(?:export )?(?:async )?function /);
+    return FOOD.slice(at, next < 0 ? FOOD.length : at + 1 + next);
+  };
+  const DRAWS = ['openAiReview', 'openRecallHit', 'openMealBuilder'];
+  check(`food.js draws the row in ${DRAWS.join(', ')} — the name, the number and the ✕ in each, Save in the estimate's alone — and nowhere else`,
+        DRAWS.every(f => { const b = fnBody(f);
+          return /el\('div', 'food-entry pe-row'\)/.test(b) && /el\('div', 'fe-name', /.test(b) && /el\('div', 'fe-cal num', /.test(b) && /el\('button', 'ex-del pe-x', /.test(b); }) &&
+        [...FOOD.matchAll(/'food-entry pe-row'/g)].length === DRAWS.length &&
+        /el\('button', 'pe-save', /.test(fnBody('openAiReview')) && [...FOOD.matchAll(/'pe-save'/g)].length === 1);
+  check('and "Which one?"’s result is that screen: openWhichOne hands its picks to openAiReview',
+        /openAiReview\(next, ctx\)/.test(fnBody('openWhichOne')));
+
+  const V57 = 'f985823';                                   // rack-v57
+  const OLD = SHEETS.flatMap(f => parseCSS(execFileSync('git', ['show', V57 + ':' + f], { cwd: SRC('.'), encoding: 'utf8', maxBuffer: 1 << 26 }), f));
+  const ROW = 'div.food-entry.pe-row < div.import-list < div < div.sheet';
+  const NUM = 'div.fe-cal.num < ' + ROW, SAVE = 'button.pe-save < ' + ROW, X = 'button.ex-del.pe-x < ' + ROW,
+        BODY = 'button.pe-body < ' + ROW, NAME = 'div.fe-name < ' + BODY;
+  // Where the row puts a child across its height: its own align-self, or the row's align-items.
+  const along = (rules, spec, w) => {
+    const row = cascade(rules, chain(ROW), w), c = cascade(rules, chain(spec), w);
+    const a = c['align-self'] ? c['align-self'].v : 'auto';
+    return a === 'auto' ? (row['align-items'] ? row['align-items'].v : 'stretch') : a;
+  };
+  const LONG = 'White rice, long-grain, enriched, cooked';           // the brief's, as far as it showed
+  const SHORT_NAMES = ['White rice', 'Whole wheat toast', 'Sirloin steak'];  // the Worker's contract's examples
+  const lines = (s, fs, max) => {         // greedy wrap on spaces, 3% held back; a word wider than the line breaks anywhere
+    let n = 1, cur = 0;
+    for (const word of s.split(' ')) {
+      const ww = textW(word, fs) * HOLD, sp = cur ? textW(' ', fs) * HOLD : 0;
+      if (cur + sp + ww <= max) { cur += sp + ww; continue; }
+      if (ww <= max) { n++; cur = ww; continue; }
+      n += cur ? 1 : 0; n += Math.ceil(ww / max) - 1; cur = ww % max;
+    }
+    return n;
+  };
+
+  for (const w of [390, 320]) {
+    const row = cascade(RULES, chain(ROW), w);
+    const rv = p => (row[p] ? row[p].v : undefined);
+    const gap = px(rv('gap'));
+    check(`${w}: the row is one flex line (display ${rv('display')}, flex-wrap ${rv('flex-wrap') || 'nowrap'}), align-items ${rv('align-items')}, ${rv('gap')} apart`,
+          rv('display') === 'flex' && (rv('flex-wrap') || 'nowrap') === 'nowrap' && rv('align-items') === 'stretch' && gap === 10);
+    check(`${w}, rack-v57, the before: the number's alignment was ${along(OLD, NUM, w)}, so its text sat at the top of the row; the ✕'s ${along(OLD, X, w)}; Save's ${along(OLD, SAVE, w)}`,
+          along(OLD, NUM, w) === 'stretch' && along(OLD, X, w) === 'center' && along(OLD, SAVE, w) === 'stretch');
+    check(`${w}: the number's alignment is ${along(RULES, NUM, w)} — a <div> does not centre its own text, so this is what puts it on the centre line`,
+          along(RULES, NUM, w) === 'center');
+    check(`${w}: the ✕'s is ${along(RULES, X, w)}; Save's ${along(RULES, SAVE, w)} and the body's ${along(RULES, BODY, w)}, each a <button> centring its words — the number, Save and the ✕ share one centre line`,
+          along(RULES, X, w) === 'center' && ['center', 'stretch'].includes(along(RULES, SAVE, w)) && along(RULES, BODY, w) === 'stretch');
+
+    const xNow = buttonBox(RULES, chain(X), w), xWas = buttonBox(OLD, chain(X), w), sv = buttonBox(RULES, chain(SAVE), w);
+    check(`${w}: Save is ${sv.used}px tall and the ✕ ${xNow.used}px — at rack-v57 the ✕ was ${xWas.used}px`,
+          sv.used >= 44 && xNow.used >= 44 && xWas.used === 24);
+
+    const nm = cascade(RULES, chain(NAME), w), was = cascade(OLD, chain(NAME), w);
+    const nv = p => (nm[p] ? nm[p].v : undefined);
+    check(`${w}: the name wraps (white-space ${nv('white-space')}, overflow-wrap ${nv('overflow-wrap')}) and is cut after ${nv('-webkit-line-clamp')} lines (display ${nv('display')}, ${nv('-webkit-box-orient')}, overflow ${nv('overflow')}) — at rack-v57, white-space ${(was['white-space'] || {}).v}: one line`,
+          nv('white-space') === 'normal' && nv('overflow-wrap') === 'anywhere' && nv('-webkit-line-clamp') === '2' && nv('line-clamp') === '2' &&
+          nv('display') === '-webkit-box' && nv('-webkit-box-orient') === 'vertical' && nv('overflow') === 'hidden' &&
+          (was['white-space'] || {}).v === 'nowrap' && !was['-webkit-line-clamp']);
+    const nameFs = px(nv('font-size'));
+    check(`${w}: the name is set ${nv('font-size')} in ${nv('font-variation-settings')}, ADV's own instance, with no letter-spacing — so it is measured, not bounded`,
+          nameFs === 14 && nv('font-variation-settings') === FACE && nv('letter-spacing') === undefined);
+
+    // The row's width: the sheet, 100% up to its max-width, less its padding, and the row 100% of that.
+    const nodes = []; for (let x = chain(ROW); x; x = x.parent) nodes.unshift(x);
+    let room = w;
+    for (const nd of nodes) {
+      const c = cascade(RULES, nd, w);
+      const v = p => (c[p] ? c[p].v : undefined);
+      let box = room - sides(c, 'margin-left', 'margin-right');
+      if (v('width') === '100%') box = Math.min(room, px(v('max-width')) ?? Infinity);
+      else if (v('width') !== undefined) throw new Error(nd.tag + '.' + nd.cls.join('.') + ' has width ' + v('width'));
+      room = box - sides(c, 'padding-left', 'padding-right') - sides(c, 'border-left-width', 'border-right-width');
+    }
+
+    /* What does not shrink. The name's type is ADV's instance and is measured;
+       the rest are not, so they are BOUNDED: the number is set 'wdth' 108
+       'wght' 800 and Save 'wght' 700, so each glyph is taken at 1.4× its
+       advance here (the width axis alone is 108/92, 1.17×, by its own
+       definition, and weight adds less than the rest); a row's calories are
+       held to four digits; and the ✕, a glyph Archivo does not carry, is
+       taken at 1.5em. A bound makes the body's room a floor, never a guess. */
+    const BOUND = 1.4;
+    const cal = cascade(RULES, chain(NUM), w), save = cascade(RULES, chain(SAVE), w),
+          xs = cascade(RULES, chain(X), w), body = cascade(RULES, chain(BODY), w);
+    const g = (c, p) => (c[p] ? c[p].v : undefined);
+    const digit = Math.max(...'0123456789'.split('').map(d => ADV[d]));
+    const calW = 4 * digit * BOUND * px(g(cal, 'font-size')) / 1000;
+    const sFs = px(g(save, 'font-size')), ls = parseFloat(g(save, 'letter-spacing')) * (/em$/.test(g(save, 'letter-spacing')) ? sFs : 1);
+    const saveW = Math.max(px(g(save, 'min-width')) ?? 0,
+      textW('Save', sFs) * BOUND + 4 * ls + sides(save, 'padding-left', 'padding-right') + sides(save, 'border-left-width', 'border-right-width'));
+    const xW = 1.5 * px(g(xs, 'font-size')) + sides(xs, 'padding-left', 'padding-right') + sides(xs, 'border-left-width', 'border-right-width') + sides(xs, 'margin-left', 'margin-right');
+    const fixedSave = calW + saveW + xW + 3 * gap, fixedNo = calW + xW + 2 * gap;
+    const floor = room - fixedSave;
+    check(`${w}: the number, Save and the ✕ do not shrink (flex-shrink ${g(cal, 'flex-shrink')}, ${g(save, 'flex-shrink')}, ${g(xs, 'flex-shrink')}) and the body gives way (flex ${g(body, 'flex-grow')} ${g(body, 'flex-shrink')} ${g(body, 'flex-basis')}, min-width ${g(body, 'min-width')})`,
+          g(cal, 'flex-shrink') === '0' && g(save, 'flex-shrink') === '0' && g(xs, 'flex-shrink') === '0' &&
+          g(body, 'flex-grow') === '1' && px(g(body, 'min-width')) === 0);
+    check(`${w}: in the row's ${room}px they take at most ${fixedSave.toFixed(1)}px — the number ${calW.toFixed(1)} (four digits), Save ${saveW.toFixed(1)}, the ✕ ${xW.toFixed(1)} with its margin, three gaps of ${gap} — so nothing overlaps and the body keeps ${floor.toFixed(1)}px or more (${(room - fixedNo).toFixed(1)} where there is no Save)`,
+          fixedSave <= room && floor >= 100);
+    for (const s of SHORT_NAMES) {
+      const n = lines(s, nameFs, floor);
+      check(`${w} · “${s}”: ${(textW(s, nameFs) * HOLD).toFixed(1)}px with the 3% — ${n} line in ${floor.toFixed(1)}px`, n === 1);
+    }
+    const nLong = lines(LONG, nameFs, floor);
+    if (w === 390) check(`390 · “${LONG}”: ${(textW(LONG, nameFs) * HOLD).toFixed(1)}px — ${nLong} lines at most in ${floor.toFixed(1)}px, whole`, nLong <= 2);
+    else results.push(`  · 320 · “${LONG}”: up to ${nLong} lines in ${floor.toFixed(1)}px, so on the narrowest phone it can be cut after the second, with an ellipsis — the brief's rule`);
   }
 }
 

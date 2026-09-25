@@ -1661,10 +1661,23 @@ body.peeking .view.active { padding-bottom: 65px; }
 }
 .conf i { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
 
-/* A proposed row: tap the left to fix it, tap the ✕ to drop it. */
+/* A proposed row: tap the left to fix it, tap the ✕ to drop it. The body and
+   Save stretch to the row's height, the biggest target it has, and a button
+   centres its own content, so their words sit on the row's centre line. The
+   number is a div, which does not: stretched, it sat level with the top of
+   the name, above Save and the ✕ (Micah, 25 Sep). v58 centres it, and holds
+   the ✕ to 44px as well — it was its 12px glyph and 12px of padding. */
 .pe-row { align-items: stretch; }
 .pe-body { flex: 1; min-width: 0; text-align: left; padding: 2px 0; }
-.pe-x { align-self: center; flex-shrink: 0; }
+.pe-row .fe-cal { align-self: center; }
+.pe-x { align-self: center; flex-shrink: 0; min-height: 44px; }
+/* v58: a long name gets two lines before it is cut, not one — "White rice,
+   long-grain, enriched, coo…" said too little. overflow-wrap, so one long
+   unbroken word wraps inside the body instead of widening it. */
+.pe-row .fe-name {
+  white-space: normal; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
+}
 /* v55: "Save", on an estimate's row — that row as a meal of its own. The
    row's full height and never under 44px, in the row's quiet type. */
 .pe-save {
