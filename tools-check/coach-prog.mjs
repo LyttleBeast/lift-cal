@@ -728,6 +728,174 @@ if (MAIN) {
           !/\bprescribe\s*\(/.test(src('coach-overlap.js').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')));
   }
 
+  /* ================= F. v54 — HIS RATING MOVES THE NEXT TARGET, AND NO FURTHER ================= */
+  section('F. v54 — his effort rating (`rir`): the two rules SHIP-V54-PROMPT §5.3 turns on — ok / miss / wrong');
+  {
+    /* Two of spec §6.4's RIR rules, and no more. A top set rated too hard (0)
+       means the session did not hit the top — the same again, never a miss.
+       Every rated set at the target's load rated way too easy (4+), no set
+       typed F, every set at the target's reps: it counts as hitting the top —
+       through the confirm dial, one step and never two. A marked session's
+       ratings leave with it. Anything but an integer 0–5 is unknown. The
+       original 57 rows above are untouched and unrated; these are new, scored
+       the same way, and the ok / miss / wrong count below is this section's. */
+    const bench = metaOf('barbell-bench-press');
+    const rate = (sets, rirs) => sets.map((s, i) => (rirs[i] == null ? s : { ...s, rir: rirs[i] }));
+    // A1's log: range 8–12 learned, step 5 learned. The target before the last
+    // session is 185 × 10, 10, 9 (the reps rule on 185 × 10, 9, 8).
+    const A1E = (last, rirs, o) => ({ meta: bench, u: 'lb', ctx: {}, sessions: logOf(bench, A1_WITH(rate(last, rirs))), ...o });
+    const KG_LOG = [[23, xN(3, kg(80), 12)], [19, xN(3, kg(82.5), 8)], [15, rs(kg(82.5), [10, 10, 9])], [11, xN(3, kg(82.5), 12)],
+                    [7, rs(kg(85), [10, 9, 8])]];
+    const CUT = A1_LOG.map(([a, s]) => [a + 4, s]).slice(0, -1);
+    const ROWS = [
+      ['R1', 'a top set rated too hard at the top: the same again — hold (hard) at 185 × 12, 12, 12',
+       A1E(xN(3, 185, 12), [2, 2, 0]), { mode: 'hold', code: 'hard', load: 185, reps: [12, 12, 12], why: /^Last time 185 lb × 12 felt too hard, so it’s the same again\.$/ }],
+      ['R2', 'about right at the top changes nothing: A1’s add, 190 × 8',
+       A1E(xN(3, 185, 12), [2, 2, 2]), { mode: 'add', load: 190, reps: [8, 8, 8] }],
+      ['R3', 'way too easy at the top: A1’s add, one step, exactly as unrated',
+       A1E(xN(3, 185, 12), [4, 4, 4]), { mode: 'add', load: 190, reps: [8, 8, 8] }],
+      ['R4', 'every set at its target (185 × 10, 10, 9) and rated way too easy: counts as the top — one step, 190 × 8',
+       A1E(rs(185, [10, 10, 9]), [4, 4, 4]), { mode: 'add', load: 190, reps: [8, 8, 8], why: /^Last time you rated 185 lb for 10, 10, 9 way too easy\.$/ }],
+      ['R5', 'one of them rated about right: not every rated set was easy — the reps rule, as unrated',
+       A1E(rs(185, [10, 10, 9]), [4, 2, 4]), { mode: 'reps', load: 185, reps: [11, 10, 10] }],
+      ['R6', 'rated way too easy with a set typed F: no — the reps rule',
+       A1E([set(185, 10), set(185, 10), set(185, 9, 'F')], [4, 4, 4]), { mode: 'reps', load: 185 }],
+      ['R7', 'rated way too easy but a set short of its target (10, 9, 9 against 10, 10, 9): no',
+       A1E(rs(185, [10, 9, 9]), [4, 4, 4]), { mode: 'reps', load: 185 }],
+      ['R8', 'way too easy on a cut: through the confirm dial — hold (confirm), and the why says it was his rating',
+       A1E(rs(185, [10, 10, 9]), [4, 4, 4], { ctx: { aim: 'cut' } }), { mode: 'hold', code: 'confirm', load: 185, reps: [10, 10, 9], why: /^Last time you rated 185 lb for 10, 10, 9 way too easy\. You’re cutting/ }],
+      ['R9', 'kilos: 85 kg × 10, 10, 9 rated way too easy — one of his 2.5 kg steps, 87.5 × 8, stored pounds',
+       { meta: bench, u: 'kg', ctx: {}, sessions: logOf(bench, KG_LOG.concat([[3, rate(rs(kg(85), [10, 10, 9]), [4, 4, 4])]])) },
+       { mode: 'add', load: 87.5, reps: [8, 8, 8], tw: kg(87.5), why: /^Last time you rated 85 kg for 10, 10, 9 way too easy\.$/ }],
+      ['R10', 'too hard below the top changes nothing: the reps rule, as unrated',
+       A1E(rs(185, [10, 10, 9]), [0, 2, 2]), { mode: 'reps', load: 185, reps: [11, 10, 10] }],
+      ['R11', 'on a cut, the session before at the top but rated too hard is no first look: hold (confirm), not add',
+       { meta: bench, u: 'lb', ctx: { aim: 'cut' }, sessions: logOf(bench, CUT.concat([[7, rate(xN(3, 185, 12), [2, 0, 2])], [3, xN(3, 185, 12)]])) },
+       { mode: 'hold', code: 'confirm', load: 185 }],
+      ['R12', 'on a cut, the session before rated way too easy at its target is the first look: add, one step',
+       { meta: bench, u: 'lb', ctx: { aim: 'cut' }, sessions: logOf(bench, CUT.concat([[7, rate(rs(185, [10, 10, 9]), [4, 4, 4])], [3, xN(3, 185, 12)]])) },
+       { mode: 'add', load: 190, reps: [8, 8, 8] }],
+      ['R13', 'the rated session marked: its ratings leave with it — the target from before it, 185 × 10, 10, 9',
+       A1E(rs(185, [10, 10, 9]), [4, 4, 4], { markLast: true }), { mode: 'reps', load: 185, reps: [10, 10, 9] }],
+      ['R14', 'rated way too easy at a weight he chose over the target (190): no rating rule — the reps rule at 190',
+       A1E(xN(3, 190, 8), [4, 4, 4]), { mode: 'reps', load: 190, reps: [9, 9, 8] }],
+      ['R15', 'junk ratings (7, −1, 2.5) are unknown, never 0: A2’s reps, exactly',
+       A1E(rs(185, [12, 11, 10]), [7, -1, 2.5]), { mode: 'reps', load: 185, reps: [12, 12, 11] }],
+      ['R16', 'a string "0" is not a rating: A1’s add at the top, not the same again',
+       A1E(xN(3, 185, 12), ['0', '0', '0']), { mode: 'add', load: 190, reps: [8, 8, 8] }]
+    ];
+    const tallyF = { ok: 0, miss: 0, wrong: 0 };
+    ROWS.forEach(([id, label, c, w]) => {
+      const exposures = P.exposuresFor(c.sessions, c.meta.exId);
+      const last = exposures[exposures.length - 1];
+      const own = last ? Math.round((new Date(NOW).setHours(12, 0, 0, 0) - new Date(last.startedAt).setHours(12, 0, 0, 0)) / DAY) : null;
+      const ex = { ...c.meta, exposures, groupDaysSince: own };
+      const ctx = { now: NOW, u: c.u, ...c.ctx };
+      let t;
+      if (c.markLast) {
+        const lastAt = last.startedAt;
+        t = P.targetFor(ex, ctx, { markedAt: new Set([lastAt]), exposures: [last],
+          latest: { word: 'slept badly', exposures: exposures.slice(0, -1), groupDaysSince: own, now: lastAt } });
+      } else t = P.targetFor(ex, ctx, null);
+      const bad = [];
+      if (!t) bad.push('no target');
+      else {
+        said.push({ u: c.u, id, text: t.line }, ...t.why.map(x => ({ u: c.u, id, text: x })));
+        if (t.mode !== w.mode) bad.push('mode ' + t.mode + (t.code ? '(' + t.code + ')' : ''));
+        if (w.code !== undefined && t.code !== w.code) bad.push('code ' + t.code);
+        const got = t.loadLb == null ? null : r2(U.wOut(t.loadLb, c.u));
+        if (!(got === w.load || (got != null && w.load != null && Math.abs(got - w.load) < 0.01))) bad.push('load ' + got);
+        if (w.reps && JSON.stringify(t.sets.filter(s => s.type !== 'W').map(s => Number(s.tr))) !== JSON.stringify(w.reps))
+          bad.push('reps ' + t.sets.map(s => s.tr).join(','));
+        if (w.tw && !t.sets.every(s => s.tw === w.tw)) bad.push('tw ' + t.sets.map(s => s.tw).join(','));
+        if (w.why && !t.why.some(x => w.why.test(x))) bad.push('why ' + JSON.stringify(t.why));
+      }
+      const kind = !bad.length ? 'ok' : t && t.mode === 'defer' ? 'miss' : 'wrong';
+      tallyF[kind]++;
+      check(id + ': ' + label, kind !== 'wrong', kind + ' — ' + bad.join('; ') + (t ? ' · ' + t.line : ''));
+    });
+    results.push('\n  ratings — ok: ' + tallyF.ok + '   miss: ' + tallyF.miss + '   wrong: ' + tallyF.wrong);
+    check('wrong: 0 — no rating moves a target further than its rule', tallyF.wrong === 0);
+
+    /* The sweep: the section B histories, their last session rated at random
+       (all four kinds of value, and none), against the same history unrated.
+       Whatever the ratings, the rated target is at most ONE of the lift's
+       steps heavier than the unrated one; never heavier at all after a set
+       typed F in that session or a top set rated too hard; and the same
+       ratings twice are the same target. And the ratings are read nowhere but
+       the last two sessions: rating an older one moves nothing. */
+    const stepOf_ = t => (t && t.step ? t.step.value : null);
+    const moved = { oneStep: [], afterF: [], tooHard: [], same: [], older: [] };
+    let rated = 0, changed = 0;
+    for (const u of ['lb', 'kg']) {
+      for (let s = 1; s <= 900; s++) {
+        const h = { ...history(s * 7919 + (u === 'kg' ? 13 : 0), u), seed: s };
+        const r = rng(s * 31 + (u === 'kg' ? 7 : 0));
+        const lastS = h.sessions[h.sessions.length - 1];
+        if (!lastS) continue;
+        const alt = clone(h.sessions);
+        const altLast = alt[alt.length - 1];
+        const VALUES = [4, 4, 4, 2, 0, null, 5, 3];
+        altLast.exercises.forEach(e => e.sets.forEach(z => { const v = VALUES[Math.floor(r() * VALUES.length)]; if (v != null) z.rir = v; }));
+        const t0 = drive(h, h.sessions).t, t1 = drive(h, alt).t;
+        rated++;
+        if (JSON.stringify(t0) !== JSON.stringify(t1)) changed++;
+        const dir = assistedOf(h.meta) ? -1 : 1;
+        if (JSON.stringify(t1) !== JSON.stringify(drive(h, clone(alt)).t)) note2(moved.same, h, 'two answers');
+        if (!t0 || !t1 || t0.loadLb == null || t1.loadLb == null) continue;
+        const L0 = r2(U.wOut(t0.loadLb, u)), L1 = r2(U.wOut(t1.loadLb, u)), S = stepOf_(t1) || stepOf_(t0);
+        const up = dir * (L1 - L0);
+        if (up > 0.01 && !(S != null && up <= S + 0.01)) note2(moved.oneStep, h, L0 + ' → ' + L1 + ' (step ' + S + ')');
+        const mine = altLast.exercises.filter(e => e.exId === h.meta.exId).flatMap(e => e.sets);
+        if (up > 0.01 && mine.some(z => z.type === 'F')) note2(moved.afterF, h, L0 + ' → ' + L1 + ' with an F');
+        const exs = P.exposuresFor(alt, h.meta.exId);
+        const lastX = exs[exs.length - 1];
+        if (up > 0.01 && lastX && lastX.sets.some(z => z.rir === 0)) note2(moved.tooHard, h, L0 + ' → ' + L1 + ' with a set rated too hard');
+        // An older session rated instead: nothing moves unless it is the one before.
+        if (h.sessions.length >= 3) {
+          const old = clone(h.sessions);
+          old[0].exercises.forEach(e => e.sets.forEach(z => { z.rir = 0; }));
+          if (JSON.stringify(drive(h, old).t) !== JSON.stringify(t0) && old.length > 2 &&
+              P.exposuresFor(old, h.meta.exId).length > 2) note2(moved.older, h, 'rating the first session moved the target');
+        }
+      }
+    }
+    function note2(list, h, why) { list.push(h.u + ' ' + h.meta.exId + ' seed ' + h.seed + ': ' + why); }
+    check('rated at random over ' + rated + ' swept histories (' + changed + ' targets moved by it): never more than one step heavier than unrated',
+          rated > 1500 && changed > 20 && !moved.oneStep.length, list(moved.oneStep));
+    check('never heavier at all when that session had a set typed F', !moved.afterF.length, list(moved.afterF));
+    check('never heavier at all when a set of it was rated too hard', !moved.tooHard.length, list(moved.tooHard));
+    check('the same ratings twice are the same target', !moved.same.length, list(moved.same));
+    check('a rating on an old session moves nothing — only the last session, and the one before it for the confirm dial',
+          !moved.older.length, list(moved.older));
+
+    /* UNRATED IS BYTE FOR BYTE: rack-v53's own coach-prog.js (71cb16e) read
+       out of git, on every row of section A and every swept history — the
+       promise §5.3 makes, beside section D's against v48 and v51. */
+    const P53 = await stageProg('71cb16e');
+    const diff = [];
+    for (const c of cases()) {
+      const { exposures } = run(P, c);
+      const last = exposures[exposures.length - 1];
+      const own = last ? Math.round((new Date(NOW).setHours(12, 0, 0, 0) - new Date(last.startedAt).setHours(12, 0, 0, 0)) / DAY) : null;
+      const ex = { ...c.meta, exposures, groupDaysSince: c.group != null ? c.group : own };
+      const ctx = { now: NOW, u: c.u, ...c.ctx };
+      if (JSON.stringify(P.prescribe(ex, ctx)) !== JSON.stringify(P53.prescribe(ex, ctx))) diff.push(c.id);
+    }
+    let sw = 0;
+    for (const u of ['lb', 'kg']) for (let s = 1; s <= PER_UNIT; s++) {
+      const h = history(s * 7919 + (u === 'kg' ? 13 : 0), u);
+      const exposures = P.exposuresFor(h.sessions, h.meta.exId);
+      const ex = { ...h.meta, exposures, groupDaysSince: h.group };
+      sw++;
+      if (JSON.stringify(P.prescribe(ex, h.ctx)) !== JSON.stringify(P53.prescribe(ex, h.ctx))) diff.push(u + ' seed ' + s);
+    }
+    check('unrated, prescribe() is rack-v53’s, byte for byte, on all ' + cases().length + ' rows and ' + sw + ' swept histories',
+          !diff.length, list(diff));
+    check('and an unrated set crosses exposuresFor() as the three keys it always was',
+          JSON.stringify(Object.keys(P.exposuresFor(logOf(bench, [xN(1, 185, 8)]), bench.exId)[0].sets[0])) === '["w","r","type"]');
+  }
+
   console.log('\nCoach names a weight only when it is one he can load\n');
   console.log(results.join('\n'));
   console.log('\n' + pass + ' passed, ' + fail + ' failed\n');

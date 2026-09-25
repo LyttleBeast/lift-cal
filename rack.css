@@ -2128,6 +2128,16 @@ body.peeking .view.active { padding-bottom: 65px; }
   transition: transform var(--fast) var(--ease), border-color var(--fast) var(--ease);
 }
 .coach-chip:active { transform: scale(.96); border-color: var(--p-yellow); }
+/* v54: "How was it?" in the live sheet — the set's line and three effort
+   chips, each a 44px target (the sheet's other chips stay smaller), the chosen
+   one reading as chosen the way the check-in's does; then Coach's answer and
+   "Use it for my next set". Laid out as the thread is, and taking no gap in it
+   while empty. */
+.coach-rate, .coach-rate-after { display: flex; flex-direction: column; gap: 10px; }
+.coach-rate:empty, .coach-rate-after:empty { display: none; }
+.coach-rate-q { font-size: 14px; color: var(--chalk); }
+.coach-effort { min-height: 44px; }
+.coach-effort.on { border-color: var(--p-yellow); color: var(--p-yellow); }
 
 /* ---------- the workout builder's proposal ----------
    Drawn with the recap's own list (.day-ex) and the workout screen's block

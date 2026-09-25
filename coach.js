@@ -49,10 +49,10 @@ import { GROUPS, GROUP_ORDER } from './exercises.js';
 import { e1rm, isWorking, mergeSessionExercises, exerciseIndex, detectPRs, sessionMilestones, normFeel } from './analytics.js';
 import { labelW, labelRate, unitW, fmtW, fmtSetLoad, labelVol } from './units.js';
 import { propose, liveRefusal, buildMenu, swapTo, BUILD_ASK } from './coach-build.js';
-import { liveRead, LIVE_NONE, REP_DROP } from './coach-live.js';
+import { liveRead, setRead, LIVE_NONE, REP_DROP, EFFORT, rateAsk, rateAnswer } from './coach-live.js';
 import { AIMS, EXPERIENCE, energyContext, normGoalLift, goalChecks, AIM_DIR } from './coach-goal.js';
 import { readLift, lighterWeek, recordDay, liftsMoving, prepare, targetsReplay, compareSession, nextTargets,
-         liftTrend, goalLiftRead, bigThree, focusRead, groupDaysAt } from './coach-overlap.js';
+         liftTrend, goalLiftRead, bigThree, focusRead, groupDaysAt, nextSetFor } from './coach-overlap.js';
 import { restRead, usualRun, replay, readinessRows, readinessHas, readinessAnswer, readinessHeavy, sessionRows,
          mergeRows, groupLine, restAnswer, lighterAnswer, groupAnswer, REST_REASON } from './coach-ready.js';
 import { fueledRead, fuelAnswer, fedUnloggedAnswer, fedNoneAnswer, fuelRow, sessionFoodRows, fuelDates, logStyle } from './coach-fuel.js';
@@ -2727,8 +2727,10 @@ const INTENT_BY_ID = Object.freeze(Object.fromEntries(INTENTS.map(i => [i.id, i]
    the card's own machinery and is never something one tier has and the other
    does not. */
 /* The in-session read's own words for "nothing to add", handed on to the view
-   so the sheet says what the pure layer says rather than a second copy. */
-export { LIVE_NONE };
+   so the sheet says what the pure layer says rather than a second copy. v54:
+   and the effort chips' — the three ratings, the line above them and what
+   Coach says after a tap — for the same reason. */
+export { LIVE_NONE, EFFORT, rateAsk, rateAnswer };
 
 export const PRO_ADDS = Object.freeze(
   CATEGORIES
@@ -4646,8 +4648,22 @@ function liveInput(d, session, current) {
     sessions: d.inWindow(),
     shapes: d.f('session.shapes') || [],
     lib: d.lib,
-    hidden: Array.isArray(d.input.hidden) ? d.input.hidden : []
+    hidden: Array.isArray(d.input.hidden) ? d.input.hidden : [],
+    /* v54: the next set's target (coach-prog.js nextSet(), spec §3.10), for
+       the lift in hand — handed in the way the window is, so coach-live.js
+       works out no weight and imports nothing that does. Off with the targets
+       switch, and on a log Coach could not read. */
+    nextSet: d.f('log.confidence') === 'readable' && !isMuted(d.input.settings, 'targets')
+      ? (exId, sets) => nextFor(d, exId, sets) : null
   };
+}
+
+/* The lift's target and step are the builder's, from the same performance
+   log and the same marks (the overlap's lifts, through coach-overlap.js
+   nextSetFor()), with REP_DROP — coach-live.js's own constant — for the stop
+   rule. A lift not in the log has no target. */
+function nextFor(d, exId, sets) {
+  return nextSetFor(d.overlap(), exId, sets, REP_DROP);
 }
 
 function toneOf(intent, d) {
@@ -5051,7 +5067,16 @@ export function coach(input) {
     live: (session, opts) => (d.f('log.confidence') !== 'readable' || !pro ||
       isMuted(d.input.settings, 'live') ||
       !session || typeof session !== 'object' || session._edit
-      ? null : liveRead(liveInput(d, session, opts && opts.current)))
+      ? null : liveRead(liveInput(d, session, opts && opts.current))),
+    /* v54: THE SET IN HAND AND THE NEXT ONE (coach-live.js setRead): which set
+       the effort chips rate, and the next set's target. On the live chip's own
+       gate — Pro, "In the gym" on, a live session and never an edit — because
+       the chips live in the sheet that chip opens. The rating needs no log;
+       the next set needs a readable one and the targets switch on (liveInput),
+       and is never drawn when the session reads "done". */
+    liveSet: (session, opts) => (!pro || isMuted(d.input.settings, 'live') ||
+      !session || typeof session !== 'object' || session._edit
+      ? null : setRead(liveInput(d, session, opts && opts.current)))
   };
 }
 

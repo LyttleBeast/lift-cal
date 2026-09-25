@@ -977,9 +977,18 @@ section('J. v48 — every target Coach names, under the ban and the words this s
   const EXTRA = [/\btry\b/i, /\bshould\b/i, /\bpush\b/i, /\bbeat\b/i, /\bgo for\b/i, /\baim for\b/i, /\beasy\b/i, /\bmust\b/i,
                  /\b(1\s*rm|one[- ]rep max) (test|attempt)|\bmax(ing)? out\b|\bgo for a (single|max)\b|\btest your max\b/i,
                  /\b(because (you|your)|caused|due to (your|the)|that'?s why)\b/i];
-  const hits = (t, u) => BANNED.concat(EXTRA).filter(re => re.test(t)).map(re => (t.match(re) || [''])[0])
+  /* v54, on purpose: "way too easy" is HIS rating's label (Micah, 24 Sep
+     2026), and a target moved by it says so — "Last time you rated 185 lb × 8
+     way too easy." — quoting him, the way the compare answer quotes his
+     "120%+". The ban on "easy" is about Coach calling a jump easy, so it holds
+     for every other use of the word, and the quote is taken out first — in a
+     rendered sentence after "rated", and in the source as the literal that
+     follows "rated " + the set (a literal that begins with it). */
+  const hits = (t0, u) => { const t = String(t0).replace(/\brated ([^.]*?)way too easy\b/g, 'rated $1')
+    .replace(/^\s*way too easy\b/, '');
+    return BANNED.concat(EXTRA).filter(re => re.test(t)).map(re => (t.match(re) || [''])[0])
     .concat(u === 'kg' && /\d ?lb\b/.test(t) ? ['lb on a kilo account'] : [])
-    .concat(/'/.test(t) ? ['a straight apostrophe'] : []);
+    .concat(/'/.test(t) ? ['a straight apostrophe'] : []); };
 
   const said = [];
   PROG.cases().forEach(c => {
@@ -1376,6 +1385,85 @@ section('M. v53 — every sentence of the finish line, on the recap, the card an
   }));
   check('and as said: his rating beside the numbers, in both units, under the same ban (' + ratedSaid.length + ' strings)',
         ratedSaid.length >= 8 && !ratedSaid.some(t => SHEET.some(re => re.test(t)) || /!/.test(t)), list(ratedSaid));
+}
+
+/* ================= N. v54 — IN THE GYM: THE NEXT SET, AND WHAT COACH SAYS AFTER A TAP ================= */
+section('N. v54 — the next set, its why, "How was it?" and Coach’s answer after a tap: warm first, both units, under the ban');
+{
+  /* Stage five speaks mid-set, the most sensitive place Coach speaks. Every
+     sentence it can build is held to the shipped list, the causal words, the
+     words the targets were held to (should, try, must, push, eat), SHIP-V54-
+     PROMPT §8 (never "AI", no exclamation mark, nothing about health or the
+     body, no eating advice), and in kilos no pound anywhere. Read on the
+     source — coach-live.js's v54 half and coach-prog.js's section 6 — and on
+     what the engine says across rated live sessions. The three chip labels
+     are his words ("way too easy" is Micah's), as every chip label is. */
+  const CAUSE = [/\bbecause\b/i, /\bcaused?\b/i, /\bdue to\b/i, /\bthat'?s why\b/i, /\bleads? to\b/i, /\bmakes? you\b/i, /\bresults? in\b/i];
+  const GYM = BANNED.concat(CAUSE, [/\bshould\b/i, /\btry\b/i, /\bmust\b/i, /\bpush\b/i, /\beat\b/i, /\beating\b/i, /\bfood\b/i,
+    /\bAI\b/, /\bartificial intelligence\b/i, /!/, /\b(health|healthy|injur|pain|hurt|posture|joint|doctor|physio|recovery)\b/i,
+    /\b(1\s*rm|one[- ]rep max|max out|test your max)\b/i]);
+  const hits = t => GYM.filter(re => re.test(t)).map(re => (t.match(re) || [''])[0]);
+  const LSRC = src('coach-live.js');
+  const LV54 = decomment(LSRC.slice(LSRC.lastIndexOf('/*', LSRC.indexOf('THE SET IN HAND, AND THE NEXT ONE'))));
+  const PSRC = src('coach-prog.js');
+  const PV54 = decomment(PSRC.slice(PSRC.lastIndexOf('/*', PSRC.indexOf('6.  THE NEXT SET'))));
+  const labels = ['Way too easy', 'About right', 'Too hard'];
+  const lits = literals(LV54).concat(literals(PV54)).filter(t => /[a-z]{3}/i.test(t) && !labels.includes(t));
+  const srcBad = lits.map(t => ({ t, w: hits(t) })).filter(x => x.w.length);
+  check('the in-gym source was found and read (' + lits.length + ' strings), and none carries a ban',
+        lits.length >= 20 && lits.some(t => /Next set: /.test(t)) && lits.some(t => /How was it\?/.test(t)) && !srcBad.length,
+        list(srcBad.map(x => '“' + x.w.join('/') + '” in: ' + x.t)));
+  // A unit handed TO units.js (wIn(P, 'kg')) is a units.js call, not copy.
+  check('and neither half types a unit word: every weight goes through units.js',
+        !/'[^'\n]*\b(lb|lbs|kg|pounds?|kilos?)\b[^'\n]*'/.test((LV54 + PV54).replace(/=== '(kg|lb)' \? '(kg|lb)' : '(kg|lb)'/g, '')
+          .replace(/=== '(kg|lb)'/g, '').replace(/\b(wIn|wOut)\([^()]*\)/g, '')),
+        ((LV54 + PV54).match(/'[^'\n]*\b(lb|lbs|kg|pounds?|kilos?)\b[^'\n]*'/g) || []).join(' '));
+  // What it says: a log climbing by his own steps, typed in each unit, and
+  // live sessions of every kind of next set, each rated every way.
+  const NL = { 'barbell-bench-press': { name: 'Barbell Bench Press', group: 'chest', equipment: 'barbell' },
+               'back-squat-high-bar': { name: 'Back Squat (High Bar)', group: 'legs', equipment: 'barbell' } };
+  const said = [];
+  const kinds = new Set();
+  ['lb', 'kg'].forEach(u => {
+    const st = L => (u === 'kg' ? String(U.wIn(L, 'kg')) : String(L));
+    const plan = u === 'kg' ? { 'barbell-bench-press': [77.5, 80, 80, 82.5, 82.5, 85, 85, 85], 'back-squat-high-bar': [95, 100, 100, 105, 105, 110, 115, 115] }
+                            : { 'barbell-bench-press': [170, 175, 175, 180, 180, 185, 185, 185], 'back-squat-high-bar': [225, 235, 235, 245, 245, 255, 255, 255] };
+    const reps = { 'barbell-bench-press': 8, 'back-squat-high-bar': 5 };
+    const log = [];
+    for (let k = 0; k < 8; k++) log.push({ id: 'n' + k, startedAt: NOW - (3 + 7 * (7 - k)) * DAY, _date: key(NOW - (3 + 7 * (7 - k)) * DAY),
+      exercises: Object.keys(NL).map(id => ({ exId: id, ...NL[id], sets: Array.from({ length: 3 }, () => ({ w: st(plan[id][k]), r: String(reps[id]), type: 'N', done: true })) })) });
+    const eng = C.coach(base({ u, sessions: sort(log), lib: NL, hidden: [], live: { active: true } }));
+    Object.keys(NL).forEach(id => {
+      const top = plan[id][7], step = plan[id][7] - plan[id][6] || plan[id][6] - plan[id][5];
+      const T = top + step;
+      const shapes = [[], [[T, reps[id]]], [[T, reps[id] + 2]], [[T, reps[id], 'F']], [[T, reps[id]], [T, Math.floor(reps[id] * 0.7)]],
+                      [[T, reps[id] - 2]], [[T, reps[id] + 2], [T + step, reps[id]]], [[top, reps[id]]]];
+      shapes.forEach(rows => [null, 4, 2, 0].forEach(rir => {
+        const sets = rows.map(([w, r, type], i) => ({ w: st(w), r: String(r), type: type || 'N', done: true, ...(rir != null && i === rows.length - 1 ? { rir } : null) }))
+          .concat([{ w: '', r: '', type: 'N', done: false }]);
+        const s = { id: 'wn', name: 'N', startedAt: NOW - 1800e3, exercises: [{ exId: id, ...NL[id], sets }] };
+        const got = eng.liveSet(s, { current: 0 });
+        if (!got) return;
+        if (got.next) { kinds.add(got.next.kind); said.push({ u, t: got.next.text }, ...got.next.why.map(t => ({ u, t }))); }
+        if (got.rated) said.push({ u, t: C.rateAsk(got.rated, u) });
+        [4, 2, 0, null].forEach(v => said.push({ u, t: C.rateAnswer(v, got.next, u) }));
+      }));
+    });
+  });
+  const bad = said.map(x => ({ ...x, w: hits(x.t).concat(x.u === 'kg' && /\d ?lb\b/.test(x.t) ? ['lb on a kilo account'] : []) })).filter(x => x.w.length);
+  check('every kind of next set was said — target, same, up, down, stop — and the line and answers around them (' + said.length + ' strings)',
+        ['target', 'same', 'up', 'down', 'stop'].every(k => kinds.has(k)) && said.length > 300, [...kinds].join(', '));
+  check('not one carries a banned word, a cause, a health or body word, "AI", an exclamation mark, or a pound in kilos',
+        !bad.length, list(bad.map(x => '[' + x.u + '] “' + x.w.join('/') + '” in: ' + x.t)));
+  check('and every answer after a tap opens warm — "Strong set.", "Good." or "Noted." — or says it cleared, before any number',
+        said.filter(x => /^(Strong set|Good|Noted|Cleared)\./.test(x.t) || !/^(Strong|Good|Noted|Cleared)/.test(x.t)).length === said.length &&
+        said.filter(x => /Next one|Same again|Stay at|Saved with the set|Cleared/.test(x.t)).every(x => /^(Strong set|Good|Noted|Cleared)\./.test(x.t)));
+  // The target's why when his rating moved or held it (coach-prog.js decide()).
+  const rated = ['Last time 185 lb × 12 felt too hard, so it’s the same again.', 'Last time you rated 185 lb for 10, 10, 9 way too easy.'];
+  const ratedSrc = literals(decomment(PSRC)).filter(t => /felt too hard|way too easy|you rated/.test(t));
+  check('the target’s why when his rating moved or held it is in his words, under the same ban (' + ratedSrc.length + ' literals)',
+        ratedSrc.length >= 3 && rated.every(t => !hits(t.replace(/\brated ([^.]*?)way too easy\b/, 'rated $1')).length) &&
+        !ratedSrc.some(t => hits(t.replace(/^\s*way too easy\b/, '')).filter(w => w !== 'easy').length));
 }
 
 /* ---------- report ---------- */

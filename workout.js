@@ -765,7 +765,10 @@ function editWorkout(record, mk, dd) {
     (record.exercises || []).map(ex => ({
       exId: ex.exId, name: ex.name, group: ex.group, equipment: ex.equipment,
       ...(ex.block ? { block: ex.block } : null),
-      sets: (ex.sets || []).map(s => ({ w: s.w, r: s.r, type: s.type || 'N', done: true }))
+      // v54: his effort rating comes too, exactly as stored, so saveEdit's
+      // record carries it (collectFrom spreads it) and an edit erases nothing.
+      sets: (ex.sets || []).map(s => ({ w: s.w, r: s.r, type: s.type || 'N', done: true,
+                                        ...(s.rir != null ? { rir: s.rir } : null) }))
     })),
     blockOrder(record.exercises)
   );
@@ -941,6 +944,27 @@ function addPicked(chosen) {
   persistSession(); render();
 }
 
+/* v54: what the live sheet's effort chips and "Use it for my next set" are
+   handed, the way "Add it" is handed addPicked — Coach never writes the
+   session itself. Each is an edit to the LIVE session, never an edit of a past
+   one, then the screen repaints as it does after "Add it". A rating lands only
+   on a set that is still ticked; the answer says whether it did. */
+function rateLive(at, rir) {
+  const ex = session && !session._edit && at ? session.exercises[at.exIdx] : null;
+  const s = ex && ex.sets && ex.sets[at.setIdx];
+  if (!s || !s.done) return false;
+  ex.sets[at.setIdx] = rateSet(s, rir);
+  persistSession(); render();
+  return true;
+}
+function useNextLive(at, t) {
+  if (!session || session._edit) return;
+  session.exercises = useNext(session.exercises, at, t);
+  persistSession(); render();
+}
+// Everything the live sheet is handed, from the chip and from the line.
+const liveOpts = current => ({ session, add: addPicked, rate: rateLive, useNext: useNextLive, current });
+
 function renderSession() {
   const editing = !!session._edit;
   const wrap = el('div');
@@ -966,7 +990,7 @@ function renderSession() {
      next?" in a small sheet. Null for a basic account and in an edit, so the
      row simply has no chip rather than a disabled one. */
   const coachChip = editing ? null
-    : liveChip({ session, add: addPicked, current: nudgedAt(session) });
+    : liveChip(liveOpts(nudgedAt(session)));
   if (coachChip) bar.appendChild(coachChip);
 
   if (!editing) {
@@ -1212,7 +1236,7 @@ function renderExercise(ex, exIdx) {
   // below it moves. Tapped, it opens the sheet with the why; dismissed, the
   // hint comes back.
   const nudge = nudgeLine(session, exIdx, {
-    open: () => openLiveSheet({ session, add: addPicked, current: exIdx }),
+    open: () => openLiveSheet(liveOpts(exIdx)),
     dismiss: () => { session._coach = dismissNudge(session._coach); persistSession(); render(); }
   });
   if (nudge) block.appendChild(nudge);
@@ -1501,7 +1525,9 @@ function collectDone() { return collectFrom(session.exercises); }
    from this one place, and tools-check/tick-targets.mjs drives the real one. */
 export function tickSet(s) {
   const was = s || {};
-  if (was.done) return { ...was, done: false };
+  // v54: an untick takes his effort rating with it — a rating is of a set
+  // that was done — and changes nothing else.
+  if (was.done) { const { rir, ...rest } = was; return { ...rest, done: false }; }
   const blank = v => v == null || v === '';
   const out = { ...was, done: true };
   if (blank(was.w) && !blank(was.tw)) out.w = String(was.tw);
@@ -1533,6 +1559,53 @@ export function lastTargets(prevSets, n) {
   if (!work.length) return null;
   const s = work[Number.isInteger(n) && n >= 0 ? Math.min(n, work.length - 1) : work.length - 1];
   return { tw: parseFloat(s.w) > 0 ? String(s.w) : '', tr: String(s.r) };
+}
+
+/* ---------- his rating of a set (v54) ----------
+
+   THE RULE, Micah's request of 24 Sep 2026 ("that set was way too easy"),
+   decided 25 Sep (SHIP-V54-PROMPT §3.4), and the native set handler builds to
+   the same words:
+
+     The live Coach sheet's three chips store `rir` on the set they rate — an
+     integer, reps he had left: way too easy 4, about right 2, too hard 0.
+     Another chip replaces it; the same chip again deletes the key (never a
+     null). Unticking the set deletes it too (tickSet). It rides into the
+     record with the set, because collectFrom spreads every key but the
+     targets; an edit carries it (editWorkout, saveEdit); the "last time"
+     index does not (foldSessionIntoHistory keeps w, r, type), because nothing
+     that reads the index reads a rating. A copied set never carries one:
+     dupSet, "+ Set", routines and the builder all build theirs fresh.
+
+   Pure: the set as it should be now. Anything but an integer 0–5 clears. */
+export function rateSet(s, rir) {
+  const { rir: was, ...rest } = s || {};
+  return Number.isInteger(rir) && rir >= 0 && rir <= 5 ? { ...rest, rir } : rest;
+}
+
+/* "Use it for my next set": Coach's number for the next set, written as the
+   grey targets (tw/tr) on the next unticked set of that exercise after the one
+   rated — in the order the screen shows it, a duplicated block's later copies
+   included, warm-ups and drop sets passed over — or on one new set added to
+   that exercise when none is left. Never `w` or `r`: a box he typed into keeps
+   what he typed, and nothing is logged until he ticks it. The target is
+   Coach's, not last time's, so `tl` goes. Pure: the exercises as they should be
+   now; anything it cannot place leaves them as they were. */
+export function useNext(exercises, at, t) {
+  const list = (exercises || []).slice();
+  const home = at && list[at.exIdx];
+  if (!home || !home.exId || !t || t.tw == null || t.tr == null || t.tr === '') return list;
+  const target = s => { const { tl, ...rest } = s; return { ...rest, tw: String(t.tw), tr: String(t.tr) }; };
+  for (let i = at.exIdx; i < list.length; i++) {
+    const ex = list[i];
+    if (!ex || ex.exId !== home.exId) continue;
+    const j = (ex.sets || []).findIndex((s, k) => (i !== at.exIdx || k > at.setIdx) && s && !s.done && s.type !== 'W' && s.type !== 'D');
+    if (j === -1) continue;
+    list[i] = { ...ex, sets: ex.sets.map((s, k) => (k === j ? target(s) : s)) };
+    return list;
+  }
+  list[at.exIdx] = { ...home, sets: (home.sets || []).concat([{ w: '', r: '', type: 'N', done: false, tw: String(t.tw), tr: String(t.tr) }]) };
+  return list;
 }
 
 /* The ticked sets collectFrom is about to leave out: ticked, and no reps. It is

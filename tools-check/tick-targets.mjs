@@ -412,6 +412,40 @@ section('G. the block check box ticks through tickSet — a block of grey target
         /session\.exercises = setBlockDone\(session\.exercises, n, next\);/.test(WSRC) && /tickSet\(s\)/.test(liftB('setBlockDone')));
 }
 
+/* ================= I. v54 — AN UNTICK TAKES HIS RATING WITH IT ================= */
+section('I. v54 — unticking a set deletes its effort rating; nothing else about a tick moves');
+{
+  /* SHIP-V54-PROMPT §3.4: a rating (`rir`) is of a set that was done, so
+     unticking the set deletes the key — deleted, never set to null — and the
+     rest of the rule above is untouched: the filled numbers stay, a typed box
+     stays, ticking again changes nothing but the tick. The block box unticks
+     through the same tickSet, so it takes the rating too. */
+  const rated = { ...set('185', '8', { tw: '185', tr: '8' }), done: true, rir: 4 };
+  const off = tickSet(rated);
+  check('unticked: done false, and the rir key is gone — not null, not 0, gone', off.done === false && !('rir' in off), J(off));
+  check('and everything else as it was: the numbers, the targets', off.w === '185' && off.r === '8' && off.tw === '185' && off.tr === '8');
+  const zero = tickSet({ ...set('185', '8'), done: true, rir: 0 });
+  check('a rating of 0 (too hard) goes the same way — a falsy rating is still a rating', !('rir' in zero));
+  const plain = { ...set('185', '8'), done: true };
+  check('an unrated set unticks exactly as it always did', J(tickSet(plain)) === J({ ...plain, done: false }));
+  const on = tickSet(off);
+  check('ticked again: no rating comes back — he rates the set he did, after he does it', on.done === true && !('rir' in on));
+  check('and a tick never touches a rating (a set is only rated once it is ticked, so this is belt and braces)',
+        tickSet({ ...set('', '', { tw: '185', tr: '8' }), rir: 2 }).rir === 2);
+  const liftB = name => {
+    const m = new RegExp('^function ' + name + '\\(', 'm').exec(WSRC);
+    return m ? WSRC.slice(m.index, WSRC.indexOf('\n}\n', m.index) + 3) : '';
+  };
+  const K = new Function('tickSet', [liftB('blockFillableSets'), liftB('blockTicked'), liftB('setBlockDone')].join('\n') +
+    '\nreturn { setBlockDone };')(tickSet);
+  const blk = [{ ...ex('bench', [{ ...set('185', '8'), done: true, rir: 4 }, { ...set('185', '8'), done: true, rir: 0 }]), block: 1 }];
+  const unb = K.setBlockDone(clone(blk), 1, false)[0].sets;
+  check('the block box, unticked, takes every rating in it with it', unb.every(x => x.done === false && !('rir' in x)), J(unb));
+  const rec = collectFrom([ex('bench', [{ ...set('185', '8'), done: true, rir: 4 }, { ...set('185', '6'), done: true }])]);
+  check('and a ticked, rated set reaches the record with its rating — collectFrom spreads it, an unrated one gains no key',
+        rec[0].sets[0].rir === 4 && !('rir' in rec[0].sets[1]), J(rec));
+}
+
 /* ================= H. THE QTY-ROW BUTTONS ================= */
 section('H. Log, Save and Add keep the 54px the stylesheet gives them');
 {

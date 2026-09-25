@@ -65,7 +65,7 @@
 // session MATH of analytics.js (the e1rm the set row prints). coach.js imports
 // this; nothing imports back.
 
-import { baselines, exposuresFor, targetFor } from './coach-prog.js';
+import { baselines, exposuresFor, targetFor, nextSet } from './coach-prog.js';
 import { bwAt, energyBand, volumeFloor, paceFor } from './coach-goal.js';
 import { labelW, labelRate, wOut } from './units.js';
 import { GROUPS, GROUP_ORDER } from './exercises.js';
@@ -1027,6 +1027,23 @@ export function nextTargets(input, session, now) {
     return out;
   } catch {
     return [];
+  }
+}
+
+/* v54: THE NEXT SET, mid-session — coach-prog.js's nextSet() for one lift of
+   the prepared log, with the same exposures, group clock, goal, energy and
+   mark "What's next time?" reads above, and `repDrop`, coach-live.js's own
+   REP_DROP, which coach.js hands over (neither this file nor coach-prog.js
+   imports coach-live.js). Here because coach.js reaches coach-prog.js through
+   the builder and this file and never directly. A lift with no log has no
+   next set. */
+export function nextSetFor(input, exId, sets, repDrop) {
+  try {
+    const i = prepare(input || {});
+    const l = i.lifts.find(x => x.exId === exId);
+    return l && Number.isFinite(i.now) ? nextSet(l, { ...ctxOf(i, i.now), repDrop }, sets) : null;
+  } catch {
+    return null;
   }
 }
 

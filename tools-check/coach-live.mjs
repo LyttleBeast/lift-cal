@@ -117,6 +117,10 @@ writeFileSync(join(dir, 'coach.mjs'), src('coach.js')
 const C = await import(pathToFileURL(join(dir, 'coach.mjs')).href);
 const L = await import(pathToFileURL(join(dir, 'coach-live.mjs')).href);
 const U = await import(real('units.js').slice(1, -1));
+// v54: the real coach-prog.js, as staged for coach.js, for the targets the
+// fence allows — worked out by the engine, never restated here.
+const P = await import(pathToFileURL(join(dir, 'coach-prog.mjs')).href);
+const EFFORT_RIRS = [4, 2, 0, null];
 
 /* ---------- harness ---------- */
 let pass = 0, fail = 0;
@@ -211,6 +215,62 @@ const live = rows => ({
 });
 const n = (id, count, r) => Array.from({ length: count }, () => [LOAD[id], r || REPS[id]]);
 const read = (session, extra, opts) => C.coach(input(extra)).live(session, opts);
+
+/* v54: THE NEXT SET'S FIXTURE. Eight weeks of four lifts climbing by his own
+   steps, typed in the account's own unit — a kilo account's loads are kilos
+   converted once, so they sit on the half-kilo grid and name targets there.
+   Every lift ends two sessions at its top weight, so each has a target one of
+   its steps up: bench 190 lb × 8 (87.5 kg), row 155 × 10 (70), squat 265 × 5
+   (120), incline dumbbell 70 × 10 (30), and an assisted pull-up, which names
+   no next set at all. The targets and steps below are coach-prog.js's own,
+   through the overlap input coach.js builds — read, never typed. */
+function fence(u) {
+  const FL = {
+    'barbell-bench-press': { name: 'Barbell Bench Press', group: 'chest', equipment: 'barbell' },
+    'incline-dumbbell-bench-press': { name: 'Incline Dumbbell Bench Press', group: 'chest', equipment: 'dumbbell' },
+    'barbell-row': { name: 'Barbell Row', group: 'back', equipment: 'barbell' },
+    'back-squat-high-bar': { name: 'Back Squat (High Bar)', group: 'legs', equipment: 'barbell' },
+    'assisted-pull-up': { name: 'Assisted Pull-Up', group: 'back', equipment: 'machine' }
+  };
+  const PLAN = u === 'kg'
+    ? { 'barbell-bench-press': [[77.5, 80, 80, 82.5, 82.5, 85, 85, 85], 8], 'incline-dumbbell-bench-press': [[22, 24, 24, 26, 26, 28, 28, 28], 10],
+        'barbell-row': [[57.5, 60, 60, 62.5, 62.5, 65, 67.5, 67.5], 10], 'back-squat-high-bar': [[95, 100, 100, 105, 105, 110, 115, 115], 5],
+        'assisted-pull-up': [[27.5, 25, 25, 22.5, 22.5, 20, 20, 20], 8] }
+    : { 'barbell-bench-press': [[170, 175, 175, 180, 180, 185, 185, 185], 8], 'incline-dumbbell-bench-press': [[50, 55, 55, 60, 60, 65, 65, 65], 10],
+        'barbell-row': [[135, 140, 140, 145, 145, 150, 150, 150], 10], 'back-squat-high-bar': [[225, 235, 235, 245, 245, 255, 255, 255], 5],
+        'assisted-pull-up': [[60, 55, 55, 50, 50, 45, 45, 45], 8] };
+  const store = L => (u === 'kg' ? String(U.wIn(L, 'kg')) : String(L));
+  const ex = (id, sets) => ({ exId: id, ...FL[id], sets });
+  const sessions = [];
+  for (let k = 0; k < 8; k++) {
+    const ago = 3 + 7 * (7 - k);
+    const s3 = (id, sh) => ex(id, Array.from({ length: 3 }, () => ({ w: store(PLAN[id][0][k]), r: String(PLAN[id][1]), type: 'N', done: true })));
+    sessions.push({ id: 'fp' + k, startedAt: NOW - ago * DAY, _date: key(NOW - ago * DAY),
+                    exercises: [s3('barbell-bench-press'), s3('incline-dumbbell-bench-press')] });
+    sessions.push({ id: 'fb' + k, startedAt: NOW - (ago + 2) * DAY, _date: key(NOW - (ago + 2) * DAY),
+                    exercises: [s3('barbell-row'), s3('assisted-pull-up')] });
+    sessions.push({ id: 'fl' + k, startedAt: NOW - (ago + 4) * DAY, _date: key(NOW - (ago + 4) * DAY),
+                    exercises: [s3('back-squat-high-bar')] });
+  }
+  sessions.sort((a, b) => a.startedAt - b.startedAt);
+  const inp = { ...input({ u, sessions, lib: FL }) };
+  const OI = C.overlapInput(inp);
+  const ctx = { now: NOW, u, aim: null, exp: null, energy: null, rateWk: null };
+  const r2 = x => Math.round(x * 100) / 100;
+  const target = {}, step = {}, logged = {}, reps = {};
+  Object.keys(FL).forEach(id => {
+    const l = OI.lifts.find(x => x.exId === id);
+    const t = l ? P.targetFor(l, ctx, l.mark || null) : null;
+    target[id] = t && t.loadLb != null ? r2(U.wOut(t.loadLb, u)) : null;
+    const b = l ? P.baselines(l, ctx) : null;
+    step[id] = b && b.step ? b.step.value : null;
+    logged[id] = [...new Set(PLAN[id][0])];
+    reps[id] = PLAN[id][1];
+  });
+  const allowed = (id, sets) => new Set(logged[id].concat(sets.filter(z => z.w !== '').map(z => r2(U.wOut(parseFloat(z.w) || 0, u))),
+    target[id] != null ? [target[id]] : [], target[id] != null && step[id] ? [r2(target[id] + step[id])] : []));
+  return { input: inp, ids: Object.keys(FL), target, step, logged, reps, store, ex, allowed, sessions, lib: FL };
+}
 
 /* ================= A. EACH OF THE FOUR ================= */
 section('A. each answer, from a session it is true of');
@@ -420,8 +480,17 @@ section('D. thin history, and every gate, is silence');
         [hiddenWeb, hiddenNative].map(h => h && h.kind + ': ' + h.text).join(' | '));
 }
 
-/* ================= E. NO NUMBER TO PUT ON THE BAR ================= */
-section('E. no weight suggested anywhere — a figure with a unit is a quote of a logged set or it is a failure');
+/* ================= E. A NUMBER FOR THE BAR IS A QUOTE OR A TARGET =================
+   Until v54 this section read "no weight suggested anywhere". Stage five
+   REPLACED that fence rather than deleting it (spec §3.10, SHIP-V54-PROMPT
+   §5.2): the live sheet now says the next set, and every number it prints is
+   either a quote of a set he logged or a coach-prog.js target — the session's
+   target, one of the lift's own steps above it, a load he has logged — with
+   nothing heavier after a stop and no second step up in a session, in pounds
+   and in kilos. The first half below is the shipped check, unchanged: the four
+   habit answers still quote and never suggest. The second half is the new
+   fence, over the next set (section H drives its rules one by one). */
+section('E. a number for the bar is a quote of a logged set or a coach-prog.js target — nothing heavier after a stop, one step a session, both units');
 {
   // Every answer the sessions above and a spread of others can produce, in
   // both units, with every string in it: text, the short nudge, and the why.
@@ -479,6 +548,70 @@ section('E. no weight suggested anywhere — a figure with a unit is a quote of 
         !/'[^']*\b(lb|lbs|kg|kgs|pounds?|kilos?)\b[^']*'/i.test(src('coach-live.js')
           .replace(/\/\*[\s\S]*?\*\//g, '').split('\n').map(l => l.replace(/(^|[^:'"\\])\/\/.*$/, '$1')).join('\n')
           .replace(/=== 'kg' \? 'kg' : 'lb'/g, '')));
+
+  /* ---- v54: the next set, swept ----
+     Generated live sessions, a seeded generator, both units — the kilo sweep
+     on a log typed in kilos (fence(), section H's fixture), since a pound log
+     read in kilos is off the half-kilo grid and names no target at all. For
+     each, the sheet's next set and Coach's words after a tap on each chip. The
+     allowed numbers are worked out by the REAL coach-prog.js, through the same
+     overlap input coach.js builds: the lift's target, that plus one of its own
+     steps, and every load logged — in the log or on the live session itself.
+     Nothing here restates a rule. */
+  const swept = { lb: 0, kg: 0 }, stops = { lb: 0, kg: 0 }, ups = { lb: 0, kg: 0 };
+  const off = [], heavyAfterStop = [], twoSteps = [], pastStep = [];
+  for (const u of ['lb', 'kg']) {
+    const F = fence(u);
+    let seed = u === 'kg' ? 91 : 17;
+    const rnd = k => { seed = (seed * 1103515245 + 12345) % 2147483648; return Math.floor(seed / 65536) % k; };
+    for (let k = 0; k < 500; k++) {
+      const id = F.ids[rnd(F.ids.length)];
+      const T = F.target[id], S = F.step[id];
+      if (T == null) continue;
+      const loads = [T, T, T, S ? T + S : T, F.logged[id][rnd(F.logged[id].length)]];
+      const count = rnd(5);
+      const sets = [];
+      for (let j = 0; j < count; j++) {
+        const ld = loads[rnd(loads.length)];
+        const r = Math.max(1, F.reps[id] + rnd(5) - 2);
+        const type = rnd(9) === 0 ? 'F' : 'N';
+        const rir = [null, null, 4, 2, 0][rnd(5)];
+        sets.push({ w: F.store(ld), r: String(r), type, done: true, ...(rir == null ? null : { rir }) });
+      }
+      sets.push({ w: '', r: '', type: 'N', done: false });
+      const s = { id: 'wsweep', name: 'Sweep', startedAt: NOW - 1800e3, exercises: [F.ex(id, sets)] };
+      const got = C.coach(F.input).liveSet(s, { current: 0 });
+      const nx = got && got.next;
+      if (!nx) continue;
+      swept[u]++;
+      const said = [nx.text].concat(nx.why, EFFORT_RIRS.map(v => L.rateAnswer(v, nx, u)));
+      const allowed = F.allowed(id, sets);
+      said.forEach(t => { for (const m of t.matchAll(/(\d[\d.,]*)\s*(lb|kg)\b/g)) {
+        const v = Number(m[1].replace(/,/g, ''));
+        if (m[2] !== u || ![...allowed].some(a => Math.abs(a - v) < 0.06)) off.push(u + ': ' + m[0] + ' in: ' + t + ' · ' + J(sets.map(z => z.w + 'x' + z.r)));
+      } });
+      const lu = w => Math.round(U.wOut(parseFloat(w) || 0, u) * 100) / 100;
+      const done = sets.filter(z => z.done);
+      const next = lu(nx.tw);
+      const first = done[0];
+      const stop = done.some(z => z.type === 'F' || z.rir === 0) ||
+        done.slice(1).some(z => lu(z.w) <= lu(first.w) && Number(z.r) <= Number(first.r) * (1 - L.REP_DROP));
+      if (stop) {
+        stops[u]++;
+        if (nx.kind !== 'stop' || next > lu(done[done.length - 1].w) + 0.01) heavyAfterStop.push(u + ' ' + id + ': ' + J(sets.map(z => z.w + 'x' + z.r + (z.type === 'F' ? 'F' : '') + (z.rir != null ? '@' + z.rir : ''))) + ' → ' + nx.kind + ' ' + next);
+      }
+      if (nx.kind === 'up') ups[u]++;
+      if (done.some(z => lu(z.w) > T + 0.01) && next > Math.max(...done.map(z => lu(z.w))) + 0.01) twoSteps.push(u + ' ' + id + ': ' + next);
+      if (next > T + (S || 0) + 0.01) pastStep.push(u + ' ' + id + ': ' + next + ' over ' + T + ' + ' + S);
+    }
+  }
+  check('the next set, swept over ' + (swept.lb + swept.kg) + ' live sessions (' + swept.lb + ' lb, ' + swept.kg + ' kg): every figure is a logged load or a coach-prog.js target, in the account’s unit',
+        swept.lb > 150 && swept.kg > 150 && !off.length, list(off));
+  check('nothing heavier after a stop — a set to failure, a set rated too hard, reps down a quarter (' + (stops.lb + stops.kg) + ' stops)',
+        stops.lb > 20 && stops.kg > 20 && !heavyAfterStop.length, list(heavyAfterStop));
+  check('no second step up on a lift in one session', !twoSteps.length, list(twoSteps));
+  check('and never more than one of the lift’s own steps over its target (' + (ups.lb + ups.kg) + ' steps up swept)',
+        ups.lb > 5 && ups.kg > 5 && !pastStep.length, list(pastStep));
 }
 
 /* ================= F. THE EXERCISE IN HAND ================= */
@@ -516,6 +649,121 @@ section('G. the same session, read twice, is the same answer — and is never wr
   check('liveRead survives junk without throwing',
         [null, undefined, {}, { session: 5 }, { session: { exercises: 'x' } }, { session: { exercises: [null, {}] } }]
           .every(x => L.liveRead(x) === null));
+}
+
+/* ================= H. v54 — THE NEXT SET, AND HIS RATING OF THE LAST ONE ================= */
+section('H. v54 — the next set (spec §3.10 with his rating), each rule by name, and the set the chips rate');
+{
+  /* Every rule of SHIP-V54-PROMPT §5.2, driven through c.liveSet — the call
+     the live sheet makes — on fence()'s log: bench's target is 190 lb × 8
+     (87.5 kg × 8), one of his 5 lb (2.5 kg) steps over the 185 he did twice. */
+  const FL = fence('lb'), FK = fence('kg');
+  check('the fixture’s targets are coach-prog.js’s: bench 190 lb / 87.5 kg, squat 265 / 120, row 155 / 70, incline 70 / 30, assisted none',
+        FL.target['barbell-bench-press'] === 190 && FK.target['barbell-bench-press'] === 87.5 &&
+        FL.target['back-squat-high-bar'] === 265 && FK.target['back-squat-high-bar'] === 120 &&
+        FL.target['barbell-row'] === 155 && FK.target['barbell-row'] === 70 &&
+        FL.target['incline-dumbbell-bench-press'] === 70 && FK.target['incline-dumbbell-bench-press'] === 30,
+        J({ lb: FL.target, kg: FK.target }));
+  const B = 'barbell-bench-press';
+  const sess = (F, id, rows, extra) => ({ id: 'wh', name: 'H', startedAt: NOW - 1800e3, ...(extra || null),
+    exercises: [F.ex(id, rows.map(([w, r, x]) => ({ w: w === '' ? '' : F.store(w), r: r === '' ? '' : String(r), type: (x && x.type) || 'N',
+      done: !(x && x.open), ...(x && x.rir != null ? { rir: x.rir } : null) })))] });
+  const nextOf = (F, s, extra, opts) => C.coach({ ...F.input, ...(extra || null) }).liveSet(s, opts || { current: 0 });
+  const said = (F, rows, extra) => { const r = nextOf(F, sess(F, B, rows), extra); return r && r.next ? r.next.kind + ' · ' + r.next.text : r && r.next; };
+  const rows = [
+    ['nothing ticked yet: the session’s target', [['', '', { open: true }], ['', '', { open: true }]], 'target · Next set: 190 lb × 8.'],
+    ['190 × 8, the target met: the same again', [[190, 8]], 'same · Next set: 190 lb × 8.'],
+    ['190 × 10, two past the target at its weight: one step up', [[190, 10]], 'up · Next set: 195 lb × 8.'],
+    ['190 × 8 rated way too easy: one step up', [[190, 8, { rir: 4 }]], 'up · Next set: 195 lb × 8.'],
+    ['190 × 8 rated about right: nothing moves', [[190, 8, { rir: 2 }]], 'same · Next set: 190 lb × 8.'],
+    ['190 × 8 rated too hard: stop — the same weight, nothing heavier', [[190, 8, { rir: 0 }]], 'stop · Next set: 190 lb × 8.'],
+    ['190 × 10 then 195 × 10: the step is used — the same again, never a second', [[190, 10], [195, 10]], 'same · Next set: 195 lb × 8.'],
+    ['195 × 8 rated way too easy after the step: the same again', [[190, 10], [195, 8, { rir: 4 }]], 'same · Next set: 195 lb × 8.'],
+    ['190 × 8 to failure: stop', [[190, 8, { type: 'F' }]], 'stop · Next set: 190 lb × 8.'],
+    ['190 × 8 then 190 × 6, reps down a quarter: stop', [[190, 8], [190, 6]], 'stop · Next set: 190 lb × 8.'],
+    ['a stop, then a set rated way too easy: still nothing heavier', [[190, 8, { rir: 0 }], [190, 8, { rir: 4 }]], 'stop · Next set: 190 lb × 8.'],
+    ['190 × 7, under the bottom of his range: one step down, to 185, a weight he has logged', [[190, 7]], 'down · Next set: 185 lb × 8.'],
+    ['190 × 12 at a load he chose under the target (185): not the target’s weight, so no step — the same again', [[185, 12]], 'same · Next set: 185 lb × 8.']
+  ];
+  rows.forEach(([label, r, want]) => check(label, said(FL, r) === want, String(said(FL, r))));
+  check('in kilos, the same rules on his own grid: 87.5 × 8 rated way too easy → 90 kg × 8, stored as pounds',
+        said(FK, [[87.5, 8, { rir: 4 }]]) === 'up · Next set: 90 kg × 8.' &&
+        nextOf(FK, sess(FK, B, [[87.5, 8, { rir: 4 }]])).next.tw === String(U.wIn(90, 'kg')), String(said(FK, [[87.5, 8, { rir: 4 }]])));
+  check('and a kilo stop: 87.5 × 8 rated too hard → stay at 87.5', said(FK, [[87.5, 8, { rir: 0 }]]) === 'stop · Next set: 87.5 kg × 8.');
+  check('a dumbbell in kilos steps by his own 2 kg: 30 × 12 → 32 kg × 10',
+        (nextOf(FK, sess(FK, 'incline-dumbbell-bench-press', [[30, 12]])).next || {}).text === 'Next set: 32 kg × 10.');
+  check('squat: 265 × 3, under his 5 — one step down to 255, logged', (nextOf(FL, sess(FL, 'back-squat-high-bar', [[265, 3]])).next || {}).text === 'Next set: 255 lb × 5.');
+  check('an assisted lift: no next set, ever (less help is the heavier set, and Coach names none mid-session)',
+        nextOf(FL, sess(FL, 'assisted-pull-up', [[45, 8]])).next === null);
+  const tail = FL.sessions.map(s => ({ ...s, exercises: s.exercises.map(e => e.exId !== B || s !== FL.sessions.filter(x => x.exercises.some(z => z.exId === B)).pop() ? e
+    : { ...e, sets: [{ w: '205', r: '5', type: 'N', done: true }, { w: '175', r: '8', type: 'N', done: true }, { w: '175', r: '8', type: 'N', done: true }] }) }));
+  check('a lift Coach cannot target (a top set with back-offs after straight sets — a defer): no number, and the chips still rate',
+        (() => { const r = nextOf(FL, sess(FL, B, [[185, 8]]), { sessions: tail }); return r && r.next === null && !!r.rated; })());
+
+  // The gates.
+  const one = sess(FL, B, [[190, 8]]);
+  const off = nextOf(FL, one, { settings: { v: 1, mute: { targets: true }, answers: {}, asked: {} } });
+  check('"Weight and rep targets" off: no next-set number — and the chips still rate the set', off && off.next === null && !!off.rated && off.rated.n === 1);
+  check('an edit of a past session: nothing at all — no chips, no number', nextOf(FL, { ...one, _edit: { mk: '2026-09', dd: '01' } }) === null);
+  check('Basic: nothing — the chips live in the sheet the Pro chip opens', nextOf(FL, one, { tier: { pro: false } }) === null);
+  check('"In the gym" off: nothing — no chip, so no sheet', nextOf(FL, one, { settings: { v: 1, mute: { live: true }, answers: {}, asked: {} } }) === null);
+  const unread = nextOf(FL, one, { log: 'unknown' });
+  check('a log Coach could not read: no number off it, and the chips still rate', unread && unread.next === null && !!unread.rated);
+  // DONE is still tried first: a session at its usual length has no next set.
+  const s4 = live([['bench', n('bench', 4)], ['incline', n('incline', 3)], ['fly', n('fly', 3)], ['curl', n('curl', 3)], ['pushdown', n('pushdown', 3)]]);
+  const d4 = C.coach(input()).liveSet(s4, { current: 0 });
+  check('when the session reads "you’re probably good for today", no next-set number is shown',
+        read(s4, {}, { current: 0 }).kind === 'done' && d4 && d4.next === null && !!d4.rated, J(d4 && d4.next));
+  const s1 = live([['bench', n('bench', 1)]]);
+  check('while one set into the same lift, on the same log, there is one — the gate is done, nothing else',
+        !!(C.coach(input()).liveSet(s1, { current: 0 }) || {}).next);
+
+  // The set the chips rate.
+  const dup = { id: 'wd', name: 'D', startedAt: NOW - 1800e3, exercises: [
+    FL.ex(B, [{ w: '190', r: '8', type: 'N', done: true }, { w: '190', r: '8', type: 'N', done: true }]),
+    FL.ex('barbell-row', [{ w: '155', r: '10', type: 'N', done: true }]),
+    FL.ex(B, [{ w: '190', r: '7', type: 'N', done: true, rir: 2 }, { w: '', r: '', type: 'N', done: false }])] };
+  const rd = nextOf(FL, dup, null, { current: 2 });
+  check('the last ticked working set of the exercise in hand, across a duplicated block: the second copy’s set 1',
+        rd && rd.rated && rd.rated.exIdx === 2 && rd.rated.setIdx === 0 && rd.rated.n === 1 && rd.rated.rir === 2, J(rd && rd.rated));
+  const warm = nextOf(FL, sess(FL, B, [[95, 10, { type: 'W' }]]));
+  check('a warm-up is not a working set: nothing to rate yet, and the target stands', warm && warm.rated === null && warm.next && warm.next.kind === 'target');
+  check('"Set 3 · 190 lb × 8. How was it?" — in kilos "Set 1 · 87.5 kg × 8.", at bodyweight "bodyweight × 10"',
+        L.rateAsk({ n: 3, w: '190', r: 8 }, 'lb') === 'Set 3 · 190 lb × 8. How was it?' &&
+        L.rateAsk({ n: 1, w: String(U.wIn(87.5, 'kg')), r: 8 }, 'kg') === 'Set 1 · 87.5 kg × 8. How was it?' &&
+        L.rateAsk({ n: 1, w: '0', r: 10 }, 'lb') === 'Set 1 · bodyweight × 10. How was it?');
+  check('the three chips, in his words, and the integer each stores', J(L.EFFORT) === J([{ rir: 4, label: 'Way too easy' }, { rir: 2, label: 'About right' }, { rir: 0, label: 'Too hard' }]));
+
+  // What Coach says after a tap: warm first, then the number.
+  const nx = rows_ => nextOf(FL, sess(FL, B, rows_)).next;
+  const words = [
+    [4, nx([[190, 8, { rir: 4 }]]), 'Strong set. Next one: 195 lb × 8.'],
+    [4, nx([[190, 10], [195, 8, { rir: 4 }]]), 'Good. Stay at 195 lb for the next one.'],
+    [2, nx([[190, 8, { rir: 2 }]]), 'Good. Same again: 190 lb × 8.'],
+    [0, nx([[190, 8, { rir: 0 }]]), 'Noted. Stay at 190 lb, or call that the last set of this one.'],
+    [2, nx([[190, 7, { rir: 2 }]]), 'Good. Next one: 185 lb × 8.'],
+    [4, null, 'Strong set. Saved with the set.'],
+    [0, null, 'Noted. Saved with the set.'],
+    [null, nx([[190, 8]]), 'Cleared.']
+  ];
+  const wrongWords = words.filter(([v, n2, w]) => L.rateAnswer(v, n2, 'lb') !== w).map(([v, n2, w]) => v + ': ' + L.rateAnswer(v, n2, 'lb') + ' (want ' + w + ')');
+  check('after a tap: "Strong set. Next one: 195 lb × 8." · "Good. Stay at 195 lb for the next one." · "Good. Same again: 190 lb × 8." · ' +
+        '"Noted. Stay at 190 lb, or call that the last set of this one." · and with no next set, the rating saved',
+        !wrongWords.length, list(wrongWords));
+  check('and in kilos, through units.js', L.rateAnswer(4, nextOf(FK, sess(FK, B, [[87.5, 8, { rir: 4 }]])).next, 'kg') === 'Strong set. Next one: 90 kg × 8.');
+
+  // The habit answers with a rating: exactly today's with no target in hand,
+  // and "one more set" never above a stopped next set.
+  const three = rir => live([['bench', n('bench', 3)]]).exercises.map(e => ({ ...e, sets: e.sets.map((s, i) => (i === 2 && rir != null ? { ...s, rir } : s)) }));
+  const liveOf = rir => ({ id: 'wlive', name: 'Live', startedAt: NOW - 1800e3, exercises: three(rir) });
+  const targetsOff = { settings: { v: 1, mute: { targets: true }, answers: {}, asked: {} } };
+  check('targets off, the live answer is exactly today’s whatever the rating — "one more set" on three of bench, rated too hard or not',
+        J(read(liveOf(0), targetsOff)) === J(read(liveOf(null), targetsOff)) && read(liveOf(0), targetsOff).kind === 'another');
+  check('with a target in hand, a set rated too hard stops the lift: "one more set" is not said above "call that the last set"',
+        (read(liveOf(0)) || {}).kind !== 'another' && (read(liveOf(null)) || {}).kind === 'another' &&
+        C.coach(input()).liveSet(liveOf(0), { current: 0 }).next.kind === 'stop');
+  check('and the one quiet line under a finished exercise never carries a number — its short answer is the habit answer’s',
+        [liveOf(null), liveOf(0), s1, s4].every(s => { const a = read(s); return !a || !/\d\s*(lb|kg)\b/.test(a.short || ''); }));
 }
 
 /* ---------- report ---------- */

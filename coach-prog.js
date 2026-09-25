@@ -32,8 +32,10 @@
 //
 // What lives where. The builder's `note` under an exercise stays a readout and
 // is coach-build.js's; the prescription is a separate field, `target`, and
-// this file is its only author. coach-live.js — mid-session — names no weight
-// at all, and nothing here changes that.
+// this file is its only author. Since v54 it also writes the NEXT SET mid-
+// session (nextSet, section 6: spec §3.10, with his effort rating), which
+// coach.js hands the in-session read; coach-live.js still names no weight of
+// its own. His rating of a set (`rir`) is read here and nowhere else.
 //
 // STATUS IS COMPUTED, NOT SHOWN. Each lift's progressing / holding / stalled /
 // declining is worked out because the confirmation dial and the battery need
@@ -226,8 +228,21 @@ const num = x => String(r2(x)).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
 const copySet = s => ({
   w: s && s.w != null ? String(s.w) : '',
   r: s && s.r != null ? String(s.r) : '',
-  type: (s && s.type) || 'N'
+  type: (s && s.type) || 'N',
+  // v54: his effort rating rides along when it is one — and only then, so an
+  // unrated set is the same three keys it always was.
+  ...(rirOf(s) != null ? { rir: rirOf(s) } : null)
 });
+
+/* v54: HIS RATING OF A SET — `rir`, reps he had left, an integer 0 to 5
+   (spec §6.4, §12.4). The live sheet writes 4 (way too easy), 2 (about
+   right) or 0 (too hard); a reader takes any integer 0–5. Anything else —
+   absent above all — is UNKNOWN, never 0, and every rule treats unknown
+   exactly as it did before the rating existed. */
+export function rirOf(s) {
+  const v = s && s.rir;
+  return Number.isInteger(v) && v >= 0 && v <= 5 ? v : null;
+}
 
 export function exposuresFor(sessions, exId) {
   if (typeof exId !== 'string' || !exId) return [];
@@ -769,12 +784,65 @@ function decide(ex, c) {
   /* ---------- the decision ---------- */
   const micro = range.source === 'default' && S && (T <= 0 || S / T > MICRO_SHARE);
   const hiEff = range.hi + (micro ? MICRO_REPS : 0);
-  const hitTop = last.R.every(r => r >= hiEff);
+  /* v54: HIS RATING, two of spec §6.4's RIR rules and no more (SHIP-V54-PROMPT
+     §5.3). A top set rated too hard (rir 0) means the session did not hit the
+     top, whatever its reps: not a miss, not a stall — the same again. Every
+     rated set at the target's load rated way too easy (rir 4+), none typed F
+     and every set at its target's reps (easyAt, below) counts as hitting it:
+     through the confirm dial, and never more than one step. A session with no
+     rating takes exactly the path it always took, and a replay (`c.plain`)
+     reads no rating at all. */
+  const rated = !c.plain;
+  const tooHardAt = e => rated && e.top.some(s => rirOf(s) === 0);
+  const repsHit = last.R.every(r => r >= hiEff);
+  const tooHard = repsHit && tooHardAt(last);
+  const easy = !repsHit && rated && easyAt(X.length - 1);
+  const hitTop = (repsHit && !tooHard) || easy;
   const inRange = Math.min(...last.R) >= lo;
   const anyF = last.top.some(s => s.type === 'F');
   const triples = last.scheme === 'straight' && range.fixed && range.lo <= 3;
   const stepOut = step ? { value: step.value, n: step.n, source: step.source } : null;
   const who = last.k === 1 ? 'Your top set' : 'Every set';
+  // "185 lb × 8", or "185 lb for 8, 8, 9" — the rated top sets, said once.
+  const topSaid = e => shown(e.all[e.top[0].i].w) +
+    (e.R.every(r => r === e.R[0]) ? ' × ' + e.R[0] : ' for ' + reps(e.R));
+
+  /* WAY TOO EASY, AT THE TARGET: the session X[k] against the target Coach
+     would have set before it — replayed with no rating read (`plain`), so a
+     replay never replays. Its top load is the target's load; every rated set
+     there is rated 4 or more; no set of it is typed F; and every set at that
+     load or above reached the target's reps (the shipped "met" test of
+     targetsReplay, and every set, not only the best of them). The replay has
+     no group clock (`groupDaysSince` null), so on a lift back from time off it
+     can differ from the target he saw — and a different load is no match, so
+     the rule then says nothing, which is the safe way round. */
+  function easyAt(k) {
+    const e = X[k];
+    if (!e || e.work.some(s => s.type === 'F')) return false;
+    const atT = e.work.filter(s => s.type !== 'D' && Math.abs(s.L - e.T) < GRID_TOL);
+    const marks = atT.map(s => rirOf(s)).filter(v => v != null);
+    if (!marks.length || !marks.every(v => v >= 4)) return false;
+    const before = (Array.isArray(ex.exposures) ? ex.exposures : []).filter(x => x && x.startedAt < e.startedAt);
+    const t0 = before.length ? decide({ ...ex, exposures: before, groupDaysSince: null }, { ...c, now: e.startedAt, plain: true }) : null;
+    if (!t0 || t0.loadLb == null) return false;
+    const TL = r2(wOut(t0.loadLb, u));
+    if (Math.abs(TL - e.T) >= GRID_TOL) return false;
+    const want = t0.sets.filter(x => x.type !== 'W' && Math.abs(r2(wOut(parseFloat(x.tw) || 0, u)) - TL) < GRID_TOL)
+      .map(x => parseInt(x.tr, 10)).filter(Number.isFinite).sort((a, b) => b - a);
+    const did = e.work.filter(s => s.type !== 'D' && s.L >= TL - GRID_TOL).map(s => s.R).sort((a, b) => b - a);
+    return want.length > 0 && did.length >= want.length && want.every((r, j) => did[j] >= r) &&
+           did.every(r => r >= want[want.length - 1]);
+  }
+
+  // Too hard at the top: the same again — same weight, same reps.
+  if (tooHard) {
+    const trs = last.R;
+    return out({ mode: 'hold', code: 'hard', loadLb: last.grid ? loadLbOf(lastW) : null,
+      sets: setsFor(null, trs),
+      line: last.grid ? loadLine(lastW, trs, ' again') : noLoadLine('same weight as last time', trs),
+      why: finish(['Last time ' + topSaid(last) + ' felt too hard, so it’s the same again.'].concat(last.grid ? [] : [offGrid]), last.grid),
+      stage, range: rangeOut, step: stepOut, ...common });
+  }
   // How the range is named: his own, or the labelled starting band — and when
   // a big jump has stretched that band's top by two, said so.
   const band = range.lo + '–' + range.hi;
@@ -789,8 +857,14 @@ function decide(ex, c) {
 
   if (hitTop) {
     const need = triples ? 2 : dials.confirm;
-    const prevHit = !!prev && Math.abs(prev.T - T) < GRID_TOL && prev.R.every(r => r >= hiEff);
-    const reached = who + ' reached ' + hiEff + at + shown(lastW);
+    // v54: the session before counts by the same two rules — at the top and
+    // not rated too hard there, or rated way too easy at its target.
+    const prevAt = !!prev && Math.abs(prev.T - T) < GRID_TOL;
+    const prevTop = prevAt && prev.R.every(r => r >= hiEff) && !tooHardAt(prev);
+    const prevEasy = prevAt && !prevTop && rated && need !== 1 && easyAt(X.length - 2);
+    const prevHit = prevTop || prevEasy;
+    const reached = easy ? 'Last time you rated ' + topSaid(last) + ' way too easy'
+                         : who + ' reached ' + hiEff + at + shown(lastW);
     if (!(need === 1 || prevHit)) {
       // Wanting a second look: say which of the reasons asked for it.
       let because;
@@ -817,10 +891,13 @@ function decide(ex, c) {
         stage, range: rangeOut, step: stepOut, ...common });
     }
     let steps = 1;
-    if (dials.maxSteps >= 2 && lift.lowerBody && lift.equipment === 'barbell' && !anyF &&
+    // A rating earns one step and never two (v54) — whether it made this
+    // session the top or gave the confirm dial its first look.
+    if (!easy && !(need !== 1 && prevEasy) && dials.maxSteps >= 2 && lift.lowerBody && lift.equipment === 'barbell' && !anyF &&
         last.R.every(r => r >= hiEff + TWO_STEP_REPS)) steps = 2;
     const trs = last.top.map(() => lo);
-    const head = steps === 2
+    const head = easy ? reached + '.'
+      : steps === 2
       ? (last.k === 1 ? 'Your top set went' : 'Every set went') + ' two or more past ' + hiEff + at + shown(lastW) + ', so two jumps.'
       : reached + onDay(last) + (range.fixed ? '.' : topOf());
     if (!last.grid || !S) {
@@ -1001,4 +1078,149 @@ export function targetFor(ex, ctx, mark) {
   } catch {
     return null;
   }
+}
+
+/* ================================================================
+   6.  THE NEXT SET (v54, stage five — spec §3.10, with his rating)
+   ================================================================
+   nextSet(ex, ctx, today) -> null | {
+     kind    'target'  before the first working set today: the session's target
+             'up'      one of this lift's own steps over the target, once a session
+             'same'    the same weight again
+             'down'    one step lighter, to a weight he has logged on this lift
+             'stop'    after a set to failure, a set rated too hard, or reps down
+                       a quarter: never heavier — the same weight, or call it there
+     tw, tr  the next set's target, stored pounds as a string (the box's own
+             shape) and reps; `loadLb` the same weight as a number
+     text    "Next set: 185 lb × 8."    why   the reasons, each with its number
+     stepped whether today's sets are already a step over the target }
+
+     ex     prescribe()'s, with its `mark` (targetFor's third argument)
+     ctx    prescribe()'s, plus `repDrop` — coach-live.js's REP_DROP, handed in
+            by coach.js: this file never imports that one, and a second copy of
+            the constant is how two rules drift
+     today  the live session's ticked working sets of this lift, in order:
+            { w, r, type, rir? }
+
+   MID-WORKOUT IS THE MOST SENSITIVE PLACE COACH SPEAKS, so this is the
+   narrowest reader in the file. Straight sets only (two or more at the
+   target's load), a loaded target only, and never an assisted lift. EVERY
+   NUMBER IT GIVES IS THE TARGET, ONE OF THIS LIFT'S OWN STEPS ABOVE IT, A LOAD
+   HE HAS LOGGED, OR A QUOTE OF THE SET HE JUST DID. No step known, no step up:
+   "the same again" is always a complete answer. And once a set is typed F,
+   rated too hard, or comes in a quarter under the first at the same or a
+   lighter weight, nothing it says for the rest of today is heavier than the
+   set he just did. About right (rir 2) moves nothing here; it is kept for the
+   next session's read. Pure, no clock but ctx.now; null on anything it cannot
+   read. */
+const LOADED = Object.freeze(['add', 'reps', 'hold', 'reduce', 'reenter']);
+const UP_REPS = 2;
+
+export function nextSet(ex, ctx, today) {
+  try {
+    return nextOf(ex || {}, ctx || {}, Array.isArray(today) ? today : []);
+  } catch {
+    return null;
+  }
+}
+
+function nextOf(ex, c, today) {
+  const u = c.u === 'kg' ? 'kg' : 'lb';
+  if (!Number.isFinite(c.now) || !(c.repDrop > 0 && c.repDrop < 1) || ex.equipment === 'cardio') return null;
+  const t = targetFor(ex, c, ex.mark || null);
+  if (!t || t.loadLb == null || !LOADED.includes(t.mode)) return null;
+  const lift = liftOf(ex, dialsFor({ aim: c.aim, exp: c.exp, energy: c.energy }));
+  if (lift.assisted) return null;
+  const unit = unitW(u);
+  const shown = w => fmtSetLoad(w, u) + ' ' + unit;
+  const L = w => r2(wOut(parseFloat(w) || 0, u));
+
+  // The target's own sets at its load: two or more is a straight scheme, and
+  // their reps, in order, are the target's reps by position. A heavier set on
+  // the target — a top set with back-offs — is not a straight scheme.
+  const TL = L(t.loadLb);
+  if (!onGrid(TL)) return null;
+  const main = t.sets.filter(x => x.type !== 'W' && x.tw !== '' && x.tw != null);
+  const atT = main.filter(x => Math.abs(L(x.tw) - TL) < GRID_TOL);
+  if (atT.length < 2 || main.some(x => L(x.tw) > TL + GRID_TOL)) return null;
+  const want = atT.map(x => parseInt(x.tr, 10)).filter(n => n >= 1);
+  if (want.length < 2) return null;
+  const twT = atT[0].tw;
+  const trAt = k => want[Math.max(0, Math.min(k, want.length - 1))];
+
+  // His step and his range, from the same log the target read — the marked
+  // sessions out, as targetFor() leaves them out.
+  const m = ex.mark;
+  const src = m && m.latest && Array.isArray(m.latest.exposures) ? m.latest.exposures
+    : (Array.isArray(ex.exposures) ? ex.exposures : []).filter(x => !(m && m.markedAt instanceof Set && m.markedAt.has(x.startedAt)));
+  const X = src.map(e => readExposure(e, u, false, c.now)).filter(Boolean);
+  const step = X.length ? stepOf(X, 1, lift.equipment, lift.lowerBody, u) : null;
+  const S = step ? step.value : null;
+  const range = X.length ? rangeOf(X, c.now, 1, lift.band) : null;
+  const logged = P => X.some(e => e.work.some(s => Math.abs(s.L - P) < GRID_TOL));
+  const store = P => (u === 'kg' ? String(wIn(P, 'kg')) : num(P));
+
+  const W = today.filter(s => s && isWorking(s) && parseInt(s.r, 10) >= 1)
+    .map(s => ({ w: String(s.w == null ? '' : s.w), L: L(s.w), R: parseInt(s.r, 10), type: s.type || 'N', rir: rirOf(s) }));
+  const done = W.filter(s => s.type !== 'D');
+  const res = (kind, tw, tr, why, extra) => ({
+    exId: lift.exId, kind, tw: String(tw), tr: String(tr), loadLb: loadLbOf(tw), reps: tr,
+    text: 'Next set: ' + shown(tw) + ' × ' + tr + '.', why, stepped: false, ...extra
+  });
+
+  // Before the first working set today: the session's target.
+  if (!done.length) {
+    return res('target', twT, trAt(0), ['Coach’s target for this lift today: ' + t.line.replace(/^Target: /, '')]);
+  }
+  const k = done.length;
+  const last = done[k - 1];
+  const stepped = done.some(s => s.L > TL + GRID_TOL);
+
+  // STOP — any set typed F, any rated too hard, or reps down a quarter from the
+  // first working set at the same or a lighter weight (REP_DROP, handed in).
+  const first = W[0];
+  const drop = W.slice(1).find(s => s.L <= first.L && s.R <= first.R * (1 - c.repDrop));
+  const why0 = W.some(s => s.type === 'F') ? 'A set of it went to failure today.'
+    : W.some(s => s.rir === 0) ? 'You rated a set of it too hard today.'
+    : drop ? 'Your reps went from ' + first.R + ' to ' + drop.R + ' at the same or a lighter weight today.' : null;
+  if (why0) {
+    return res('stop', last.w, trAt(k), [why0, 'Nothing heavier on it for the rest of today. Stopping a set early costs nothing.'],
+               { stop: true, stepped });
+  }
+
+  // UP — two reps past the target at its weight, or rated way too easy at its
+  // weight and reps: one step, once a session.
+  const target = trAt(k - 1);
+  const earned = last.L >= TL - GRID_TOL && (last.R >= target + UP_REPS || (last.rir != null && last.rir >= 4 && last.R >= target));
+  const how = last.R >= target + UP_REPS
+    ? plural(last.R, 'rep') + ' at ' + shown(last.w) + ', ' + UP_REPS + ' or more past the target’s ' + target + '.'
+    : 'You rated ' + shown(last.w) + ' × ' + last.R + ' way too easy.';
+  if (earned && stepped) {
+    return res('same', last.w, trAt(k), [how, 'Coach goes up one step in a session, and today’s is used.'], { stepped: true });
+  }
+  if (earned && S) {
+    const P = r2(TL + S);
+    // Every weight said mid-session is a quote or a target, so the step is
+    // named by what it steps from, never as a size of its own.
+    return res('up', store(P), trAt(k), [how,
+      'One step over the target’s ' + shown(twT) + ', once in a session' +
+      (step.source === 'yours' ? ': your usual jump on this lift.' : ': a common starting jump for this kind of lift.')]);
+  }
+
+  // DOWN — reps under the range's low end: the same weight, or one step down
+  // when that lighter weight is one he has logged on this lift.
+  if (range && last.R < range.lo) {
+    const P = S ? r2(last.L - S) : null;
+    if (P != null && P > 0 && onGrid(last.L) && logged(P)) {
+      return res('down', store(P), trAt(k), [plural(last.R, 'rep') + ' at ' + shown(last.w) + ', under the ' + range.lo + ' at the bottom of your range.',
+        shown(store(P)) + ' is a weight you’ve lifted here before.'], { stepped });
+    }
+    return res('same', last.w, trAt(k), [plural(last.R, 'rep') + ' at ' + shown(last.w) + ', under the ' + range.lo + ' at the bottom of your range.',
+      'The same weight again.'], { stepped });
+  }
+
+  // Otherwise: the same weight, at the target's reps.
+  return res('same', last.w, trAt(k), [earned
+    ? how + ' Coach doesn’t know this lift’s steps yet, so it won’t guess a heavier number.'
+    : plural(last.R, 'rep') + ' at ' + shown(last.w) + ' against the target’s ' + target + '. The same again.'], { stepped });
 }

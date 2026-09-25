@@ -25,7 +25,8 @@
 
 import { el, sheet, noteEl, segmented, toast } from './ui.js';
 import { GROUPS } from './exercises.js';
-import { coach, CATEGORIES, QUESTIONS, PRO_ADDS, LIVE_NONE, isMuted, TOPICS_SHOWN, MARK_ASK, FUEL_ROUTES } from './coach.js';
+import { coach, CATEGORIES, QUESTIONS, PRO_ADDS, LIVE_NONE, isMuted, TOPICS_SHOWN, MARK_ASK, FUEL_ROUTES,
+         EFFORT, rateAsk, rateAnswer } from './coach.js';
 import { coachInput, coachReady, coachLogKnown, rememberGreeting, rememberHype, coachSettings, coachSettingsKnown,
          setCategoryMuted, answerQuestion, markAsked, liveSessionOnDevice, coachPro, setAim, setGoalLift,
          markSession, loadFuel, fuelNeedsRead } from './coach-data.js';
@@ -1176,17 +1177,27 @@ const LIVE_WAIT = 'Coach is reading your log — ask again in a moment.';
 
 /* The compact sheet: the question, answered at once, and at most two ways on —
    the reasons behind the answer, and, when the answer names an exercise he
-   has not got on today's list, a button that adds it. */
+   has not got on today's list, a button that adds it.
+
+   v54, top to bottom (SHIP-V54-PROMPT §5.4): his question and Coach's answer
+   as before; the next set, when coach-prog.js gives one ("Next set: 185 lb ×
+   8.", its why behind the same Why? chip); "Set 3 · 185 lb × 8. How was it?"
+   and three chips, when the exercise in hand has a ticked working set; after a
+   tap, Coach's short answer and "Use it for my next set"; then Add it and
+   Close. Still nothing pops up: every one of these is drawn inside the sheet
+   he opened. A rating is an edit to the live session, and Coach never writes
+   the session itself — workout.js hands in `opts.rate` (and `opts.useNext`)
+   the way it hands in `opts.add`. */
 export function openLiveSheet(opts = {}) {
   const { sh, close } = sheet();
   sh.classList.add('coach-sheet', 'coach-live');
   sh.appendChild(el('div', 'eyebrow', 'Coach'));
   const thread = el('div', 'coach-thread');
   sh.appendChild(thread);
-  const bubble = (who, text) => {
+  const bubble = (who, text, host) => {
     const b = el('div', 'coach-bub ' + who);
     b.appendChild(el('div', 'coach-bub-t', text));
-    thread.appendChild(b);
+    (host || thread).appendChild(b);
     return b;
   };
 
@@ -1196,9 +1207,21 @@ export function openLiveSheet(opts = {}) {
   if (known) {
     try { a = coach(coachInput({ live: true })).live(opts.session, { current: opts.current }); } catch { a = null; }
   }
-  bubble('coach', a ? a.text : known ? LIVE_NONE.text : LIVE_WAIT);
+  // The set in hand and the next one, read again after every rating.
+  let u = 'lb';
+  const setNow = () => {
+    try { const c = coach(coachInput({ live: true })); u = c.u; return c.liveSet(opts.session, { current: opts.current }); }
+    catch { return null; }
+  };
+  const first = setNow();
+  // Never a number off a log not read yet; the chips need none.
+  const next = known && first ? first.next : null;
+  // With nothing from his habits to say, the next set IS the answer, rather
+  // than "Nothing Coach can add" above a number Coach just added.
+  if (a || !next) bubble('coach', a ? a.text : known ? LIVE_NONE.text : LIVE_WAIT);
+  if (next) bubble('coach', next.text);
 
-  const why = a ? a.why : known ? LIVE_NONE.why : [];
+  const why = (a ? a.why : known && !next ? LIVE_NONE.why : []).concat(next ? next.why : []);
   const row = el('div', 'coach-chips');
   if (why.length) {
     const w = el('button', 'coach-chip', 'Why?');
@@ -1206,11 +1229,55 @@ export function openLiveSheet(opts = {}) {
       w.remove();
       const b = bubble('coach', why[0]);
       why.slice(1).forEach(t => b.appendChild(el('div', 'coach-bub-r', t)));
+      // v54: the reasons belong under what they explain, so "How was it?" and
+      // anything said after a tap move back below them.
+      [rateHost, afterHost].forEach(n => { n.remove(); thread.appendChild(n); });
       try { sh.scrollTop = sh.scrollHeight; } catch {}
     };
     row.appendChild(w);
   }
   thread.appendChild(row);
+
+  /* HOW WAS IT? The last ticked working set of the exercise in hand, and three
+     chips. A tap stores `rir` on that set through opts.rate; the chosen chip
+     tapped again clears it. Coach then answers with the next set as it reads
+     now, and offers it for the next row — applied only on that tap. */
+  const rateHost = el('div', 'coach-rate');
+  const afterHost = el('div', 'coach-rate-after');
+  thread.appendChild(rateHost);
+  thread.appendChild(afterHost);
+  const clear = host => [...host.children].forEach(c => c.remove());
+  const drawRate = s => {
+    clear(rateHost);
+    const rated = s && s.rated;
+    if (!rated || typeof opts.rate !== 'function') return;
+    rateHost.appendChild(el('div', 'coach-rate-q', rateAsk(rated, u)));
+    const chips = el('div', 'coach-chips');
+    EFFORT.forEach(e => {
+      const on = rated.rir === e.rir;
+      const b = el('button', 'coach-chip coach-effort' + (on ? ' on' : ''), e.label);
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      b.onclick = () => {
+        const v = on ? null : e.rir;
+        if (opts.rate({ exIdx: rated.exIdx, setIdx: rated.setIdx }, v) === false) return;
+        const s2 = setNow();
+        drawRate(s2);
+        clear(afterHost);
+        const n2 = v == null ? null : s2 && s2.next;
+        bubble('coach', rateAnswer(v, n2, u), afterHost);
+        if (n2 && typeof opts.useNext === 'function') {
+          const use = el('button', 'btn btn-primary btn-block', 'Use it for my next set');
+          use.style.marginTop = '10px';
+          use.onclick = () => { close(); opts.useNext({ exIdx: rated.exIdx, setIdx: rated.setIdx }, { tw: n2.tw, tr: n2.tr }); };
+          afterHost.appendChild(use);
+        }
+        try { sh.scrollTop = sh.scrollHeight; } catch {}
+      };
+      chips.appendChild(b);
+    });
+    rateHost.appendChild(chips);
+  };
+  drawRate(first);
 
   /* ADD IT goes through the picker's own path — workout.js hands in the very
      function the "+ Add exercise" button hands openPicker — with the library

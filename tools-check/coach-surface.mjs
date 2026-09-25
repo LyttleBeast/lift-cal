@@ -949,7 +949,14 @@ section('G. in a live session: a chip when asked, one quiet line once, nothing f
     at('pull', 5 + 7 * k, [lx('row', 4), lx('curl', 3)]);
     at('legs', 1 + 7 * k, [lx('squat', 4)]);
   }
-  const LIVEX = { ...BASE, lib: GL, hidden: [], libReady: true, sessions: hist.slice().sort((a, b) => a.startedAt - b.startedAt) };
+  /* v54, on purpose: with the targets switch ON the live sheet also says the
+     next set ("Next set: 185 lb × 8.") under the answer, and section O drives
+     that. This section's checks are about the four habit answers and the line
+     under a finished exercise, exactly as shipped — which is what the sheet
+     draws with "Weight and rep targets" switched off (SHIP-V54-PROMPT §5.4),
+     so that is the account they run on, and every one of them is unchanged. */
+  const LIVEX = { ...BASE, lib: GL, hidden: [], libReady: true, sessions: hist.slice().sort((a, b) => a.startedAt - b.startedAt),
+                  settings: { v: 1, mute: { targets: true }, answers: {}, asked: {} } };
   // A live session the way workout.js holds it. Rows: [exId, sets, ticked?]
   const liveS = (rows, extra) => ({ id: 'wlive', name: 'Live', startedAt: NOW - 1800000, ...(extra || null),
     exercises: rows.map(([id, c, ticked]) => ({ exId: id, name: GL[id].name, group: GL[id].group, equipment: GL[id].equipment,
@@ -1094,9 +1101,12 @@ section('G. in a live session: a chip when asked, one quiet line once, nothing f
 
   /* ---- the wiring, read from the file that does it ---- */
   const WS = src('workout.js');
+  // v54: the chip and the line hand the sheet one set of callbacks,
+  // liveOpts() — Add it's is still addPicked, beside the rating's two.
   check('"+ Add exercise" and Coach’s Add it are the same function — the picker’s own path, never a parallel one',
         /add\.onclick = \(\) => openPicker\(addPicked\);/.test(WS) &&
-        /liveChip\(\{ session, add: addPicked/.test(WS) && /openLiveSheet\(\{ session, add: addPicked/.test(WS));
+        /const liveOpts = current => \(\{ session, add: addPicked, rate: rateLive, useNext: useNextLive, current \}\);/.test(WS) &&
+        /liveChip\(liveOpts\(nudgedAt\(session\)\)\)/.test(WS) && /openLiveSheet\(liveOpts\(exIdx\)\)/.test(WS));
   check('and that function appends at the end of the session, outside any block',
         /function addPicked\(chosen\) \{[\s\S]{0,200}session\.exercises\.push\(newExercise\(x, !!session\._edit\)\)/.test(WS));
   const tick = (WS.split('chk.onclick = () => {')[2] || WS.split('chk.onclick = () => {')[1] || '').split('\n  };')[0];
@@ -1911,7 +1921,12 @@ section('N. v52 — the caution before a proposal, the mark’s chips, and "Shou
   // Against rack-v51's own coach-ui.js: every class it draws is one it drew.
   const cls = t => new Set([...t.matchAll(/'((?:coach|day|wk|btn|ob|set|you)-[a-z0-9-]+)'/g)].map(m => m[1]));
   const was = cls(execFileSync('git', ['show', '99b49ea:coach-ui.js'], { cwd: ROOT, encoding: 'utf8' }));
-  const added = [...cls(src('coach-ui.js'))].filter(c => !was.has(c));
+  /* v54, on purpose: the live sheet's "How was it?" is a new thing on
+     screen — its line and the two boxes the chips and the answer after a tap
+     sit in (rack.css, with the chips' 44px). Named here, three and no more;
+     the chips themselves are Coach chips. */
+  const V54 = ['coach-rate', 'coach-rate-after', 'coach-rate-q'];
+  const added = [...cls(src('coach-ui.js'))].filter(c => !was.has(c) && !V54.includes(c));
   check('no new CSS class: the caution and the mark are Coach bubbles and chips', !added.length, list(added));
   // ---- Phase B: "Am I fueled?" ----
   /* A month of food logged as he goes, training every other day; now is
@@ -1985,6 +2000,99 @@ section('N. v52 — the caution before a proposal, the mark’s chips, and "Shou
         JSON.stringify(state.calls.filter(c => c[0] !== 'markAsked')));
   state.fuelPending = false; state.fuelArrives = null;
   check('the coach-data stub still answers everything coach-ui.js imports', !state.unknown.length, list(state.unknown));
+  state.input = BASE; body.children.length = 0;
+}
+
+/* ================= O. v54 — THE LIVE SHEET, TOP TO BOTTOM ================= */
+section('O. v54 — the live sheet in its order: the answer, the next set, "How was it?", then Add it and Close');
+{
+  /* SHIP-V54-PROMPT §5.4, as drawn: 1. his question and Coach's answer, as
+     before (done first); 2. the next set, its why behind the same Why?; 3. the
+     set's line and three chips, when the exercise in hand has a ticked
+     working set; 4. after a tap, Coach's answer and "Use it for my next set";
+     5. Add it and Close. A log of chest and arms days, bench climbing by his own
+     5 lb, so bench has a target (190 × 8) and the habits have answers. */
+  const OL = {
+    'barbell-bench-press': { name: 'Barbell Bench Press', group: 'chest', equipment: 'barbell' },
+    'incline-dumbbell-bench-press': { name: 'Incline Dumbbell Bench Press', group: 'chest', equipment: 'dumbbell' },
+    'cable-crossover': { name: 'Cable Crossover', group: 'chest', equipment: 'cable' },
+    'barbell-curl': { name: 'Barbell Curl', group: 'arms', equipment: 'barbell' }
+  };
+  const ox = (id, n, w, r) => ({ exId: id, ...OL[id], sets: Array.from({ length: n }, () => ({ w: String(w), r: String(r), type: 'N', done: true })) });
+  const ohist = [];
+  [170, 175, 175, 180, 180, 185, 185, 185].forEach((w, k) => {
+    const ago = 3 + 7 * (7 - k);
+    ohist.push({ id: 'o' + k, startedAt: NOW - ago * DAY, _date: key(NOW - ago * DAY),
+      exercises: [ox('barbell-bench-press', 3, w, 8), ox('incline-dumbbell-bench-press', 3, 60, 10), ox('cable-crossover', 3, 40, 12), ox('barbell-curl', 3, 75, 10)] });
+  });
+  const OIN = { ...BASE, lib: OL, hidden: [], libReady: true, sessions: ohist, settings: { v: 1, mute: {}, answers: {}, asked: {} } };
+  state.input = OIN; state.logKnown = true; state.ready = true; state.pro = true;
+  const liveO = rows => ({ id: 'wlive', name: 'Live', startedAt: NOW - 1800e3,
+    exercises: rows.map(([id, sets]) => ({ exId: id, ...OL[id], sets: sets.map(([w, r, done, extra]) => ({ w: String(w), r: String(r), type: 'N', done: done !== false, ...(extra || null) })) })) });
+  const rates = [];
+  const optsO = s => ({ session: s, add() {}, current: 0,
+    rate: (at, v) => { rates.push([at, v]); const e = s.exercises[at.exIdx]; const { rir, ...rest } = e.sets[at.setIdx];
+                       e.sets[at.setIdx] = v == null ? rest : { ...rest, rir: v }; return true; },
+    useNext: () => {} });
+  const sheetO = () => body.children.find(x => x.classList.contains('sheet')) || null;
+  const openO = s => { body.children.length = 0; UI.liveChip(optsO(s)).onclick(); return sheetO(); };
+  const btn = (sh, label) => buttonsIn(sh).find(b => b.textContent === label) || null;
+  // The thread's children in order, each as what it is.
+  const order = sh => find(sh, 'coach-thread')[0].children.map(n => n.classList.contains('coach-bub')
+      ? (n.classList.contains('you') ? 'you' : 'coach: ' + (find(n, 'coach-bub-t')[0] || {}).textContent)
+      : n.classList.contains('coach-rate') ? (n.children.length ? 'rate' : '(rate, empty)')
+      : n.classList.contains('coach-rate-after') ? (n.children.length ? 'after' : '(after, empty)')
+      : n.classList.contains('coach-chips') ? 'chips: ' + buttonsIn(n).map(b => b.textContent).join('/') : n.className);
+
+  const S2 = liveO([['barbell-bench-press', [[190, 8], [190, 8], ['', '', false]]]]);
+  const eng2 = C.coach({ ...OIN, live: { active: true }, tier: { pro: true } });
+  const a2 = eng2.live(S2, { current: 0 }), n2 = eng2.liveSet(S2, { current: 0 });
+  let sh = openO(S2);
+  const got = order(sh);
+  check('top to bottom: his question, the answer, the next set, Why?, "How was it?" — and nothing after a tap yet',
+        !!a2 && !!n2.next && J_(got) === J_(['you', 'coach: ' + a2.text, 'coach: Next set: 190 lb × 8.', 'chips: Why?', 'rate', '(after, empty)']),
+        J_(got));
+  check('then Add it (when the answer names one) and Close, below the thread',
+        J_(buttonsIn(sh).filter(b => !b.classList.contains('coach-chip')).map(b => b.textContent)) === J_((a2.add ? ['Add it'] : []).concat(['Close'])),
+        J_(buttonsIn(sh).map(b => b.textContent)));
+  btn(sh, 'Why?').onclick();
+  const why = find(sh, 'coach-bub').pop();
+  check('Why? shows the answer’s reasons and then the next set’s, once',
+        J_([(find(why, 'coach-bub-t')[0] || {}).textContent].concat(find(why, 'coach-bub-r').map(x => x.textContent))) === J_(a2.why.concat(n2.next.why)),
+        find(why, 'coach-bub-r').map(x => x.textContent).join(' / '));
+  check('under the chip it replaced, with "How was it?" still below them',
+        J_(order(sh).slice(3)) === J_(['chips: ', 'coach: ' + a2.why[0], 'rate', '(after, empty)']), J_(order(sh)));
+  const rq = find(sh, 'coach-rate')[0];
+  check('"Set 2 · 190 lb × 8. How was it?" over Way too easy, About right, Too hard',
+        (find(rq, 'coach-rate-q')[0] || {}).textContent === 'Set 2 · 190 lb × 8. How was it?' &&
+        J_(buttonsIn(rq).map(b => b.textContent)) === J_(['Way too easy', 'About right', 'Too hard']));
+  buttonsIn(rq).find(b => b.textContent === 'About right').onclick();
+  check('a tap: the rating through the callback, and the answer and "Use it for my next set" under the chips',
+        J_(rates.pop()) === J_([{ exIdx: 0, setIdx: 1 }, 2]) &&
+        J_(order(sh).slice(-2)) === J_(['rate', 'after']) &&
+        J_(find(find(sh, 'coach-rate-after')[0], 'coach-bub-t').map(x => x.textContent)) === J_(['Good. Same again: 190 lb × 8.']) &&
+        buttonsIn(find(sh, 'coach-rate-after')[0]).map(b => b.textContent).join() === 'Use it for my next set', J_(order(sh)));
+
+  // Done first: the session at its usual length has no next-set number.
+  const SD = liveO([['barbell-bench-press', [[190, 8], [190, 8], [190, 8]]], ['incline-dumbbell-bench-press', [[60, 10], [60, 10], [60, 10]]],
+                    ['cable-crossover', [[40, 12], [40, 12], [40, 12]]], ['barbell-curl', [[75, 10], [75, 10], [75, 10]]]]);
+  const aD = C.coach({ ...OIN, live: { active: true }, tier: { pro: true } }).live(SD, { current: 0 });
+  sh = openO(SD);
+  check('"you’re probably good for today": the answer, and no next set — the chips still there for the set just done',
+        !!aD && aD.kind === 'done' && !find(sh, 'coach-bub-t').some(x => /^Next set/.test(x.textContent)) && !!find(sh, 'coach-rate')[0].children.length,
+        J_(order(sh)));
+  // Thin habits, a target in hand: the next set is the answer.
+  state.input = { ...OIN, sessions: ohist.slice(-2) };
+  const S1 = liveO([['barbell-bench-press', [[190, 8], ['', '', false]]]]);
+  const thinA = C.coach({ ...state.input, live: { active: true }, tier: { pro: true } }).live(S1, { current: 0 });
+  sh = openO(S1);
+  check('nothing from his habits, a target in hand: the next set IS the answer — never "Nothing Coach can add" above a number',
+        thinA === null && J_(order(sh).slice(0, 2)) === J_(['you', 'coach: ' + C.coach({ ...state.input, live: { active: true }, tier: { pro: true } }).liveSet(S1, { current: 0 }).next.text]) &&
+        !find(sh, 'coach-bub-t').some(x => x.textContent === C.LIVE_NONE.text), J_(order(sh)));
+  state.input = { ...state.input, settings: { v: 1, mute: { targets: true }, answers: {}, asked: {} } };
+  sh = openO(S1);
+  check('and with the targets switch off, exactly as before: "Nothing Coach can add…", then the chips',
+        J_(order(sh).slice(0, 2)) === J_(['you', 'coach: ' + C.LIVE_NONE.text]) && order(sh).includes('rate'), J_(order(sh)));
   state.input = BASE; body.children.length = 0;
 }
 

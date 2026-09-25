@@ -10,11 +10,18 @@
 // MID-WORKOUT IS THE MOST SENSITIVE PLACE COACH WILL EVER SPEAK. He is under a
 // bar, and three things follow from that, each of them a line in this file:
 //
-//   NO WEIGHT, EVER. Nothing here says heavier, lighter, or a number to put on
-//   the bar. Progression is the builder's nudge and stays there. The one
-//   weight this file may print is a quote of a set he logged — "Last time on
-//   Cable Fly: 3 × 12 at 40 lb" — through units.js, the way every load on
-//   every screen is printed.
+//   A NUMBER FOR THE BAR IS A QUOTE OR A TARGET (v54; spec §3.10, which
+//   replaced "no weight, ever" rather than deleting it). This file works out
+//   no weight of its own. What it prints is a quote of a set he logged — "Last
+//   time on Cable Fly: 3 × 12 at 40 lb" — or the next set's target, which
+//   coach-prog.js's nextSet() works out and coach.js hands in (setRead,
+//   below): the session's target, one of the lift's own steps above it once a
+//   session, a load he has logged, or the set he just did. After a set to
+//   failure, a set he rated too hard, or reps down a quarter, nothing is
+//   heavier for the rest of today. Every load goes through units.js, the way
+//   every load on every screen is printed. The habits' four answers below
+//   still name none, and neither does the one quiet line under a finished
+//   exercise.
 //   NEVER A SET AFTER A FAILURE. An exercise with a set typed F today is never
 //   told "one more set", and neither is one whose reps have fallen away.
 //   WHEN THE SIGNALS DISAGREE, DONE WINS. Stopping one set early costs nothing;
@@ -44,11 +51,13 @@
 //            so far, in his own sessions of this shape — when it is not
 //            already on today's list.
 //
-// FATIGUE, from what the log holds (there is no RIR, and there is not going to
-// be a guess at one): a set typed F; or, on the same exercise at the same or a
-// lighter weight, reps falling a quarter or more from that session's first
-// working set. A warm-up is not a working set, so how many warm-ups there were
-// is never fatigue.
+// FATIGUE, from what the log holds (never a guess): a set typed F; or, on the
+// same exercise at the same or a lighter weight, reps falling a quarter or more
+// from that session's first working set. A warm-up is not a working set, so how
+// many warm-ups there were is never fatigue. Since v54 a set can carry his own
+// rating (`rir`); it is the next set's business (setRead), and the four answers
+// read it in one place only: "one more set" is not said of a lift whose next
+// set has been stopped, which with no target in hand is never.
 //
 // PURE, and copied into the native tree verbatim (src/pure/coach-live.js). No
 // reads, no DOM, no clock, no module state. And it derives nothing about the
@@ -415,6 +424,10 @@ function anotherRead(i, t, history) {
   if (!cur || cur.cardio || !cur.sets.length) return null;
   // Never after a set typed F, and never once the reps have fallen away.
   if (fatigueIn(cur.sets)) return null;
+  // v54: nor once his next set is stopped — a set he rated too hard — so the
+  // sheet never says "one more set" above "call that the last set". With no
+  // target in hand there is no next set, and this is today's rule exactly.
+  if (nextOf(i, cur) && nextOf(i, cur).kind === 'stop') return null;
   const counts = history.map(s => s.order.find(ex => ex.exId === cur.exId)).filter(Boolean).map(ex => ex.sets.length);
   if (counts.length < MIN_SESSIONS) return null;
   const now = cur.sets.length;
@@ -514,4 +527,113 @@ export function liveRead(input) {
   } catch {
     return null;
   }
+}
+
+/* ================================================================
+   THE SET IN HAND, AND THE NEXT ONE (v54, stage five)
+   ================================================================
+   setRead(input) -> { rated, next }, what the live sheet draws under his
+   question (SHIP-V54-PROMPT §5.4):
+
+     rated  the set his effort chips rate — the LAST TICKED WORKING SET of
+            the exercise in hand, as it sits on screen: { exIdx, setIdx, n
+            (its number on the row), w, r, rir }. Null when that exercise
+            has none, and then there are no chips.
+     next   the next set's target, coach-prog.js's nextSet() as coach.js
+            hands it in (`input.nextSet`), or null — the targets switch off,
+            a lift it cannot target, or DONE: "done" is still tried first, and
+            when it answers, no next-set number is shown.
+
+   The exercise in hand is liveRead's: the one the caller names, else the
+   last one with a ticked working set. With nothing ticked at all it is the
+   first exercise on the list with a set left to do (spec §9.1), which is
+   where "before its first working set: the session's target" is read.
+   Separate from liveRead, whose answer and its one quiet line under a
+   finished exercise are exactly what they were: neither ever carries a
+   number. */
+export function setRead(input) {
+  try {
+    const i = input || {};
+    const t = todayOf(i);
+    const raw = i.session && Array.isArray(i.session.exercises) ? i.session.exercises : [];
+    let cur = t.current;
+    if (!cur && !t.worked.length) {
+      const k = raw.findIndex(e => e && e.exId && (e.sets || []).some(s => s && !s.done && isWorking(s)));
+      cur = k === -1 ? null : t.entries.find(e => e.exId === raw[k].exId) || null;
+    }
+    if (!cur) return { rated: null, next: null };
+    const rated = ratedOf(raw, cur.exId);
+    let next = null;
+    if (!cur.cardio && typeof i.nextSet === 'function') {
+      const history = historyOf(i);
+      if (!(t.worked.length && doneRead(i, t, history, shapeOf(i, t)))) next = nextOf(i, cur);
+    }
+    return { rated, next };
+  } catch {
+    return { rated: null, next: null };
+  }
+}
+
+// The next set for one of today's entries, asked once a read.
+function nextOf(i, e) {
+  if (!e || e.cardio || typeof i.nextSet !== 'function') return null;
+  if (!('next' in e)) {
+    let n = null;
+    try { n = i.nextSet(e.exId, e.sets.slice()) || null; } catch { n = null; }
+    e.next = n;
+  }
+  return e.next;
+}
+
+// The last ticked working set of an exercise, in the order the screen shows
+// it — across every occurrence of it in a duplicated block — with where it is.
+function ratedOf(raw, exId) {
+  let at = null;
+  raw.forEach((e, k) => {
+    if (!e || e.exId !== exId) return;
+    (e.sets || []).forEach((s, j) => { if (liveWorking(s)) at = { exIdx: k, setIdx: j, s }; });
+  });
+  if (!at) return null;
+  return { exIdx: at.exIdx, setIdx: at.setIdx, n: at.setIdx + 1, exId,
+           w: at.s.w == null ? '' : String(at.s.w), r: reps(at.s), rir: at.s.rir == null ? null : at.s.rir };
+}
+
+/* HIS RATING, in his words (Micah, 24 Sep 2026: "that set was way too easy").
+   Three chips, and the integer each stores as `rir` on the set — reps he had
+   left: way too easy 4, about right 2, too hard 0. Readers take any integer
+   0–5 (coach-prog.js rirOf); these three are all the sheet ever writes. */
+export const EFFORT = Object.freeze([
+  Object.freeze({ rir: 4, label: 'Way too easy' }),
+  Object.freeze({ rir: 2, label: 'About right' }),
+  Object.freeze({ rir: 0, label: 'Too hard' })
+]);
+
+// A load as the sheet says it: the stored string through units.js.
+const loadSaid = (w, u) => {
+  const s = fmtSetLoad(w, u);
+  return s === '' || s === 'BW' ? 'bodyweight' : s + ' ' + unitW(u);
+};
+
+/* The line above the chips: "Set 3 · 135 lb × 8. How was it?" — the set's
+   number on its row, and what he logged on it. */
+export function rateAsk(rated, u) {
+  const unit = u === 'kg' ? 'kg' : 'lb';
+  return 'Set ' + rated.n + ' · ' + loadSaid(rated.w, unit) + ' × ' + rated.r + '. How was it?';
+}
+
+/* What Coach says after a tap — warm first, then the number, never a number
+   that stings (SHIP-V54-PROMPT §5.4, §8). `rir` is the rating just stored, or
+   null when the chip was tapped again to clear it; `next` is setRead's next
+   set as it reads after the rating. */
+const OPENER = Object.freeze({ 4: 'Strong set.', 2: 'Good.', 0: 'Noted.' });
+export function rateAnswer(rir, next, u) {
+  const unit = u === 'kg' ? 'kg' : 'lb';
+  if (rir == null) return 'Cleared.';
+  const open = OPENER[rir] || 'Noted.';
+  if (!next) return open + ' Saved with the set.';
+  const load = loadSaid(next.tw, unit);
+  if (next.kind === 'stop') return open + ' Stay at ' + load + ', or call that the last set of this one.';
+  if (next.kind === 'up' || next.kind === 'down') return open + ' Next one: ' + load + ' × ' + next.tr + '.';
+  if (next.stepped && rir >= 4) return 'Good. Stay at ' + load + ' for the next one.';
+  return open + ' Same again: ' + load + ' × ' + next.tr + '.';
 }
