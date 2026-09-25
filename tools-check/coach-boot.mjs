@@ -242,11 +242,15 @@ async function rig({ data = {}, slow = [], fail = [], pro = false } = {}) {
     ['./coach-live.js', LIVE], ['./units.js', real('units.js')], ['./exercises.js', real('exercises.js')]]));
   const FUEL   = put('coach-fuel.mjs', swap(src('coach-fuel.js'), [
     ['./coach-goal.js', real('coach-goal.js')], ['./units.js', real('units.js')]]));
+  // v54: coach-volume.js, the whole week, staged the same way.
+  const VOL    = put('coach-volume.mjs', swap(src('coach-volume.js'), [
+    ['./exercises.js', real('exercises.js')], ['./coach-tags.js', real('coach-tags.js')],
+    ['./coach-goal.js', real('coach-goal.js')], ['./analytics.js', ANALY]]));
   const COACH  = put('coach.mjs', swap(src('coach.js'), [
     ['./exercises.js', real('exercises.js')], ['./analytics.js', ANALY],
     ['./units.js', real('units.js')], ['./coach-build.js', BUILD], ['./coach-live.js', LIVE],
     ['./coach-goal.js', real('coach-goal.js')], ['./coach-prog.js', PROG], ['./coach-overlap.js', OVER],
-    ['./coach-ready.js', READY], ['./coach-fuel.js', FUEL]]));
+    ['./coach-ready.js', READY], ['./coach-fuel.js', FUEL], ['./coach-volume.js', VOL]]));
   const DATA_  = put('coach-data.mjs', swap(src('coach-data.js'), [
     ['./store.js', STORE], ['./exercises.js', real('exercises.js')],
     ['./picker.js', PICK], ['./tdee.js', TDEE], ['./insights.js', INSI],

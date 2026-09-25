@@ -376,6 +376,10 @@ export function openCoachSheet(opts = {}) {
     if (openingRow) { openingRow.remove(); openingRow = null; }
     let a;
     try { a = c.ask(id); } catch { a = null; }
+    // v54: a line said once in a while (the neglected group under "How's my
+    // weekly volume?", once in four weeks) is stamped as it is drawn, the way
+    // a question is when it is put.
+    if (a && a.once) markAsked(a.once).catch(() => {});
     /* The answer IS the opening bubble, word for word — the engine says so
        (`repeats`). Printing it again under the question put the same sentence
        on screen twice, one above the other. So nothing is printed: the

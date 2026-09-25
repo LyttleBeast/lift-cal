@@ -562,10 +562,23 @@ function build(i, o, top) {
     };
   });
 
+  /* v54: HIS FOCUS COMES FIRST (spec §6.5, SHIP-V54-PROMPT §7). With a focus
+     group set (Settings → Coach → Your goal), the proposal's exercises of
+     that group move to the top, and everything else follows — each side in
+     the order he did it. Nothing is added or dropped, no set changes, and a
+     session with lifting blocks keeps his order whole: a block's order is his
+     structure, and it is never split to move one exercise. A proposal with
+     none of the group, or nothing else, is as it was. */
+  const fg = typeof i.focusGroup === 'string' && GROUPS[i.focusGroup] ? i.focusGroup : null;
+  const mine = fg ? chosen.filter(e => e.group === fg) : [];
+  const ordered = fg && !chosen.some(e => e.block) && mine.length && mine.length < chosen.length
+    ? mine.concat(chosen.filter(e => e.group !== fg)) : chosen;
+  const focusMoved = ordered.some((e, k) => e !== chosen[k]);
+
   // The block annotations come across exactly as he recorded them; a drop
   // that empties a block renumbers the rest the way every other editor of a
   // block does, through the shared pure model rather than a copy of it.
-  const laid = normalizeBlocks(chosen, blockOrder(chosen)).exercises;
+  const laid = normalizeBlocks(ordered, blockOrder(ordered)).exercises;
   if (!laid.length) return null;
 
   const u = i.u === 'kg' ? 'kg' : 'lb';
@@ -697,6 +710,8 @@ function build(i, o, top) {
                           : plural(n, 'day') + ' since your last working set for ' + groupWord(focus.group) + '.');
     }
   }
+  // v54: and when his focus moved anything, it says so.
+  if (focusMoved) reason.push('Your focus, ' + groupWord(fg) + ', comes first.');
 
   const routineLine = focus.routine && focus.routine.name
     ? 'You have a routine for this: ' + focus.routine.name + '.' : null;

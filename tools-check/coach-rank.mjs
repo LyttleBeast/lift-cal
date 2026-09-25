@@ -108,7 +108,15 @@ writeFileSync(join(dir, 'coach.mjs'), src('coach.js')
   .replace("from './coach-overlap.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-overlap.mjs')).href))
   .replace("from './coach-fuel.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-fuel.mjs')).href))
   .replace("from './coach-ready.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-ready.mjs')).href))
+  .replace("from './coach-volume.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-volume.mjs')).href))
   .replace("from './coach-prog.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-prog.mjs')).href))
+  .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href)));
+// v54: coach-volume.js, the whole week, staged the same way (the staging edit
+// the brief allows everywhere): coach.js imports it.
+writeFileSync(join(dir, 'coach-volume.mjs'), src('coach-volume.js')
+  .replace("from './exercises.js'", 'from ' + real('exercises.js'))
+  .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
+  .replace("from './coach-goal.js'", 'from ' + real('coach-goal.js'))
   .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href)));
 const C = await import(pathToFileURL(join(dir, 'coach.mjs')).href);
 
@@ -447,9 +455,12 @@ section('G2. the topic set belongs to the surface that opened the sheet');
         youSet.join(',') === ['topic_train', 'topic_fuel', 'topic_weight'].concat(
           ['ask_goal', 'ask_lifts'].filter(id => full.ask(id).id !== id)).join(','),
         list(youSet));
+  /* v54, on purpose (SHIP-V54-PROMPT §7): the whole week's two answers —
+     "How's my weekly volume?" and "Is my training balanced?" — follow
+     Train's own bubbles, under "More". Training questions both. */
   check('Train gets a different set, and a training-first one',
         trainSet.join(',') !== youSet.join(',') &&
-        trainSet.every(id => C.TRAIN_TOPICS.some(t => t.id === id)), list(trainSet));
+        trainSet.every(id => C.TRAIN_TOPICS.some(t => t.id === id) || ['ask_week_volume', 'ask_balance'].includes(id)), list(trainSet));
   /* v52 (SHIP-V52-PROMPT §10): "Am I fueled?" joins Train before a workout —
      the one food question there, and a question about the workout. Every
      other food and weight question stays off Train. */

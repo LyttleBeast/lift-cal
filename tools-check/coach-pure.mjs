@@ -115,7 +115,15 @@ writeFileSync(join(dir, 'coach.mjs'), src('coach.js')
   .replace("from './coach-overlap.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-overlap.mjs')).href))
   .replace("from './coach-fuel.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-fuel.mjs')).href))
   .replace("from './coach-ready.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-ready.mjs')).href))
+  .replace("from './coach-volume.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-volume.mjs')).href))
   .replace("from './coach-prog.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-prog.mjs')).href))
+  .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href)));
+// v54: coach-volume.js, the whole week, staged the same way (the staging edit
+// the brief allows everywhere): coach.js imports it.
+writeFileSync(join(dir, 'coach-volume.mjs'), src('coach-volume.js')
+  .replace("from './exercises.js'", 'from ' + real('exercises.js'))
+  .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
+  .replace("from './coach-goal.js'", 'from ' + real('coach-goal.js'))
   .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href)));
 const C = await import(pathToFileURL(join(dir, 'coach.mjs')).href);
 
@@ -154,10 +162,15 @@ section('A. three imports, and the analytics one is a closed list');
   // (v52, deliberately added): the rest read and readiness, food-blind, held
   // to the same rules in section K; and coach-fuel.js the ninth (v52, Phase
   // B), "Am I fueled?", held to them in section M.
+  // v54, deliberately added: coach-volume.js is the tenth — stage five's
+  // weekly volume and balance, handed the shaped sessions from here and held
+  // to the same rules in section N. coach-prog.js is still reached only
+  // through the builder and the overlap (the next set: coach-overlap.js
+  // nextSetFor()).
   const ALLOWED = ['./exercises.js', './analytics.js', './units.js', './coach-build.js', './coach-live.js',
-                   './coach-goal.js', './coach-overlap.js', './coach-ready.js', './coach-fuel.js'];
+                   './coach-goal.js', './coach-overlap.js', './coach-ready.js', './coach-fuel.js', './coach-volume.js'];
   const extra = imports.map(i => i.from).filter(f => !ALLOWED.includes(f));
-  check('coach.js imports nothing outside exercises.js, analytics.js, units.js, coach-build.js, coach-live.js, coach-goal.js, coach-overlap.js, coach-ready.js and coach-fuel.js',
+  check('coach.js imports nothing outside exercises.js, analytics.js, units.js, coach-build.js, coach-live.js, coach-goal.js, coach-overlap.js, coach-ready.js, coach-fuel.js and coach-volume.js',
         !extra.length, list(extra));
   check('and imports none of them twice',
         new Set(imports.map(i => i.from)).size === imports.length);
@@ -796,6 +809,51 @@ section('M. coach-fuel.js — "Am I fueled?" is copied byte for byte as well, an
   const D = src('coach-data.js');
   check('coach-data.js reads the food log only through loadFuel(), and only the days coach.js’s fuelDays() names',
         /export function loadFuel\(/.test(D) && /fuelDays\(coachInput\(/.test(D) && /read\('food\/log\/' \+ d, null\)/.test(D));
+}
+
+/* ================= N. COACH-VOLUME.JS IS HELD TO THE SAME FENCE (v54) =================
+   Stage five's whole week is the tenth file the native port copies verbatim
+   (src/pure/coach-volume.js). It may reach exercises.js (the secondaries),
+   the pure half of analytics.js, coach-tags.js (the movement split) and
+   coach-goal.js (the floors), and nothing else; coach.js imports it, and
+   nothing reaches back. And REP_DROP is coach-live.js's, handed in — never a
+   second copy of it here. */
+section('N. coach-volume.js — the whole week is copied byte for byte as well');
+{
+  const VRAW = src('coach-volume.js');
+  const VCODE = VRAW.replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n').map(l => l.replace(/(^|[^:'"\\])\/\/.*$/, '$1')).join('\n');
+  const imports = [...VRAW.matchAll(/^import\s+(?:([^;]*?)\s+from\s+)?['"]([^'"]+)['"];?$/gm)]
+    .map(m => ({ names: (m[1] || '').trim(), from: m[2] }));
+  const ALLOWED = ['./exercises.js', './analytics.js', './coach-tags.js', './coach-goal.js'];
+  check('it imports exercises.js, analytics.js, coach-tags.js and coach-goal.js, and nothing else',
+        imports.every(i => ALLOWED.includes(i.from)) && imports.length === 4, list(imports.map(i => i.from)));
+  const a = imports.find(i => i.from === './analytics.js');
+  const named = a ? a.names.replace(/[{}]/g, '').split(',').map(s => s.trim()).filter(Boolean) : [];
+  check('it takes only session math from analytics.js', named.length > 0 &&
+        named.every(n => ['isWorking', 'mergeSessionExercises'].includes(n)), list(named));
+  check('and never coach.js, coach-live.js or coach-prog.js — coach.js imports IT',
+        !imports.some(i => /coach(-live|-prog|-build)?\.js$/.test(i.from)));
+  // (Its one 0.25 is the custom-exercise share, a different quarter.)
+  check('REP_DROP is handed in, never restated: the rep-drop test reads the argument',
+        !/\bREP_DROP\b/.test(VCODE) && /\(1 - repDrop\)/.test(VCODE) && !/\(1 - 0?\.25\)/.test(VCODE));
+  check('the goal floors are coach-goal.js volumeFloor()’s — never a second table of them',
+        /import \{[^}]*\bvolumeFloor\b[^}]*\} from '\.\/coach-goal\.js'/.test(VRAW) && !/VOLUME_FLOOR/.test(VCODE));
+  check('and never names store.js, reads or writes',
+        !/store\.js/.test(VCODE) && !/\bread\s*\(|\breadExact\s*\(|\bwrite\s*\(/.test(VCODE));
+  check('no clock of its own — no Date.now(), no argless new Date(), no performance.now()',
+        !/Date\.now\s*\(/.test(VCODE) && ![...VCODE.matchAll(/new\s+Date\s*\(\s*\)/g)].length && !/performance\s*\.\s*now/.test(VCODE));
+  check('no Math.random()', !/Math\s*\.\s*random/.test(VCODE));
+  ['document', 'window', 'navigator', 'localStorage', 'sessionStorage', 'fetch', 'XMLHttpRequest']
+    .forEach(g => check('no ' + g, !new RegExp('\\b' + g + '\\b').test(VCODE),
+                        (VCODE.match(new RegExp('.*\\b' + g + '\\b.*')) || [''])[0].trim()));
+  check('no console, no timers', !/\bconsole\s*\./.test(VCODE) && !/\bset(Timeout|Interval)\s*\(/.test(VCODE));
+  const topLevel = VCODE.split('\n').filter(l => /^(export\s+)?(let|var)\s/.test(l));
+  check('no top-level let or var — nothing remembered between reads', !topLevel.length, list(topLevel.map(l => l.trim())));
+  check('no default export', !/export\s+default/.test(VCODE));
+  check('volumeRead() and balanceRead() are what coach.js calls',
+        /export function volumeRead\(input\)/.test(VRAW) && /export function balanceRead\(input\)/.test(VRAW) &&
+        /import \{[^}]*\bvolumeRead\b[^}]*\bbalanceRead\b[^}]*\} from '\.\/coach-volume\.js'/.test(RAW));
 }
 
 /* ================= L. COACH-OVERLAP.JS'S FOUR NEW EXPORTS, BODIES UNCHANGED =================

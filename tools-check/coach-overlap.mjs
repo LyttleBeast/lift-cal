@@ -107,6 +107,14 @@ writeFileSync(join(dir, 'coach.mjs'), src('coach.js')
   .replace("from './coach-overlap.js'", 'from ' + at('coach-overlap.mjs'))
   .replace("from './coach-fuel.js'", 'from ' + at('coach-fuel.mjs'))
   .replace("from './coach-ready.js'", 'from ' + at('coach-ready.mjs'))
+  .replace("from './coach-volume.js'", 'from ' + at('coach-volume.mjs'))
+  .replace("from './analytics.js'", 'from ' + at('analytics.mjs')));
+// v54: coach-volume.js, the whole week, staged the same way (the staging edit
+// the brief allows everywhere): coach.js imports it.
+writeFileSync(join(dir, 'coach-volume.mjs'), src('coach-volume.js')
+  .replace("from './exercises.js'", 'from ' + real('exercises.js'))
+  .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
+  .replace("from './coach-goal.js'", 'from ' + real('coach-goal.js'))
   .replace("from './analytics.js'", 'from ' + at('analytics.mjs')));
 const C = await import(pathToFileURL(join(dir, 'coach.mjs')).href);
 const O = await import(pathToFileURL(join(dir, 'coach-overlap.mjs')).href);

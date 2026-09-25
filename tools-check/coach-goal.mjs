@@ -261,6 +261,14 @@ export function todayKey(d = new Date()) {
     .replace("from './coach-overlap.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-overlap.mjs')).href))
     .replace("from './coach-fuel.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-fuel.mjs')).href))
     .replace("from './coach-ready.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-ready.mjs')).href))
+    .replace("from './coach-volume.js'", 'from ' + at('coach-volume.mjs'))
+    .replace("from './analytics.js'", 'from ' + at('analytics.mjs')));
+  // v54: coach-volume.js, the whole week, staged the same way (the staging
+  // edit the brief allows everywhere): coach.js imports it.
+  writeFileSync(join(dir, 'coach-volume.mjs'), src('coach-volume.js')
+    .replace("from './exercises.js'", 'from ' + real('exercises.js'))
+    .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
+    .replace("from './coach-goal.js'", 'from ' + real('coach-goal.js'))
     .replace("from './analytics.js'", 'from ' + at('analytics.mjs')));
   const C = await import(pathToFileURL(join(dir, 'coach.mjs')).href);
   const { EXERCISES } = await import(pathToFileURL(join(ROOT, 'exercises.js')).href);

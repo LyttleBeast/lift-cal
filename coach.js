@@ -56,6 +56,8 @@ import { readLift, lighterWeek, recordDay, liftsMoving, prepare, targetsReplay, 
 import { restRead, usualRun, replay, readinessRows, readinessHas, readinessAnswer, readinessHeavy, sessionRows,
          mergeRows, groupLine, restAnswer, lighterAnswer, groupAnswer, REST_REASON } from './coach-ready.js';
 import { fueledRead, fuelAnswer, fedUnloggedAnswer, fedNoneAnswer, fuelRow, sessionFoodRows, fuelDates, logStyle } from './coach-fuel.js';
+// v54: stage five's whole week — weekly volume, neglect and balance.
+import { volumeRead, volumeAnswer, balanceRead, balanceAnswer } from './coach-volume.js';
 
 const DAY = 864e5;
 
@@ -930,6 +932,22 @@ export const FACTS = Object.freeze([
     because: () => 'counted from working sets alone, over the four weeks before this one — ' +
                    'your own normal rather than a bar Coach picked',
     age: () => 0
+  },
+  {
+    /* v54, stage five: "How's my weekly volume?" — coach-volume.js's read of
+       each group's hard sets in the last 7 days (fractional, §6.1) against a common
+       range for his goal and his own normal, and the one neglected group, at
+       most once in four weeks. Sheet only: its intent is a selector, no card
+       reads it, and the shipped group.underWeekly keeps its own count. */
+    id: 'group.volume', unit: null, requires: [],
+    compute: d => (d.f('log.confidence') === 'readable' ? volumeRead(d.volumeIn()) : null),
+    because: () => 'your hard sets by group in the last 7 days, against a common range for your goal and your own normal'
+  },
+  {
+    // v54: "Is my training balanced?" — the four splits over eight weeks.
+    id: 'group.balance', unit: null, requires: [],
+    compute: d => (d.f('log.confidence') === 'readable' ? balanceRead(d.volumeIn()) : null),
+    because: () => 'your hard sets from the last 8 weeks, by movement'
   },
   {
     /* The rest-day finding, and the only one that counsels caution. It fires on
@@ -2077,8 +2095,9 @@ export const QUESTIONS = Object.freeze([
   },
   /* v49. The focus group: asked under "How am I tracking toward my goal?"
      (where: 'goal'), never as the opener, and shown in Settings → Your goal
-     like the aim. Tonight it changes what goal pace reads; its volume and
-     builder effects are stage five's. */
+     like the aim. It changes what goal pace reads, and (v54, stage five) the
+     weekly volume answer — its range up 30%, its line first — and the
+     builder, where its exercises come first. */
   {
     id: 'q_focus_group',
     text: 'Is there one muscle group you most want to bring up?',
@@ -2091,7 +2110,7 @@ export const QUESTIONS = Object.freeze([
       { value: 'core',      label: 'Core' },
       { value: 'none',      label: 'No focus' }
     ]),
-    changes: Object.freeze(['goal_pace']),
+    changes: Object.freeze(['goal_pace', 'week_volume', 'build_workout']),
     fact: 'coach.focus',
     always: true,
     where: 'goal',
@@ -2632,6 +2651,27 @@ export const INTENTS = Object.freeze([
     when: d => fuelEmptyToday(d),
     response: 'resp_fed_none'
   },
+  /* ---------- v54, stage five: the whole week (coach-volume.js) ----------
+     Two answers in the volume category, Pro like their siblings, and
+     SELECTORS, sheet-only: neither competes for a card, and neither is in the
+     live sheet. Offered wherever the log is readable; under three weeks of it
+     each answer says so and guesses nothing. */
+  {
+    id: 'week_volume', kind: 'selector', priorityBand: 5, severity: 1,
+    category: 'volume', tier: 'pro', surfaces: ['sheet'],
+    factsNeeded: ['group.volume'], supersedes: [],
+    minData: d => !isMuted(d.input.settings, 'volume'),
+    when: d => d.f('group.volume') != null,
+    response: 'resp_week_volume'
+  },
+  {
+    id: 'balance_read', kind: 'selector', priorityBand: 5, severity: 1,
+    category: 'volume', tier: 'pro', surfaces: ['sheet'],
+    factsNeeded: ['group.balance'], supersedes: [],
+    minData: d => !isMuted(d.input.settings, 'volume'),
+    when: d => d.f('group.balance') != null,
+    response: 'resp_balance'
+  },
   {
     /* THE IN-SESSION READ, registered so its switch is a category like any
        other and so the Pro panel names it. It is never answered through the
@@ -3078,6 +3118,18 @@ export const RESPONSES = Object.freeze({
     text: d => d.f('session.lighterWeek').text,
     reason: d => d.f('session.lighterWeek').reason
   },
+  /* v54, stage five. Every sentence is coach-volume.js's — counts only, and
+     never a reason about the body; what is composed here is nothing. */
+  resp_week_volume: {
+    text: d => volLines(d).text,
+    reason: d => volLines(d).reason,
+    more: d => volLines(d).more
+  },
+  resp_balance: {
+    text: d => balLines(d).text,
+    reason: d => balLines(d).reason,
+    more: d => balLines(d).more
+  },
 
   /* v52, stage four. Every sentence is coach-ready.js's, through units.js;
      what is composed here is the order they are said in. */
@@ -3371,6 +3423,13 @@ function readyLines(d) {
 }
 function fuelLines(d) {
   return d.once('ans:fuel', () => fuelAnswer(d.fuelIn(), d.f('fuel.read')));
+}
+// v54: the two volume answers, once a call each.
+function volLines(d) {
+  return d.once('ans:vol', () => volumeAnswer(d.f('group.volume')));
+}
+function balLines(d) {
+  return d.once('ans:bal', () => balanceAnswer(d.f('group.balance')));
 }
 /* v52, Phase B: the one link from his own log under "How did today compare?"
    — Patterns on — the first of four Patterns comparisons that is there,
@@ -4122,17 +4181,25 @@ export const TRAIN_TOPICS = Object.freeze([
    kept (the shipped filter), and Patterns stays last on You. Train's `pre`
    list is TRAIN_TOPICS above, his decided order first; `live` is the shipped
    behaviour — Train's own table, and You's general three. */
+/* v54, stage five: the whole week's two answers. Offered after everything
+   that was there before them — past the first four, under "More" — on the
+   Train sheet, before a workout and on a day already trained; never
+   mid-session and never on a card. Not on You's lists: those are read on
+   every card paint (leadQuestion), and no card paint may ask a new route. */
+const WEEK_TOPICS = Object.freeze(['ask_week_volume', 'ask_balance']);
 const TOPIC_BY_ID = Object.freeze(Object.fromEntries(
   TOPICS.concat(TRAIN_TOPICS, [
     { id: 'ask_compare', label: 'How did today compare?',           category: 'progression' },
     { id: 'ask_next',    label: 'What’s next time?',                 category: 'targets' },
-    { id: 'ask_goal',    label: 'How am I tracking toward my goal?', category: 'progression' }
+    { id: 'ask_goal',    label: 'How am I tracking toward my goal?', category: 'progression' },
+    { id: 'ask_week_volume', label: 'How’s my weekly volume?',       category: 'volume' },
+    { id: 'ask_balance', label: 'Is my training balanced?',          category: 'volume' }
   ]).map(t => [t.id, Object.freeze(t)])));
 export const STATE_TOPICS = Object.freeze({
   train: Object.freeze({
-    pre:        Object.freeze(TRAIN_TOPICS.map(t => t.id)),
+    pre:        Object.freeze(TRAIN_TOPICS.map(t => t.id).concat(WEEK_TOPICS)),
     post:       Object.freeze(['ask_compare', 'ask_next', 'ask_lifts', 'ask_build']),
-    done_today: Object.freeze(['ask_compare', 'ask_shape', 'ask_build', 'ask_lifts']),
+    done_today: Object.freeze(['ask_compare', 'ask_shape', 'ask_build', 'ask_lifts'].concat(WEEK_TOPICS)),
     // rack-v51's list, written out (v52): it was derived from TRAIN_TOPICS,
     // and the pre-workout order moving is not a reason for the live one to.
     live:       Object.freeze(['ask_shape', 'ask_build', 'ask_targets', 'ask_record_day', 'ask_lighter', 'ask_lifts',
@@ -4191,6 +4258,9 @@ const ROUTES = Object.freeze({
   ask_stall:    ['stalled_lift', 'pr_proximity'],
   ask_records:  ['recent_pr', 'pr_proximity'],
   ask_volume:   ['group_under_weekly_normal', 'weekly_sessions_vs_trailing'],
+  // v54: the whole week — each group's hard sets, and the balance of the split.
+  ask_week_volume: ['week_volume'],
+  ask_balance:  ['balance_read'],
   ask_rest:     ['same_group_overused'],
   ask_calories: ['fuel_calories_left_today'],
   ask_macros:   ['fuel_macro_share_vs_targets'],
@@ -4241,6 +4311,9 @@ const FOLLOWUPS = Object.freeze({
   ask_ready:    [],
   ask_compare:  ['ask_next', 'ask_lifts'],
   ask_next:     ['ask_compare', 'ask_lifts'],
+  // v54: each of the whole week's two leads to the other.
+  ask_week_volume: ['ask_balance'],
+  ask_balance:  ['ask_week_volume'],
   ask_goal:     ['ask_lifts', 'ask_rate'],
   // Nothing: the answer is already every pattern that clears its bar.
   ask_patterns: [],
@@ -4296,6 +4369,8 @@ const ASK_LABELS = Object.freeze({
   ask_compare:  'How did today compare?',
   ask_next:     'What’s next time?',
   ask_goal:     'How am I tracking toward my goal?',
+  ask_week_volume: 'How’s my weekly volume?',
+  ask_balance:  'Is my training balanced?',
   ask_overdue:  'What’s overdue?',
   ask_shape:    'Which session is due?',
   ask_stall:    'Anything stalled?',
@@ -4427,8 +4502,31 @@ function factStore(input) {
   // v52, Phase B: coach-fuel.js's input, once per call — sheet only.
   let fuelIn = null;
   d.fuelIn = () => fuelIn || (fuelIn = fuelOf(d));
+  // v54: coach-volume.js's input, once per call — sheet only.
+  let volumeIn = null;
+  d.volumeIn = () => volumeIn || (volumeIn = volumeOf(d));
 
   return d;
+}
+
+/* Everything coach-volume.js is allowed to know, and every piece of it is
+   this file's: the shaped sessions (every one — a mark says the numbers were
+   not representative, never that the sets were not done), the merged
+   library, his aim and when he set it, his focus, the `asked` stamps (the
+   neglect line's), and REP_DROP, coach-live.js's own. */
+function volumeOf(d) {
+  const s = d.input.settings || {};
+  const focus = d.f('coach.focus');
+  return {
+    now: d.now,
+    sessions: d.all(),
+    lib: d.lib,
+    aim: d.f('coach.aim'),
+    focus: focus && focus !== 'none' ? focus : null,
+    aimSetAt: Number.isFinite((s.asked || {}).q_goal_aim) ? s.asked.q_goal_aim : null,
+    asked: s.asked || {},
+    repDrop: REP_DROP
+  };
 }
 
 /* Everything coach-ready.js is allowed to know, and every piece of it is this
@@ -4585,6 +4683,14 @@ export function fuelInput(input) {
     return null;
   }
 }
+// v54: and coach-volume.js's, for tools-check/coach-volume.mjs.
+export function volumeInput(input) {
+  try {
+    return factStore(input || {}).volumeIn();
+  } catch {
+    return null;
+  }
+}
 
 /* Everything the builder is allowed to know, and every piece of it is a fact
    or a gate this file already owns. The builder derives nothing about the log
@@ -4629,7 +4735,9 @@ function builderInput(d) {
     libReady: d.input.libReady === true,
     goal: { aim: d.f('coach.aim'), exp: d.f('coach.experience') },
     energy: { context: d.f('weight.energy'), rateWk: d.f('weight.rateWk') },
-    targetsOn: !isMuted(d.input.settings, 'targets')
+    targetsOn: !isMuted(d.input.settings, 'targets'),
+    // v54: his focus group, whose exercises the proposal puts first.
+    focusGroup: (f => (f && f !== 'none' ? f : null))(d.f('coach.focus'))
   };
 }
 
@@ -5109,7 +5217,10 @@ function ask(d, u, id) {
       const where = v.id === 'lift_targets' ? 'targets' : v.id === 'goal_pace' ? 'goal' : v.id === 'fuel_fueled' ? 'fuel' : null;
       return { ...v, followups: followupsFor(d, u, id, v.id),
                ...(where ? { question: questionView(questionUnder(d, where), d, u) } : null),
-               ...(v.id === 'session_compare' ? markView(d) : null) };
+               ...(v.id === 'session_compare' ? markView(d) : null),
+               // v54: a once-only line in the answer (the neglected group,
+               // once in four weeks): the sheet stamps `asked` as it draws it.
+               ...(v.id === 'week_volume' && volLines(d).once ? { once: volLines(d).once } : null) };
     }
   }
   return {
@@ -5212,6 +5323,14 @@ function markView(d) {
    never PUT from stale module state. */
 export const COACH_SETTINGS_VERSION = 1;
 
+/* v54: THE ONCE-IN-A-WHILE LINES — sentences said at most once in a stretch,
+   stamped in `asked` the way a question is when it is put (coach-data.js
+   markAsked). Not questions: nothing is answered, and nothing here is in
+   Settings. `vol_neglect` is the neglected group under "How's my weekly
+   volume?", once in 28 days (coach-volume.js). A child of the already-granted
+   settings/coach, so no rules change. */
+export const ONCE_LINES = Object.freeze(['vol_neglect']);
+
 export function normSettings(v) {
   const o = v && typeof v === 'object' && !Array.isArray(v) ? v : {};
   const mute = {};
@@ -5234,6 +5353,8 @@ export function normSettings(v) {
   const asked = {};
   const rawAsk = o.asked && typeof o.asked === 'object' ? o.asked : {};
   QUESTIONS.forEach(q => { if (Number.isFinite(rawAsk[q.id])) asked[q.id] = rawAsk[q.id]; });
+  // v54: and the stamps of the lines said once in a while, not questions.
+  ONCE_LINES.forEach(id => { if (Number.isFinite(rawAsk[id])) asked[id] = rawAsk[id]; });
   /* No `lastGreet`. It used to live here and it was the wrong node for it: the
      write fires as the app opens and the app is routinely closed a second or
      two later, so the one usage pattern that needed the value remembered was

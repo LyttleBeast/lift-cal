@@ -99,6 +99,14 @@ writeFileSync(join(dir, 'coach.mjs'), src('coach.js')
   .replace("from './coach-overlap.js'", 'from ' + at('coach-overlap.mjs'))
   .replace("from './coach-fuel.js'", 'from ' + at('coach-fuel.mjs'))
   .replace("from './coach-ready.js'", 'from ' + at('coach-ready.mjs'))
+  .replace("from './coach-volume.js'", 'from ' + at('coach-volume.mjs'))
+  .replace("from './analytics.js'", 'from ' + at('analytics.mjs')));
+// v54: coach-volume.js, the whole week, staged the same way (the staging edit
+// the brief allows everywhere): coach.js imports it.
+writeFileSync(join(dir, 'coach-volume.mjs'), src('coach-volume.js')
+  .replace("from './exercises.js'", 'from ' + real('exercises.js'))
+  .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
+  .replace("from './coach-goal.js'", 'from ' + real('coach-goal.js'))
   .replace("from './analytics.js'", 'from ' + at('analytics.mjs')));
 const C = await import(pathToFileURL(join(dir, 'coach.mjs')).href);
 const { EXERCISES } = await import(pathToFileURL(join(ROOT, 'exercises.js')).href);
@@ -250,8 +258,10 @@ section('D. v52 — "Should I rest or go lighter?" before the record, and the li
   // SHIP-V52-PROMPT §6.4 and §10: the pre-workout Train list, with "Am I
   // fueled?" and then the rest question ahead of "Good day for a record?" —
   // his decided first three unmoved.
-  check('Train before a workout: shape, build, targets, fueled, rest-or-lighter, record, lifts, overdue, volume',
-        C.STATE_TOPICS.train.pre.join(',') === 'ask_shape,ask_build,ask_targets,ask_fueled,ask_lighter,ask_record_day,ask_lifts,ask_overdue,ask_volume',
+  // v54, on purpose (SHIP-V54-PROMPT §7): the whole week's two answers after
+  // everything that was there — past the first four, so under "More".
+  check('Train before a workout: shape, build, targets, fueled, rest-or-lighter, record, lifts, overdue, volume — and v54’s weekly volume and balance',
+        C.STATE_TOPICS.train.pre.join(',') === 'ask_shape,ask_build,ask_targets,ask_fueled,ask_lighter,ask_record_day,ask_lifts,ask_overdue,ask_volume,ask_week_volume,ask_balance',
         C.STATE_TOPICS.train.pre.join(','));
   check('"Am I fueled?" and its two follow-ups are routes, and only "Am I fueled?" is a topic',
         ['ask_fueled', 'ask_fed_unlogged', 'ask_fed_none'].every(id => C.ROUTE_IDS.includes(id)) &&

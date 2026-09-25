@@ -36,8 +36,9 @@ const src = p => readFileSync(join(ROOT, p), 'utf8');
 const real = p => JSON.stringify(pathToFileURL(join(ROOT, p)).href);
 
 /* ================= STAGING ================= */
+// v54: and coach-volume.js, which coach.js imports (the staging edit).
 const FILES = ['analytics.js', 'coach-goal.js', 'coach-prog.js', 'coach-overlap.js', 'coach-build.js', 'coach-live.js',
-               'coach-ready.js', 'coach-fuel.js', 'coach.js'];
+               'coach-ready.js', 'coach-fuel.js', 'coach-volume.js', 'coach.js'];
 const dir = mkdtempSync(join(tmpdir(), 'rack-coach-fuel-'));
 const at = f => JSON.stringify(pathToFileURL(join(dir, f)).href);
 writeFileSync(join(dir, 'store-stub.mjs'), `
