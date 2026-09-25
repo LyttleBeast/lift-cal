@@ -972,24 +972,31 @@ never leave the phone.
   remainder. It moves at most once a week and at most 100 kcal at a time, and it floors
   itself at protein + fat + 100 g of carbs, because carbs being the remainder means calories
   falling too low produces zero carbs rather than a warning.
-- **The big number is the deficit**, not calories left. The whole point of a cut is how
-  far under maintenance the day is; the daily target is a number you typed into settings
-  once. So `633 under maintenance` gets the 40px and `893 left · 1,807 / 2,700` gets the
-  small print. With no maintenance number pinned and not enough logged to estimate one,
-  there is no deficit to show and it falls back to calories-left.
+- **The big number is what is left of today's target**: `893` beside "kcal left today" —
+  or "kcal over target" once past it — with `1,807 eaten · target 2,700` under that. The
+  target is the number you eat to, so it is the one you act on; the distance from
+  maintenance sits under the bar instead, beside the bands it is measured against
+  (`Holding · 120 over maintenance`). The big number's colour is the band the day is in,
+  so a day under target but past the holding band reads red before the small print is
+  read. With no maintenance to measure against it is plain, and red once over the target
+  (`food.js` `renderSummary`).
 - **The calorie bar** is the one that matters, so it's the big one. Two ticks cut it into
   three bands: left of the first is a deficit, between them is holding, right of the second
   you're gaining — and the fill takes the colour of the band you're standing in. The ticks sit
-  8% of maintenance either side of it, rounded to 25 and held between 150 and 250 kcal
-  (`tdee.js` `calorieZones`): about 200 at a maintenance of 2,500, and the 250 cap — half a
-  pound a week, Bulking's own rate — from 2,970 up. Both edges count as holding. They are
+  8% of maintenance either side of it, rounded to 25 and held between 150 and 200 kcal
+  (`tdee.js` `calorieZones`): 200 from a maintenance of 2,344 up. The cap was 250 until
+  v58, which put Bulking's own target, maintenance + 250, on the band's top edge from 2,970
+  up, reading as holding; at 200 Bulking and Cutting land in their own colours at every
+  maintenance. Both edges count as holding. They are
   anchored on the number you pinned in Daily targets if you've set one, otherwise the
   estimate off your weight trend. With neither, the bar falls back to plain progress against target and says so. A
   blowout day pins the bar full rather than stretching the axis until the bands are slivers.
   When the target sits inside the holding band, or past it on the wrong side of the goal, a
-  note under the bar says so with the band's numbers (v57: "Your target, 3,470, sits inside
-  your holding range (maintenance 3,220 ± 250), so the calorie bar reads eating to it as
-  holding, not bulking.").
+  note under the bar says so with the band's numbers (v57: "Your target, 3,400, sits inside
+  your holding range (maintenance 3,220 ± 200), so the calorie bar reads eating to it as
+  holding, not bulking."). The ⋯ opens *Reading the bar*, which says what the yellow comes
+  to at 3,500 kcal a pound — at 200, eating at its edge every day is about 0.4 lb a week,
+  up or down — and what a target inside it does (v58, `holdWords`, `markWords`).
 - **Tap any logged food → ×2 / ×3 / ×4 / Half** to scale it, or *Log this again separately*
   to add a second helping as its own entry. **Copy JSON** lifts it out in the shape the paste
   box eats; on a past day, **Log on today** does the same trip without the clipboard. Library-linked foods scale by portion so the
