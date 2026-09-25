@@ -148,6 +148,33 @@ export function originHeading(rows) {
                                   : 'Part published, part estimate', sub: '' };
 }
 
+/* ---------- a meal saved off this sheet (v55) ----------
+   Micah, 16 Sep 2026: on the estimate result, a way "to save that item (or
+   plate) as a saved meal for quick re-logging later". The meal builder opens
+   with this in its name box, and he can change it before anything is saved:
+   the venue and the item, "Panda Express · Grilled teriyaki chicken ×3.5", or
+   for a plate its first two items. The venue is the rows' own when they agree
+   on one, else the reply's. A count is said only when the row's amount starts
+   with one — "3.5 × entrée", "3.5 servings" — and is never worked out: a
+   number in a name he did not type has to be one the reply said. */
+const COUNT = /^\s*(\d+(?:\.\d+)?)\s*(?:[×x]\s|servings?\b)/i;
+export function mealName(rows, origins, res) {
+  const list = Array.isArray(rows) ? rows.filter(r => r && String(r.name == null ? '' : r.name).trim()) : [];
+  if (!list.length) return '';
+  const os = Array.isArray(origins) ? origins : [];
+  const venues = Array.from(new Set(os.map(o => (o && o.venue) || '').filter(Boolean)));
+  const venue = venues.length === 1 ? venues[0] : venueText(res && res.venue);
+  const nameOf = r => String(r.name).trim();
+  let what;
+  if (list.length === 1) {
+    const m = COUNT.exec(String(list[0].qty == null ? '' : list[0].qty));
+    what = nameOf(list[0]) + (m && parseFloat(m[1]) > 0 && parseFloat(m[1]) !== 1 ? ' ×' + m[1] : '');
+  } else {
+    what = list.slice(0, 2).map(nameOf).join(', ');
+  }
+  return venue ? venue + ' · ' + what : what;
+}
+
 /* ---------- the one call the sheet makes ----------
    `rows` is aligned one-for-one with `res.items`, including any item that will
    later be dropped for having no name — alignment is the caller's to keep and

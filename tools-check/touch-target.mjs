@@ -367,7 +367,12 @@ const BUTTONS = [
      dropAddRow). A .btn, so the minimum holds it; never measured in Chrome at
      v46 either, and its widths join the snapshot as they are tonight. */
   ['Train · session', '+ Drop', ['workout.js', /el\('button', 'btn btn-ghost drop-add', '\+ Drop'\)/],
-   `button.btn.btn-ghost.drop-add < div.drop-add-row < div.ex-block < div.screen-pad < ${V}`, null]
+   `button.btn.btn-ghost.drop-add < div.drop-add-row < div.ex-block < div.screen-pad < ${V}`, null],
+  /* v55, on purpose: "Save" on an estimate's row (food.js openAiReview) — that
+     row as a meal. Not a .btn; its own min-height holds it, never measured in
+     Chrome at v46, and its widths join the snapshot as they are tonight. */
+  ['Fuel · estimate', 'Save (a row as a meal)', ['food.js', /el\('button', 'pe-save', 'Save'\)/],
+   'button.pe-save < div.food-entry.pe-row < div.import-list < div < div.sheet', null]
 ];
 
 /* The width snapshot, v46 (12b3a9d), produced by this file's own resolver

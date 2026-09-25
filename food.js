@@ -27,7 +27,7 @@ import { initRecall, lookup as recallLookup, remember as recallRemember,
          forget as recallForget, forgetAll as recallForgetAll } from './recall.js';
 import { bump } from './usage.js';
 import { noteCoachFood } from './coach-data.js';
-import { estimateOrigin, originHeading, EDITED } from './estimate-origin.js';
+import { estimateOrigin, originHeading, EDITED, mealName } from './estimate-origin.js';
 import { goalDirection } from './insights.js';
 import { wIn, fmtW, labelW, unitW, rateIn, boxRate, perIn, boxPer,
          kcalPerUnit, limW, limRate, limPer } from './units.js';
@@ -1548,12 +1548,16 @@ function openMealsSheet(mealId) {
   sh.appendChild(cancel);
 }
 
-/* ---------- the builder ---------- */
-function openMealBuilder(draft, mealId) {
+/* ---------- the builder ----------
+   v55: `opts.saveOnly` is the form "Save as meal" opens it in, off the
+   estimate sheet: the name, the ingredients and one Save, and none of the
+   logging controls — logging the plate is the sheet underneath's job. */
+function openMealBuilder(draft, mealId, opts = {}) {
   const { sh, close } = sheet();
   let meal = mealId || defaultMeal();
   let asOne = false;
   let keep = !!draft.saved;
+  const saveOnly = !!(opts && opts.saveOnly);
 
   const body = el('div');
   sh.appendChild(body);
@@ -1614,7 +1618,18 @@ function openMealBuilder(draft, mealId) {
     add.onclick = () => openIngredientSource(ing => { draft.items.push(ing); rebuild(); });
     body.appendChild(add);
 
-    if (draft.items.length) {
+    if (saveOnly && draft.items.length) {
+      body.appendChild(noteEl('It keeps these numbers, so logging it again from My meals is free.'));
+      const save = el('button', 'btn btn-primary btn-block btn-lg', 'Save meal');
+      save.style.marginTop = '12px';
+      save.onclick = async () => {
+        if (!draft.name.trim()) { toast('Give it a name first'); nameIn.focus(); return; }
+        await persistMeal(draft);
+        close();
+        toast('Saved to my meals');
+      };
+      body.appendChild(save);
+    } else if (draft.items.length) {
       body.appendChild(el('div', 'field-lbl', 'Meal'));
       body.appendChild(mealChips(meal, v => { meal = v; }));
 
@@ -1703,6 +1718,17 @@ function logMeal(draft, meal, asOne) {
   }
   // The whole meal under its own name, so describing it next time is free.
   if (draft.name.trim()) recallRemember(draft.name, draft.items.map(cleanIng), 'log');
+}
+
+/* v55: SAVE AS MEAL, off the estimate sheet — the plate, or one row of it.
+   The existing builder and the existing write (persistMeal, food/meals), so
+   a meal saved here is exactly a meal saved anywhere else: an ingredient list
+   at these numbers, re-logged later from My meals with no estimate spent.
+   The rows are copied as they stand when he taps, corrections included, and
+   the builder opens in its save-only form, since the sheet under it still
+   logs the plate. */
+function saveAsMeal(rows, name, mealId) {
+  openMealBuilder({ ...blankMeal(), name: name || '', items: rows.map(r => ({ ...r })) }, mealId, { saveOnly: true });
 }
 
 /* ---------- where an ingredient comes from ---------- */
@@ -2143,6 +2169,17 @@ function openAiReview(res, ctx) {
       row.appendChild(b);
       row.appendChild(el('div', 'fe-cal num', String(e.cal)));
 
+      /* v55: save this row as a meal of its own (Micah, 16 Sep). A small
+         control on the row, because the row has no menu — its tap is the
+         fix-it sheet. Not while building a meal already (onPick). */
+      if (!ctx.onPick) {
+        const keep = el('button', 'pe-save', 'Save');
+        keep.setAttribute('aria-label', 'Save ' + e.name + ' as a meal');
+        keep.title = 'Save this item as a meal';
+        keep.onclick = () => saveAsMeal([e], mealName([e], [origins[i]], res), meal);
+        row.appendChild(keep);
+      }
+
       const x = el('button', 'ex-del pe-x', '✕');
       x.setAttribute('aria-label', 'Remove ' + e.name);
       x.onclick = () => {
@@ -2185,6 +2222,17 @@ function openAiReview(res, ctx) {
       toast('Logged ' + entries.length + ' food' + (entries.length > 1 ? 's' : ''));
     };
     body.appendChild(go);
+
+    /* v55: the plate as it stands now, his corrections included, into the
+       meal builder to be named and saved. Nothing is saved until he taps Save
+       there, and this sheet stays open under it: logging the plate is exactly
+       what it was. */
+    if (!ctx.onPick) {
+      const keep = el('button', 'btn btn-ghost btn-block', 'Save as meal');
+      keep.style.marginTop = '8px';
+      keep.onclick = () => saveAsMeal(entries, mealName(entries, origins, res), meal);
+      body.appendChild(keep);
+    }
 
     if (ctx.retry) {
       const again = el('button', 'btn btn-ghost btn-block', 'Not right — add detail and retry');

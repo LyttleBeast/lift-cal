@@ -1650,6 +1650,15 @@ body.peeking .view.active { padding-bottom: 65px; }
 .pe-row { align-items: stretch; }
 .pe-body { flex: 1; min-width: 0; text-align: left; padding: 2px 0; }
 .pe-x { align-self: center; flex-shrink: 0; }
+/* v55: "Save", on an estimate's row — that row as a meal of its own. The
+   row's full height and never under 44px, in the row's quiet type. */
+.pe-save {
+  flex-shrink: 0; align-self: stretch; min-height: 44px; min-width: 44px;
+  padding: 0 8px; border-radius: var(--r-sm);
+  font-size: 11px; letter-spacing: .04em; color: var(--steel);
+  font-variation-settings: 'wdth' 92, 'wght' 700;
+}
+.pe-save:active { color: var(--chalk); background: var(--collar); }
 
 .ai-cost {
   font-size: 10px; color: var(--dim);
