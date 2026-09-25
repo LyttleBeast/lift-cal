@@ -89,8 +89,14 @@ function fnSource(name) {
 
 // collectFrom is the rule; collectDone is the live session's one-line caller.
 // Both, or the caller lifts with nothing to call.
+// v54: newExercise gives a live session's first set last time's numbers in
+// grey, through greyFor, which reads the "Last ·" session (lastEntry) off the
+// module's `history` — so those four come too, and the index starts empty
+// here, which is an exercise with no last time: the shape every check below
+// was written against. tools-check/grey-last.mjs drives them with a history.
 const LIFTED = ['blockHasLogged', 'newExercise', 'dupSet',
-                'collectFrom', 'collectDone', 'editWorkout'];
+                'collectFrom', 'collectDone', 'editWorkout',
+                'greyFor', 'lastEntry', 'lastTargets', 'historyRows'];
 
 // The pure model, by name, as blocks.js exports it. Listed rather than splatted
 // so a function quietly disappearing from the module is an import error here.
@@ -107,7 +113,9 @@ const SHARED = [
 writeFileSync(
   join(dir, 'blocks.mjs'),
   'import { ' + SHARED.join(', ') + ' } from ' + real('blocks.js') + ';\n' +
+  'import { isWorking } from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href) + ';\n' +
   'let session = null;\n' +
+  'let history = {};\n' +
   'function render() {}\n' +
   LIFTED.map(fnSource).join('\n') + '\n' +
   'export function setSession(s) { session = s; }\n' +

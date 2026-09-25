@@ -887,11 +887,46 @@ function dupSet(editing) {
 
 // One shape for a new exercise, so one added inside a block is the same object
 // as one added outside it and the annotation is the only difference.
+//
+// v54: in a live session its first set carries last time's numbers in grey
+// (greyFor, below) — every hand-added path comes through here, the "+ Add
+// exercise" button, a block's own and Coach's "Add it", so all three get them.
 function newExercise(x, editing) {
-  return {
-    exId: x.id, name: x.name, group: x.group, equipment: x.equipment,
-    sets: [{ w: '', r: '', type: 'N', done: editing }]
-  };
+  const ex = { exId: x.id, name: x.name, group: x.group, equipment: x.equipment, sets: [] };
+  ex.sets.push({ w: '', r: '', type: 'N', done: editing, ...(editing ? null : greyFor(ex)) });
+  return ex;
+}
+
+/* The session the "Last ·" line quotes for an exercise: its newest entry in the
+   index that is not the date being edited. One function, so the line and the
+   grey numbers under it (v54) read the same session and cannot disagree. */
+function lastEntry(exId) {
+  return historyRows(history[exId]).find(h => !session || !session._edit || h.date !== session._edit.dateKey) || null;
+}
+
+/* v54: last time's numbers for the next set of an exercise added by hand, as
+   `{ tw, tr, tl: true }`, or null. `tl` says the targets are last time's and no
+   plan's; collectFrom strips it with tw and tr. Null in an edit of a past
+   session, on an exercise carrying a routine's or the builder's targets (a set
+   with tw/tr that last time did not put there), and with no "Last ·" session
+   to read. The position is how many of today's sets are not warm-ups, so a
+   warm-up typed first does not push last time's first set along. */
+function greyFor(ex) {
+  if (!session || session._edit) return null;
+  if ((ex.sets || []).some(s => s && ('tw' in s || 'tr' in s) && !s.tl)) return null;
+  const prev = lastEntry(ex.exId);
+  const t = prev ? lastTargets(prev.sets, (ex.sets || []).filter(s => s && s.type !== 'W').length) : null;
+  return t ? { ...t, tl: true } : null;
+}
+
+/* "+ Set". A previous set with anything typed in it is copied exactly as it
+   always was. With both of its boxes blank, the new set gets last time's
+   numbers for its position in grey (v54) — or blanks, as before, wherever
+   greyFor says no. */
+function addSetTo(ex) {
+  const last = ex.sets[ex.sets.length - 1] || {};
+  const blank = (last.w == null || last.w === '') && (last.r == null || last.r === '');
+  ex.sets.push({ w: last.w || '', r: last.r || '', type: 'N', done: !!session._edit, ...(blank ? greyFor(ex) : null) });
 }
 
 /* What "+ Add exercise" hands the picker, and — the same function, never a
@@ -1147,7 +1182,7 @@ function renderExercise(ex, exIdx) {
   block.appendChild(hd);
 
   // previous performance — the single most useful thing on the screen
-  const prev = (history[ex.exId] || []).find(h => !session._edit || h.date !== session._edit.dateKey);
+  const prev = lastEntry(ex.exId);
   if (prev) {
     const txt = prev.sets.map(s => `${fmtSetLoad(s.w, wu())}×${s.r}`).join('  ');
     block.appendChild(el('div', 'ex-prev', `Last · ${fmtDate(prev.date)}   ${txt}`));
@@ -1194,11 +1229,7 @@ function renderExercise(ex, exIdx) {
 
   const acts = el('div', 'ex-actions');
   const addSet = el('button', 'btn btn-ghost', '+ Set');
-  addSet.onclick = () => {
-    const last = ex.sets[ex.sets.length - 1] || {};
-    ex.sets.push({ w: last.w || '', r: last.r || '', type: 'N', done: !!session._edit });
-    persistSession(); render();
-  };
+  addSet.onclick = () => { addSetTo(ex); persistSession(); render(); };
   acts.appendChild(addSet);
   block.appendChild(acts);
 
@@ -1426,8 +1457,9 @@ export function collectFrom(exercises) {
     .map(ex => ({
       ...ex,
       // tw/tr are routine targets — live-session scaffolding, not part of the record.
+      // tl (v54) only says whose targets they were, and goes with them.
       sets: ex.sets.filter(s => s.done && s.r !== '')
-                   .map(({ tw, tr, ...keep }) => ({ ...keep, w: keep.w === '' ? '0' : keep.w }))
+                   .map(({ tw, tr, tl, ...keep }) => ({ ...keep, w: keep.w === '' ? '0' : keep.w }))
     }))
     .filter(ex => ex.sets.length);
   // A block whose exercises all went unlogged never reaches the record, so the
@@ -1475,6 +1507,32 @@ export function tickSet(s) {
   if (blank(was.w) && !blank(was.tw)) out.w = String(was.tw);
   if (blank(was.r) && !blank(was.tr)) out.r = String(was.tr);
   return out;
+}
+
+/* ---------- last time, in grey (v54) ----------
+
+   THE RULE, Micah's request of 23 Sep 2026, decided 25 Sep (SHIP-V54-PROMPT
+   §3.8), and the native session screen builds to the same words:
+
+     An exercise added by hand to a LIVE session shows last time's numbers in
+     grey, from the session the "Last ·" line quotes, so the two cannot
+     disagree. Set n takes last time's n-th working set; past the end of
+     those, last time's final working set again. Warm-ups are not last time's
+     sets for this. A bodyweight set's weight target is '' — the box stays
+     blank and a tick records '0' exactly as collectFrom always has — so "0"
+     is never printed as a target.
+
+   `n` counts from 0. tw and tr are stored pounds-as-strings exactly as w and
+   r are, copied with no units call — a conversion here would be the second
+   one. They are not Coach's targets: Coach's number for the next set is in the
+   live sheet, and "Use it for my next set" is how it reaches a row. Pure, and
+   HERE beside tickSet, because a tick is what adopts them. Null when last time
+   has no working set to read. */
+export function lastTargets(prevSets, n) {
+  const work = (Array.isArray(prevSets) ? prevSets : []).filter(s => s && isWorking(s) && parseInt(s.r, 10) >= 1);
+  if (!work.length) return null;
+  const s = work[Number.isInteger(n) && n >= 0 ? Math.min(n, work.length - 1) : work.length - 1];
+  return { tw: parseFloat(s.w) > 0 ? String(s.w) : '', tr: String(s.r) };
 }
 
 /* The ticked sets collectFrom is about to leave out: ticked, and no reps. It is
