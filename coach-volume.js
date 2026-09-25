@@ -42,16 +42,23 @@
 // `group_under_weekly_normal` (coach.js) keeps its own primary-only count;
 // nothing here moves it.
 //
+// v56, THE WEEK READ RIGHT. Get stronger's and Powerlifting's 6–15 is for the
+// groups carrying the main lifts (coach-goal.js MAIN_LIFTS, through
+// exercises.js: chest, back and legs); every other group gets 10–20, and the
+// line says which. And a group skipped for its customs is left out of push
+// against pull — its sets, not the whole split — which says so; the two
+// direction splits and knees against hips are skipped whole, as before.
+//
 // PURE, and copied into the native tree verbatim (src/pure/coach-volume.js).
 // No reads, no DOM, no module state; the clock is `now`. Imports exercises.js
 // (groups, secondaries), analytics.js's session math, coach-tags.js (movement
-// patterns and angles) and coach-goal.js (the floor each aim sets). coach.js
-// imports this; nothing imports back.
+// patterns and angles) and coach-goal.js (the floor each aim sets, and the
+// main lifts). coach.js imports this; nothing imports back.
 
 import { GROUPS, GROUP_ORDER, EXERCISE_BY_ID } from './exercises.js';
 import { isWorking, mergeSessionExercises } from './analytics.js';
 import { tagsFor } from './coach-tags.js';
-import { AIMS, volumeFloor } from './coach-goal.js';
+import { AIMS, volumeFloor, MAIN_LIFTS, MAIN_LIFT_AIMS, mainLiftGroups } from './coach-goal.js';
 
 const DAY = 864e5;
 
@@ -107,10 +114,15 @@ export const CUSTOM_SHARE = 0.25;
    road 10–20, strength 6–15, staying consistent 6–12, a cut no top at all
    (it keeps what he has: two thirds of his usual before the cut, and more is
    fine). The floors are coach-goal.js volumeFloor()'s — the stall ladder's
-   own, so the two can never disagree — which sets strength's 6 on every
-   group where the spec wrote "the groups carrying the main lifts"; the code
-   wins, and COACH-REPORT.md's v54 section says so. */
+   own, so the two can never disagree. v56: strength's and powerlifting's
+   6–15 is for the groups carrying the main lifts, as the spec wrote it; every
+   other group gets the middle road's 10–20 (`none`), floor and top. */
 const TOP = Object.freeze({ muscle: 20, recomp: 20, none: 20, strength: 15, powerlifting: 15, maintain: 12, cut: null });
+// The groups carrying a main lift — legs, chest and back.
+const MAIN_GROUPS = mainLiftGroups(EXERCISE_BY_ID);
+// The row of the table a group reads: on a main-lift aim, a group with no
+// main lift reads the middle road's.
+const bandAim = (aim, g) => (MAIN_LIFT_AIMS.includes(aim) && !MAIN_GROUPS.includes(g) ? 'none' : aim);
 const AIM_WORDS = Object.freeze({
   muscle: 'for building muscle', strength: 'for strength', powerlifting: 'for powerlifting',
   maintain: 'for staying consistent', recomp: 'for a recomp', none: ''
@@ -134,6 +146,11 @@ const setsOf = n => half(n) + ' hard ' + (Number(half(n)) === 1 ? 'set' : 'sets'
 const Label = g => (GROUPS[g] ? GROUPS[g].label : String(g));
 const label = g => Label(g).toLowerCase();
 const add = (o, k, n) => { o[k] = (o[k] || 0) + n; };
+// "chest", "chest and arms", "chest, shoulders and arms".
+const joined = xs => (xs.length > 1 ? xs.slice(0, -1).join(', ') + ' and ' + xs[xs.length - 1] : xs.join(''));
+// The movement counts the balance split reads, one set of them per group.
+const PAT_KEYS = Object.freeze(['push', 'pull', 'hPress', 'vPress', 'hPull', 'vPull', 'knee', 'hip']);
+const noPat = () => Object.fromEntries(PAT_KEYS.map(k => [k, 0]));
 
 /* THE HARD SETS OF ONE EXERCISE IN ONE SESSION, warm-ups in disguise out.
    Exported for the battery, which drives the three conditions one at a time.
@@ -164,10 +181,11 @@ function dropped(sets, repDrop) {
 
 /* One session, counted: fractional sets per group; whole sets per primary
    group, and of them the ones typed F and the ones on customs; lifts with a
-   rep drop per group; and the movement counts the balance split reads. */
+   rep drop per group; and the movement counts the balance split reads — v56,
+   per primary group, so a group can be left out of one split and not the
+   rest. */
 function countSession(rec, lib, repDrop) {
-  const out = { groups: {}, prim: {}, f: {}, drops: {}, custom: {},
-                pat: { push: 0, pull: 0, hPress: 0, vPress: 0, hPull: 0, vPull: 0, knee: 0, hip: 0 }, customSets: 0 };
+  const out = { groups: {}, prim: {}, f: {}, drops: {}, custom: {}, pat: {}, customSets: 0 };
   mergeSessionExercises(rec && rec.exercises).forEach(ex => {
     if (!ex || !ex.exId) return;
     const row = lib[ex.exId] || null;
@@ -187,7 +205,7 @@ function countSession(rec, lib, repDrop) {
     (built.secondary || []).forEach(s => { if (s !== g && GROUPS[s]) add(out.groups, s, n * SECONDARY); });
     const t = tagsFor(ex.exId);
     if (!t) return;
-    const P = out.pat;
+    const P = out.pat[g] || (out.pat[g] = noPat());
     if (['press', 'fly', 'extension'].includes(t.pattern) && ['chest', 'shoulders', 'arms'].includes(g)) P.push += n;
     if (t.pattern === 'row' || t.pattern === 'pulldown') P.pull += n;
     if (t.pattern === 'press' && ['flat', 'incline', 'decline'].includes(t.angle)) P.hPress += n;
@@ -209,14 +227,13 @@ function weeksOf(i) {
   const sessions = (Array.isArray(i.sessions) ? i.sessions : [])
     .filter(s => s && Number.isFinite(s.daysAgo) && s.daysAgo >= 0 && (s.session || s.exercises));
   const weeks = [];
-  const at = k => weeks[k] || (weeks[k] = { n: 0, groups: {}, prim: {}, f: {}, drops: {}, custom: {},
-    pat: { push: 0, pull: 0, hPress: 0, vPress: 0, hPull: 0, vPull: 0, knee: 0, hip: 0 }, customSets: 0 });
+  const at = k => weeks[k] || (weeks[k] = { n: 0, groups: {}, prim: {}, f: {}, drops: {}, custom: {}, pat: {}, customSets: 0 });
   sessions.forEach(s => {
     const w = at(Math.floor(s.daysAgo / 7));
     w.n++;
     const c = countSession(s.session || s, lib, i.repDrop);
     ['groups', 'prim', 'f', 'drops', 'custom'].forEach(k => Object.keys(c[k]).forEach(g => add(w[k], g, c[k][g])));
-    Object.keys(c.pat).forEach(k => { w.pat[k] += c.pat[k]; });
+    Object.keys(c.pat).forEach(g => { const P = w.pat[g] || (w.pat[g] = noPat()); PAT_KEYS.forEach(k => { P[k] += c.pat[g][k]; }); });
     w.customSets += c.customSets;
   });
   const age = sessions.length ? Math.max(...sessions.map(s => s.daysAgo)) : null;
@@ -261,8 +278,10 @@ export function volumeRead(input) {
     const groups = order.map(g => {
       const sets = wk(g, 0), last = wk(g, 1), normal = normalOf(g, 1);
       if (g === 'core') return { group: g, sets, last, normal, band: null, zone: null, flag: null, why: null };
-      let lo = aim === 'cut' ? volumeFloor('cut', preCut(g) != null ? preCut(g) : normal) : volumeFloor(aim, null);
-      let hi = TOP[aim];
+      // v56: the floor and the top for THIS group — on Get stronger and
+      // Powerlifting, 6–15 where a main lift is and 10–20 everywhere else.
+      let lo = aim === 'cut' ? volumeFloor('cut', preCut(g) != null ? preCut(g) : normal) : volumeFloor(aim, null, MAIN_GROUPS.includes(g));
+      let hi = TOP[bandAim(aim, g)];
       const raised = g === focus;
       if (raised) { lo = lo != null ? Math.round(lo * FOCUS_RAISE) : null; hi = hi != null ? Math.round(hi * FOCUS_RAISE) : null; }
       const zone = lo != null && sets >= lo && (hi == null || sets <= hi) ? 'common'
@@ -323,15 +342,24 @@ export function volumeAnswer(read) {
              reason: 'It won’t guess at a week from less.', more: [], once: null };
   }
   const aimWords = AIM_WORDS[read.aim] != null ? AIM_WORDS[read.aim] : '';
-  const rangeSaid = b => (b.cut
+  // v56: a group with no main lift on Get stronger or Powerlifting reads the
+  // middle road's range, and says why it is not the aim's.
+  const whose = g => (bandAim(read.aim, g) !== read.aim ? ' for a group with no main lift' : aimWords ? ' ' + aimWords : '');
+  const rangeSaid = (b, g) => (b.cut
     ? (b.lo != null ? half(b.lo) + ' or more, two thirds of your usual before your cut' : null)
-    : b.lo + '–' + b.hi + ', a common range' + (aimWords ? ' ' + aimWords : '')) + (b.raised && b.lo != null ? ' raised 30% for your focus' : '');
+    : b.lo + '–' + b.hi + ', a common range' + whose(g)) + (b.raised && b.lo != null ? ' raised 30% for your focus' : '');
+  // And which groups those are, once, under the first line.
+  const mainSaid = MAIN_LIFT_AIMS.includes(read.aim)
+    ? ' ' + aimWords.charAt(0).toUpperCase() + aimWords.slice(1) + ', ' + volumeFloor(read.aim, null, true) + '–' + TOP[read.aim] +
+      ' is for the groups with a main lift in them (' + joined(MAIN_LIFTS.map(([w]) => w)) + '): ' +
+      joined(GROUP_ORDER.filter(g => MAIN_GROUPS.includes(g)).map(label)) + '. The rest get ' + volumeFloor('none', null) + '–' + TOP.none + '.'
+    : '';
   // "In the last 7 days", never "this week": the window rolls, and a calendar
   // word on a rolling count is the defect v43 fixed on the greeting.
   const lines = read.groups.map(r => {
     const head = Label(r.group) + ': ' + setsOf(r.sets) + ' in the last 7 days';
     if (r.group === 'core') return head + '.';
-    const range = rangeSaid(r.band);
+    const range = rangeSaid(r.band, r.group);
     const where = !range ? ''
       : r.zone === 'common' ? ', inside ' + range
       : r.zone === 'very low' ? ', very low against ' + range
@@ -361,7 +389,7 @@ export function volumeAnswer(read) {
   return {
     text: lines[0],
     reason: 'Working sets from the last 7 days, warm-ups out, and a set counts half for each group it works second. ' +
-            'Each range is a common starting point for your goal; your usual is the middle of your 8 weeks before this one.',
+            'Each range is a common starting point for your goal; your usual is the middle of your 8 weeks before this one.' + mainSaid,
     more,
     once: n ? 'vol_neglect' : null
   };
@@ -371,7 +399,8 @@ export function volumeAnswer(read) {
    IS MY TRAINING BALANCED?
    ================================================================
    balanceRead(input) -> { state: 'thin', days } | { state: 'read', ratios:
-     [{ id, a, b, flagged, skipped }], custom, skipped: [groups] }
+     [{ id, a, b, flagged, skipped, left }], custom, skipped: [groups],
+     heavy: [groups] }
 
    Four splits over eight weeks of hard sets, by movement, from the tags:
    pushing (presses, flyes and extensions on chest, shoulders and arms) against
@@ -381,10 +410,22 @@ export function volumeAnswer(read) {
    three to one. A set is one set of its movement here: fractional counting
    shares a set between muscle groups, and a set has one movement. Customs
    have no movement tag and are left out, and said to be; a group whose sets
-   are over a quarter customs has its splits skipped. Hidden exercises count —
-   hiding only takes one out of the picker — and nothing here suggests one. */
+   are over a quarter customs — `heavy` — has its splits skipped. Hidden
+   exercises count — hiding only takes one out of the picker — and nothing
+   here suggests one.
+
+   v56: PUSH AGAINST PULL IS READ ACROSS GROUPS — its pushing comes from chest,
+   shoulders and arms, its pulling from back — so a heavy group is left out of
+   it by its sets (`left`), never the whole split: pushing without the arms is
+   still a count of pushing, said with the arms named as not in it, and the two
+   to one is on what is counted. It is skipped whole only when every group
+   carrying one of its sides (`sides`) is out, since a side with nothing left
+   in it would read as a lopsided split. The other three each read inside one
+   or two groups and are skipped whole, as they always were. `skipped` is the
+   heavy groups that did skip a split. */
 const SPLITS = Object.freeze([
-  Object.freeze({ id: 'pushPull', groups: ['chest', 'shoulders', 'arms', 'back'], a: 'push', b: 'pull', ratio: PUSH_PULL }),
+  Object.freeze({ id: 'pushPull', groups: ['chest', 'shoulders', 'arms', 'back'], a: 'push', b: 'pull', ratio: PUSH_PULL,
+                  sides: Object.freeze({ a: ['chest', 'shoulders', 'arms'], b: ['back'] }) }),
   Object.freeze({ id: 'press', groups: ['chest', 'shoulders'], a: 'hPress', b: 'vPress', ratio: null }),
   Object.freeze({ id: 'pull', groups: ['back'], a: 'hPull', b: 'vPull', ratio: null }),
   Object.freeze({ id: 'kneeHip', groups: ['legs'], a: 'knee', b: 'hip', ratio: KNEE_HIP })
@@ -396,43 +437,62 @@ export function balanceRead(input) {
     const W = weeksOf(i);
     if (W.age == null || W.age < MIN_LOG_DAYS) return { state: 'thin', days: W.age == null ? 0 : W.age };
     const focus = GROUP_ORDER.includes(i.focus) ? i.focus : null;
-    const pat = { push: 0, pull: 0, hPress: 0, vPress: 0, hPull: 0, vPull: 0, knee: 0, hip: 0 };
+    const pat = {};   // group -> the eight weeks' movement counts
     const prim = {}, custom = {};
     let customSets = 0;
     for (let k = 0; k < BALANCE_WEEKS; k++) {
       const w = W.week(k);
-      Object.keys(pat).forEach(x => { pat[x] += w.pat[x]; });
+      Object.keys(w.pat).forEach(g => { const P = pat[g] || (pat[g] = noPat()); PAT_KEYS.forEach(x => { P[x] += w.pat[g][x]; }); });
       Object.keys(w.prim).forEach(g => add(prim, g, w.prim[g]));
       Object.keys(w.custom).forEach(g => add(custom, g, w.custom[g]));
       customSets += w.customSets;
     }
     const heavy = GROUP_ORDER.filter(g => prim[g] > 0 && (custom[g] || 0) / prim[g] > CUSTOM_SHARE);
     const ratios = SPLITS.map(s => {
-      const a = pat[s.a], b = pat[s.b];
-      const skipped = s.groups.some(g => heavy.includes(g));
+      const out = s.groups.filter(g => heavy.includes(g));
+      const skipped = s.sides ? ['a', 'b'].some(k => s.sides[k].every(g => out.includes(g))) : out.length > 0;
+      // What is counted: every group's sets, less the ones left out of a
+      // split read across groups. A skipped split counts everything, as before.
+      const left = s.sides && !skipped ? out : [];
+      const tally = key => Object.keys(pat).filter(g => !left.includes(g)).reduce((n, g) => n + pat[g][key], 0);
+      const a = tally(s.a), b = tally(s.b);
       const enough = a + b >= BALANCE_MIN;
       const flagged = !skipped && enough && (s.ratio == null
         ? (a === 0) !== (b === 0)
         : (a === 0 || b === 0) || Math.max(a, b) / Math.min(a, b) > s.ratio);
-      return { id: s.id, groups: s.groups, a, b, flagged, skipped, enough };
+      return { id: s.id, groups: s.groups, a, b, flagged, skipped, enough, left };
     });
     // His focus first: the splits his focus group is in rank above the rest.
     const rank = r => (focus && r.groups.includes(focus) ? 0 : 1);
     ratios.sort((x, y) => rank(x) - rank(y) || SPLITS.findIndex(s => s.id === x.id) - SPLITS.findIndex(s => s.id === y.id));
-    return { state: 'read', focus, ratios, custom: customSets, skipped: heavy };
+    const skipped = heavy.filter(g => ratios.some(r => r.skipped && r.groups.includes(g)));
+    return { state: 'read', focus, ratios, custom: customSets, skipped, heavy };
   } catch {
     return null;
   }
 }
 
+/* v56: two counts are joined by a comma, never an "and" — "37 squat and lunge
+   sets, 36 hinge and bridge sets" — because a movement's own name can carry
+   one, and two of them in a row read as one list. tools-check/coach-voice.mjs
+   O holds every readout to it. */
 const SPLIT_WORDS = Object.freeze({
-  pushPull: (a, b) => (a >= b ? a + ' pushing sets and ' + b + ' pulling' : b + ' pulling sets and ' + a + ' pushing'),
-  press: (a, b) => (b === 0 ? a + ' flat, incline or decline pressing sets and none overhead'
-                            : b + ' overhead pressing sets and no flat, incline or decline ones'),
-  pull: (a, b) => (b === 0 ? a + ' rowing sets and none on a pulldown' : b + ' pulldown sets and no rows'),
-  kneeHip: (a, b) => (a >= b ? a + ' squat and lunge sets and ' + b + ' hinge and bridge' : b + ' hinge and bridge sets and ' + a + ' squat and lunge')
+  pushPull: (a, b) => (a >= b ? a + ' pushing sets, ' + b + ' pulling sets' : b + ' pulling sets, ' + a + ' pushing sets'),
+  press: (a, b) => (b === 0 ? a + ' flat, incline or decline pressing sets, none overhead'
+                            : b + ' overhead pressing sets, no flat, incline or decline ones'),
+  pull: (a, b) => (b === 0 ? a + ' rowing sets, none on a pulldown' : b + ' pulldown sets, no rows'),
+  kneeHip: (a, b) => (a >= b ? a + ' squat and lunge sets, ' + b + ' hinge and bridge sets' : b + ' hinge and bridge sets, ' + a + ' squat and lunge sets')
 });
 const SPLIT_TAIL = Object.freeze({ pushPull: ', more than two to one.', kneeHip: ', more than three to one.', press: '.', pull: '.' });
+// With nothing lopsided, the two big splits in their own order.
+const COUNT_WORDS = Object.freeze({
+  pushPull: (a, b) => a + ' pushing sets, ' + b + ' pulling sets',
+  kneeHip: (a, b) => a + ' squat and lunge sets, ' + b + ' hinge and bridge sets'
+});
+// What a split read across groups left out, said after its counts.
+const leftSaid = r => (r.left && r.left.length
+  ? ' Your ' + joined(r.left.map(label)) + ' work isn’t in this: more than a quarter of ' + (r.left.length > 1 ? 'each' : 'it') + ' is custom exercises.'
+  : '');
 
 export function balanceAnswer(read) {
   if (!read) return null;
@@ -441,12 +501,11 @@ export function balanceAnswer(read) {
              reason: 'It won’t guess at a split from less.', more: [] };
   }
   const flagged = read.ratios.filter(r => r.flagged);
-  const lines = flagged.map(r => 'Over 8 weeks: ' + SPLIT_WORDS[r.id](r.a, r.b) + SPLIT_TAIL[r.id]);
+  const lines = flagged.map(r => 'Over 8 weeks: ' + SPLIT_WORDS[r.id](r.a, r.b) + SPLIT_TAIL[r.id] + leftSaid(r));
   // With nothing lopsided, the two big splits' counts, so "nothing" is a
-  // number he can check rather than a shrug.
-  const parts = read.ratios.filter(r => !r.skipped && r.a + r.b > 0 && (r.id === 'pushPull' || r.id === 'kneeHip'))
-    .map(r => (r.id === 'pushPull' ? r.a + ' pushing and ' + r.b + ' pulling sets' : r.a + ' squat and lunge and ' + r.b + ' hinge and bridge sets'));
-  const counts = parts.length ? 'Over 8 weeks: ' + parts.join('; ') + '.' : null;
+  // number he can check rather than a shrug — v56, a line each.
+  const counts = read.ratios.filter(r => !r.skipped && r.a + r.b > 0 && COUNT_WORDS[r.id])
+    .map(r => ({ text: 'Over 8 weeks: ' + COUNT_WORDS[r.id](r.a, r.b) + '.' + leftSaid(r), reason: '' }));
   const notes = [];
   if (read.custom > 0) {
     notes.push({ text: plural(half(read.custom), 'set') + ' on your custom exercises aren’t in this split: Coach doesn’t know their movement.',
@@ -456,8 +515,7 @@ export function balanceAnswer(read) {
                                          reason: '' }));
   const reason = 'Hard sets from the last 8 weeks, sorted by movement. A split is worth saying when it’s lopsided; there is no exact ratio to aim for.';
   if (!flagged.length) {
-    return { text: 'Nothing lopsided in the last 8 weeks.', reason,
-             more: (counts ? [{ text: counts, reason: '' }] : []).concat(notes) };
+    return { text: 'Nothing lopsided in the last 8 weeks.', reason, more: counts.concat(notes) };
   }
   return { text: lines[0], reason, more: lines.slice(1).map(t => ({ text: t, reason: '' })).concat(notes) };
 }

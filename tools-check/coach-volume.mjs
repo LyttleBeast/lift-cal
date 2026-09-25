@@ -20,8 +20,17 @@
 // every sentence the module can build, from every fixture and from its source,
 // in pounds and in kilos, held to the ban — above all, never a reason about the
 // body (Micah's decision 12: counts only).
+//
+// v56 (SHIP-V56-PROMPT §2): the 40 rows are held, and three of the sentences
+// checked beside them moved on purpose — two counts are joined by a comma now,
+// never an "and" (L1, L2, L3). The new rows: G5–G10, each group's range on Get
+// stronger and Powerlifting, and the stall ladder reading the same floor;
+// L11–L15, push against pull with a customs-heavy group left out rather than
+// the split; and M1–M4, Micah's two answers of 25 Sep, reconstructed and read
+// by rack-v55 (staged out of git) beside today's.
 
 import { mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -48,7 +57,20 @@ FILES.forEach(f => writeFileSync(join(dir, f.replace(/\.js$/, '.mjs')), src(f)
   .replace(/from '\.\/([\w-]+)\.js'/g, (w, n) => 'from ' + (FILES.includes(n + '.js') ? at(n + '.mjs') : real(n + '.js')))));
 const C = await import(JSON.parse(at('coach.mjs')));
 const V = await import(JSON.parse(at('coach-volume.mjs')));
+const O = await import(JSON.parse(at('coach-overlap.mjs')));
 const { EXERCISES } = await import(JSON.parse(real('exercises.js')));
+/* v56: rack-v55's stack too, out of git, staged the same way — the "before"
+   of Micah's two answers in M. */
+const BEFORE = 'f2ba45e';
+const odir = mkdtempSync(join(tmpdir(), 'rack-coach-volume-v55-'));
+const oat = f => JSON.stringify(pathToFileURL(join(odir, f)).href);
+writeFileSync(join(odir, 'store-stub.mjs'), readFileSync(join(dir, 'store-stub.mjs'), 'utf8'));
+FILES.forEach(f => writeFileSync(join(odir, f.replace(/\.js$/, '.mjs')),
+  execFileSync('git', ['show', BEFORE + ':' + f], { cwd: ROOT, encoding: 'utf8' })
+    .replace("from './store.js'", "from './store-stub.mjs'")
+    .replace(/from '\.\/([\w-]+)\.js'/g, (w, n) => 'from ' + (FILES.includes(n + '.js') ? oat(n + '.mjs') : real(n + '.js')))));
+const OC = await import(JSON.parse(oat('coach.mjs')));
+const OV = await import(JSON.parse(oat('coach-volume.mjs')));
 
 /* ---------- harness ---------- */
 let pass = 0, fail = 0;
@@ -73,6 +95,7 @@ const LIB = {};
 EXERCISES.forEach(x => { LIB[x.id] = { name: x.name, group: x.group, equipment: x.equipment }; });
 LIB['custom-my-press-a1b2c'] = { name: 'My Press', group: 'chest', equipment: 'machine' };
 LIB['custom-my-row-d3e4f'] = { name: 'My Row', group: 'back', equipment: 'cable' };
+LIB['custom-my-curl-g5h6i'] = { name: 'My Curl', group: 'arms', equipment: 'machine' };
 let sid = 0;
 const S = (w, r, type) => ({ w: String(w), r: String(r), type: type || 'N', done: true });
 const ex = (id, sets) => ({ exId: id, name: LIB[id].name, group: LIB[id].group, equipment: LIB[id].equipment, sets });
@@ -210,6 +233,63 @@ const chestWeeks = (now, was, o = {}) => weekly(9, k => [nx(o.id || 'pec-deck', 
   score('G3', 'Get stronger: 6–15 (volumeFloor()’s 6, on every group)', row(vol(chestWeeks(12, 12), { aim: 'strength' }), 'back').band,
         { lo: 6, hi: 15, raised: false, cut: false });
   score('G4', 'Stay consistent: 6–12', row(vol(chestWeeks(12, 12), { aim: 'maintain' }), 'chest').band, { lo: 6, hi: 12, raised: false, cut: false });
+  // v56 (SHIP-V56-PROMPT §2.3): the range per group. The main lifts are
+  // coach-goal.js's MAIN_LIFTS — squat, bench and deadlift, the list bigThree()
+  // reads — and their groups come from exercises.js: legs, chest and back.
+  const bands = r => Object.fromEntries(['chest', 'back', 'legs', 'shoulders', 'arms'].map(g => [g, [row(r, g).band.lo, row(r, g).band.hi]]));
+  score('G5', 'Get stronger: 6–15 on the groups carrying squat, bench and deadlift — chest, back and legs — and 10–20 on shoulders and arms',
+        bands(vol(chestWeeks(12, 12), { aim: 'strength' })), { chest: [6, 15], back: [6, 15], legs: [6, 15], shoulders: [10, 20], arms: [10, 20] });
+  score('G6', 'Powerlifting: the same — 6–15 on chest, back and legs, 10–20 on shoulders and arms',
+        bands(vol(chestWeeks(12, 12), { aim: 'powerlifting' })), { chest: [6, 15], back: [6, 15], legs: [6, 15], shoulders: [10, 20], arms: [10, 20] });
+  const g7r = vol(weekly(9, () => [nx('pec-deck', 8), nx('barbell-curl', 16)]), { aim: 'strength' });
+  const g7 = V.volumeAnswer(g7r);
+  score('G7', 'and it names the range it used: chest "6–15, a common range for strength", arms "10–20, a common range for a group with no main lift"',
+        { chest: g7.text, arms: (g7.more.find(m => /^Arms:/.test(m.text)) || {}).text, which: g7.reason.slice(g7.reason.indexOf(' For strength')) },
+        { chest: 'Chest: 8 hard sets in the last 7 days, inside 6–15, a common range for strength. About right.',
+          arms: 'Arms: 16 hard sets in the last 7 days, inside 10–20, a common range for a group with no main lift. About right.',
+          which: ' For strength, 6–15 is for the groups with a main lift in them (squat, bench and deadlift): chest, back and legs. The rest get 10–20.' });
+  hear(g7);
+  score('G8', 'his focus on arms, on Get stronger: 10–20 raised 30% — 13–26', row(vol(chestWeeks(12, 12), { aim: 'strength', focus: 'arms' }), 'arms').band,
+        { lo: 13, hi: 26, raised: true, cut: false });
+  score('G8b', 'and every other aim reads one range for every group, as it did: Build muscle 10–20 on shoulders and on chest',
+        bands(vol(chestWeeks(12, 12), { aim: 'muscle' })), { chest: [10, 20], shoulders: [10, 20], arms: [10, 20] });
+  /* The stall ladder (coach-overlap.js's volume rung) reads the same floor for
+     the same group: coach-overlap.mjs's C3 — bench twice a week for twelve
+     weeks, climbing to 225×5 and level for the last five, flyes beside it
+     until four weeks ago, 6 chest sets a week now against 12 — on Get
+     stronger, with the two lifts filed under chest as shipped, or refiled
+     under shoulders (an override he can make). */
+  const ladder = group => {
+    const lib = { ...LIB, 'barbell-bench-press': { ...LIB['barbell-bench-press'], group }, 'dumbbell-flye': { ...LIB['dumbbell-flye'], group } };
+    const t = (ago, h) => { const d = new Date(NOW - ago * DAY); d.setHours(h, 0, 0, 0); return d.getTime(); };
+    const mk = (ago, h, rows) => ({ id: 'z' + (++sid), name: 'S', startedAt: t(ago, h), _date: key(t(ago, h)),
+      exercises: rows.map(([id, sets]) => ({ exId: id, name: lib[id].name, group: lib[id].group, equipment: lib[id].equipment, sets })) });
+    const n = (k, w, r) => Array.from({ length: k }, () => S(w, r));
+    const days = []; for (let ago = 2, g = 0; ago <= 2 + 12 * 7 - 1; ago += [3, 4][g++ % 2]) days.push(ago);
+    days.reverse();
+    const LEVEL = [[225, 5], [230, 4], [220, 6]];
+    let w = 225 - 2.5 * days.filter(a => a > 38).length;
+    const out = [];
+    days.forEach((ago, k) => {
+      const rows = [['barbell-bench-press', ago > 38 ? n(3, (w += 2.5), 5) : n(3, LEVEL[k % 3][0], LEVEL[k % 3][1])]];
+      if (ago >= 28) rows.push(['dumbbell-flye', n(3, 35, 12)]);
+      out.push(mk(ago, 18, rows));
+    });
+    days.filter((a, k) => k % 2 === 0).forEach((ago, k) => {
+      out.push(mk(ago + 1, 9, [['back-squat-high-bar', n(4, 245, 5)], ['romanian-deadlift', n(3, 185, 8)]]));
+      if (k % 2 === 0) out.push(mk(ago, 20, [['barbell-row', n(3, 155, 8)]]));
+    });
+    const weighIns = []; for (let ago = 90; ago >= 0; ago -= 2) weighIns.push({ lb: Math.round((190 + 1.6 * (90 - ago) / 90) * 10) / 10, t: t(ago, 7) });
+    const oi = C.overlapInput({ ...inputOf(out.sort((a, b) => a.startedAt - b.startedAt), { aim: 'strength' }), lib, weighIns,
+      weight: { latestLb: 191.6, latestAt: t(0, 7), rateWk: 0.13, rateDays: 90, goalDir: null, goalRateWk: null } });
+    const r = O.readLift(oi.lifts.find(l => l.exId === 'barbell-bench-press'), { now: oi.now, u: oi.u, aim: oi.aim, exp: oi.exp, energy: oi.energy, rateWk: oi.rateWk }, oi);
+    return { call: r.call, rung: r.rung, floor: r.volume ? r.volume.floor : null, text: r.text };
+  };
+  const onShoulders = ladder('shoulders'), onChest = ladder('chest');
+  score('G9', 'the stall ladder on shoulders, on Get stronger: 6 sets a week against 12 is under its 10 — the volume rung: "' + onShoulders.text + '"',
+        onShoulders, { call: 'plateau', rung: 'volume', floor: 10 });
+  score('G10', 'and the same lift filed under chest: 6 is not under chest’s 6, so no volume rung — the floor the weekly answer reads for chest',
+        onChest, { call: 'plateau', rung: 'none', floor: null });
   hear(V.volumeAnswer(vol(chestWeeks(12, 12), { aim: 'strength' })));
   hear(V.volumeAnswer(vol(chestWeeks(12, 12), { aim: 'powerlifting' })));
   hear(V.volumeAnswer(vol(chestWeeks(12, 12), { aim: 'recomp' })));
@@ -251,23 +331,29 @@ const chestWeeks = (now, was, o = {}) => weekly(9, k => [nx(o.id || 'pec-deck', 
   const L1 = bal(weekly(9, () => [nx('barbell-bench-press', 3), nx('triceps-pushdown-rope', 1), pull(1)]));
   score('L1', 'push : pull past 2 : 1 — 32 pushing sets against 8 pulling over 8 weeks', L1.ratios.find(r => r.id === 'pushPull'),
         { a: 32, b: 8, flagged: true, skipped: false });
-  check('said as counts: "Over 8 weeks: 32 pushing sets and 8 pulling, more than two to one."',
-        V.balanceAnswer(L1).text === 'Over 8 weeks: 32 pushing sets and 8 pulling, more than two to one.', V.balanceAnswer(L1).text);
+  // v56: two counts joined by a comma (SHIP-V56-PROMPT §2.2); v55 said "32 pushing sets and 8 pulling".
+  check('said as counts: "Over 8 weeks: 32 pushing sets, 8 pulling sets, more than two to one."',
+        V.balanceAnswer(L1).text === 'Over 8 weeks: 32 pushing sets, 8 pulling sets, more than two to one.', V.balanceAnswer(L1).text);
   hear(V.balanceAnswer(L1));
   const L2log = weekly(9, () => [nx('barbell-bench-press', 2), push(1), pull(2), nx('lat-pulldown', 1), nx('back-squat-high-bar', 2), nx('romanian-deadlift', 1)]);
   const L2 = bal(L2log);
   score('L2', 'nothing lopsided: 24 pushing and 24 pulling, 16 squat and 8 hinge, both directions of each', { flagged: L2.ratios.filter(r => r.flagged).map(r => r.id) },
         { flagged: [] });
   const L2a = V.balanceAnswer(L2);
-  check('said: "Nothing lopsided in the last 8 weeks." — with the counts under it',
-        L2a.text === 'Nothing lopsided in the last 8 weeks.' && L2a.more[0].text === 'Over 8 weeks: 24 pushing and 24 pulling sets; 16 squat and lunge and 8 hinge and bridge sets.',
+  // v56: a line for each split, its counts joined by a comma (SHIP-V56-PROMPT
+  // §2.2). v55 said both on one line: "24 pushing and 24 pulling sets; 16
+  // squat and lunge and 8 hinge and bridge sets", two "and"s between counts.
+  check('said: "Nothing lopsided in the last 8 weeks." — with the counts under it, a line each, joined by a comma',
+        L2a.text === 'Nothing lopsided in the last 8 weeks.' && L2a.more[0].text === 'Over 8 weeks: 24 pushing sets, 24 pulling sets.' &&
+        L2a.more[1].text === 'Over 8 weeks: 16 squat and lunge sets, 8 hinge and bridge sets.',
         J([L2a.text].concat(L2a.more.map(m => m.text))));
   hear(L2a);
   const L3 = bal(weekly(9, () => [nx('barbell-bench-press', 3), pull(3), nx('lat-pulldown', 1)]));
   score('L3', 'horizontal against vertical press: 24 flat and none overhead — one side at zero', L3.ratios.find(r => r.id === 'press'),
         { a: 24, b: 0, flagged: true });
-  check('said: "Over 8 weeks: 24 flat, incline or decline pressing sets and none overhead."',
-        V.balanceAnswer(L3).more.concat([{ text: V.balanceAnswer(L3).text }]).some(m => m.text === 'Over 8 weeks: 24 flat, incline or decline pressing sets and none overhead.'));
+  // v56: the same comma (SHIP-V56-PROMPT §2.2 — every readout joining two families); v55 said "…sets and none overhead".
+  check('said: "Over 8 weeks: 24 flat, incline or decline pressing sets, none overhead."',
+        V.balanceAnswer(L3).more.concat([{ text: V.balanceAnswer(L3).text }]).some(m => m.text === 'Over 8 weeks: 24 flat, incline or decline pressing sets, none overhead.'));
   hear(V.balanceAnswer(L3));
   const L4 = bal(weekly(9, () => [push(2), pull(3)]));
   score('L4', 'horizontal against vertical pull: 24 rows and no pulldown', L4.ratios.find(r => r.id === 'pull'), { a: 24, b: 0, flagged: true });
@@ -298,6 +384,81 @@ const chestWeeks = (now, was, o = {}) => weekly(9, k => [nx(o.id || 'pec-deck', 
   score('L10', 'his focus ranks first: with legs his focus, knee : hip is said before push : pull and the two direction splits',
         { order: L10.ratios.filter(r => r.flagged).map(r => r.id) }, { order: ['kneeHip', 'pushPull', 'press', 'pull'] });
   hear(V.balanceAnswer(L10));
+
+  // --- v56: a customs-heavy group leaves push : pull by its sets, not the whole split (SHIP-V56-PROMPT §2.1) ---
+  const pp = r => { const x = r.ratios.find(y => y.id === 'pushPull'); return { a: x.a, b: x.b, flagged: x.flagged, skipped: x.skipped, left: x.left }; };
+  const L11 = bal(weekly(9, () => [nx('barbell-bench-press', 2), push(1), nx('triceps-pushdown-rope', 1), nx('custom-my-curl-g5h6i', 1), pull(2), nx('lat-pulldown', 1)]));
+  score('L11', 'arms half customs: push : pull still read, from chest and shoulders against back — 24 and 24 — with the arms’ 8 pushdowns left out, and no split skipped',
+        { pp: pp(L11), skipped: L11.skipped, heavy: L11.heavy }, { pp: { a: 24, b: 24, flagged: false, skipped: false, left: ['arms'] }, skipped: [], heavy: ['arms'] });
+  const L11a = V.balanceAnswer(L11);
+  score('L12', 'and said with what it left out: "Over 8 weeks: 24 pushing sets, 24 pulling sets. Your arms work isn’t in this: more than a quarter of it is custom exercises."',
+        { text: L11a.text, lines: L11a.more.map(m => m.text) },
+        { text: 'Nothing lopsided in the last 8 weeks.',
+          lines: ['Over 8 weeks: 24 pushing sets, 24 pulling sets. Your arms work isn’t in this: more than a quarter of it is custom exercises.',
+                  '8 sets on your custom exercises aren’t in this split: Coach doesn’t know their movement.'] });
+  hear(L11a);
+  const L13 = bal(weekly(9, () => [nx('barbell-bench-press', 3), nx('triceps-pushdown-rope', 2), nx('custom-my-curl-g5h6i', 1), pull(2)]));
+  score('L13', 'the two to one is on what is counted: 24 pushing against 16 pulling is not lopsided — with the arms’ 16 pushdowns it would have been 40',
+        pp(L13), { a: 24, b: 16, flagged: false, skipped: false, left: ['arms'] });
+  hear(V.balanceAnswer(L13));
+  const L14 = bal(weekly(9, () => [nx('barbell-bench-press', 2), nx('custom-my-press-a1b2c', 1), push(2), nx('triceps-pushdown-rope', 1), pull(2), nx('lat-pulldown', 1)]));
+  score('L14', 'chest a third customs: push : pull read without chest (24 against 24), and the press split — chest’s own — skipped whole, as before',
+        { pp: pp(L14), press: L14.ratios.find(r => r.id === 'press').skipped, skipped: L14.skipped },
+        { pp: { a: 24, b: 24, flagged: false, skipped: false, left: ['chest'] }, press: true, skipped: ['chest'] });
+  const L14a = V.balanceAnswer(L14);
+  check('and both are said: chest out of push : pull, and its own split left out',
+        L14a.more.some(m => m.text === 'Over 8 weeks: 24 pushing sets, 24 pulling sets. Your chest work isn’t in this: more than a quarter of it is custom exercises.') &&
+        L14a.more.some(m => m.text === 'Your chest work is more than a quarter custom exercises, so Coach leaves its split out.'), J(L14a.more.map(m => m.text)));
+  hear(L14a);
+  LIB['custom-my-raise-j7k8l'] = { name: 'My Raise', group: 'shoulders', equipment: 'cable' };
+  const L15 = bal(weekly(9, () => [nx('barbell-bench-press', 1), nx('custom-my-press-a1b2c', 1), push(1), nx('custom-my-raise-j7k8l', 1),
+                                    nx('triceps-pushdown-rope', 1), nx('custom-my-curl-g5h6i', 1), pull(2)]));
+  score('L15', 'every pushing group half customs: nothing left to push with, so push : pull is skipped whole — never "0 pushing sets"',
+        { pp: pp(L15), skipped: L15.skipped }, { pp: { a: 24, b: 16, flagged: false, skipped: true, left: [] }, skipped: ['chest', 'shoulders', 'arms'] });
+  hear(V.balanceAnswer(L15));
+
+  /* --- M: Micah's two answers of 25 Sep (rack-v1054), reconstructed ---
+     His log is not in this repo. This one is built to the shapes he read:
+     back 21.5 and arms 16 hard sets in the last 7 days, 37 squat and lunge
+     and 36 hinge and bridge sets over 8 weeks, 33 sets on customs, his arms a
+     third customs, Get stronger, nothing lopsided. His push and pull counts
+     were never shown — v55 skipped the split — so the ones here are made up.
+     rack-v55 (f2ba45e) reads it beside today's build. */
+  const micah = weekly(9, k => [nx('barbell-bench-press', 8), nx('z-press', 4), nx('straight-arm-pulldown', 10), nx('rope-face-pull', 10), nx('bird-dog', 3),
+    nx('barbell-curl', 4), nx('triceps-pushdown-rope', 4), nx('custom-my-curl-g5h6i', k === 2 ? 5 : 4),
+    nx('back-squat-high-bar', k <= 4 || k === 8 ? 5 : 4), nx('hip-thrust', k <= 3 || k === 8 ? 5 : 4)]);
+  const mo = { aim: 'strength' };
+  const mIn = inputOf(micah, mo);
+  const oldBal = OV.balanceAnswer(OV.balanceRead(OC.volumeInput(mIn))), newBal = V.balanceAnswer(V.balanceRead(C.volumeInput(mIn)));
+  const lines = a => [a.text].concat(a.more.map(m => m.text));
+  check('M0: rack-v55 reads the reconstruction as he saw it: ' + J(lines(oldBal)),
+        J(lines(oldBal)) === J(['Nothing lopsided in the last 8 weeks.', 'Over 8 weeks: 37 squat and lunge and 36 hinge and bridge sets.',
+                                '33 sets on your custom exercises aren’t in this split: Coach doesn’t know their movement.',
+                                'Your arms work is more than a quarter custom exercises, so Coach leaves its split out.']));
+  const mBal = bal(micah, mo);
+  score('M1', 'Is my training balanced? — push : pull read from chest, shoulders and back, his arms left out, the two to one on what is counted',
+        { pp: pp(mBal), kneeHip: (({ a, b, flagged }) => ({ a, b, flagged }))(mBal.ratios.find(r => r.id === 'kneeHip')), skipped: mBal.skipped },
+        { pp: { a: 96, b: 160, flagged: false, skipped: false, left: ['arms'] }, kneeHip: { a: 37, b: 36, flagged: false }, skipped: [] });
+  score('M2', 'and said: ' + J(lines(newBal)), { lines: lines(newBal).slice(0, 4) },
+        { lines: ['Nothing lopsided in the last 8 weeks.',
+                  'Over 8 weeks: 96 pushing sets, 160 pulling sets. Your arms work isn’t in this: more than a quarter of it is custom exercises.',
+                  'Over 8 weeks: 37 squat and lunge sets, 36 hinge and bridge sets.',
+                  '33 sets on your custom exercises aren’t in this split: Coach doesn’t know their movement.'] });
+  hear(newBal);
+  const oldVol = OV.volumeAnswer(OV.volumeRead(OC.volumeInput(mIn))), newVol = V.volumeAnswer(V.volumeRead(C.volumeInput(mIn)));
+  const lineOf = (a, g) => lines(a).find(t => t.startsWith(g + ':'));
+  check('M3: rack-v55 read his back and arms as he saw them: "' + lineOf(oldVol, 'Back') + '" / "' + lineOf(oldVol, 'Arms') + '"',
+        /^Back: 21\.5 hard sets in the last 7 days, above 6–15, a common range for strength\./.test(lineOf(oldVol, 'Back')) &&
+        /^Arms: 16 hard sets in the last 7 days, above 6–15, a common range for strength\./.test(lineOf(oldVol, 'Arms')));
+  const mVol = vol(micah, mo);
+  score('M4', 'How’s my weekly volume? — back keeps 6–15 (the deadlift’s group), arms reads 10–20, and 16 is inside it: "' + lineOf(newVol, 'Arms') + '"',
+        { back: [row(mVol, 'back').sets, row(mVol, 'back').band.lo, row(mVol, 'back').band.hi, row(mVol, 'back').zone],
+          arms: [row(mVol, 'arms').sets, row(mVol, 'arms').band.lo, row(mVol, 'arms').band.hi, row(mVol, 'arms').zone, row(mVol, 'arms').flag],
+          said: [lineOf(newVol, 'Back'), lineOf(newVol, 'Arms')] },
+        { back: [21.5, 6, 15, 'high'], arms: [16, 10, 20, 'common', 'right'],
+          said: ['Back: 21.5 hard sets in the last 7 days, above 6–15, a common range for strength. About your usual 21.5.',
+                 'Arms: 16 hard sets in the last 7 days, inside 10–20, a common range for a group with no main lift. About right.'] });
+  hear(newVol);
 
   // --- too little log ---
   const t1 = vol(weekly(3, () => [nx('pec-deck', 10)]));

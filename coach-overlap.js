@@ -66,9 +66,9 @@
 // this; nothing imports back.
 
 import { baselines, exposuresFor, targetFor, nextSet } from './coach-prog.js';
-import { bwAt, energyBand, volumeFloor, paceFor } from './coach-goal.js';
+import { bwAt, energyBand, volumeFloor, paceFor, MAIN_LIFTS, mainLiftGroups } from './coach-goal.js';
 import { labelW, labelRate, wOut } from './units.js';
-import { GROUPS, GROUP_ORDER } from './exercises.js';
+import { GROUPS, GROUP_ORDER, EXERCISE_BY_ID } from './exercises.js';
 import { tagsFor } from './coach-tags.js';
 import { e1rm } from './analytics.js';
 
@@ -410,7 +410,10 @@ function rungOf(ex, c, i, b, blocks, light, weeksFlat) {
   // His group's sets over the last four weeks against weeks five to twelve.
   const recent4 = g ? sum([0, 1, 2, 3].map(k => blocks[k].by[g] || 0)) / 4 : null;
   const normal12 = g ? weeklyOf(blocks, light, 4, 11, g) : null;
-  const floor = volumeFloor(c.aim, normal12);
+  // v56: the floor for this group — the main lifts' groups keep Get
+  // stronger's and Powerlifting's 6, the rest the common range's — the one
+  // coach-volume.js reads for the same group, so the two never disagree.
+  const floor = volumeFloor(c.aim, normal12, MAIN_GROUPS.includes(g));
   const volume = recent4 != null && normal12 != null && floor != null && recent4 < normal12 && recent4 < floor
     ? { recent4, normal12, floor, more: Math.max(1, Math.ceil(floor - recent4 - 1e-9)) } : null;
   const variation = weeksFlat >= PLATEAU_WEEKS ? variationOf(ex, c, i) : null;
@@ -1114,12 +1117,11 @@ function paceForLift(b, target) {
 /* POWERLIFTING'S BIG THREE, estimated: the most-logged squat, bench and
    deadlift variant each (twelve weeks), its estimated max now — the middle of
    its last two sessions — and its status; and the total when all three are
-   there. */
-const BIG_THREE = Object.freeze([
-  ['squat', ['back-squat-low-bar', 'back-squat-high-bar']],
-  ['bench', ['barbell-bench-press', 'barbell-bench-press-paused']],
-  ['deadlift', ['conventional-deadlift', 'sumo-deadlift']]
-]);
+   there. v56: the list is coach-goal.js's MAIN_LIFTS, the same one the weekly
+   volume range reads, so the lifts and their groups are named once. */
+const BIG_THREE = MAIN_LIFTS;
+// The groups carrying them (legs, chest, back), for the stall ladder's floor.
+const MAIN_GROUPS = mainLiftGroups(EXERCISE_BY_ID);
 export function bigThree(input, now) {
   try {
     const i = prepare(input || {});

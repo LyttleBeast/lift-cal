@@ -1504,7 +1504,11 @@ section('O. v54 — "How’s my weekly volume?" and "Is my training balanced?": 
                'overhead-press': { name: 'Overhead Press', group: 'shoulders', equipment: 'barbell' },
                'barbell-curl': { name: 'Barbell Curl', group: 'arms', equipment: 'barbell' },
                'lat-pulldown': { name: 'Lat Pulldown', group: 'back', equipment: 'cable' },
-               'custom-my-row-d3e4f': { name: 'My Row', group: 'back', equipment: 'cable' } };
+               'custom-my-row-d3e4f': { name: 'My Row', group: 'back', equipment: 'cable' },
+               // v56: a custom arms exercise, so push : pull is said with the arms left out.
+               'triceps-pushdown-rope': { name: 'Triceps Pushdown (Rope)', group: 'arms', equipment: 'cable' },
+               'hip-thrust': { name: 'Hip Thrust', group: 'legs', equipment: 'barbell' },
+               'custom-my-curl-g5h6i': { name: 'My Curl', group: 'arms', equipment: 'machine' } };
   const wk = (weeks, f) => Array.from({ length: weeks }, (_, k) => ({ id: 'o' + k, startedAt: NOW - (7 * k + 2) * DAY, _date: key(NOW - (7 * k + 2) * DAY),
     exercises: f(k).map(([id, n, type]) => ({ exId: id, ...WL[id], sets: Array.from({ length: n }, () => ({ w: '135', r: '8', type: type || 'N', done: true })) })) }));
   const LOGS = {
@@ -1514,6 +1518,9 @@ section('O. v54 — "How’s my weekly volume?" and "Is my training balanced?": 
     dropped: wk(10, k => [['barbell-bench-press', k < 2 ? 2 : 12], ['barbell-row', 10], ['back-squat-high-bar', 10], ['overhead-press', 10]]),
     spiked: wk(10, k => [['barbell-bench-press', k === 0 ? 16 : 10, k === 0 ? 'F' : 'N'], ['barbell-row', 10], ['back-squat-high-bar', 10]]),
     custom: wk(10, () => [['custom-my-row-d3e4f', 6], ['barbell-row', 2], ['barbell-bench-press', 8]]),
+    // v56: arms a third customs — push : pull said without them — and squats against hip thrusts.
+    armsCustom: wk(10, () => [['barbell-bench-press', 4], ['overhead-press', 2], ['barbell-row', 3], ['lat-pulldown', 3], ['barbell-curl', 2],
+                              ['triceps-pushdown-rope', 2], ['custom-my-curl-g5h6i', 2], ['back-squat-high-bar', 4], ['hip-thrust', 4]]),
     thin: wk(2, () => [['barbell-bench-press', 4]])
   };
   const said = [];
@@ -1526,13 +1533,28 @@ section('O. v54 — "How’s my weekly volume?" and "Is my training balanced?": 
     });
   })));
   const reached = ['About right', 'Two weeks running', 'More than your usual', 'Nothing lopsided', 'more than two to one', 'custom exercises',
-                   'three weeks of your log', 'raised 30% for your focus', 'before your cut', 'across your other groups|no hard sets in the last 8 weeks'];
+                   'three weeks of your log', 'raised 30% for your focus', 'before your cut', 'across your other groups|no hard sets in the last 8 weeks',
+                   // v56: a group left out of push : pull, and a range for a group with no main lift
+                   'work isn’t in this', 'a group with no main lift', 'squat and lunge sets, '];
   const missing = reached.filter(p => !said.some(x => new RegExp(p).test(x.t)));
-  check('the answers were said across six logs, five goals and both units, reaching every kind of line (' + said.length + ' strings)',
+  check('the answers were said across seven logs, five goals and both units, reaching every kind of line (' + said.length + ' strings)',
         said.length > 400 && !missing.length, 'never said: ' + missing.join(', '));
   const bad = said.map(x => ({ ...x, w: hits(x.t).concat(/\d\s*(lb|kg)\b/.test(x.t) ? ['a weight in a volume answer'] : []) })).filter(x => x.w.length);
   check('not one carries a banned word, a cause, a health or posture word, food, "AI", "!", a calendar week or a weight',
         !bad.length, list(bad.map(x => x.where + ' “' + x.w.join('/') + '” in: ' + x.t)));
+  /* v56 (SHIP-V56-PROMPT §2.2): no readout joins its counts with a second
+     "and". A movement's own name can carry one ("squat and lunge"), so two
+     counts joined by another read as one list: "37 squat and lunge and 36
+     hinge and bridge sets". Between any two numbers in a sentence, one "and"
+     at most. rack-v55's own sentence is the control: it must be caught. */
+  const twoAnds = t => t.split(/(?<=[.:;])\s+/).some(s => {
+    const nums = [...s.matchAll(/\d+(?:\.\d+)?/g)];
+    return nums.slice(1).some((m, k) => (s.slice(nums[k].index + nums[k][0].length, m.index).match(/\band\b/g) || []).length >= 2);
+  });
+  check('the check catches rack-v55’s own sentence, "Over 8 weeks: 37 squat and lunge and 36 hinge and bridge sets."',
+        twoAnds('Over 8 weeks: 37 squat and lunge and 36 hinge and bridge sets.') && !twoAnds('Over 8 weeks: 37 squat and lunge sets, 36 hinge and bridge sets.'));
+  const anded = said.filter(x => twoAnds(x.t));
+  check('and not one readout joins its counts with two "and"s (' + said.length + ' strings)', !anded.length, list(anded.map(x => x.where + ': ' + x.t)));
 }
 
 /* ---------- report ---------- */

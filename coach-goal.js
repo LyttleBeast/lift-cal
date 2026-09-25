@@ -133,9 +133,41 @@ export const VOLUME_FLOOR = Object.freeze({
 });
 // Lose fat, keep strength: two thirds of his own twelve-week normal.
 export const VOLUME_CUT_SHARE = 2 / 3;
-export function volumeFloor(aim, normal) {
+/* v56: `main` is whether the group carries one of MAIN_LIFTS below. Get
+   stronger's and Powerlifting's 6 is "for the groups carrying the main lifts"
+   (spec §6.2, §8.2), so a group that carries none — `main` false — gets the
+   common range's floor instead. Left out, it is the aim's own floor, as
+   before: the weekly volume answer and the stall ladder both pass it, so the
+   two still read one floor per group and can never disagree. */
+export function volumeFloor(aim, normal, main) {
   if (aim === 'cut') return Number.isFinite(normal) && normal > 0 ? Math.floor(normal * VOLUME_CUT_SHARE) : null;
-  return VOLUME_FLOOR[AIMS.includes(aim) ? aim : 'none'];
+  const a = AIMS.includes(aim) ? aim : 'none';
+  return VOLUME_FLOOR[main === false && MAIN_LIFT_AIMS.includes(a) ? 'none' : a];
+}
+
+/* THE MAIN LIFTS (v56): squat, bench and deadlift, each as the variants the
+   big three are read from — coach-overlap.js bigThree() reads this list, and
+   it is the only list of main lifts the code has. Get stronger has none of its
+   own, so it is this one too. The groups carrying them — each lift's primary
+   group in exercises.js: legs, chest and back — are where Get stronger's and
+   Powerlifting's 6–15 applies; every other group gets the common range.
+   Ids only, since this file imports nothing: mainLiftGroups() is handed the
+   library to read the groups from. */
+export const MAIN_LIFTS = Object.freeze([
+  Object.freeze(['squat', Object.freeze(['back-squat-low-bar', 'back-squat-high-bar'])]),
+  Object.freeze(['bench', Object.freeze(['barbell-bench-press', 'barbell-bench-press-paused'])]),
+  Object.freeze(['deadlift', Object.freeze(['conventional-deadlift', 'sumo-deadlift'])])
+]);
+// The aims whose floor is for the main lifts' groups alone.
+export const MAIN_LIFT_AIMS = Object.freeze(['strength', 'powerlifting']);
+export function mainLiftGroups(byId) {
+  const lib = byId && typeof byId === 'object' ? byId : {};
+  const out = [];
+  MAIN_LIFTS.forEach(([, ids]) => ids.forEach(id => {
+    const g = lib[id] && lib[id].group;
+    if (g && !out.includes(g)) out.push(g);
+  }));
+  return Object.freeze(out);
 }
 
 /* ================================================================
