@@ -93,7 +93,7 @@ node in the database. See *Access* below for what replaced them, and why.
 |---|---|
 | `index.html` | The only markup: auth gate, five empty views, bottom dock |
 | `app.js` | Shell — sign-in/sign-up, access gate, boot order, tab router, service worker |
-| `you.js` | You tab — the screen the app opens on. Read-only; every number is re-derived |
+| `you.js` | You tab — the screen the app opens on. Read-only; every number is re-derived. Since v57 it reads its seven nodes once per app open and after that only a node that changed (`store.js` `onChange()`), where it re-read all seven on every render |
 | `insights.js` | What Rack makes of the data — wins, slips, insights, the weekly review, the goal pace. Pure functions over what `you.js` loaded |
 | `coach.js` | **Coach's engine.** Facts, intents, responses, router — four tables and a sort. Pure: no clock, no DOM, no reads, no module state. Since v53 also `finishRead()`, the finish line the recap, the card and the sheet read after a workout ("Great workout." only with evidence, otherwise "Good work."), and the card's warm lines. Copied into the native tree verbatim |
 | `coach-build.js` | **The workout builder** — "Make me a workout" on Train. Turns the shape that has waited longest into a workout made out of his own log: the most recent such session, its exercises, blocks and logged numbers, never an invented weight — and beside each exercise its target from `coach-prog.js`. Pure, and copied into the native tree verbatim like `coach.js` |
@@ -102,8 +102,8 @@ node in the database. See *Access* below for what replaced them, and why.
 | `coach-overlap.js` | **Plateau or cut?** (v49) — a flat lift read against the bodyweight, the frequency and the sets beside it: a real plateau and the rung of the stall ladder, a cut that is holding, a slide, trained too rarely to say, or "Coach needs weigh-ins". Also the lighter week, the record day, "How are my lifts moving?", and the stage-three reads that need a target replayed or a lift's series (how today compared, what's next time, the lift target's pace). Pure; copied verbatim. `tools-check/coach-overlap.mjs` is its battery |
 | `coach-ready.js` | **Rest and recovery** (v52) — each group's recovery window from his own gaps, longer after a day big against his own normal (lifting sets only, cardio out); the rest read (rest, go lighter, a recovered group, or the recovered shape that has waited longest); the replayed "did you rest on days like this"; readiness, a list and never a score; what was different about a session, in both directions and never a cause. Never imports `coach-fuel.js`, so food moves no rest call. Pure; copied verbatim. `tools-check/coach-ready.mjs` is its battery |
 | `coach-fuel.js` | **Am I fueled?** (v52) — his food against his own normal and never a prescription: complete days, the food phase, his by-hour curve on training days, whether he logs as he goes or later, and the food rows beside readiness and a session. A half-logged day is "not fully logged", never low. Imports `coach-goal.js` and `units.js` only. Pure; copied verbatim. `tools-check/coach-fuel.mjs` is its battery |
-| `coach-volume.js` | **The whole week** (v54) — each muscle group's hard sets in the last 7 days against a common range for his goal and his own normal, the one group gone quiet (once in four weeks), and whether pushing and pulling, presses, pulls, knees and hips are lopsided over eight weeks. Counts only, never a reason about the body. Since v56 strength's 6–15 is for the main lifts' groups only, a group that is over a quarter customs is left out of push : pull by its sets rather than dropping the split, and a custom exercise with a movement set counts. Pure; copied verbatim. `tools-check/coach-volume.mjs` is its battery |
-| `coach-tags.js` | Movement pattern, angle, load and side for every built-in exercise. A sidecar keyed on `exercises.js`'s ids, so a tagging mistake can never reach the picker. Pure; imports nothing. The builder reads it: pattern for "Swap one", load for "Fewer exercises". Since v56 it is also the one reader of a custom exercise's own movement (`ownMovement()`), which only the balance split asks for; a built-in's tags stay pinned |
+| `coach-volume.js` | **The whole week** (v54) — each muscle group's hard sets in the last 7 days against a common range for his goal and his own normal, the one group gone quiet (once in four weeks), and whether pushing and pulling, presses, pulls, knees and hips are lopsided over eight weeks. Counts only, never a reason about the body. Since v56 strength's 6–15 is for the main lifts' groups only, a group that is over a quarter customs is left out of push : pull by its sets rather than dropping the split, and a custom exercise with a movement set counts. Since v57 a rear-delt fly, the reverse pec deck and a band pull-apart are pulling, not pushing. Pure; copied verbatim. `tools-check/coach-volume.mjs` is its battery |
+| `coach-tags.js` | Movement pattern, angle, load and side for every built-in exercise. A sidecar keyed on `exercises.js`'s ids, so a tagging mistake can never reach the picker. Pure; imports nothing. The builder reads it: pattern for "Swap one", load for "Fewer exercises". Since v56 it is also the one reader of a custom exercise's own movement (`ownMovement()`), which only the balance split asks for; a built-in's tags stay pinned. Since v57 `PULL_FLYES`, the flyes that pull (every fly filed under shoulders), read through `flyPulls()`, and the editor's word for a fly on shoulders, "Rear-delt fly" |
 | `coach-live.js` | **Coach in the gym** — during a live workout, what usually comes next, one more set, the next group, or "you're probably good for today", read off the session in progress against his own sessions of that shape, and (v54) the sessions he finished earlier that day. It works out no weight itself: since v54 it says the next set `coach-prog.js` gives, and the effort chips' words. Pure, and copied into the native tree verbatim like `coach.js` |
 | `coach-data.js` | The impure half — the one file the native port rewrites. Reads once per app open and never on a paint, except the food days *Am I fueled?* reads on an ask (v52: Pro, Food on, fifteen at most). Writes `settings/coach`, bad-day marks included. Since v53 `coachFinishRead()` for the recap and `noteCoachFood()`, which `food.js` calls after each day-summary write |
 | `coach-ui.js` | Coach's card (since v49 one earned line from his own log — the sheet opens on the finding; since v53 the finish line after a workout, and a warm line when nothing is earned), the COACH ME sheet with "More", the builder's recovery caution and the bad-day mark's chips (v52), the Settings switches and Your goal (aim, experience, focus, Lift target), and the live session's chip, sheet (since v54 the next set and the effort chips) and one-line nudge |
@@ -111,7 +111,7 @@ node in the database. See *Access* below for what replaced them, and why.
 | `admin.js` | Owner-only panel — feature usage, the Accounts page, People & access |
 | `accounts.js` | Account types and what each one may do. Pure, and the single entitlement choke point — every limit and feature check goes through `capabilitiesFor()` |
 | `usage.js` | Counters-only telemetry: the `usage/{uid}` ledger, and platform detection |
-| `store.js` | Data layer — Firebase + per-account localStorage mirror + offline queue |
+| `store.js` | Data layer — Firebase + per-account localStorage mirror + offline queue. Since v57 `onChange()`: the path of every write on this device and every node a live listener delivers |
 | `firebase-config.js` | Public project keys and the owner UID |
 | `access.js` | Who is allowed in — invite codes, requests, approval; `admin.js` draws the People UI from it |
 | `onboarding.js` | First run — setup questions, starting targets, add-to-home-screen, the five-tab tour |
@@ -123,9 +123,9 @@ node in the database. See *Access* below for what replaced them, and why.
 | `stats.js` | The statistics page |
 | `workout.js` | Train tab — calendar, live session, editing, post-workout recap (v53: the win first, "How did that feel?", no percentage; v54: last time's numbers in grey on an exercise added by hand, and a set's effort rating, `rir`; v55: a drop set's drops indented under the set he changed, **+ Drop**, and "185×8 → 135×6 → 95×5" on the "Last ·" line, the recap and the day sheet; v56: `+ Set` after a drop set copies its first set, as a normal set) |
 | `blocks.js` | Lifting blocks — the pure model, shared by the workout screen and the routine editor. Imports nothing, reads nothing |
-| `picker.js` | Exercise library (static + custom) and the two picking sheets (v56: a custom exercise's optional **Movement** and **Angle**) |
+| `picker.js` | Exercise library (static + custom) and the two picking sheets (v56: a custom exercise's optional **Movement** and **Angle**; v57: on shoulders its fly chip reads **Rear-delt fly**) |
 | `routines.js` | Pre-planned routines — list, editor, start, save-a-session-as (v56: drop sets drawn grouped in the editor, with **+ Drop**) |
-| `food.js` | Fuel tab (v55: **Save as meal** on the estimate sheet, and the "Which one?" question; v56: **Save as meal** on "Found in your log" too) |
+| `food.js` | Fuel tab (v55: **Save as meal** on the estimate sheet, and the "Which one?" question; v56: **Save as meal** on "Found in your log" too; v57: the note under the calorie bar says where the target sits against the holding band, with the band's numbers — `targetNote()`) |
 | `estimate-origin.js` | What the estimate sheet says about where each number came from — the menu, published nutrition, or an estimate — and (v55) the name a meal saved off it starts with. Pure, imports nothing; copied verbatim |
 | `estimate-ask.js` | **"Which one?"** (v55) — the client half of the estimator's ask: whether a reply's question can be drawn whole, where a pick goes, a chip's words. Pure, imports nothing; copied verbatim |
 | `ai.js` | AI estimator client — photo shrinking, the two estimate calls (since v55 a text one sends `ask: 1`), error shapes |
@@ -779,7 +779,8 @@ group it works second.
 
 **Is my training balanced?** Over eight weeks, as counts:
 
-- pushing against pulling, past two to one;
+- pushing against pulling, past two to one (since v57 a rear-delt fly, the
+  reverse pec deck and a band pull-apart are pulling, and not rows);
 - presses flat against overhead, and rows against pulldowns, when one side is
   at zero;
 - squats and lunges against hinges and bridges, past three to one.
@@ -790,8 +791,9 @@ Custom exercises are left out, and it says so. A group that is more than a
 quarter custom exercises still skips the splits read inside it, but since v56
 pushing against pulling is said without that group, naming it ("Your arms work
 isn’t in this…"), instead of not at all. Once in four weeks it adds that a
-custom exercise's movement can be set in its settings, and a custom exercise
-with one set counts in the split.
+custom exercise's movement can be set, naming the path since v57 ("in Train →
+Exercises → tap it → Movement"), and a custom exercise with one set counts in
+the split. On shoulders its fly is a "Rear-delt fly", and counts as pulling.
 
 Under three weeks of log, both say so and guess nothing. Neither ever gives a
 reason about your body: no health, no posture, no injury. Counts only.
@@ -978,10 +980,16 @@ never leave the phone.
 - **The calorie bar** is the one that matters, so it's the big one. Two ticks cut it into
   three bands: left of the first is a deficit, between them is holding, right of the second
   you're gaining — and the fill takes the colour of the band you're standing in. The ticks sit
-  a collar of ~8% either side of maintenance (call it 200 kcal, under half a pound a week),
+  8% of maintenance either side of it, rounded to 25 and held between 150 and 250 kcal
+  (`tdee.js` `calorieZones`): about 200 at a maintenance of 2,500, and the 250 cap — half a
+  pound a week, Bulking's own rate — from 2,970 up. Both edges count as holding. They are
   anchored on the number you pinned in Daily targets if you've set one, otherwise the
   estimate off your weight trend. With neither, the bar falls back to plain progress against target and says so. A
   blowout day pins the bar full rather than stretching the axis until the bands are slivers.
+  When the target sits inside the holding band, or past it on the wrong side of the goal, a
+  note under the bar says so with the band's numbers (v57: "Your target, 3,470, sits inside
+  your holding range (maintenance 3,220 ± 250), so the calorie bar reads eating to it as
+  holding, not bulking.").
 - **Tap any logged food → ×2 / ×3 / ×4 / Half** to scale it, or *Log this again separately*
   to add a second helping as its own entry. **Copy JSON** lifts it out in the shape the paste
   box eats; on a past day, **Log on today** does the same trip without the clipboard. Library-linked foods scale by portion so the

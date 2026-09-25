@@ -902,6 +902,10 @@ targets, `{ tw: '', tr: '', type: 'D', dp: 1 }`.
     memory is taken on only once it resolves.
   - What reads it: Coach's balance split, and nothing else. The builder and the
     picker suggest what they did.
+  - **v57: `fly` on a shoulders exercise is a rear-delt fly.** The editor's chip
+    reads "Rear-delt fly" there, and the balance split counts it as pulling
+    (`coach-tags.js` `flyPulls()`). Nothing new is stored: it is `pattern:
+    'fly'`, as v56 writes it. On chest the same value is a chest fly, pushing.
   - The published rules take it (`exercises` carries a section-level `.write`
     and validates nothing under it). Native's PROPOSED rule is
     `NEXT-NATIVE-V56.md` §6.

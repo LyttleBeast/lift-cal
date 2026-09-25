@@ -7,7 +7,7 @@ Two things this file is not. It is not a design document — where a shape was
 already decided, the decision stays where it was written and this only points at
 it. And it is not a port brief: `NEXT-NATIVE.md`, `NEXT-NATIVE-UNITS.md`,
 `NEXT-NATIVE-V40.md`, `NEXT-NATIVE-V41.md`, `NEXT-NATIVE-V42.md`,
-`NEXT-NATIVE-V43.md`, `NEXT-NATIVE-V45.md`, `NEXT-NATIVE-V46.md`, `NEXT-NATIVE-V48.md`, `NEXT-NATIVE-V49.md`, `NEXT-NATIVE-V52.md`, `NEXT-NATIVE-V53.md`, `NEXT-NATIVE-V54.md`, `NEXT-NATIVE-V55.md` and `NEXT-NATIVE-V56.md` are the instructions for copying
+`NEXT-NATIVE-V43.md`, `NEXT-NATIVE-V45.md`, `NEXT-NATIVE-V46.md`, `NEXT-NATIVE-V48.md`, `NEXT-NATIVE-V49.md`, `NEXT-NATIVE-V52.md`, `NEXT-NATIVE-V53.md`, `NEXT-NATIVE-V54.md`, `NEXT-NATIVE-V55.md`, `NEXT-NATIVE-V56.md` and `NEXT-NATIVE-V57.md` are the instructions for copying
 work into `~/dev/rack-mobile`, and they stay. What is below is the list of
 things nobody has done yet.
 
@@ -146,6 +146,10 @@ twice. `AGENTS.md` (`steps/{date}`) says the same thing.
   pull without a customs-heavy group), a custom exercise's movement (the
   editor, and the PROPOSED `exercises/custom/$i` rule, §6), and v55's drop-set
   and Save-as-meal leftovers. A delta on V55.
+- **`NEXT-NATIVE-V57.md`** — rear-delt flyes counted as pulling (`coach-tags.js`
+  and `coach-volume.js` re-copied), the Fuel note's words, the movement tip's
+  path, and the You tab reading once per open and then only what changed
+  (`store.js` `onChange`). Nothing new stored, no rules. A delta on V56.
 - **`NEXT-NATIVE-V45.md`** — the workout builder, all of it open. At `13f6b80`
   native has Coach (`src/pure/coach.js`, `src/ui/coach/`) and no
   `src/pure/coach-build.js`. Read it with `NEXT-NATIVE-V42.md` and
@@ -215,6 +219,136 @@ Carried from `NEXT-NATIVE.md` §7 so it survives that file. Do not "fix" these:
 
 ---
 
+## What v57 left open in its own work
+
+v57 is **three truths and a faster You tab**: rear-delt flyes counted as pulling
+(Phase A), the Fuel note under the calorie bar saying something true of its
+numbers (Phase B), the balance answer's movement tip naming the path (Phase C),
+and the You tab reading its seven nodes once per open and then only what
+changed (Phase D). The port note is `NEXT-NATIVE-V57.md`; what changed in Coach
+is `COACH-REPORT.md` §102–§108.
+
+### The holding band — Micah's decision, with the numbers
+
+**How it is worked out.** `tdee.js` `calorieZones(maint)`: the band is 8% of
+maintenance, rounded to the nearest 25 kcal, and held between 150 and 250.
+Maintenance minus the band is the top of the deficit (`cutTop`), maintenance
+plus the band is where gaining starts (`gainFrom`), and the band includes both
+edges (`zoneOf`: under `cutTop` is cut, up to and including `gainFrom` is hold).
+
+**Its width at his maintenance.** 8% of 3,220 is 257.6; to the nearest 25 that
+is 250, the cap. So his holding range is 2,970 to 3,470, 3,220 ± 250. (The brief
+said ± 260; the code says 250.)
+
+**What +250 a day means against it.** 250 kcal a day is 1,750 a week, which at
+the app's 3,500 kcal a pound is half a pound a week: exactly Rack's own
+**Bulking** rate (`food.js` `GOAL_RATE.gain`, 0.5 lb a week, "about half a
+pound a week up"). At his maintenance the band's half-width is the whole
+bulking surplus, and the edge counts as holding, so the app's own Bulking
+target lands on the band's top edge and the bar calls it holding. That is true
+for every measured maintenance of 2,970 or more (the measured number is always
+a round ten; `maintenance.mjs` checks 1,500 to 4,500). Below 2,970 the band is
+225 or less and the same target reads as gaining. If his 3,470 is Bulking's own
+number at +0.5 lb a week, as it looks, the fix button under the note has
+nowhere to move it and does not appear, in v56 or v57 (read from `food.js`
+`previewGoal`, not driven by a verifier).
+
+**Which screens would move if he changed the band.** `calorieZones()` has one
+reader, `food.js`, so a change to the band moves:
+
+- the **Fuel calorie bar**: the three coloured bands, the two ticks, where the
+  bar ends, the big number's colour and the "Holding / Gaining / In a deficit"
+  line under it;
+- the **note under the bar** (v57's `targetNote`), which fires on the band;
+- **Reading the bar** (the ⋯ on Fuel's card): the Blue, Yellow and Red rows,
+  the ticks row, and the dashed mark's "hitting it every day is a cut / holds
+  your weight / is a bulk";
+- **Settings → Goal**: whether its note says the target does not fit the goal
+  (`goalFits`, and v57's `misfitNote`).
+
+It would **not** move the Weight tab's rate colour or the You tab's insights.
+Those read `insights.js` `HOLD_RATE_LB` (0.5 lb a week, and only for a hold
+goal: on a bulk any upward pace up to `RATE_BAND_LB`, 1.5 lb, is green) — a
+separate number that happens to match the band at his maintenance. Coach's
+energy read is a third, its own: ±0.25% of bodyweight a week off the scale
+trend (`coach-goal.js`). Changing one of the three moves none of the others.
+
+### The You tab's reads, measured
+
+v42 onward listed it: "The You tab issues around seven live GETs per render."
+Measured at rack-v56 with a spy on every `get()` (`tools-check/you-reads.mjs`,
+the whole app over a Firebase stub): **exactly seven on every switch to You**,
+the seven nodes `refreshLogged()` read whole; **fourteen after a change**, the
+switch's seven and seven more for the repaint that followed; and the boot read
+each of the seven twice, the second round taken as a baseline and thrown away.
+
+**rack-v57: none on a switch with nothing changed.** A weigh-in (from this
+device or another, through the Weight tab's listener) costs none; a day's food
+or the targets cost one read of that node. The screen is the same, line for
+line, on one fixture in both builds. `store.js` `onChange()` is the change feed;
+`you.js` reads only the nodes it names.
+
+### Decisions this ship made that Micah may want back
+
+- **The Fuel note says what the bar reads, not what his body does**: "…so the
+  calorie bar reads eating to it as holding, not bulking." The brief's example
+  said "so eating to it holds rather than bulks", which is a claim about the
+  body that the app's own arithmetic contradicts at the band's edge (+250 a day
+  is half a pound a week).
+- **Settings → Goal's note** had the same false sentence under the same
+  condition. It says the bar's sentence now, and only offers Save when saving
+  would move the target.
+- **A custom fly under shoulders is a "Rear-delt fly"**, one chip in the Fly
+  chip's place, rather than a "Front or rear?" question. Every fly the library
+  files under shoulders pulls; a front-delt movement is a raise or a press.
+- **The flyes that pull are not rows.** They count as pulling in push against
+  pull and nowhere else; the pull split's words are "rowing sets".
+- **The settings callbacks on You repaint** (gear, avatar, the targets button,
+  the goal buttons). v56's emptied a fingerprint and threw their refresh away:
+  a name saved from You's gear did not reach You until another of the seven
+  nodes changed. A unit switch now repaints You at once as well.
+- **A change from another device** to targets, profile, the step or water goal,
+  or a past day's food, reaches You at the next open rather than the next
+  switch to the tab. Weigh-ins, steps and the day on Fuel still arrive live.
+
+### Found and deliberately not fixed
+
+- **Curls are in neither count** of push against pull. The spec's pieces count
+  triceps extensions as pushing and leave biceps curls out of pulling, which
+  leans every split toward pushing for anyone who trains arms. It is the spec's
+  table, so it is his call; counting curls as pulling is one condition in
+  `coach-volume.js` `countSession` and moves every account's pulling count by
+  its curl sets (`COACH-REPORT.md` §107).
+- **"Reading the bar" says the yellow band "holds your weight"** and that the
+  scale "will not move in any direction that matters" inside it. At the band's
+  edge that is half a pound a week. Those sentences are the band's own claim
+  and move with the band decision above.
+- **`README.md`'s "The big number is the deficit"** does not match the code:
+  `food.js` `renderSummary` says the big number is what is left to today's
+  target, with the distance from maintenance under the bar. Not this ship's
+  change, so not edited here.
+- **A custom reverse fly filed under back** cannot be a Rear-delt fly: the
+  agreement table allows no fly on back. Row is the nearest, and counts among
+  the rows.
+- **The weight model's boot reads**: opening the app reads each weigh-in day's
+  food and water log (`weightmodel.js` `refreshModel`), fingerprinted so it is
+  once per open, and a new weigh-in day's pair after that. Most of the boot's
+  reads on `you-reads.mjs`'s fixture are these. Untouched, and the same in both
+  builds.
+
+### Left open in v57's own work
+
+- **Nothing in this ship has been seen on a screen.** The "Rear-delt fly" chip
+  and the You tab were driven through DOM shims; the Fuel note's words through
+  `targetNote()` itself; the goal sheet's note not at all — it is the same
+  function, checked in the source.
+- **One full verifier run hung** in its second zone, with no cap on it, and was
+  stopped after ten minutes. Every verifier alone in that zone finished in
+  under 25 seconds, and every run since — capped at 240 seconds a verifier —
+  finished clean. What hung was not found.
+- **Native was not read.** `NEXT-NATIVE-V57.md` says "the native run maps
+  this" wherever a native path would have been a guess.
+
 ## What v56 left open in its own work
 
 v56 is **the week read right** (*Is my training balanced?* says push against
@@ -259,8 +393,9 @@ The port note is `NEXT-NATIVE-V56.md`; what changed in Coach is
   suggesting customs by movement is its own decision.
 - **A custom exercise has no load or side**, only a movement and an angle, so
   it would not help the targets' compound/isolation band even if they read it.
-- **The pointer says "in its settings"**. The path is Train → Exercises →
-  tap it. The sentence is the brief's; it does not name the path.
+- ~~**The pointer says "in its settings"**. The path is Train → Exercises →
+  tap it. The sentence is the brief's; it does not name the path.~~ **Fixed in
+  v57**: "…in Train → Exercises → tap it → Movement, and Coach will count it."
 - **The exercise manager's list does not show a movement** on a row; only the
   editor does.
 - **"Found in your log"'s Save as meal names the meal by its first two items**
@@ -933,10 +1068,12 @@ wanders into a neighbouring bug has scope-crept — and all of it is here.
   finished earlier that day from the window `coach.js` already hands in. What
   they trained counts as trained today for `switch` and `next`, and the same
   shape across two visits counts together for `done` (`coach-live.mjs` I).
-- **The You tab issues around seven live GETs per render.** Coach adds none per
+- ~~**The You tab issues around seven live GETs per render.** Coach adds none per
   paint — `coach-data.js` gathers once per app open — but the underlying number
   is unchanged and is the thing worth attacking before anything else is added to
-  that screen.
+  that screen.~~ **Fixed in v57**: measured at exactly seven per switch to You,
+  now none unless one of the seven changed (`tools-check/you-reads.mjs`; the v57
+  section above).
 - **Water is a whole domain Coach does not cover.** Its own node, its own unit,
   its own card. Deliberate, and out of scope for all three Coach ships until
   somebody asks.
