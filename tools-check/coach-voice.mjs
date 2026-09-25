@@ -1474,6 +1474,67 @@ section('N. v54 — the next set, its why, "How was it?" and Coach’s answer af
         !ratedSrc.some(t => hits(t.replace(/^\s*way too easy\b/, '')).filter(w => w !== 'easy').length));
 }
 
+/* ================= O. v54 — THE WHOLE WEEK: WEEKLY VOLUME AND BALANCE ================= */
+section('O. v54 — "How’s my weekly volume?" and "Is my training balanced?": counts only, both units, under the ban');
+{
+  /* Sheet answers, so the shipped list and not the card's — "under" and "the
+     low end" are how a range is read out. On top of it: the causal words,
+     should / try / must, food and eating, "AI", "!", SHIP-V54-PROMPT decision
+     12's health and posture words (counts only, never a reason about the
+     body), and the rolling-window rule: a sum over the last 7 days is never
+     "this week". Read on coach-volume.js's source, and on what the engine says
+     across logs that reach every line. tools-check/coach-volume.mjs E scans
+     the same sentences again over its whole sweep. */
+  const CAUSE = [/\bbecause\b/i, /\bcaused?\b/i, /\bdue to\b/i, /\bthat'?s why\b/i, /\bleads? to\b/i, /\bmakes? you\b/i, /\bresults? in\b/i];
+  const WEEK = BANNED.concat(CAUSE, [/\bshould\b/i, /\btry\b/i, /\bmust\b/i, /\beat\b/i, /\beating\b/i, /\bfood\b/i, /\bAI\b/, /!/,
+    /\b(health|healthy|injur\w*|pain|hurt|posture|joint|imbalance|weak point|risk|safe|doctor|physio)\b/i, /\b(this|last) week\b/i]);
+  const hits = t => WEEK.filter(re => re.test(t)).map(re => (t.match(re) || [''])[0]);
+  const VSRC = decomment(src('coach-volume.js'));
+  const lits = literals(VSRC).filter(t => /[a-z]{3}/i.test(t) && /\s/.test(t));
+  const srcBad = lits.map(t => ({ t, w: hits(t) })).filter(x => x.w.length);
+  check('coach-volume.js was read (' + lits.length + ' strings), and none carries a ban',
+        lits.length >= 25 && lits.some(t => /hard set/.test(t)) && !srcBad.length, list(srcBad.map(x => '“' + x.w.join('/') + '” in: ' + x.t)));
+  check('and it types no unit word — a volume answer is sets, never a weight',
+        !/'[^'\n]*\b(lb|lbs|kg|pounds?|kilos?)\b[^'\n]*'/.test(VSRC));
+  // Real library ids, so the secondaries and the movement tags are read.
+  const WL = { 'barbell-bench-press': { name: 'Barbell Bench Press', group: 'chest', equipment: 'barbell' },
+               'barbell-row': { name: 'Barbell Row', group: 'back', equipment: 'barbell' },
+               'back-squat-high-bar': { name: 'Back Squat (High Bar)', group: 'legs', equipment: 'barbell' },
+               'romanian-deadlift': { name: 'Romanian Deadlift', group: 'back', equipment: 'barbell' },
+               'overhead-press': { name: 'Overhead Press', group: 'shoulders', equipment: 'barbell' },
+               'barbell-curl': { name: 'Barbell Curl', group: 'arms', equipment: 'barbell' },
+               'lat-pulldown': { name: 'Lat Pulldown', group: 'back', equipment: 'cable' },
+               'custom-my-row-d3e4f': { name: 'My Row', group: 'back', equipment: 'cable' } };
+  const wk = (weeks, f) => Array.from({ length: weeks }, (_, k) => ({ id: 'o' + k, startedAt: NOW - (7 * k + 2) * DAY, _date: key(NOW - (7 * k + 2) * DAY),
+    exercises: f(k).map(([id, n, type]) => ({ exId: id, ...WL[id], sets: Array.from({ length: n }, () => ({ w: '135', r: '8', type: type || 'N', done: true })) })) }));
+  const LOGS = {
+    even: wk(10, () => [['barbell-bench-press', 4], ['barbell-row', 4], ['lat-pulldown', 2], ['back-squat-high-bar', 4], ['romanian-deadlift', 2],
+                        ['overhead-press', 3], ['barbell-curl', 3]]),
+    lopsided: wk(10, () => [['barbell-bench-press', 6], ['overhead-press', 4], ['barbell-row', 1], ['back-squat-high-bar', 6]]),
+    dropped: wk(10, k => [['barbell-bench-press', k < 2 ? 2 : 12], ['barbell-row', 10], ['back-squat-high-bar', 10], ['overhead-press', 10]]),
+    spiked: wk(10, k => [['barbell-bench-press', k === 0 ? 16 : 10, k === 0 ? 'F' : 'N'], ['barbell-row', 10], ['back-squat-high-bar', 10]]),
+    custom: wk(10, () => [['custom-my-row-d3e4f', 6], ['barbell-row', 2], ['barbell-bench-press', 8]]),
+    thin: wk(2, () => [['barbell-bench-press', 4]])
+  };
+  const said = [];
+  Object.entries(LOGS).forEach(([name, log]) => ['lb', 'kg'].forEach(u => [{}, { q_goal_aim: 'muscle', q_focus_group: 'chest' },
+    { q_goal_aim: 'cut' }, { q_goal_aim: 'strength', q_focus_group: 'legs' }, { q_goal_aim: 'maintain' }].forEach(answers => {
+    const eng = C.coach(base({ u, sessions: sort(log), lib: WL, hidden: [], settings: { v: 1, mute: {}, answers, asked: { q_goal_aim: NOW - 30 * DAY } } }));
+    ['ask_week_volume', 'ask_balance'].forEach(id => {
+      const a = eng.ask(id);
+      [a.text, a.reason].concat((a.more || []).flatMap(m => [m.text, m.reason])).filter(Boolean).forEach(t => said.push({ where: name + '/' + u + '/' + id, u, t }));
+    });
+  })));
+  const reached = ['About right', 'Two weeks running', 'More than your usual', 'Nothing lopsided', 'more than two to one', 'custom exercises',
+                   'three weeks of your log', 'raised 30% for your focus', 'before your cut', 'across your other groups|no hard sets in the last 8 weeks'];
+  const missing = reached.filter(p => !said.some(x => new RegExp(p).test(x.t)));
+  check('the answers were said across six logs, five goals and both units, reaching every kind of line (' + said.length + ' strings)',
+        said.length > 400 && !missing.length, 'never said: ' + missing.join(', '));
+  const bad = said.map(x => ({ ...x, w: hits(x.t).concat(/\d\s*(lb|kg)\b/.test(x.t) ? ['a weight in a volume answer'] : []) })).filter(x => x.w.length);
+  check('not one carries a banned word, a cause, a health or posture word, food, "AI", "!", a calendar week or a weight',
+        !bad.length, list(bad.map(x => x.where + ' “' + x.w.join('/') + '” in: ' + x.t)));
+}
+
 /* ---------- report ---------- */
 console.log('\nCoach describes the numbers, and never the person, on a card nobody asked\n');
 console.log(results.join('\n'));

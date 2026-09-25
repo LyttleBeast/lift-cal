@@ -2104,6 +2104,59 @@ section('O. v54 — the live sheet in its order: the answer, the next set, "How 
   state.input = BASE; body.children.length = 0;
 }
 
+section('P. v54 — the whole week on Train’s sheet: both answers drawn whole, the neglect line stamped as it is drawn, never on You');
+{
+  /* Nine weeks of chest, back (a Romanian deadlift, so no arms work comes in
+     second), legs and shoulders at ten sets each, and one set of curls: arms
+     is the neglected group. coach-ui.js stamps settings/coach.asked.vol_neglect
+     (markAsked) when the answer carries `once`, and not otherwise. */
+  const PL = {
+    'pec-deck': { name: 'Machine Pec Fly', group: 'chest', equipment: 'machine' },
+    'romanian-deadlift': { name: 'Romanian Deadlift', group: 'back', equipment: 'barbell' },
+    'back-squat-high-bar': { name: 'Back Squat (High Bar)', group: 'legs', equipment: 'barbell' },
+    'dumbbell-lateral-raise': { name: 'Dumbbell Lateral Raise', group: 'shoulders', equipment: 'dumbbell' },
+    'barbell-curl': { name: 'Barbell Curl', group: 'arms', equipment: 'barbell' }
+  };
+  const px = (id, n) => ({ exId: id, ...PL[id], sets: Array.from({ length: n }, () => ({ w: '100', r: '10', type: 'N', done: true })) });
+  const plog = Array.from({ length: 9 }, (_, k) => ({ id: 'p' + k, startedAt: NOW - (7 * k + 2) * DAY, _date: key(NOW - (7 * k + 2) * DAY),
+    exercises: [px('pec-deck', 10), px('romanian-deadlift', 10), px('back-squat-high-bar', 10), px('dumbbell-lateral-raise', 10), px('barbell-curl', 1)] }))
+    .sort((a, b) => a.startedAt - b.startedAt);
+  const PIN = asked => ({ ...BASE, lib: PL, hidden: [], libReady: true, sessions: plog, settings: { v: 1, mute: {}, answers: {}, asked } });
+  const bubT = sh => find(sh, 'coach-bub').filter(b => b.classList.contains('coach')).map(b => (find(b, 'coach-bub-t')[0] || {}).textContent);
+  const ask = (label, input) => {
+    state.input = input; state.pro = true; state.logKnown = true; state.ready = true; state.calls.length = 0;
+    const { sh } = open(UI, { tight: true, live: false, start() {}, save() {} });
+    const more = chipsIn(sh).find(b => b.textContent === 'More');
+    if (more) more.onclick();
+    const b = chipsIn(sh).find(x => x.textContent === label);
+    if (b) b.onclick();
+    return { sh, found: !!b };
+  };
+  const v = engine(PIN({})).ask('ask_week_volume');
+  const r1 = ask('How’s my weekly volume?', PIN({}));
+  check('offered on Train, under "More", and tapped it draws every line of the answer — one per group, the neglected one last',
+        r1.found && v.id === 'week_volume' && bubT(r1.sh).includes(v.text) && v.more.every(m => bubT(r1.sh).includes(m.text)) &&
+        bubT(r1.sh).includes('Arms: 4 hard sets in the last 4 weeks, against a middle of 40 across your other groups.'), list(bubT(r1.sh)));
+  check('and the neglect line is stamped as it is drawn: markAsked("vol_neglect"), once',
+        state.calls.filter(c => c[0] === 'markAsked' && c[1] === 'vol_neglect').length === 1, J_(state.calls));
+  const r2 = ask('How’s my weekly volume?', PIN({ vol_neglect: NOW - 10 * DAY }));
+  check('stamped ten days ago: the answer comes without it, and nothing is stamped',
+        r2.found && !bubT(r2.sh).some(t => /^Arms: \d+ hard sets? in the last 4 weeks/.test(t)) &&
+        !state.calls.some(c => c[0] === 'markAsked'), list(bubT(r2.sh)) + ' / ' + J_(state.calls));
+  const b = engine(PIN({})).ask('ask_balance');
+  const r3 = ask('Is my training balanced?', PIN({}));
+  check('"Is my training balanced?" draws its answer and each line under it, and stamps nothing',
+        r3.found && b.id === 'balance_read' && bubT(r3.sh).includes(b.text) && (b.more || []).every(m => bubT(r3.sh).includes(m.text)) &&
+        !state.calls.some(c => c[0] === 'markAsked'), list(bubT(r3.sh)));
+  state.input = PIN({}); state.calls.length = 0;
+  const ysh = openBare(UI);
+  const ym = chipsIn(ysh).find(x => x.textContent === 'More');
+  if (ym) ym.onclick();
+  check('the You sheet never offers either', !chipsIn(ysh).some(x => /weekly volume|training balanced/.test(x.textContent)),
+        list(chipsIn(ysh).map(x => x.textContent)));
+  state.input = BASE; body.children.length = 0;
+}
+
 /* ---------- report ---------- */
 console.log('\nthe lock means something, and the sheet knows which card opened it\n');
 console.log(results.join('\n'));
