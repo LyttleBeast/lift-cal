@@ -488,7 +488,19 @@ section('D. Coach — a custom exercise with a movement counts in the split, the
   check('said before: "16 sets on your custom exercises aren’t in this split…", arms named as not in push : pull, and where to set it',
         bA.includes('16 sets on your custom exercises aren’t in this split: Coach doesn’t know their movement.') &&
         bA.some(t => /^Over 8 weeks: 32 pushing sets, 40 pulling sets\. Your arms work isn’t in this/.test(t)) &&
-        bA.includes('You can set the movement of a custom exercise in its settings, and Coach will count it.'), J(bA));
+        bA.includes('You can set the movement of a custom exercise in Train → Exercises → tap it → Movement, and Coach will count it.'), J(bA));
+  /* v57 (SHIP-V57-PROMPT §C): the pointer names the path, and each step is a
+     label the app shows — read out of the app's own source, never restated:
+     the dock's Train, Train's Exercises button, the manager it opens (whose
+     rows open the editor), and the editor's Movement row, which B drives. */
+  const pathSaid = ((/in (.+), and Coach will count it\.$/.exec(bA.find(t => /set the movement/.test(t)) || '') || [])[1] || '').split(' → ');
+  check('v57: the pointer names the path, each step a label the app shows — ' + J(pathSaid),
+        J(pathSaid) === J(['Train', 'Exercises', 'tap it', 'Movement']) &&
+        /<button data-view="workout"[^>]*>[\s\S]*?\n\s*Train\s*\n\s*<\/button>/.test(src('index.html')) &&
+        /el\('button', 'btn btn-ghost', 'Exercises'\);\s*\n\s*exBtn\.onclick = \(\) => openExerciseManager\(/.test(src('workout.js')) &&
+        /el\('h2', null, 'Exercises'\)/.test(src('picker.js')) &&
+        /b\.onclick = \(\) => \{ close\(\); openExerciseEdit\(x\.id, reopen\); \};/.test(src('picker.js')) &&
+        /el\('div', 'field-lbl', 'Movement'\)/.test(src('picker.js')), J(pathSaid));
   check('said after: no customs line, no arms left out, no pointer — "' + aA[1] + '"',
         !aA.some(t => /custom/.test(t)) && aA[1] === 'Over 8 weeks: 64 pushing sets, 40 pulling sets.', J(aA));
   const wrongGroup = bal(libOf([{ ...KICK, pattern: 'squat' }]));

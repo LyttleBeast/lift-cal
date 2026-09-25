@@ -417,7 +417,8 @@ const chestWeeks = (now, was, o = {}) => weekly(9, k => [nx(o.id || 'pec-deck', 
           lines: ['Over 8 weeks: 24 pushing sets, 24 pulling sets. Your arms work isn’t in this: more than a quarter of it is custom exercises.',
                   '8 sets on your custom exercises aren’t in this split: Coach doesn’t know their movement.',
                   // Phase B's line, once in four weeks: tools-check/custom-movement.mjs holds its rules.
-                  'You can set the movement of a custom exercise in its settings, and Coach will count it.'] });
+                  // v57 (SHIP-V57-PROMPT §C): it names the path now; v56 said "in its settings".
+                  'You can set the movement of a custom exercise in Train → Exercises → tap it → Movement, and Coach will count it.'] });
   hear(L11a);
   const L13 = bal(weekly(9, () => [nx('barbell-bench-press', 3), nx('triceps-pushdown-rope', 2), nx('custom-my-curl-g5h6i', 1), pull(2)]));
   score('L13', 'the two to one is on what is counted: 24 pushing against 16 pulling is not lopsided — with the arms’ 16 pushdowns it would have been 40',

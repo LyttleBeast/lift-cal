@@ -543,9 +543,11 @@ export function balanceAnswer(read) {
   read.skipped.forEach(g => notes.push({ text: 'Your ' + label(g) + ' work is more than a quarter custom exercises, so Coach leaves its split out.',
                                          reason: '' }));
   // v56: where to tell Coach a custom exercise's movement — last, and once in
-  // four weeks; the sheet stamps `bal_custom` as it draws it.
+  // four weeks; the sheet stamps `bal_custom` as it draws it. v57: by the path,
+  // in the app's own words — the Train tab, its Exercises button
+  // (workout.js), the exercise's row, and its Movement row (picker.js).
   if (read.hint) {
-    notes.push({ text: 'You can set the movement of a custom exercise in its settings, and Coach will count it.',
+    notes.push({ text: 'You can set the movement of a custom exercise in Train → Exercises → tap it → Movement, and Coach will count it.',
                  reason: 'Coach mentions this once in four weeks.' });
   }
   const once = read.hint ? 'bal_custom' : null;
