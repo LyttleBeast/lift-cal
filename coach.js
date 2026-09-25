@@ -3609,7 +3609,17 @@ const HYPE_NUMBERS = 1;
 const HYPE_REPEAT_MS = 24 * 3600e3;
 const HYPE_MEMORY = 8;
 const HYPE_ROTATION = 3;
-const TRAIN_HYPE = Object.freeze(['volume', 'progression', 'targets', 'recency', 'rest']);
+export const TRAIN_HYPE = Object.freeze(['volume', 'progression', 'targets', 'recency', 'rest']);
+/* v53, a NAMED EXCEPTION (Micah, after the ship): the finish line is the
+   Train card's too, after a workout. That card sits directly above Start
+   workout, and it is the first thing he sees after Done on the recap. Its
+   category (core) is not a training one, and the You card is showing the
+   same line; both rules give way for this one line and nothing else.
+   TRAIN_HYPE stays training-only, and every other line the You card shows
+   stays off Train. */
+// Exported, with TRAIN_HYPE, so coach-hype.mjs reads both rather than
+// keeping a copy.
+export const TRAIN_ALSO = Object.freeze(['hype_finish']);
 const weekday = key => {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(key || ''));
   return m ? ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][
@@ -4918,13 +4928,16 @@ export function coach(input) {
   /* v49: WHAT EACH CARD SHOWS. The blocking states as they are; otherwise
      one earned line when one qualifies (both tiers — encouragement is not a
      Pro feature); otherwise Basic's locked state, then thin or clear. The
-     Train card takes a training line the You card is not already showing. */
+     Train card takes a training line the You card is not already showing —
+     bar the finish line (TRAIN_ALSO), which both cards show after a
+     workout. */
   const pool = blocked ? [] : hypePool(d, u, you.state === 'finding' ? you : null);
   const recentHype = d.f('coach.recentHype') || [];
   const state = d.f('coach.state');
   function cardView(surface, claimed) {
     if (blocked) return { ...blocked, state: blocked.id };
-    const mine = pool.filter(h => (surface === 'you' || TRAIN_HYPE.includes(h.category)) && h.id !== claimed);
+    const mine = pool.filter(h => TRAIN_ALSO.includes(h.id) ||
+                                  ((surface === 'you' || TRAIN_HYPE.includes(h.category)) && h.id !== claimed));
     /* v53: after a workout, an explicit order — the recovery line when its
        gate passes, then the finish line, then the shipped rotation. The pool
        is sorted by suits, age and id and the walk starts at a rotated

@@ -269,7 +269,10 @@ row('N10', () => {
   return grade(ok, false, said(withRecords) + ' · bare: ' + said(bare) + ' · junk: ' + junk.map(f => f.headline + ' ' + f.line).join(' / '));
 });
 
-/* N12 — the card and the sheet after a workout. */
+/* N12 — the cards and the sheet after a workout. Since the v53 follow-up
+   (Micah, before the push) the TRAIN card shows the finish line too — the
+   card above Start workout, the first thing after Done on the recap — as a
+   named exception to its training-only rule and to the You card's claim. */
 row('N12', () => {
   const rec = justNow([[INCLINE, xN(3, 70, 8)], [CURL, xN(3, 65, 10)]]);
   const inp = input({ sessions: sortS(inclineLog().concat([rec])) });
@@ -278,6 +281,9 @@ row('N12', () => {
     const c = C.coach({ ...inp, opens });
     if (c.state !== 'post') bad.push('state ' + c.state);
     if (c.card.you.id !== 'hype_finish') bad.push('open ' + opens + ': ' + c.card.you.id);
+    // The Train card: the same finish line, word for word, on every open.
+    if (c.card.train.id !== 'hype_finish' || c.card.train.text !== c.card.you.text || c.card.train.reason !== c.card.you.reason)
+      bad.push('train open ' + opens + ': ' + c.card.train.id + ' ' + c.card.train.text);
   }
   const c = C.coach(inp);
   const f = later(inp, rec);
@@ -287,6 +293,7 @@ row('N12', () => {
   // Shown an hour ago, it is still the line: finish keys are exempt while the moment lasts.
   const again = C.coach({ ...inp, opens: 3, recentHype: [{ id: 'hype_finish', key: 'finish:' + rec.id, at: NOW - 3600e3 }] });
   if (again.card.you.id !== 'hype_finish') bad.push('exempt: ' + again.card.you.id);
+  if (again.card.train.id !== 'hype_finish') bad.push('train exempt: ' + again.card.train.id);
   // Three days running: the recovery line takes the card, and the sheet
   // still opens on the finish line.
   // On a clock where the session is today's in every zone — 14:00 local —
@@ -298,16 +305,27 @@ row('N12', () => {
   const cr = C.coach(input({ now: T, sessions: run }));
   if (cr.card.you.id !== 'hype_recovery') bad.push('streak card ' + cr.card.you.id);
   if (cr.opening.id !== 'finish') bad.push('streak opening ' + cr.opening.id);
+  // The recovery line stays first on You. The exception is the finish line's
+  // alone, so the You card's claim on recovery still holds and Train leads
+  // with the finish line.
+  if (cr.card.train.id !== 'hype_finish') bad.push('streak train card ' + cr.card.train.id);
   // Recovery shown in the last day: the finish line is next.
   const rk = cr.card.you.key;
   const cr2 = C.coach(input({ now: T, sessions: run, recentHype: [{ id: 'hype_recovery', key: rk, at: T - 3600e3 }] }));
   if (cr2.card.you.id !== 'hype_finish') bad.push('after recovery ' + cr2.card.you.id);
+  if (cr2.card.train.id !== 'hype_finish') bad.push('train after recovery ' + cr2.card.train.id);
   // Five hours on (done_today) it is still first; a day on (pre) it is gone.
   const five = C.coach({ ...inp, now: NOW + 5 * 3600e3 });
-  if (!['done_today', 'pre'].includes(five.state) || (five.state === 'done_today' && five.card.you.id !== 'hype_finish')) bad.push('done_today ' + five.card.you.id);
+  if (!['done_today', 'pre'].includes(five.state) || (five.state === 'done_today' && (five.card.you.id !== 'hype_finish' || five.card.train.id !== 'hype_finish')))
+    bad.push('done_today ' + five.card.you.id + ' / ' + five.card.train.id);
   const tomorrow = C.coach({ ...inp, now: NOW + DAY + 12 * 3600e3 });
-  if (tomorrow.state !== 'pre' || tomorrow.card.you.id === 'hype_finish' || tomorrow.opening.id === 'finish') bad.push('next day ' + tomorrow.card.you.id);
-  return grade(!bad.length, false, bad.join(' | ') || c.card.you.text + ' / ' + c.card.you.reason + ' · ' + cr.card.you.text);
+  if (tomorrow.state !== 'pre' || tomorrow.card.you.id === 'hype_finish' || tomorrow.card.train.id === 'hype_finish' || tomorrow.opening.id === 'finish')
+    bad.push('next day ' + tomorrow.card.you.id + ' / ' + tomorrow.card.train.id);
+  // Basic too: the finish line is both tiers', on both cards.
+  const basic = C.coach({ ...inp, tier: { pro: false } });
+  if (basic.card.you.id !== 'hype_finish' || basic.card.train.id !== 'hype_finish') bad.push('basic ' + basic.card.you.id + ' / ' + basic.card.train.id);
+  return grade(!bad.length, false, bad.join(' | ') || c.card.you.text + ' / ' + c.card.you.reason + ' · Train: ' + c.card.train.text +
+               ' · streak: ' + cr.card.you.text + ' / Train: ' + cr.card.train.text);
 });
 
 /* N11 — every answer above, the words it may never use. Read after the rows. */

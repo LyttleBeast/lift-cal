@@ -3314,8 +3314,9 @@ model and never load `rack.css`. The check-in's 44px targets are reasoned from
 2. **Warm lines are not written to the memory.** They rotate on the open
    counter alone.
 3. **The finish line's category is `core`.** A HYPE line needs one, and the
-   thing said after every session should not be a switch. So the Train card
-   never shows it.
+   thing said after every session should not be a switch. The Train card
+   shows it too, after a workout, by a named exception Micah asked for before
+   the push (§73.4).
 4. **A weight or volume record's line carries its number.** `prDetail`
    prints only a phrase for those ("heaviest ever").
 5. **The check-in's mark chips are drawn in `workout.js`**, not `coach-ui.js`.
@@ -3330,9 +3331,10 @@ model and never load `rack.css`. The check-in's 44px targets are reasoned from
 ## 70. WHAT GOT BUILT
 
 ```
-coach.js        5,266 lines  was 4,787. finishRead() and section 7c; session.finish; hype_finish
+coach.js        5,279 lines  was 4,787. finishRead() and section 7c; session.finish; hype_finish
                              and a key on every HYPE line; the 24-hour rule and WARM; the card's order
-                             after a workout; c.opening / c.openingNext; ask_ready; the feel category,
+                             after a workout, and TRAIN_ALSO (the finish line on Train too);
+                             c.opening / c.openingNext; ask_ready; the feel category,
                              FEEL_S_WORDS, feelHarder(), canMark(), feelLine(); three feel Patterns and
                              patternFoodDays()'s rated dates; replayOf(), one targets replay a paint.
 coach-data.js     757 lines  was 699. The memory read at open, rememberHype(id, key) replaced per open;
@@ -3363,7 +3365,8 @@ b25af85  "Your usual here is from before your change" now says which change
 a0d628f  The recap, redone: the win first, the stats under it, no percentage
 b634056  "How did that feel?": energy and strength, saved with the session, heard by Coach
 da13007  rack-v53
-         docs
+ff2852a  docs
+         The Train card shows the finish line too after a workout (TRAIN_ALSO)
 ```
 
 **Phase A: the five fixes.**
@@ -3450,7 +3453,7 @@ counts." Its three surfaces:
 | N9 | kilos: Great workout. New best on Incline Dumbbell Bench Press: 32.5 x 8. (Your best at 32.5 kg was 7 reps.) |
 | N10 | log unreadable: with the recap's records, Great workout. New best on …: 70 x 8. (Your best estimated max before was 86 lb.); with none, Good work. Chest and arms done: 6 sets.; junk record, input and extras: always one of the two headlines |
 | N11 | 13 answers read: no `%`, "down", "under", "below", "lighter", "only", "still" or "!" in a headline or line |
-| N12 | the card in `post`: `hype_finish` on every open, still exempt when shown an hour ago; three days running, `hype_recovery` takes the card and the sheet opens on the finish line; the recovery line shown in the last day, the finish line is next; five hours on it is still first; the next day it is gone |
+| N12 | both cards in `post`: `hype_finish` on every open, the Train card's word for word the You card's (both tiers), still exempt when shown an hour ago; three days running, `hype_recovery` takes the You card, the Train card leads with the finish line and the sheet opens on it; the recovery line shown in the last day, the finish line is next on both; five hours on it is still first; the next day it is gone from both |
 
 **Beside the rows:**
 
@@ -3493,7 +3496,7 @@ counts." Its three surfaces:
 | `recap` | NEW: the hero, no `%` in either unit, like with like by median, the bodyweight day's sets, the order, the switch, and his own `%` left in the check-in |
 | `feel` | NEW, 44 checks: normFeel; the write and its order; the cache only after it lands; a refused write; Skip; the mark chips at exactly s ≤ 90 or e ≤ 3, never with Questions off; the rating through a later whole-month write; `saveEdit` keeping it, moved or not; the compare line; the headline recompute; the switch |
 | `coach-surface` | the Lift target at 2,001 lb, 908 kg, 907.18 kg and 2,000 lb, a failed write, and a write that lands without the key; the sheet's two first bubbles |
-| `coach-hype` | G: a pool of one and two through a day, one value under two ids, old memory, WARM under the ban; fixtures a day earlier, since a session today now leads with the finish line; the pool of five became four |
+| `coach-hype` | G: a pool of one and two through a day, one value under two ids, old memory, WARM under the ban; fixtures a day earlier, since a session today now leads with the finish line; the pool of five became four. H: the finish line on the Train card too, a named exception of one line; across every log, Train draws a training line or the finish line after a workout and shares no other line with You |
 | `coach-rotation` | J's RICH and CAUTION read the day before, for the same reason |
 | `coach-voice` | WARM under the card ban; EARN the day before; M: every finish sentence, source and rendered, and the rating line and three energy patterns |
 | `coach-overlap` | the `ask_ready` chip on a lighter-week log, and none with readiness muted (outside the table) |
@@ -3578,8 +3581,15 @@ In the order they were found.
    - A HYPE line needs a category, and the brief named none.
    - `core` is the one that cannot be switched off, and the thing said after
      every session should not be a switch.
-   - `TRAIN_HYPE` walks training categories only, so the Train card keeps its
-     rotation and never shows the finish line.
+   - `TRAIN_HYPE` walks training categories only, which would keep the
+     finish line off the Train card.
+   - **The follow-up, before the push.** Micah asked for the Train card to
+     show the finish line too: it sits above Start workout, and it is the
+     first thing after Done on the recap. `TRAIN_ALSO = ['hype_finish']`
+     names the one line that crosses both the training-only rule and the You
+     card's claim. Nothing else crosses (`coach-hype.mjs` H).
+   - The recovery line keeps both rules. So on a streak day's first open You
+     leads with it and Train with the finish line (`finish.mjs` N12).
 5. **§4.4.3's re-key.** `withRepeat` compares an answer with `you.text`, and
    `you` is `openingNext` after a workout, so the engine was already keyed to
    the finding. The sheet's "follow-ups hang on the opening bubble" is what
@@ -3735,6 +3745,11 @@ post       Basic  9.11 ms      9.31 ms    +0.20
 done_today Pro    3.59 ms      3.97 ms    +0.37
 done_today Basic  9.21 ms      9.40 ms    +0.19
 ```
+
+Re-measured after the follow-up that puts the finish line on the Train card
+too (the same pool, no new work): two interleaved runs gave Pro +0.40 / +0.36
+and +0.40 / +0.38 ms (post / done_today), and Basic +0.17 / +0.43 and +0.20 /
++0.23 ms. The +0.43 did not repeat, so it was noise.
 
 Sequential runs put Pro at +0.34 to +0.50 ms, and Basic anywhere from +0.03 to
 +0.98 ms. That spread is drift between the two runs: interleaved, it is +0.2.

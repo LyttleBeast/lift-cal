@@ -62,7 +62,7 @@ coach-build.js    1257d46bec95a62a1a4466ef23bc5b7751c2e26b3072970b6d1d6684700d7c
 
 ```
 analytics.js      6ba64c5a57ffe28ca27f6556a03ba058f97fc840ef83cece7013253858473129   CHANGED — re-copy, 1,014 lines (v52: f6054ad…, unchanged since rack-v47)
-coach.js          a93c7d8251dc608faf1a8857e58e9038b03604735ff796189223681f46cba59c   CHANGED — re-copy, 5,266 lines (v52: 276de12…)
+coach.js          d724f11c614136bc0147031046a67f98dd4aea30be97e64ca902812867ecd3f6   CHANGED — re-copy, 5,279 lines (v52: 276de12…)
 coach-fuel.js     36fdf21814d6b32d3ac6bb1411636fe664f1c58e569f8569d1f4c786d1bfd896   CHANGED — re-copy, 479 lines (v52: 5be93f1…)
 ```
 
@@ -107,6 +107,12 @@ after a workout and the sheet's opening, which native's view layer reads (§7).
   - In those two states the order is explicit: `hype_recovery` when its gate
     passes and it was not shown in the last day, then `hype_finish`, then the
     rotation.
+  - **Both cards show the finish line.** `TRAIN_ALSO = ['hype_finish']`
+    (exported, with `TRAIN_HYPE`) is a named exception: the one line the
+    Train card shows outside its training categories, and the one it shares
+    with the You card. The Train card sits above Start workout, the first
+    thing after Done. The recovery line keeps the You card's claim, so on a
+    streak day's first open You shows it and Train shows the finish line.
   - **`WARM`**, eight frozen lines, replace "Nothing stands out today." on the
     card (state `'warm'`). It stays as a sheet answer. A warm line is never the
     greeting's sentence, and on Train never You's line.
@@ -263,7 +269,7 @@ Native paths are V45's, unverified.
 
 | web | native destination | what it needs |
 |---|---|---|
-| the card after a workout | `src/ui/coach/card.jsx` | nothing if it draws `c.card.you`. `hype_finish` arrives by itself. Pass `view.key` to `rememberHype(id, key)` |
+| the cards after a workout | `src/ui/coach/card.jsx` | nothing if both draw `c.card.you` and `c.card.train`: `hype_finish` arrives on both by itself. Pass `view.key` to `rememberHype(id, key)` from the You card only, as before |
 | warm lines | same | `c.card.you.state === 'warm'` is drawn like an earned line (reason may be empty). The half-loaded substitution ("Your training is in. Food and weight have not landed yet.") applies to `warm` as it does to `card_state_clear` |
 | the sheet after a workout | `src/ui/coach/sheets.jsx` | when `c.openingNext` is set, draw `c.opening` first, then `c.openingNext`. An answer marked `repeats` hangs its follow-ups on the `openingNext` bubble |
 | *Anything else off today?* | same | nothing: it is a follow-up chip, and `FUEL_ROUTES` covers its read |

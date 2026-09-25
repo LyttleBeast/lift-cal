@@ -251,9 +251,12 @@ Patterns. Five small fixes came first. It is written up in `COACH-REPORT.md`
   pinned the greeting, not the line, and wrote the first line drawn. With the
   24-hour rule the engine reads the memory as it stood at open, and the entry
   written is the line he last saw.
-- **The Train card never shows the finish line.** It is category `core`, and
-  the Train card walks training categories only. On the day of a workout the
-  You card leads with it and the Train card keeps its rotation.
+- **On a streak day's first open the two cards differ.** Both cards show the
+  finish line after a workout: the Train card by a named exception
+  (`TRAIN_ALSO`, Micah's ask before the push), since it sits above Start
+  workout and is the first thing after Done. The exception is the finish
+  line's alone, so when the recovery line's gate passes, the You card leads
+  with it and its claim keeps it off Train, which shows the finish line.
 - **The finish line's comparison evidence ("Above your usual on …") needs
   Pro**, like the answer it quotes. So does "every Coach target met". A Basic
   account's "Great workout." comes from a record, a milestone, his rating or

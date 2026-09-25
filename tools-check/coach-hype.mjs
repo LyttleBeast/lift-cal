@@ -604,6 +604,46 @@ section('G. v53 — a fact value shown once in 24 hours under any id, then warm 
   check('"Nothing stands out today." is no longer a card line', both.every(x => x.you.text !== 'Nothing stands out today.' && x.train.text !== 'Nothing stands out today.'));
 }
 
+/* ================= H. v53 — THE TRAIN CARD AFTER A WORKOUT ================= */
+section('H. v53 — the finish line on the Train card too, a named exception; every other line stays training-only');
+{
+  /* Micah, before the push: the Train card sits directly above Start
+     workout and is the first thing he sees after Done on the recap, so after
+     a workout it shows the finish line as well — though its category (core)
+     is not a training one and the You card is showing it. One line crosses,
+     by name, and nothing else. */
+  check('the exception is exactly one line, by name, and TRAIN_HYPE is still training categories only',
+        JSON.stringify(C.TRAIN_ALSO) === '["hype_finish"]' && !C.TRAIN_HYPE.includes('core') &&
+        C.HYPE.find(h => h.id === 'hype_finish').category === 'core', JSON.stringify([C.TRAIN_ALSO, C.TRAIN_HYPE]));
+  const post = CASES.hype_finish[0];
+  const same = [];
+  ['lb', 'kg'].forEach(u => [true, false].forEach(pro => { for (let opens = 0; opens < 8; opens++) {
+    const c = C.coach({ ...post, u, opens, tier: { pro } });
+    same.push(c.card.train.id === 'hype_finish' && c.card.you.id === 'hype_finish' && c.card.train.text === c.card.you.text &&
+              c.card.train.reason === c.card.you.reason);
+  } }));
+  check('an hour after a session both cards show the same finish line, every open, both units, both tiers (' + same.length + ' paints)',
+        same.every(Boolean), same.filter(x => !x).length + ' paints differ');
+  // Every log in this file, every open, both units: the Train card draws a
+  // training line, or the finish line after a workout, and never another
+  // line the You card is showing.
+  const cat = id => (C.HYPE.find(h => h.id === id) || {}).category;
+  const off = [];
+  Object.entries(CASES).forEach(([name, logs]) => logs.forEach((lg, k) => ['lb', 'kg'].forEach(u => { for (let opens = 0; opens < 12; opens++) {
+    const c = C.coach({ ...lg, u, opens, recentHype: [] });
+    const t = c.card.train;
+    if (t.state !== 'earned') continue;
+    const after = c.state === 'post' || c.state === 'done_today';
+    if (t.id === 'hype_finish' ? !after : !C.TRAIN_HYPE.includes(cat(t.id))) off.push(name + '/' + k + '/' + u + ': ' + t.id + ' in ' + c.state);
+    if (t.id !== 'hype_finish' && c.card.you.state === 'earned' && t.id === c.card.you.id) off.push(name + '/' + k + ': both show ' + t.id);
+  } })));
+  check('across every log here: Train draws a training line, or the finish line after a workout, and never shares any other line with You',
+        !off.length, list(off));
+  const pre = CASES.hype_finish[1];
+  check('and with no session today, no finish line on either card',
+        Array.from({ length: 8 }, (_, opens) => C.coach({ ...pre, opens })).every(c => c.card.train.id !== 'hype_finish' && c.card.you.id !== 'hype_finish'));
+}
+
 console.log('\nthe card only says what he has earned\n');
 console.log(results.join('\n'));
 console.log('\n' + pass + ' passed, ' + fail + ' failed\n');
