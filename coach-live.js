@@ -475,10 +475,6 @@ function anotherRead(i, t, history) {
   if (!cur || cur.cardio || !cur.sets.length) return null;
   // Never after a set typed F, and never once the reps have fallen away.
   if (fatigueIn(cur.sets)) return null;
-  // v54: nor once his next set is stopped — a set he rated too hard — so the
-  // sheet never says "one more set" above "call that the last set". With no
-  // target in hand there is no next set, and this is today's rule exactly.
-  if (nextOf(i, cur) && nextOf(i, cur).kind === 'stop') return null;
   const counts = history.map(s => s.order.find(ex => ex.exId === cur.exId)).filter(Boolean).map(ex => ex.sets.length);
   if (counts.length < MIN_SESSIONS) return null;
   const now = cur.sets.length;
@@ -487,6 +483,12 @@ function anotherRead(i, t, history) {
   // count. That is what "usually" means, and it is never weaker than the
   // median going past it.
   if (!(more > counts.length * USUALLY)) return null;
+  // v54: nor once his next set is stopped — a set he rated too hard — so the
+  // sheet never says "one more set" above "call that the last set". With no
+  // target in hand there is no next set, and this is today's rule exactly.
+  // Asked last: the target costs the tick about half a millisecond, and only
+  // an answer that would otherwise be said needs it.
+  if (nextOf(i, cur) && nextOf(i, cur).kind === 'stop') return null;
 
   return {
     kind: 'another', exId: cur.exId, add: null,

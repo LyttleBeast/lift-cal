@@ -37,8 +37,9 @@ import { execFileSync } from 'node:child_process';
 
 const ROOT = join(fileURLToPath(new URL('.', import.meta.url)), '..', '..');
 const real = p => JSON.stringify(pathToFileURL(join(ROOT, p)).href);
+// v54: coach-volume.js too; a revision without it stages without it.
 const FILES = ['analytics.js', 'coach-goal.js', 'coach-prog.js', 'coach-overlap.js', 'coach-build.js', 'coach-live.js',
-               'coach-ready.js', 'coach-fuel.js', 'coach.js'];
+               'coach-ready.js', 'coach-fuel.js', 'coach-volume.js', 'coach.js'];
 
 async function stage(rev) {
   const dir = mkdtempSync(join(tmpdir(), 'rack-paint-'));
@@ -135,6 +136,25 @@ if (process.env.AB) {
     console.log('  ' + m.padEnd(10) + (pro ? ' Pro   ' : ' Basic ') + targets[0][0] + ' ' + md(a).toFixed(2) + ' ms   ' +
                 targets[1][0] + ' ' + md(b).toFixed(2) + ' ms   ' + (md(b) - md(a) >= 0 ? '+' : '') + (md(b) - md(a)).toFixed(2) + ' ms');
   }
+  /* v54: the tick. Not a card paint, but it runs under a bar: noteLiveTick()'s
+     c.live() on a session in progress on top of the year, its second lift's
+     last set just ticked. v54 added the same-day read to it (coach-live.js
+     dayOf); the next set is setRead()'s, asked when the sheet opens. */
+  const liveSession = { id: 'now', startedAt: NOW - 1800e3, exercises: DAYS[0].slice(0, 2).map(([id, w, r]) => ({ exId: id,
+    name: LIB[id].name, group: LIB[id].group, equipment: LIB[id].equipment,
+    sets: [1, 2].map(() => ({ w: String(w), r: String(r), type: 'N', done: true })) })) };
+  const liveIn = { ...INPUT, sessions: before, live: { active: true } };
+  const tick = C => { const a = C.coach(liveIn).live(liveSession, { current: 1 }); return a && a.text; };
+  for (let i = 0; i < 50; i++) { tick(A); tick(B); }
+  const a = [], b = [];
+  for (let i = 0; i < 1500; i++) {
+    let t = process.hrtime.bigint(); tick(A); a.push(Number(process.hrtime.bigint() - t) / 1e6);
+    t = process.hrtime.bigint(); tick(B); b.push(Number(process.hrtime.bigint() - t) / 1e6);
+  }
+  a.sort((x, y) => x - y); b.sort((x, y) => x - y);
+  const md = v => v[v.length >> 1];
+  console.log('  ' + 'live tick'.padEnd(10) + ' Pro   ' + targets[0][0] + ' ' + md(a).toFixed(2) + ' ms   ' +
+              targets[1][0] + ' ' + md(b).toFixed(2) + ' ms   ' + (md(b) - md(a) >= 0 ? '+' : '') + (md(b) - md(a)).toFixed(2) + ' ms');
   console.log('');
   process.exit(0);
 }
