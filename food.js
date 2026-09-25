@@ -2405,6 +2405,18 @@ function openRecallHit(hit, ctx) {
     };
     body.appendChild(go);
 
+    /* v56: Save as meal here too — the estimate sheet's own button, through
+       the same saveAsMeal and the same save-only builder: the rows as they
+       stand, his corrections included, named the way mealName names a plate.
+       Nothing is saved until he taps Save there, and this sheet stays open
+       under it. Not while building a meal already (onPick). */
+    if (!ctx.onPick) {
+      const keep = el('button', 'btn btn-ghost btn-block', 'Save as meal');
+      keep.style.marginTop = '8px';
+      keep.onclick = () => saveAsMeal(entries, mealName(entries, [], null), (entries[0] && entries[0].meal) || ctx.meal);
+      body.appendChild(keep);
+    }
+
     const ask = el('button', 'btn btn-ghost btn-block', 'Not this — ask Claude');
     ask.style.marginTop = '8px';
     ask.onclick = () => { close(); runEstimate(ctx); };

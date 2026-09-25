@@ -56,7 +56,7 @@
 // scored ok / miss / wrong, and thousands of generated histories per unit
 // against the properties the rules above promise.
 
-import { e1rm, isWorking, mergeSessionExercises } from './analytics.js';
+import { e1rm, isWorking, mergeSessionExercises, dropRuns, setsText } from './analytics.js';
 import { wOut, wIn, fmtSetLoad, unitW, labelW, labelRate } from './units.js';
 import { GROUPS } from './exercises.js';
 import { tagsFor } from './coach-tags.js';
@@ -603,13 +603,19 @@ function decide(ex, c) {
   // and one kind of set, each through units.js.
   const quote = sets => {
     const runs = [];
-    sets.forEach(s => {
+    // v56: a drop set with drops in it is said once, as a group — "185 lb × 8
+    // → 135 lb × 6 → 95 lb × 5, a drop set" — through analytics.js setsText,
+    // the rule every screen draws one by. A 'D' with no drops is said as it was.
+    dropRuns(sets).forEach(run => {
+      if (run.length > 1) { runs.push({ drop: setsText(run, s => (shown(s.w) || 'no weight') + ' × ' + s.r, '') }); return; }
+      const s = run[0];
       const k = s.type + '|' + s.w;
       const r = runs[runs.length - 1];
       if (r && r.k === k) { r.reps.push(s.r); return; }
       runs.push({ k, w: s.w, type: s.type, reps: [s.r] });
     });
     return runs.map(x => {
+      if (x.drop) return x.drop + ', a drop set';
       const load = shown(x.w) || 'no weight';
       const even = x.reps.every(r => r === x.reps[0]);
       return (even && x.reps.length > 1 ? x.reps.length + ' × ' + x.reps[0] + at + load

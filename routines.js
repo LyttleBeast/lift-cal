@@ -25,8 +25,11 @@ import {
   duplicateBlock, deleteBlock, sessionLayout
 } from './blocks.js';
 import { openPicker } from './picker.js';
-// v55: a drop set's grouping — the rule, and the two edits the editor makes.
-import { retypeSet, removeSet } from './analytics.js';
+// v55: a drop set's grouping — the rule, and the edits the editor makes. v56:
+// the editor draws the groups (dropHeads), adds a drop (addDrop), repeats a
+// set after one the way the workout screen does (repeatOf), and the preview
+// says one as a group (setsText).
+import { retypeSet, removeSet, dropHeads, addDrop, repeatOf, setsText } from './analytics.js';
 import { bump } from './usage.js';
 import { el, sheet, toast, noteEl, confirmSheet, swipeToDelete, fmtDate, setNum, LIMITS } from './ui.js';
 import { wIn, fmtSetW, unitW, limW } from './units.js';
@@ -186,8 +189,10 @@ function openRoutine(id, onStart) {
     const sets = ex.sets || [];
     // fmtSetW, not fmtSetLoad: a routine's target is a plan, not a record, and
     // a blank one already prints as nothing at all rather than as a zero.
+    // v56: a drop set reads as one group, "185×8 → 135×6", as on the workout
+    // screen's "Last ·" line (analytics.js setsText).
     const txt = sets.length
-      ? sets.map(s => (s.tw ? fmtSetW(s.tw, u) + '×' : '') + (s.tr || '–')).join('  ')
+      ? setsText(sets, s => (s.tw ? fmtSetW(s.tw, u) + '×' : '') + (s.tr || '–'), '  ')
       : 'no sets';
     line.appendChild(el('span', 'rt-pv-sets num', txt));
     return line;
@@ -397,11 +402,18 @@ function openEditor(draft, isNew, onStart) {
     ['Set', 'Target ' + unitW(u), 'Reps', ''].forEach(t => shd.appendChild(el('span', null, t)));
     sets.appendChild(shd);
 
+    /* v56: a drop set's drops sit indented under the set he changed to a drop
+       set, with the arrow for a badge, and "+ Drop" under its last one — the
+       workout screen's rows, from the same grouping (analytics.js dropHeads),
+       so a routine shows what it will start as. */
+    const heads = dropHeads(ex.sets);
     ex.sets.forEach((s, si) => {
-      const row = el('div', 'set-row');
+      const drop = heads[si] != null && heads[si] !== si;
+      const row = el('div', 'set-row' + (drop ? ' drop' : ''));
       const idx = el('button', 'set-idx t-' + (s.type || 'N'),
-        (s.type || 'N') === 'N' ? String(si + 1) : s.type);
-      idx.title = 'Tap to cycle: normal, warm-up, failure, drop set';
+        drop ? '↳' : (s.type || 'N') === 'N' ? String(si + 1) : s.type);
+      idx.title = drop ? 'A drop in the drop set above. Tap to cycle: normal, warm-up, failure, drop set'
+                       : 'Tap to cycle: normal, warm-up, failure, drop set';
       // v55: through retypeSet, as on the workout screen, so no drop set is
       // stitched to another when one set's type changes.
       idx.onclick = () => {
@@ -437,20 +449,36 @@ function openEditor(draft, isNew, onStart) {
       sets.appendChild(swipeToDelete(row, {
         onDelete: () => { ex.sets = removeSet(ex.sets, si); paint(); }
       }));
+      if (heads[si] != null && heads[si + 1] !== heads[si]) sets.appendChild(dropAddRow(ex, si));
     });
     block.appendChild(sets);
     if (ex.sets.length) block.appendChild(el('div', 'swipe-hint', 'Swipe a set left to delete it'));
 
     const acts = el('div', 'ex-actions');
     const addSet = el('button', 'btn btn-ghost', '+ Set');
+    // v56: after a drop set, the drop set's first set's targets, as a normal
+    // set — never its last drop's (analytics.js repeatOf), as on the workout
+    // screen.
     addSet.onclick = () => {
-      const last = ex.sets[ex.sets.length - 1] || {};
+      const last = repeatOf(ex.sets) || {};
       ex.sets.push({ tw: last.tw || '', tr: last.tr || '', type: 'N' });
       paint();
     };
     acts.appendChild(addSet);
     block.appendChild(acts);
     return block;
+  }
+
+  // v56: "+ Drop" under a drop set's last set, the workout screen's control.
+  // The new drop's targets start empty: a drop is lighter by definition, so
+  // copying the set above would plan a weight he will not lift.
+  function dropAddRow(ex, si) {
+    const wrap = el('div', 'drop-add-row');
+    const b = el('button', 'btn btn-ghost drop-add', '+ Drop');
+    b.setAttribute('aria-label', 'Add a drop to this drop set');
+    b.onclick = () => { ex.sets = addDrop(ex.sets, si, { tw: '', tr: '' }); paint(); };
+    wrap.appendChild(b);
+    return wrap;
   }
 
   paint();

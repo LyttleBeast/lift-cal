@@ -100,7 +100,9 @@ const stubs = {
   swipeToDelete: row => row,
   // v55, on purpose: collectFrom keeps each drop set whole, and a set row's
   // badge and swipe go through the drop-set edits — the real ones.
-  keepSets: A.keepSets, retypeSet: A.retypeSet, removeSet: A.removeSet
+  keepSets: A.keepSets, retypeSet: A.retypeSet, removeSet: A.removeSet,
+  // v56, on purpose: "+ Set" asks analytics.js repeatOf which set it copies — the real one.
+  repeatOf: A.repeatOf
 };
 const NAMES = Object.keys(stubs);
 const W = new Function(...NAMES, `

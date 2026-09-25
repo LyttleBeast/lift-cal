@@ -155,7 +155,9 @@ function harness(o = {}) {
     normalizeBlocks: B.normalizeBlocks, blockOrder: B.blockOrder, wu: () => 'lb',
     // v55, on purpose: collectFrom and the "last time" fold keep each drop
     // set whole through analytics.js keepSets — the real one.
-    keepSets: A.keepSets
+    keepSets: A.keepSets,
+    // v56, on purpose: "+ Set" asks analytics.js repeatOf which set it copies — the real one.
+    repeatOf: A.repeatOf
   };
   const NAMES = Object.keys(stubs);
   const api = new Function(...NAMES, `

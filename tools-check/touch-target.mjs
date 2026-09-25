@@ -384,7 +384,12 @@ const BUTTONS = [
      whole in a .move-opts. Never measured in Chrome at v46; its widths join the
      snapshot as they are tonight, and G measures every label against its chip. */
   ['Exercise editor', 'Movement / Angle', ['picker.js', /el\('button', 'move-opt' \+ \(on \? ' on' : ''\), label\)/],
-   'button.move-opt < div.move-opts < div < div.sheet', null]
+   'button.move-opt < div.move-opts < div < div.sheet', null],
+  /* v56, on purpose: the routine editor's own "+ Drop" (routines.js
+     dropAddRow), the workout screen's control in the editor's set list. A
+     .btn, so the minimum holds it; its widths join the snapshot tonight. */
+  ['Routines · editor', '+ Drop', ['routines.js', /el\('button', 'btn btn-ghost drop-add', '\+ Drop'\)/],
+   'button.btn.btn-ghost.drop-add < div.drop-add-row < div.rt-sets < div.ex-block < div.rt-edit < div.sheet', null]
 ];
 
 /* The width snapshot, v46 (12b3a9d), produced by this file's own resolver

@@ -253,6 +253,19 @@ export function addDrop(sets, j, fresh) {
   return relinked(list, tags);
 }
 
+// "+ Set" (v56): the set a new one is copied from — the last set, or, when
+// the last is in a drop set, that drop set's first set, the one he changed to
+// a drop set. Never a drop: a drop is lighter by design, and the set after a
+// drop set is a working set again. The caller makes the copy, as a normal set
+// ('N', no `dp`); the workout screen and the routine editor both ask here.
+// Null for no sets.
+export function repeatOf(sets) {
+  const list = Array.isArray(sets) ? sets : [];
+  if (!list.length) return null;
+  const j = list.length - 1, h = dropHeads(list)[j];
+  return list[h != null ? h : j] || null;
+}
+
 /* ================================================================
    3.  PER-EXERCISE INDEX
    ================================================================ */

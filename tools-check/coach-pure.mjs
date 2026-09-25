@@ -455,8 +455,11 @@ section('F. coach-build.js — the builder is copied byte for byte as well');
         !imports.some(i => i.from === './coach.js') && !/coach\.js'/.test(BCODE.replace(/coach-(build|tags)\.js'/g, '')));
   const a = imports.find(i => i.from === './analytics.js');
   const named = a ? a.names.replace(/[{}]/g, '').split(',').map(s => s.trim()).filter(Boolean) : [];
+  /* v56, on purpose: dropRuns and setsText — a drop set as one group on a
+     line — are set math too, pure, and the one rule a "Last time" quote says
+     a drop set by (SHIP-V56-PROMPT §4.2). */
   check('it takes only session math from analytics.js',
-        named.length > 0 && named.every(n => ['e1rm', 'isWorking', 'setVolume', 'mergeSessionExercises', 'exerciseIndex'].includes(n)),
+        named.length > 0 && named.every(n => ['e1rm', 'isWorking', 'setVolume', 'mergeSessionExercises', 'exerciseIndex', 'dropRuns', 'setsText'].includes(n)),
         list(named));
   check('and never names store.js, reads or writes',
         !/store\.js/.test(BCODE) && !/\bread\s*\(|\breadExact\s*\(|\bwrite\s*\(/.test(BCODE));
@@ -502,9 +505,10 @@ section('G. coach-live.js — the in-session read is copied byte for byte as wel
   const named = a ? a.names.replace(/[{}]/g, '').split(',').map(s => s.trim()).filter(Boolean) : [];
   /* v55, on purpose: continuesDrop — which drop set a set is in — is set math
      too, pure, and the rule the live chips pass a drop over by
-     (SHIP-V55-PROMPT §3). */
+     (SHIP-V55-PROMPT §3). v56, on purpose: dropRuns and setsText, the rule
+     "Last time on …" says a drop set by, as one group (SHIP-V56-PROMPT §4.2). */
   check('it takes only session math from analytics.js',
-        named.length > 0 && named.every(n => ['e1rm', 'isWorking', 'setVolume', 'mergeSessionExercises', 'exerciseIndex', 'continuesDrop'].includes(n)),
+        named.length > 0 && named.every(n => ['e1rm', 'isWorking', 'setVolume', 'mergeSessionExercises', 'exerciseIndex', 'continuesDrop', 'dropRuns', 'setsText'].includes(n)),
         list(named));
   check('and never names store.js, reads or writes',
         !/store\.js/.test(LCODE) && !/\bread\s*\(|\breadExact\s*\(|\bwrite\s*\(/.test(LCODE));
@@ -552,8 +556,10 @@ section('H. coach-prog.js — the targets are copied byte for byte as well');
         !imports.some(i => /coach(-build|-live)?\.js$/.test(i.from)));
   const a = imports.find(i => i.from === './analytics.js');
   const named = a ? a.names.replace(/[{}]/g, '').split(',').map(s => s.trim()).filter(Boolean) : [];
-  check('it takes only the pure half of analytics.js — e1rm, isWorking, mergeSessionExercises',
-        named.length > 0 && named.every(n => ['e1rm', 'isWorking', 'mergeSessionExercises'].includes(n)), list(named));
+  // v56, on purpose: dropRuns and setsText, the rule the target's "Last time:"
+  // says a drop set by, as one group (SHIP-V56-PROMPT §4.2) — set math, pure.
+  check('it takes only the pure half of analytics.js — e1rm, isWorking, mergeSessionExercises, dropRuns, setsText',
+        named.length > 0 && named.every(n => ['e1rm', 'isWorking', 'mergeSessionExercises', 'dropRuns', 'setsText'].includes(n)), list(named));
   check('and never names store.js, reads or writes',
         !/store\.js/.test(PCODE) && !/\bread\s*\(|\breadExact\s*\(|\bwrite\s*\(/.test(PCODE) &&
         !/\b(loadAll|allSessions)\s*\(/.test(PCODE));

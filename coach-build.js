@@ -65,7 +65,7 @@
 // this; nothing imports back.
 
 import { GROUPS, GROUP_ORDER } from './exercises.js';
-import { isWorking, mergeSessionExercises } from './analytics.js';
+import { isWorking, mergeSessionExercises, dropRuns, setsText } from './analytics.js';
 import { fmtSetLoad, unitW } from './units.js';
 import { normalizeBlocks, blockOrder } from './blocks.js';
 import { tagsFor } from './coach-tags.js';
@@ -268,13 +268,22 @@ function setsLine(sets, u) {
   // and "3 × –" is a row of blanks dressed as a plan.
   if (sets.every(s => s.w === '' && s.r === '')) return plural(sets.length, 'set');
   const runs = [];
-  sets.forEach(s => {
+  // v56: a drop set with drops in it is said once, as a group — "185 lb × 8 →
+  // 135 lb × 6, a drop set" — through analytics.js setsText, the rule every
+  // screen draws one by. A 'D' with no drops is said as it was.
+  dropRuns(sets).forEach(run => {
+    if (run.length > 1) {
+      runs.push({ drop: setsText(run, s => (loadText(s.w, u) || '–') + ' × ' + (s.r === '' ? '–' : String(s.r)), '') });
+      return;
+    }
+    const s = run[0];
     const k = s.type + '|' + String(s.w) + '|' + String(s.r);
     const last = runs[runs.length - 1];
     if (last && last.k === k) { last.n++; return; }
     runs.push({ k, n: 1, type: s.type, w: s.w, r: s.r });
   });
   return runs.map(x => {
+    if (x.drop) return x.drop + ', a drop set';
     const load = loadText(x.w, u);
     return (x.type === 'W' ? 'warm-up ' : '') + x.n + ' × ' + (x.r === '' ? '–' : String(x.r)) +
            (load ? ' at ' + load : '') +

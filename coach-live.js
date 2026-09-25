@@ -104,7 +104,7 @@
 // imports this; nothing imports back.
 
 import { GROUPS, GROUP_ORDER } from './exercises.js';
-import { isWorking, mergeSessionExercises, continuesDrop } from './analytics.js';
+import { isWorking, mergeSessionExercises, continuesDrop, dropRuns, setsText } from './analytics.js';
 import { fmtSetLoad, unitW } from './units.js';
 
 /* Three sessions before any habit is called one. Two is a coincidence and a
@@ -318,13 +318,19 @@ function lastTime(i, history, exId, name) {
     if (!ex) continue;
     const u = i.u === 'kg' ? 'kg' : 'lb';
     const runs = [];
-    ex.sets.forEach(s => {
+    // v56: a drop set with drops in it is said once, as a group — "185 lb × 8
+    // → 135 lb × 6 → 95 lb × 5, a drop set" — through analytics.js setsText,
+    // the rule every screen draws one by. A 'D' with no drops is said as it was.
+    dropRuns(ex.sets).forEach(run => {
+      if (run.length > 1) { runs.push({ drop: setsText(run, s => loadSaid(s.w, u) + ' × ' + reps(s), '') }); return; }
+      const s = run[0];
       const key = s.type + '|' + String(s.w) + '|' + String(s.r);
       const prev = runs[runs.length - 1];
       if (prev && prev.key === key) { prev.n++; return; }
       runs.push({ key, n: 1, s });
     });
     const line = runs.map(x => {
+      if (x.drop) return x.drop + ', a drop set';
       const shown = x.s.w === '' || x.s.w == null ? '' : fmtSetLoad(x.s.w, u);
       const at = shown === '' ? '' : shown === 'BW' ? ' at bodyweight' : ' at ' + shown + ' ' + unitW(u);
       return x.n + ' × ' + reps(x.s) + at + (x.s.type === 'F' ? ' to failure' : x.s.type === 'D' ? ' drop set' : '');

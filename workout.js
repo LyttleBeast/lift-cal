@@ -13,7 +13,7 @@ import {
   allSessions, invalidate, detectPRs, sessionMilestones, sameKindComparison,
   sessionReps, isWorking, groupColor,
   mergeSessionExercises, prDetail, normFeel, FEEL_STRENGTH,
-  dropHeads, setsText, keepSets, retypeSet, removeSet, addDrop
+  dropHeads, setsText, keepSets, retypeSet, removeSet, addDrop, repeatOf
 } from './analytics.js';
 // One-way dependency: this file imports stats.js, stats.js never imports back.
 import { openStats, isStatsOpen, renderStats, refresh as refreshStats } from './stats.js';
@@ -936,9 +936,11 @@ function greyFor(ex) {
 /* "+ Set". A previous set with anything typed in it is copied exactly as it
    always was. With both of its boxes blank, the new set gets last time's
    numbers for its position in grey (v54) — or blanks, as before, wherever
-   greyFor says no. */
+   greyFor says no. v56: after a drop set, the set copied is the drop set's
+   first — the one he changed to a drop set — as a normal set, never its last
+   drop (analytics.js repeatOf). */
 function addSetTo(ex) {
-  const last = ex.sets[ex.sets.length - 1] || {};
+  const last = repeatOf(ex.sets) || {};
   const blank = (last.w == null || last.w === '') && (last.r == null || last.r === '');
   ex.sets.push({ w: last.w || '', r: last.r || '', type: 'N', done: !!session._edit, ...(blank ? greyFor(ex) : null) });
 }

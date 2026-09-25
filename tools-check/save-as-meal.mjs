@@ -84,8 +84,10 @@ function liftFrom(SRC, file, name) {
 }
 const constOf = (head, end) => { const a = FSRC.indexOf(head); if (a === -1) throw new Error('save-as-meal: ' + head.trim() + ' is gone');
   return FSRC.slice(a, FSRC.indexOf(end, a) + end.length); };
+// v56: and "Found in your log" (openRecallHit), which gains Save as meal (E).
 const LIFTED = ['defaultMeal', 'fmtViewDate', 'macroTotals', 'newEntryId', 'addEntries', 'mealChips', 'normalizeImport', 'readMacros',
-  'blankMeal', 'cleanIng', 'openMealsSheet', 'openMealBuilder', 'persistMeal', 'logMeal', 'saveAsMeal', 'openAiReview', 'openProposedEdit'];
+  'blankMeal', 'cleanIng', 'openMealsSheet', 'openMealBuilder', 'persistMeal', 'logMeal', 'saveAsMeal', 'openAiReview', 'openProposedEdit',
+  'openRecallHit'];
 
 function harness(o = {}) {
   const S = { writes: [], toasts: [], recalled: [], estimates: 0, db: {} };
@@ -102,7 +104,9 @@ function harness(o = {}) {
     wu: () => o.u || 'lb',
     // No estimate is ever spent re-logging a saved meal: anything that asks for one is counted.
     estimateText: () => { S.estimates++; return Promise.reject(new Error('no')); },
-    estimatePhoto: () => { S.estimates++; return Promise.reject(new Error('no')); }
+    estimatePhoto: () => { S.estimates++; return Promise.reject(new Error('no')); },
+    // v56: "Found in your log" hands "Not this — ask Claude" to the paid estimate. Counted the same way.
+    runEstimate: () => { S.estimates++; }
   };
   const NAMES = Object.keys(stubs);
   const api = new Function(...NAMES, `
@@ -112,7 +116,7 @@ ${constOf('\nconst MICROS = [', '\n];')}
 ${constOf('\nconst CONF = {', '\n};')}
 ${LIFTED.map(n => liftFrom(FSRC, 'food.js', n)).join('\n')}
 return {
-  review: (res, ctx) => openAiReview(res, ctx), mealsSheet: m => openMealsSheet(m),
+  review: (res, ctx) => openAiReview(res, ctx), mealsSheet: m => openMealsSheet(m), recall: (hit, ctx) => openRecallHit(hit, ctx),
   meals: () => meals, day: () => dayLog, clearDay: () => { dayLog = {}; }
 };`)(...NAMES.map(k => stubs[k]));
   return { api, S };
@@ -328,6 +332,69 @@ section('D. not while building a meal already, and a kilo account saves and logs
         ['openAiReview', 'saveAsMeal', 'openMealBuilder', 'persistMeal', 'logMeal', 'cleanIng'].every(n => !/\b(wOut|wIn|fmtW|labelW|unitW|wu)\(/.test(bodyOf(n))));
   check('and no new node: every write on this path is food/meals, the node AGENTS.md documents',
         !/write\('food\/(?!meals')/.test(bodyOf('persistMeal')) && /await write\('food\/meals', meals\);/.test(bodyOf('persistMeal')));
+}
+
+/* ================= E. "FOUND IN YOUR LOG" (v56) =================
+   SHIP-V56-PROMPT §4.4: the free answer out of his own log gets Save as meal
+   too — the same saveAsMeal, the same save-only builder — and logging it is
+   exactly what it was. */
+section('E. v56 — "Found in your log" has Save as meal too: the same path, the same builder, and logging exactly as it was');
+{
+  const HIT = { q: 'chucks bowl', kind: 'ai', n: 3, last: Date.UTC(2026, 8, 20, 12), exact: true,
+                items: [{ name: 'Rice', qty: '1 cup', cal: 200, p: 4, c: 45, f: 0 }, { name: 'Ground beef 85/15', qty: '4 oz', cal: 240, p: 21, c: 0, f: 17 }] };
+  const RCTX = { meal: 'lunch', mode: 'text', text: 'chucks bowl' };
+  const correct = sh => {
+    buttonsIn(sh).filter(b => b.classList.contains('pe-body'))[0].onclick();
+    const fix = top(), ins = walk(fix).filter(x => x.tag === 'input');
+    ins[1].value = '1.5 cup'; ins[2].value = '300'; ins[3].value = '6'; ins[4].value = '67'; ins[5].value = '1';
+    tap(fix, 'Done');
+  };
+  reset();
+  const h = harness();
+  h.api.recall(clone(HIT), { ...RCTX });
+  const sh = top();
+  check('the sheet is "Found in your log"', (find(sh, 'eyebrow')[0] || {}).textContent === 'Found in your log');
+  const order = buttonsIn(sh).filter(b => b.classList.contains('btn')).map(b => b.textContent);
+  check('"Save as meal" sits under "Log it", as it does on the estimate sheet: ' + order.join(' · '),
+        order.indexOf('Save as meal') === order.indexOf('Log it') + 1 && order.filter(l => l === 'Save as meal').length === 1);
+  correct(sh);
+  const before = h.S.writes.length;
+  tap(sh, 'Save as meal');
+  const b = top();
+  const nameIn = walk(b).find(x => x.tag === 'input' && x.type === 'text');
+  check('the same save-only builder opens over it — "Save meal" and Cancel, no Log meal — named as the estimate sheet names a plate: "Rice, Ground beef 85/15"',
+        sheets().length === 2 && sheets()[0] === sh && nameIn && nameIn.value === 'Rice, Ground beef 85/15' &&
+        buttonsIn(b).some(x => x.textContent === 'Save meal') && !buttonsIn(b).some(x => /^Log meal/.test(x.textContent)), nameIn && nameIn.value);
+  check('holding the rows as shown, the corrected one at its corrected numbers',
+        walk(b).filter(x => x.classList.contains('fe-name')).map(x => x.textContent).join() === 'Rice,Ground beef 85/15' &&
+        walk(b).some(x => x.classList.contains('fe-cal') && x.textContent === '300'));
+  check('opening it wrote nothing', h.S.writes.length === before);
+  tap(b, 'Cancel');
+  check('Cancel writes nothing, and "Found in your log" is where it was', h.S.writes.length === before && sheets().length === 1 && top() === sh);
+  tap(sh, 'Save as meal');
+  await tap(top(), 'Save meal');
+  const w = h.S.writes.slice(before);
+  const m = Object.values(h.api.meals())[0];
+  check('saved through the same write: one, to food/meals', w.length === 1 && w[0].p === 'food/meals', J(w.map(x => x.p)));
+  check('as saved meals are: each row an ingredient — name, amount, the numbers — no src "recall", no meal slot',
+        !!m && m.name === 'Rice, Ground beef 85/15' && J(m.items.map(i => [i.name, i.qty, i.cal])) === J([['Rice', '1.5 cup', 300], ['Ground beef 85/15', '4 oz', 240]]) &&
+        m.items.every(i => Object.keys(i).every(k => ['name', 'qty', 'cal', 'p', 'c', 'f', 'micro', 'itemId', 'amt', 'unit'].includes(k))), J(m));
+  check('"Saved to my meals", and the sheet still open under it', h.S.toasts.pop() === 'Saved to my meals' && sheets().length === 1 && top() === sh);
+  tap(sh, 'Log it');
+  const logged = Object.values(h.api.day()).map(({ id, t, ...e }) => e);
+  reset();
+  const hc = harness();
+  hc.api.recall(clone(HIT), { ...RCTX });
+  correct(top());
+  tap(top(), 'Log it');
+  const control = Object.values(hc.api.day()).map(({ id, t, ...e }) => e);
+  check('logging it afterwards writes exactly what it writes when nothing was saved — src "recall", and no estimate spent',
+        J(logged) === J(control) && logged.length === 2 && logged.every(e => e.src === 'recall' && e.meal === 'lunch') && h.S.estimates === 0, J(logged));
+  check('and the sentence is remembered exactly as before', J(h.S.recalled) === J(hc.S.recalled) && h.S.recalled.length === 1);
+  reset();
+  harness().api.recall(clone(HIT), { ...RCTX, onPick: () => {} });
+  check('not while building a meal already: no "Save as meal"', !buttonsIn(top()).some(x => x.textContent === 'Save as meal'));
+  check('and the button is the estimate sheet’s own call: saveAsMeal, with mealName', /keep\.onclick = \(\) => saveAsMeal\(entries, mealName\(entries, \[\], null\),/.test(liftFrom(FSRC, 'food.js', 'openRecallHit')));
 }
 
 console.log('\nsave as meal: the plate or a row, through the builder that exists, and only on his tap\n');

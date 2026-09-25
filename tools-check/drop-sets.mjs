@@ -27,6 +27,10 @@
 //        old record gains nothing (D). Duplicating a block, a routine saved
 //        and started, the routine editor, and the builder's proposal all keep
 //        the grouping (E).
+//   V56 (G).  "+ Set" after a drop set copies its first set as a normal set;
+//        Coach's three "Last time" quotes say a drop set once, as a group,
+//        through setsText; the routine editor draws the groups with "+ Drop",
+//        and a routine started keeps them.
 //   EVERY ENGINE COUNTS WHAT IT COUNTED — except the one read that was wrong.
 //        A 'D' is a working set for every count, with `dp` or without it (F1).
 //        The rep-drop reads counted a drop set's falling reps as fatigue; they
@@ -72,6 +76,9 @@ function mkEl(tag) {
     remove() { if (n.parent) n.parent.children = n.parent.children.filter(x => x !== n); n.parent = null; },
     querySelectorAll(sel) { return walk(n).filter(x => x.classList.contains(sel.replace(/^\./, ''))); }
   };
+  // v56: innerHTML = '' empties an element, as a browser's does — the routine
+  // editor (section G) repaints its body that way on every edit.
+  Object.defineProperty(n, 'innerHTML', { get: () => '', set: () => { n.children.forEach(c => { c.parent = null; }); n.children = []; } });
   return n;
 }
 function walk(n, out = []) { n.children.forEach(c => { out.push(c); walk(c, out); }); return out; }
@@ -156,6 +163,8 @@ function harness(o = {}) {
     detectPRs: A.detectPRs, sessionMilestones: A.sessionMilestones, isWorking: A.isWorking, mergeSessionExercises: A.mergeSessionExercises,
     normalizeBlocks: B.normalizeBlocks, blockOrder: B.blockOrder, wu: () => 'lb',
     keepSets: A.keepSets, setsText: A.setsText, dropHeads: A.dropHeads, retypeSet: A.retypeSet, removeSet: A.removeSet, addDrop: A.addDrop,
+    // v56: "+ Set" asks which set it copies — the real one.
+    repeatOf: A.repeatOf,
     el: UI.el, LIMITS: UI.LIMITS, setNum: UI.setNum, fmtDate: UI.fmtDate, GROUPS,
     fmtSetLoad: U.fmtSetLoad, fmtSetW: U.fmtSetW, unitW: U.unitW, limW: U.limW, wOut: U.wOut, wIn: U.wIn,
     nudgeLine: () => null, openLiveSheet: () => {}, dismissNudge: x => x, noteLiveTick: () => null, startRest: () => {},
@@ -337,6 +346,9 @@ section('C. the session screen — drops indented under the set he changed, "+ D
   check('and one "+ Drop", after the last of them', drops().length === 1 && blk.children.indexOf(drops()[0].parent) > blk.children.indexOf(rows()[2]));
   Object.assign(ex().sets[1], { w: '135', r: '6' }); Object.assign(ex().sets[2], { w: '95', r: '5' });
   h.api.addSet(ex()); blk = h.api.draw(0);
+  // v56 (SHIP-V56-PROMPT §4.1): v55 copied the set above — the last drop, 95×5.
+  check('"+ Set" after the drop set: the drop set’s first set, 185×8, as a normal set with no dp — never the last drop’s 95×5',
+        J(ex().sets[3]) === J({ w: '185', r: '8', type: 'N', done: false }), J(ex().sets[3]));
   tapBadge(3); tapBadge(3); tapBadge(3);
   drops()[1].onclick(); blk = h.api.draw(0);
   Object.assign(ex().sets[3], { w: '185', r: '7' }); Object.assign(ex().sets[4], { w: '135', r: '5' });
@@ -444,9 +456,10 @@ section('E. every copy keeps the grouping — a duplicated block, a routine save
   const started = toSession({ name: 'Push', exercises: saved.map(e => ({ ...e })) });
   check('and started: the same grouping in the live session, grey targets and all',
         TYPES(started.exercises[0].sets) === 'NDdd' && started.exercises[0].sets[2].tw === '135' && started.exercises[0].sets[2].w === '');
+  // v56: the import names more of the drop-set rule now (the editor draws the groups and adds a drop; section G drives it).
   check('the routine editor’s badge and swipe go through the same edits as the workout screen’s',
         /ex\.sets = retypeSet\(ex\.sets, si, order\[/.test(RSRC) && /onDelete: \(\) => \{ ex\.sets = removeSet\(ex\.sets, si\); paint\(\); \}/.test(RSRC) &&
-        /import \{ retypeSet, removeSet \} from '\.\/analytics\.js';/.test(RSRC));
+        /import \{ retypeSet, removeSet, dropHeads, addDrop, repeatOf, setsText \} from '\.\/analytics\.js';/.test(RSRC));
   // The builder, from a log whose last push day had a drop set at its end.
   const sess = (id, ago, w) => ({ id, startedAt: NOW - ago * DAY, _date: key(NOW - ago * DAY), exercises: [
     exOf(BENCH, [S_(w, 8), S_(w, 8), S_(w, 8), D_(w, 8), P_(w - 50, 6), P_(w - 90, 5)]),
@@ -617,6 +630,125 @@ section('F3. the live chips rate a drop set on the set he changed, never on a dr
   const r = NEW.C.coach(INPUT).liveSet(live([S_(190, 8), D_(190, 8), P_(140, 6)]), { current: 0 });
   check('the rating lands on the drop set’s first set — a working set, and one every reader of a rating can find',
         !!r && r.rated.setIdx === 1 && r.rated.exIdx === 0);
+}
+
+/* ================= G. V56 — WHAT V55 LEFT OPEN ================= */
+section('G. v56 — "+ Set" after a drop set, Coach’s "Last time" as one group, and the routine editor’s groups and "+ Drop"');
+{
+  // repeatOf: the set "+ Set" copies (SHIP-V56-PROMPT §4.1).
+  const one = [S_(185, 8), D_(185, 8), P_(135, 6), P_(95, 5)];
+  const two = [D_(185, 8), P_(135, 6), D_(165, 7), P_(115, 5)];
+  check('repeatOf: after a drop set, its first set — never its last drop; after two stacked, the second’s first',
+        A.repeatOf(one) === one[1] && A.repeatOf(two) === two[2]);
+  check('and otherwise the last set, as "+ Set" always copied: a straight set, a lone D from before v55; nothing for no sets',
+        A.repeatOf([S_(185, 8), S_(185, 6)]).r === '6' && A.repeatOf([S_(185, 8), D_(135, 6)]).w === '135' && A.repeatOf([]) === null && A.repeatOf(null) === null);
+
+  /* Coach's quotes (SHIP-V56-PROMPT §4.2): a drop set once, as a group,
+     through setsText — in the builder's line, the in-gym "Last time on …",
+     and a target's "Last time:". rack-v54's engines, staged at 2e8da18,
+     say what v55 still said: every drop its own run. */
+  const inp = (sessions, live) => ({ now: NOW, opens: 0, recentGreets: [], recentHype: [], u: 'lb', log: 'readable', sessions, lib: LIB, hidden: [],
+    libReady: true, routines: [], live: { active: !!live }, tier: { pro: true }, targets: null, targetsSet: null, summaries: {}, steps: { days: {} },
+    weighIns: [], weight: { latestLb: null, latestAt: null, rateWk: null, rateDays: null, goalDir: null, goalRateWk: null },
+    settings: { v: 1, mute: {}, answers: {}, asked: {} } });
+  const day = (id, ago, exs) => ({ id, startedAt: NOW - ago * DAY, _date: key(NOW - ago * DAY), exercises: exs });
+  // Eight push days: bench, straight, then flyes ending in a drop set of three.
+  const log = Array.from({ length: 8 }, (_, k) => day('q' + k, 3 + 7 * (7 - k),
+    [exOf(BENCH, [S_(185, 8), S_(185, 8), S_(185, 8)]), exOf(FLY, [S_(40, 12), D_(40, 12), P_(25, 9), P_(15, 8)])]));
+  const flyOf = p => (p ? p.exercises.find(e => e.exId === FLY) : null);
+  const bNew = flyOf(NEW.C.coach(inp(log)).build({})), bOld = flyOf(OLD.C.coach(inp(log)).build({}));
+  check('the builder’s line — before: "' + (bOld && bOld.line) + '"', !!bOld && bOld.line === '1 × 12 at 40 lb, 1 × 12 at 40 lb drop set, 1 × 9 at 25 lb drop set, 1 × 8 at 15 lb drop set');
+  check('after, once, as a group: "' + (bNew && bNew.line) + '"', !!bNew && bNew.line === '1 × 12 at 40 lb, 40 lb × 12 → 25 lb × 9 → 15 lb × 8, a drop set');
+  // In the gym: bench done, and Coach says what usually comes next, with last time's numbers.
+  const live = { id: 'wq', name: 'Push', startedAt: NOW - 1800e3, exercises: [exOf(BENCH, [S_(185, 8), S_(185, 8), S_(185, 8)])] };
+  const lastOn = E => { const r = E.C.coach(inp(log, true)).live(live, { current: 0 }); return r ? (r.why || []).find(t => /^Last time on /.test(t)) || null : null; };
+  check('"Last time on …" in the gym — before: "' + lastOn(OLD) + '"',
+        lastOn(OLD) === 'Last time on Dumbbell Flye: 1 × 12 at 40 lb, 1 × 12 at 40 lb drop set, 1 × 9 at 25 lb drop set, 1 × 8 at 15 lb drop set.');
+  check('after: "' + lastOn(NEW) + '"', lastOn(NEW) === 'Last time on Dumbbell Flye: 1 × 12 at 40 lb, 40 lb × 12 → 25 lb × 9 → 15 lb × 8, a drop set.');
+  // A target that names no number quotes last time: a lone heavy double, then a drop set.
+  const heavy = Array.from({ length: 4 }, (_, k) => day('h' + k, 3 + 7 * (3 - k), [exOf(BENCH, [S_(275, 2), D_(185, 8), P_(135, 6), P_(95, 5)])]));
+  const lastTimeOf = E => { const t = E.P.targetFor({ exId: BENCH, name: 'Barbell Bench Press', group: 'chest', equipment: 'barbell', exposures: E.P.exposuresFor(heavy, BENCH) },
+                                                    { now: NOW, u: 'lb' }, null);
+                            return t ? (t.why || []).find(x => /^Last time: /.test(x)) || null : null; };
+  check('a target’s "Last time:" — before: "' + lastTimeOf(OLD) + '"',
+        lastTimeOf(OLD) === 'Last time: 275 lb for 2, then 185 lb for 8 as a drop set, then 135 lb for 6 as a drop set, then 95 lb for 5 as a drop set.');
+  check('after: "' + lastTimeOf(NEW) + '"', lastTimeOf(NEW) === 'Last time: 275 lb for 2, then 185 lb × 8 → 135 lb × 6 → 95 lb × 5, a drop set.');
+  const kgLine = flyOf(NEW.C.coach({ ...inp(log), u: 'kg' }).build({}));
+  check('in kilos the same group, each load through units.js: "' + (kgLine && kgLine.line) + '"',
+        !!kgLine && / → /.test(kgLine.line) && /kg × 12 → .* kg × 9 → .* kg × 8, a drop set$/.test(kgLine.line) && !/\blb\b/.test(kgLine.line));
+  const lone = day('l0', 3, [exOf(FLY, [S_(40, 12), D_(25, 9)])]);
+  check('a D with no drops (every one before v55) is said exactly as it was',
+        flyOf(NEW.C.coach(inp(log.slice(1).concat([lone]))).build({})).line === flyOf(OLD.C.coach(inp(log.slice(1).concat([lone]))).build({})).line);
+  const quoteSites = [['coach-live.js', /setsText\(run, s => loadSaid\(s\.w, u\) \+ ' × ' \+ reps\(s\), ''\)/],
+                      ['coach-build.js', /setsText\(run, s => \(loadText\(s\.w, u\) \|\| '–'\) \+ ' × ' \+/],
+                      ['coach-prog.js', /setsText\(run, s => \(shown\(s\.w\) \|\| 'no weight'\) \+ ' × ' \+ s\.r, ''\)/]];
+  check('all three say a drop set through analytics.js setsText — one rule', quoteSites.every(([f, re]) => re.test(src(f))),
+        quoteSites.filter(([f, re]) => !re.test(src(f))).map(x => x[0]).join(', '));
+
+  /* The routine editor, driven for real (SHIP-V56-PROMPT §4.3): routines.js
+     staged against a store holding one routine, the picker and usage
+     stubbed, and ui.js's swipe swapped for the harness's own. */
+  const RDIR = mkdtempSync(join(tmpdir(), 'rack-drops-routines-'));
+  const rat = f => JSON.stringify(pathToFileURL(join(RDIR, f)).href);
+  writeFileSync(join(RDIR, 'store.mjs'), STORE.replace('export async function read(_p, fallback) { return fallback; }', '') + `
+export const saved = [];
+let seed = null;
+export function setSeed(v) { seed = v; }
+export async function read(_p, fallback) { return seed == null ? fallback : JSON.parse(JSON.stringify(seed)); }
+export async function write(p, v) { saved.push({ p, v: JSON.parse(JSON.stringify(v)) }); }
+export function watch() { return () => {}; }
+export function wu() { return 'lb'; }
+`);
+  writeFileSync(join(RDIR, 'picker-stub.mjs'), 'export function openPicker() {}\n');
+  writeFileSync(join(RDIR, 'usage-stub.mjs'), 'export function bump() {}\n');
+  writeFileSync(join(RDIR, 'ui-wrap.mjs'), 'export * from ' + real('ui.js') + ';\nexport function swipeToDelete(row, opts) { row._delete = opts.onDelete; return row; }\n');
+  writeFileSync(join(RDIR, 'analytics.mjs'), src('analytics.js').replace("from './store.js'", "from './store.mjs'")
+    .replace(/from '\.\/(exercises|ui|units)\.js'/g, (w, n) => 'from ' + real(n + '.js')));
+  writeFileSync(join(RDIR, 'routines.mjs'), RSRC
+    .replace("from './store.js'", "from './store.mjs'").replace("from './picker.js'", "from './picker-stub.mjs'")
+    .replace("from './usage.js'", "from './usage-stub.mjs'").replace("from './ui.js'", "from './ui-wrap.mjs'")
+    .replace("from './analytics.js'", "from './analytics.mjs'")
+    .replace(/from '\.\/(exercises|blocks|units)\.js'/g, (w, n) => 'from ' + real(n + '.js')));
+  const RT = await import(JSON.parse(rat('routines.mjs'))), RS = await import(JSON.parse(rat('store.mjs')));
+  const routine = { id: 'r1', name: 'Push', note: '', created: 1, lastUsed: 0, uses: 0, exercises: [exOf(BENCH,
+    [{ tw: '185', tr: '8', type: 'N' }, { tw: '185', tr: '8', type: 'D' }, { tw: '135', tr: '6', type: 'D', dp: 1 }, { tw: '95', tr: '5', type: 'D', dp: 1 }])] };
+  RS.setSeed({ r1: routine });
+  await RT.initRoutines(() => {});
+  body.children.length = 0;
+  let started = null;
+  const topSheet = () => body.children.filter(x => x.classList.contains('sheet')).slice(-1)[0];
+  const btn = (root, text) => walk(root).find(x => x.tag === 'button' && x.textContent === text);
+  RT.openRoutines(s => { started = s; });
+  walk(topSheet()).find(x => x.classList.contains('rt-item')).onclick();
+  const pv = (walk(topSheet()).find(x => x.classList.contains('rt-pv-sets')) || {}).textContent;
+  check('the routine’s preview says the drop set as one group: "' + pv + '"', pv === '185×8  185×8 → 135×6 → 95×5');
+  btn(topSheet(), 'Edit').onclick();
+  let ed = topSheet();
+  const setRows = () => find(ed, 'set-row');
+  const shape = () => setRows().map(r => (r.classList.contains('drop') ? 'i' : '|') + find(r, 'set-idx')[0].textContent).join(' ');
+  const dropBtns = () => buttonsIn(ed).filter(b => b.classList.contains('drop-add'));
+  check('the editor draws the drop set grouped, as the workout screen does: the set he changed a D, its drops indented with the arrow — ' + shape(),
+        shape() === '|1 |D i↳ i↳');
+  check('and one "+ Drop", under its last drop', dropBtns().length === 1 && dropBtns()[0].textContent === '+ Drop' &&
+        dropBtns()[0].getAttribute('aria-label') === 'Add a drop to this drop set');
+  dropBtns()[0].onclick();
+  check('"+ Drop" adds the next drop to it, its targets empty — ' + shape(), shape() === '|1 |D i↳ i↳ i↳' && dropBtns().length === 1);
+  btn(ed, '+ Set').onclick();
+  check('"+ Set" after it: a normal set at the drop set’s first set’s targets — ' + shape(), shape() === '|1 |D i↳ i↳ i↳ |6' &&
+        find(setRows()[5], 'set-idx')[0].textContent === '6' && walk(setRows()[5]).filter(x => x.tag === 'input')[0].value === '185');
+  await btn(ed, 'Save routine').onclick();
+  const savedR = (RS.saved.filter(w => w.p === 'routines').slice(-1)[0] || { v: {} }).v.r1;
+  check('saved: the drop set whole, the new drop and the new set in their places',
+        !!savedR && TYPES(savedR.exercises[0].sets) === 'NDdddN' &&
+        J(savedR.exercises[0].sets.slice(4)) === J([{ tw: '', tr: '', type: 'D', dp: 1 }, { tw: '185', tr: '8', type: 'N' }]), J(savedR && savedR.exercises[0].sets));
+  RS.setSeed({ r1: savedR });
+  await RT.initRoutines(() => {});
+  RT.openRoutines(s => { started = s; });
+  walk(topSheet()).find(x => x.classList.contains('rt-item')).onclick();
+  btn(topSheet(), 'Start workout').onclick();
+  check('and started, it keeps the groups: the live session’s sets are the same drop set, targets as placeholders',
+        !!started && TYPES(started.exercises[0].sets) === 'NDdddN' && J(A.dropHeads(started.exercises[0].sets)) === J([null, 1, 1, 1, 1, null]) &&
+        started.exercises[0].sets[2].tw === '135' && started.exercises[0].sets[2].w === '');
 }
 
 console.log('\ndrop sets you can read: one optional field, kept apart by every edit, and counted as they were\n');
