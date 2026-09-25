@@ -512,6 +512,35 @@ it felt* hides the card):
   90% or less or energy 3 or less is a harder day), a line under *How did today
   compare?*, and three Patterns (see `settings/coach`).
 
+**v54: `rir` on a set, his effort rating of that one set.** In a live workout,
+the Coach sheet's three chips store it on the last ticked working set of the
+exercise in hand: *Way too easy* `4`, *About right* `2`, *Too hard* `0`.
+
+- **The shape:** an integer 0–5 (reps he had left). Readers take any integer
+  in that range (`coach-prog.js` `rirOf()`); anything else, the string `"0"`
+  included, is unknown. **Absent means unknown**, never 0. Nothing migrates.
+- **Where it lives:** inside the set object,
+  `{ "w": 185, "r": 8, "type": "N", "done": true, "rir": 4 }`. It rides the
+  live session and reaches the record through `collectFrom`, in the one whole
+  write at Finish. There is no child write and no new node, and the published
+  rules take it: `workouts` carries a section-level `.write`.
+- **Written and cleared:** `workout.js` `rateSet()` sets it, and deletes the
+  key (never null) for the chosen chip tapped again. Unticking a set deletes
+  it (`tickSet`), since a rating is of a set that was done.
+- **The trap, again:** `saveEdit()` rebuilds the record, so `editWorkout`
+  carries each `rir` onto the edit's sets and `collectFrom` carries it back.
+  **Every place that builds a set from another set builds it fresh**, with no
+  rating: `dupSet`, `+ Set`, a routine started or saved, and the builder.
+  `tools-check/effort.mjs` proves both.
+- **Not in `history/{exId}`**, which stays `{ w, r, type }`. Its one reader,
+  `prescribe()`, reads the record.
+- **What it moves:**
+  - the next set, mid-session (a set rated too hard stops the lift going
+    heavier today; way too easy at the target allows the one step);
+  - next session's target (a top set rated too hard holds it; every rated set
+    at the target rated way too easy counts as the top, one step at most).
+  - Nothing else reads it.
+
 `history/{exId}` → `[ { date, sets: [ {w,r,type} ] }, … ]`, newest first, 20 max
 — the per-exercise "last time" index.
 
@@ -618,7 +647,9 @@ twelve characters.
 - `q_focus_group` — `chest`, `back`, `legs`, `shoulders`, `arms`, `core` or
   `none` ("No focus"). `always: true` like the aim (shown under Your goal on
   Pro), and `where: 'goal'`: asked under the *How am I tracking toward my
-  goal?* answer, never as the opener. Tonight it changes what goal pace reads.
+  goal?* answer, never as the opener. It changes what goal pace reads and,
+  since v54, *How's my weekly volume?* (that group's range up 30%, its line
+  first) and the builder (its exercises first).
 - `q_goal_check_weight` and `q_goal_check_targets` — `update`, `temp` or
   `keep`. The "did your goal change?" questions: asked as the sheet's opener
   (Pro only) when three weeks of weigh-ins run against the aim, or the food
@@ -666,6 +697,14 @@ twelve characters.
 The native tree's PROPOSED rules validate `settings/coach` key by key and end
 in `$other: false`, so they refuse `marks` until `NEXT-NATIVE-V52.md` §8 is
 added to them. The published rules take it today.
+
+**v54 adds one `asked` stamp that is not a question:** `asked.vol_neglect`,
+epoch ms. The neglected-group line under *How's my weekly volume?* is said at
+most once in 28 days, and the sheet stamps it when the line is drawn
+(`coach-data.js` `markAsked()`, the questions' own writer). `coach.js`
+`ONCE_LINES` is the list of such stamps, and `normSettings()` keeps them beside
+the questions'. It is a child of the already-granted `settings/coach`, so no
+rules change.
 
 **v52's food reads — when, how many, and for whom.** *Am I fueled?*, *Should I
 rest or go lighter?* and *How did today compare?* read `food/log/{date}`
@@ -757,9 +796,10 @@ a number you lifted. Since v46 there is one way a target becomes a value, and it
 is a deliberate one: **ticking** a set fills each EMPTY box from its target
 ("I did what it says"; `tickSet` in `workout.js`) — one set at a time, or a whole
 lifting block through its check box. A box that was typed in is
-never overwritten, unticking clears nothing, and `collectFrom` strips `tw` / `tr`
-from the record as before. A ticked set that still has no reps is counted at
-Finish and named before anything is saved.
+never overwritten, unticking clears no box (since v54 it deletes the set's
+`rir`), and `collectFrom` strips `tw` / `tr` (and v54's `tl`) from the record
+as before. A ticked set that still has no reps is counted at Finish and named
+before anything is saved.
 
 The same `tw` / `tr` carry **Coach's targets** (v48): *Start with Coach’s
 targets* starts a proposal's `targets` view, whose ghosts are `coach-prog.js`'s
@@ -769,6 +809,19 @@ exactly like `w`; on a kilo account it is the kilo target converted once
 (102.5 kg is `"225.97"`, which prints back as 102.5). Where a target names no
 number ("the next setting up"), its `tw` is last time's weight and never blank,
 because a blank weight box is recorded as `'0'`, a bodyweight set.
+
+Since v54 two more things put `tw` / `tr` on a live set, and neither stores
+anything:
+
+- **Last time's numbers on an exercise added by hand**, from the session the
+  "Last ·" line quotes (`workout.js` `lastTargets()`, `greyFor()`), and on
+  `+ Set` after a blank set. These sets carry **`tl: true`** so they can be
+  told from a routine's or the builder's targets, which they never overwrite.
+  `tl` is live-session state only and `collectFrom` strips it. A bodyweight
+  set's `tw` is `''`, never `'0'`.
+- ***Use it for my next set*** in the live Coach sheet (`useNext()`) writes
+  Coach's next set as `tw` / `tr` on the next unticked set, and drops `tl`.
+  It never writes `w` or `r`.
 
 A lifting block is stored here exactly as it is in a workout record: `block: 1`
 on the exercise objects, and nothing else. A routine **never** carries a

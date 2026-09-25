@@ -97,15 +97,16 @@ node in the database. See *Access* below for what replaced them, and why.
 | `insights.js` | What Rack makes of the data — wins, slips, insights, the weekly review, the goal pace. Pure functions over what `you.js` loaded |
 | `coach.js` | **Coach's engine.** Facts, intents, responses, router — four tables and a sort. Pure: no clock, no DOM, no reads, no module state. Since v53 also `finishRead()`, the finish line the recap, the card and the sheet read after a workout ("Great workout." only with evidence, otherwise "Good work."), and the card's warm lines. Copied into the native tree verbatim |
 | `coach-build.js` | **The workout builder** — "Make me a workout" on Train. Turns the shape that has waited longest into a workout made out of his own log: the most recent such session, its exercises, blocks and logged numbers, never an invented weight — and beside each exercise its target from `coach-prog.js`. Pure, and copied into the native tree verbatim like `coach.js` |
-| `coach-prog.js` | **The targets** — per lift, the weight and reps for next time: his rep range learned from where he moves up, his step learned from his own jumps, a hold, a jump, a reduction or a way back after a layoff, each with its evidence. Every weight is one he logged or at most two of his own steps away (coming back, a whole number of steps below). Since v52 `targetFor()` is the one way a target is named: after a marked session it is the target from before it. Pure; copied verbatim. `tools-check/coach-prog.mjs` is its battery |
+| `coach-prog.js` | **The targets** — per lift, the weight and reps for next time: his rep range learned from where he moves up, his step learned from his own jumps, a hold, a jump, a reduction or a way back after a layoff, each with its evidence. Every weight is one he logged or at most two of his own steps away (coming back, a whole number of steps below). Since v52 `targetFor()` is the one way a target is named: after a marked session it is the target from before it. Since v54 it reads his effort rating of a set (`rir`: too hard holds, way too easy at the target counts as the top), and `nextSet()` gives the next set mid-session. Pure; copied verbatim. `tools-check/coach-prog.mjs` is its battery |
 | `coach-goal.js` | **The goal's dials** — the six aims and three experience answers, what each turns (confirm twice before a jump, one jump or two, the starting rep band), and the energy context read off the weight trend. Since v49 also bodyweight at a moment, the energy band, the volume floors, the lift target's shape (`normGoalLift`), its pace (`paceFor`) and the goal-change checks. Pure; imports nothing; copied verbatim |
 | `coach-overlap.js` | **Plateau or cut?** (v49) — a flat lift read against the bodyweight, the frequency and the sets beside it: a real plateau and the rung of the stall ladder, a cut that is holding, a slide, trained too rarely to say, or "Coach needs weigh-ins". Also the lighter week, the record day, "How are my lifts moving?", and the stage-three reads that need a target replayed or a lift's series (how today compared, what's next time, the lift target's pace). Pure; copied verbatim. `tools-check/coach-overlap.mjs` is its battery |
 | `coach-ready.js` | **Rest and recovery** (v52) — each group's recovery window from his own gaps, longer after a day big against his own normal (lifting sets only, cardio out); the rest read (rest, go lighter, a recovered group, or the recovered shape that has waited longest); the replayed "did you rest on days like this"; readiness, a list and never a score; what was different about a session, in both directions and never a cause. Never imports `coach-fuel.js`, so food moves no rest call. Pure; copied verbatim. `tools-check/coach-ready.mjs` is its battery |
 | `coach-fuel.js` | **Am I fueled?** (v52) — his food against his own normal and never a prescription: complete days, the food phase, his by-hour curve on training days, whether he logs as he goes or later, and the food rows beside readiness and a session. A half-logged day is "not fully logged", never low. Imports `coach-goal.js` and `units.js` only. Pure; copied verbatim. `tools-check/coach-fuel.mjs` is its battery |
+| `coach-volume.js` | **The whole week** (v54) — each muscle group's hard sets in the last 7 days against a common range for his goal and his own normal, the one group gone quiet (once in four weeks), and whether pushing and pulling, presses, pulls, knees and hips are lopsided over eight weeks. Counts only, never a reason about the body. Pure; copied verbatim. `tools-check/coach-volume.mjs` is its battery |
 | `coach-tags.js` | Movement pattern, angle, load and side for every built-in exercise. A sidecar keyed on `exercises.js`'s ids, so a tagging mistake can never reach the picker. Pure; imports nothing. The builder reads it: pattern for "Swap one", load for "Fewer exercises" |
-| `coach-live.js` | **Coach in the gym** — during a live workout, what usually comes next, one more set, the next group, or "you're probably good for today", read off the session in progress against his own sessions of that shape. Never a weight. Pure, and copied into the native tree verbatim like `coach.js` |
+| `coach-live.js` | **Coach in the gym** — during a live workout, what usually comes next, one more set, the next group, or "you're probably good for today", read off the session in progress against his own sessions of that shape, and (v54) the sessions he finished earlier that day. It works out no weight itself: since v54 it says the next set `coach-prog.js` gives, and the effort chips' words. Pure, and copied into the native tree verbatim like `coach.js` |
 | `coach-data.js` | The impure half — the one file the native port rewrites. Reads once per app open and never on a paint, except the food days *Am I fueled?* reads on an ask (v52: Pro, Food on, fifteen at most). Writes `settings/coach`, bad-day marks included. Since v53 `coachFinishRead()` for the recap and `noteCoachFood()`, which `food.js` calls after each day-summary write |
-| `coach-ui.js` | Coach's card (since v49 one earned line from his own log — the sheet opens on the finding; since v53 the finish line after a workout, and a warm line when nothing is earned), the COACH ME sheet with "More", the builder's recovery caution and the bad-day mark's chips (v52), the Settings switches and Your goal (aim, experience, focus, Lift target), and the live session's chip, sheet and one-line nudge |
+| `coach-ui.js` | Coach's card (since v49 one earned line from his own log — the sheet opens on the finding; since v53 the finish line after a workout, and a warm line when nothing is earned), the COACH ME sheet with "More", the builder's recovery caution and the bad-day mark's chips (v52), the Settings switches and Your goal (aim, experience, focus, Lift target), and the live session's chip, sheet (since v54 the next set and the effort chips) and one-line nudge |
 | `settings.js` | The settings hub behind the You gear, and the profile editor |
 | `admin.js` | Owner-only panel — feature usage, the Accounts page, People & access |
 | `accounts.js` | Account types and what each one may do. Pure, and the single entitlement choke point — every limit and feature check goes through `capabilitiesFor()` |
@@ -120,7 +121,7 @@ node in the database. See *Access* below for what replaced them, and why.
 | `units.js` | Pounds/kilos and inches/centimetres. Pure, imports nothing, reads nothing — every function takes the unit as an argument |
 | `analytics.js` | Training aggregates, personal-record detection, SVG chart builders — and (v53) the recap's comparison with sessions of the same kind, and `normFeel()`, the one reader of a session's rating |
 | `stats.js` | The statistics page |
-| `workout.js` | Train tab — calendar, live session, editing, post-workout recap (v53: the win first, "How did that feel?", no percentage) |
+| `workout.js` | Train tab — calendar, live session, editing, post-workout recap (v53: the win first, "How did that feel?", no percentage; v54: last time's numbers in grey on an exercise added by hand, and a set's effort rating, `rir`) |
 | `blocks.js` | Lifting blocks — the pure model, shared by the workout screen and the routine editor. Imports nothing, reads nothing |
 | `picker.js` | Exercise library (static + custom) and the two picking sheets |
 | `routines.js` | Pre-planned routines — list, editor, start, save-a-session-as |
@@ -151,6 +152,7 @@ app.js → you.js       → coach-ui.js  → coach.js   → analytics.js ──�
                                                  → coach-overlap.js → coach-prog.js  coach-goal.js  coach-tags.js
                                                  → coach-ready.js → coach-overlap.js  coach-prog.js  coach-goal.js  coach-live.js
                                                  → coach-fuel.js  → coach-goal.js
+                                                 → coach-volume.js → coach-goal.js  coach-tags.js
                                     → coach-data.js → picker.js
                                                     → tdee.js  insights.js
                                                     → access.js → store.js
@@ -205,7 +207,7 @@ close a loop, and `bump()` is one line at a call site that already has real work
 to do.
 
 `coach.js` is at the bottom of the graph with `units.js` and `blocks.js`: it
-imports `exercises.js`, `units.js`, `coach-build.js`, `coach-live.js`, `coach-goal.js`, `coach-overlap.js`, `coach-ready.js`, `coach-fuel.js` and the SESSION MATH from
+imports `exercises.js`, `units.js`, `coach-build.js`, `coach-live.js`, `coach-goal.js`, `coach-overlap.js`, `coach-ready.js`, `coach-fuel.js`, `coach-volume.js` and the SESSION MATH from
 `analytics.js` (`e1rm`, `isWorking`, `mergeSessionExercises`, `exerciseIndex`,
 and since v53 `detectPRs`, `sessionMilestones` and `normFeel` for the finish line)
 and nothing else — never `loadAll`/`allSessions`, which are that file's impure
@@ -226,7 +228,9 @@ without closing a ring. The You card hands in neither, so the builder is on
 Train alone.
 
 `coach-live.js` sits beside it on the same terms: `coach.js` hands it the
-window and the recurring shapes (`liveInput()`), it reads the live session it
+window and the recurring shapes (`liveInput()`), and since v54 the live
+session's date key and the next set as a function it may call (a
+`coach-prog.js` target, reached through `coach-overlap.js`). It reads the live session it
 is given and never writes to it, and what it says reaches the screen through
 `coach-ui.js`. "Add it" in the live sheet is the picker's own callback, handed
 in by `workout.js` — `addPicked`, the one function "+ Add exercise" hands
@@ -521,7 +525,11 @@ Three related promises:
   trailing average.** Never a population norm, never a healthy range, never a
   guideline. Where it quotes a comparison it names the denominator out loud:
   *2 sessions in the last 7 days, against 3.5 a week across the four weeks
-  before.*
+  before.* **One exception since v54, in the sheet only:** *How's my weekly
+  volume?* sets each group's hard sets beside "a common range" for your goal,
+  from the research the spec cites (§6.2). It is named as that and always
+  sits beside your own usual. The range alone flags nothing, except on the
+  focus group you named, after four weeks under it.
 - **A readout, not an instruction.** *Fat is 38% of your calories over the
   last seven full days, against the 30% your targets work out to* — never "eat
   less fat". It does not do injuries or pain, and it says so if it is asked.
@@ -550,9 +558,9 @@ and shoulders day* — never in programme jargon Rack has no way to know applies
 If one of your own saved routines covers exactly those groups, your name for it
 wins.
 
-Nothing derives from `session.groups` on the stored record: `workout.js` builds
-that array from sets filtered on `done`, not on `isWorking`, so it counts
-warm-ups. Every group Coach names is derived fresh from the sets.
+Nothing derives from `session.groups` on the stored record. It counted
+warm-ups until `884ddd9` (23 Sep 2026) and counts working sets now, but every
+group Coach names is still derived fresh from the sets.
 
 ### Make me a workout
 
@@ -563,7 +571,8 @@ recurring sessions by their names, then the six muscle groups, each only if
 there is something in your log to build it from. The answer to *What should I
 train today?* offers **Build it**, which skips the question and builds what that
 answer named. Either way it is built out of your own log: the most recent
-session of that kind, its exercises in the order you did them, your lifting blocks, and the numbers
+session of that kind, its exercises in the order you did them (since v54, your
+focus group's first, unless the session has lifting blocks), your lifting blocks, and the numbers
 you actually lifted — never a weight you did not. It says which session it was
 built from, offers your own routine for that shape by your name if you have one,
 and says what it left out (an exercise you hid, one no longer in your library)
@@ -608,6 +617,14 @@ first time back. Singles and lone heavy top sets get no target, a set taken to
 failure never earns two jumps, and a session that does not carry a safe answer
 gets *No target this time* with last time quoted.
 
+Since v54 your rating of a set (see *In the gym*) is read too, and no more
+than this. A top set you rated **Too hard** holds the target: the same again,
+not a miss. A session where every set you rated at the target was **Way too
+easy**, none went to failure and every one reached its reps counts as reaching
+the top: one jump at most, and still through the goal's confirm-twice rule. The
+target's evidence says when your rating moved it. A session you never rated
+gets exactly the target it always did.
+
 Settings → Coach → **Your goal** sets what you are training for (*Get stronger*,
 *Powerlifting*, *Build muscle*, *Lose fat, keep strength*, *Recomp*, *Stay
 consistent*) and how long you have lifted; each turns how many times Coach wants to see the
@@ -636,18 +653,52 @@ next      what usually comes straight after what you've done so far
 ```
 
 Done first, always: stopping one set early costs nothing, and Coach pushing a
-tired set is the one thing it must never do. It suggests no weight — the only
-figure it prints is a quote of the last time you logged the exercise it names.
-**Why?** shows the working; for *next* and *switch*, **Add it** adds the
-exercise the way **+ Add exercise** would, at the end of the session.
+tired set is the one thing it must never do. **Why?** shows the working; for
+*next* and *switch*, **Add it** adds the exercise the way **+ Add exercise**
+would, at the end of the session.
+
+**Today is a day, not a session** (v54). A group or exercise you trained in a
+session you already finished today counts as trained today: an evening
+session's Coach never offers the chest you did this morning. When the morning
+and the evening are one of your usual workouts split across two visits, their
+sets count together toward *done*. A different workout is a different workout.
+
+**The next set** (v54, spec §3.10). Under the answer, when the exercise in hand
+has a Coach target, the sheet says the next set: "Next set: 190 lb × 8."
+
+- Before your first working set of it, the next set is the session's target.
+- It goes one of the lift's own steps up, once a session, after two reps past
+  the target at its weight, or a set you rated way too easy.
+- The same weight after a set to failure, a set you rated too hard, or reps
+  down a quarter. Nothing heavier on that lift for the rest of the day.
+- One step down, to a weight you have lifted, when your reps fall under your
+  range.
+- Otherwise, the same again.
+
+Every figure is a quote of a set you logged or a `coach-prog.js` target. With
+**Weight and rep targets** off, or on a lift Coach cannot target, there is no
+number. The one line under a finished exercise never carries one.
+
+**How was it?** (v54). Under the next set: "Set 3 · 185 lb × 8. How was it?"
+and three chips, **Way too easy**, **About right** and **Too hard**. They rate
+the last working set you ticked on the exercise in hand, and tapping the chosen chip
+again clears it. Coach answers warm first ("Strong set. Next one: 195 lb × 8.")
+and offers **Use it for my next set**, which puts that number in grey on your
+next set. It never types into a box, and nothing is applied without the tap.
+The rating is saved on the set (`rir`, see AGENTS.md), and next session's
+target reads it (see *Targets*).
+
+On a hand-added exercise, the grey numbers are **last time's**, from the
+session the "Last ·" line quotes: set by set, and last time's final set again
+past the end. Coach's number reaches a row only through *Use it*.
 
 When a tick finishes an exercise, the answer can appear once as a single line
 under it, in the slot the swipe hint uses — nothing pops up, no row moves, and
 the rest timer is untouched. It never appears twice for the same exercise, and
 never over an edit of a past session. A basic account sees none of it, and
 Settings → Coach → **In the gym** switches the chip and the line off.
-`coach-live.js` decides; `tools-check/coach-live.mjs` and `coach-surface.mjs`
-are its fences.
+`coach-live.js` decides; `tools-check/coach-live.mjs`, `coach-surface.mjs` and
+`effort.mjs` are its fences.
 
 ### Rest, readiness and the bad day
 
@@ -693,6 +744,42 @@ left out, never guessed. It never says what or how much to eat, and never
 names a food. "I ate, it’s not logged" and "I haven’t eaten" are answers for
 that moment only, and nothing is saved. The food days are read when you ask,
 never when the card draws.
+
+### The whole week
+
+On Pro, two bubbles on Train's sheet, under **More** (v54, `coach-volume.js`).
+Each is a sheet answer only: never the card, never the live sheet.
+
+**How's my weekly volume?** One line per muscle group, your focus group first.
+A hard set is a working set with reps, with cardio out and an obvious warm-up
+you forgot to mark out. A set counts whole for its main group and half for each
+group it works second.
+
+- Each line: the hard sets in the last 7 days, against a common range for your
+  goal. Building muscle is 10–20, strength 6–15 and staying consistent 6–12. A
+  cut is two thirds of your usual from before it. Your focus group's range is
+  up 30%.
+- Then one flag:
+  - **too little**: under the range and under 70% of your own usual, two weeks
+    running, or on your focus group, four weeks under its range;
+  - **more than your usual**: 1.3 times it, with a sign of fatigue in the log
+    (sets to failure, or reps falling away). Volume alone is never "too much";
+  - **about right**.
+- Core is a number only.
+- Once in four weeks, it names a group that has gone quiet against the others.
+
+**Is my training balanced?** Over eight weeks, as counts:
+
+- pushing against pulling, past two to one;
+- presses flat against overhead, and rows against pulldowns, when one side is
+  at zero;
+- squats and lunges against hinges and bridges, past three to one.
+
+Or "Nothing lopsided in the last 8 weeks.", with the counts. Custom exercises
+are left out, and it says so.
+
+Under three weeks of log, both say so and guess nothing. Neither ever gives a
+reason about your body: no health, no posture, no injury. Counts only.
 
 ### Patterns in your data
 

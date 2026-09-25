@@ -3793,3 +3793,641 @@ unchanged at about 31 ms.
   child write lands (`feel.mjs` F).
 - The next thing stored on a record — the effort tap's per-set rating, say —
   needs the same two lines, or the first edit takes it away.
+
+---
+
+# COACH TRAINER — stage five: in the gym (rack-v54)
+
+## 79. READ THIS FIRST — rack-v54, and what is not done
+
+Written at the end of an unattended run in `~/dev/ship-v54` (a fenced, full
+clone at rack-v53, `71cb16e`), against `SHIP-V54-PROMPT.md`, with §69–§78 and
+§59–§68 of this report and `COACH-TRAINER-SPEC.md` read first, as the brief
+asked. The fence was proved before anything else: `echo GUARDTEST ping` was
+refused. Shipped as `rack-v54`. **Not pushed.**
+
+**All four phases are built, in the brief's order, each committed and green
+before the next began.** Every commit passes every verifier under
+`TZ=America/New_York`, `UTC` and `Pacific/Auckland`.
+
+- **Before:** 43 verifiers, 43 exit 0 in each zone.
+- **After:** 46 verifiers, 46 exit 0 in each zone. The three new ones are
+  `grey-last.mjs`, `effort.mjs` and `coach-volume.mjs`.
+
+- The held batteries did not move: `coach-overlap` **24 / 0 / 0**,
+  `coach-ready` **46 / 0 / 0**, `coach-fuel` **16 / 0 / 0**, `finish`
+  **12 / 0 / 0**, and `coach-prog`'s original **57 / 0 / 0**.
+- The new batteries:
+  - `coach-prog`'s ratings section: **ok 16, miss 0, wrong 0**.
+  - `coach-volume`: **ok 40, miss 0, wrong 0**.
+- `database.rules.json` is byte-identical to rack-v53. `sw.js` and
+  `usage.js` read `rack-v54`.
+- **The card paint** against rack-v53, interleaved, is within ±0.3 ms in every
+  moment and both tiers. **The live tick** (the one quiet line's read) costs
+  +0.56 ms when it would say "one more set", and nothing extra otherwise (§86).
+
+**What he can do in the gym now:**
+
+- An exercise he adds by hand opens with last time's numbers in grey.
+- The Coach chip says the next set ("Next set: 190 lb × 8.").
+- He can rate the set he just did (**Way too easy**, **About right**, **Too
+  hard**), and Coach answers with the next set and *Use it for my next set*.
+- Next session, a set rated too hard holds the target, and a session rated way
+  too easy at its target counts as the top, one step at most.
+- A second session in a day sees the first.
+- On Train's sheet: *How's my weekly volume?* and *Is my training balanced?*
+
+**What nobody has seen.** Nothing in this ship has been on a phone or in a
+browser. The grey numbers, the chips and their 44px (reasoned from `rack.css`
+by `touch-target.mjs`, never measured), *Use it for my next set*, and the
+week's two answers were all driven through DOM shims, which have no box model
+and never load `rack.css`.
+
+**Places where I departed from the brief, each forced by the code** (§83):
+
+1. **The next set is its own read**, `setRead()` through `c.liveSet()`, not a
+   new answer inside `liveRead()`. So the one quiet line under a finished
+   exercise cannot print a number, by construction.
+2. **`coach.js` reaches `coach-prog.js` through `coach-overlap.js`**
+   (`nextSetFor()`), because `coach-pure.mjs` fences `coach.js`'s imports.
+3. **Strength's volume range is 6–15 on every group.** `coach-goal.js`
+   `volumeFloor()` has no idea of "the groups carrying the main lifts".
+4. **The week's two answers are on Train's sheet only.** You's topic lists
+   are read on every card paint, and no card paint may ask a new route.
+
+**Two commits landed after the version bump**, so the docs are last but the
+bump is not second-to-last:
+
+- `74daa5d` is a speed fix to the live tick, found by measuring it.
+- `1c1d7b3` has `coach-voice` and `coach-surface` cover the week's answers.
+
+Neither needs a second bump: rack-v54 has not shipped, and the number names
+the ship.
+
+**What is not done** is in BACKLOG.md under *What v54 left open*. That
+includes decision 7's question (singles at RIR ≥ 2), rest-tolerance learning,
+and spec §6.3's frequency line for the strength aim.
+
+---
+
+## 80. WHAT GOT BUILT
+
+```
+workout.js      2,169 lines  was 2,038. lastTargets() beside tickSet; newExercise's grey first set;
+                             lastEntry() (the one "Last ·" lookup); greyFor(); + Set's grey; the tl
+                             mark, stripped by collectFrom; tickSet deletes rir on an untick;
+                             rateSet(), useNext(); rateLive/useNextLive handed to the live sheet;
+                             editWorkout carries rir.
+coach-prog.js   1,226 lines  was 1,004. rir read and carried (copySet, rirOf); decide()'s two rating
+                             rules and their why; section 6, nextSet() (spec §3.10 with the rating).
+coach-live.js     699 lines  was 517. The header's "NO WEIGHT, EVER" rewritten; dayOf() (today is a
+                             day); setRead(), EFFORT, rateAsk(), rateAnswer(); "one more set" never
+                             above a stop.
+coach-overlap.js 1,172 lines was 1,155. nextSetFor(): the lift's target and step, for coach.js.
+coach-volume.js   462 lines  NEW. hardSets(), volumeRead(), volumeAnswer(), balanceRead(),
+                             balanceAnswer().
+coach.js        5,430 lines  was 5,279. liveInput's day and nextSet; c.liveSet; group.volume and
+                             group.balance; week_volume and balance_read; the two topics on Train;
+                             ONCE_LINES; volumeInput(); builderInput's focusGroup.
+coach-build.js    758 lines  was 743. His focus first.
+coach-ui.js     1,373 lines  was 1,302. The live sheet's new rows; a `once` line stamped as drawn.
+rack.css        2,230 lines  was 2,220. .coach-rate, .coach-effort (44px).
+sw.js, usage.js              rack-v54.
+report/coach-paint/bench.mjs stages coach-volume.js; AB mode times the live tick too.
+```
+
+Commits, each passing every verifier in three zones:
+
+```
+e05b3a2  Last time's numbers, in grey, on an exercise added by hand
+17a76cf  In the gym: the next set, and his rating of the last one
+263a3fe  Today is a day: a second session sees the first
+6249a87  The whole week: weekly volume, balance, and his focus first
+8813cc5  rack-v54
+74daa5d  The live tick looks up the next set only when it would say one more set
+1c1d7b3  coach-voice and coach-surface see the whole week
+         docs
+```
+
+**Phase A: the grey numbers.** An exercise added by hand to a live session
+opens with last time's numbers as grey targets. The + Add exercise button, a
+block's own, and Coach's *Add it* all hand `newExercise`, so all three get
+them. The numbers come from the session the "Last ·" line quotes: `lastEntry()`
+is now the one lookup both read.
+
+- `+ Set` with the previous boxes blank gives last time's set for its
+  position, and past the end, last time's final working set again.
+- A typed previous set is copied exactly as before.
+- None of this happens in an edit, on an exercise carrying a routine's or the
+  builder's targets, or with no last time.
+- `lastTargets(prevSets, n)` is pure and sits beside `tickSet`, whose shipped
+  rule adopts the grey numbers on a tick.
+- A bodyweight set's weight target is `''`, so a tick still records `'0'`.
+
+**Phase B: the next set and the effort tap.**
+
+- `nextSet(ex, ctx, today)` in `coach-prog.js`, spec §3.10:
+  - before the first working set, the session's target;
+  - **up** one of the lift's own steps, once a session, after two reps past
+    the target at its weight, or a set rated way too easy at the target;
+  - **stop** (the same weight, never heavier) after a set to failure, a set
+    rated too hard, or reps down a quarter;
+  - **down** one step to a load he has logged when reps fall under the range;
+  - otherwise the same again.
+  - Straight sets and a loaded target only. Never an assisted lift. Never when
+    the session reads done.
+- The sheet: "Set 3 · 185 lb × 8. How was it?" and three chips store `rir`
+  (4, 2, 0) on the last ticked working set of the exercise in hand, through
+  `rateLive`, which `workout.js` hands in. Tapping the chosen chip again
+  deletes the key.
+- Coach answers warm first ("Strong set. Next one: 195 lb × 8.") and offers
+  *Use it for my next set*, which writes `tw`/`tr` and never `w` or `r`.
+- Next session, `prescribe()` reads two ratings and no more:
+  - a top set rated too hard holds the target (`hold`, code `hard`);
+  - every rated set at the target rated way too easy, with no F and every
+    target rep reached, counts as the top, through the confirm dial, one step
+    at most.
+
+**Phase C: today is a day.** `coach-live.js` `dayOf()` reads the sessions he
+finished earlier on the live session's own day, out of the window `coach.js`
+already hands in.
+
+- What he trained earlier counts as trained today. `switch` never names it,
+  and neither `switch` nor `next` puts an exercise done earlier, or one of a
+  group trained earlier, in front of him.
+- The same shape across two visits counts its sets together for `done`. A
+  different shape is a different workout.
+- Checked right for two with no change: the `post` and `done_today` states,
+  the finish line, *How did today compare?*, the rest read, the big day and
+  the streak.
+
+**Phase D: the whole week.** `coach-volume.js` counts hard sets (§6.1):
+
+- working sets with reps, cardio out;
+- the warm-up in disguise out;
+- a set counts 1 for its primary group and 0.5 for each secondary;
+- a custom exercise counts for its primary group only.
+
+- ***How's my weekly volume?***: one line per group, focus first. Each line
+  gives the sets in the last 7 days, the band against a common range for his
+  goal, and a flag. The neglected group gets a line once in 28 days.
+- ***Is my training balanced?***: four splits over eight weeks, as counts.
+- The builder puts his focus group's exercises first (§84).
+
+---
+
+## 81. THE BATTERIES — every row
+
+### 81.1 `tools-check/coach-volume.mjs` — ok 40, miss 0, wrong 0
+
+No goal set unless the row says. Every set is a working set of 10 at 100 lb
+unless it says.
+
+| # | the reading |
+|---|---|
+| B1 | very low: chest 2 in the last 7 days, under 4, no flag (one week under 70% is one week) |
+| B2 | low end: 7, under the 10 floor, about his usual 7: "About your usual 7." |
+| B3 | common: 12 inside 10–20: "Chest: 12 hard sets in the last 7 days, inside 10–20, a common range. About right." |
+| B4 | high: 24 over 20, within 30% of his usual 22, so about his usual, never "too much" |
+| F1 | too little: 6 and 6, under 10 and under 70% of his usual 12: "…Two weeks running under that range and under 70% of your usual 12 (6 the 7 days before)." |
+| F9 | one week under is not two: 6 after 12, no flag |
+| F2 | too little on his focus group: 11 each week, under its raised 13 four weeks running, though his usual is 11 |
+| F4 | about right by his usual: 22 against 20, over the range |
+| F5 | more than usual: 14 against 10 with 4 sets taken to failure against a usual none |
+| F6 | more than usual: 14 chest sets against 10, reps down a quarter on 2 of its lifts |
+| F7 | 14 against 10 with no fatigue sign: about right, never "too much" |
+| F8 | core: 1 set against a usual 6, a readout only: "Core: 1 hard set in the last 7 days." |
+| D1 | the warm-up in disguise: N, 90 of a 185 top, before the first top set, 5 reps: out |
+| D2 | the load alone: 95 of 185 is over half, so it counts |
+| D3 | the order alone: after the first top set, so it counts |
+| D4 | the reps alone: 8 against a top set of 5 is a light working set, so it counts |
+| D5 | a light F set before the top counts: the rule is for N sets |
+| D6 | a typed warm-up never counts, and bodyweight has no top load to be half of |
+| X1 | fractional: 4 bench and 3 pec deck: chest 7, arms 2, shoulders 2 |
+| X2 | a custom counts for its primary only: chest 4, arms 0 |
+| X3 | cardio is never a hard set: a treadmill filed under legs adds nothing |
+| — | the shipped `group_under_weekly_normal` keeps its primary-only count: "2 working arms sets", where the fractional count is 3 |
+| G1 | the focus group: range 13–26, its line first: "…raised 30% for your focus." |
+| G2 | a cut 20 days old: two thirds of his usual before it (15 then): "inside 10 or more, two thirds of your usual before your cut." |
+| G3 | Get stronger: 6–15, on every group (§83.3) |
+| G4 | Stay consistent: 6–12 |
+| N1 | neglect: arms 4 in 4 weeks against a middle of 40: "Arms: 4 hard sets in the last 4 weeks, against a middle of 40 across your other groups." Said last, with `once: 'vol_neglect'` |
+| N2 | neglect: arms at zero for eight weeks: "Arms: no hard sets in the last 8 weeks." |
+| N3 | stamped 10 days ago: quiet (`neglectHeld`) |
+| N4 | stamped 29 days ago: said again |
+| N5 | core is never neglected |
+| L1 | push : pull past 2 : 1: "Over 8 weeks: 32 pushing sets and 8 pulling, more than two to one." |
+| L2 | nothing lopsided: "Nothing lopsided in the last 8 weeks.", then "Over 8 weeks: 24 pushing and 24 pulling sets; 16 squat and lunge and 8 hinge and bridge sets." |
+| L3 | 24 flat pressing sets and none overhead, flagged |
+| L4 | 24 rows and no pulldown, flagged |
+| L5 | knee : hip past 3 : 1: 32 squat sets against 8 hinge |
+| L7 | customs over a quarter of back (16 of 40): push/pull and the pull split skipped, and said |
+| L8 | hidden exercises still count |
+| L9 | a split with fewer than 8 sets says nothing: 4 pushing, none pulling |
+| L10 | legs his focus: knee : hip first, then push : pull and the two direction splits |
+| T1 | 16 days of log: "Coach reads weekly volume from three weeks of your log or more, and yours has 16 days so far." |
+
+**Beside the rows:**
+
+- **L6:** customs are left out and the answer says so ("8 sets on your
+  custom exercises aren’t in this split: Coach doesn’t know their
+  movement.").
+- **T2:** balance's own thin answer.
+- **B, where the answers are:**
+  - both are on Train's sheet, after its own bubbles, and never on You's
+    lists or the live state's;
+  - they are Pro selectors in `volume`, sheet only;
+  - they are the module's words exactly, and each leads to the other;
+  - the switch silences both, an unreadable log gets neither, and the live
+    read says none of it.
+  - The engine's answer carries `once` when the neglect line is in it, and
+    `normSettings()` keeps the stamp.
+- **C, the builder:** Bu1–Bu4 (§84).
+- **D, properties** over 300 generated histories: the same history gives the
+  same read; shuffled sessions change nothing; no count is below zero; core is
+  never flagged; there is one line per group. The sweep reached every flag
+  (little 318, right 257, more 57, none 820).
+- **E, the must-never-say scan:**
+  - every one of the module's 65 string literals;
+  - over 6,000 said sentences, about half on a kilo account.
+  - None has a health, posture or injury word, a cause, food, "AI", "!",
+    "this week", or a weight.
+
+### 81.2 `tools-check/coach-prog.mjs` F — his rating: ok 16, miss 0, wrong 0
+
+| # | the reading |
+|---|---|
+| R1 | a top set rated too hard at the top: the same again, `hold` (hard) at 185 × 12, 12, 12 |
+| R2 | about right at the top changes nothing: A1's add, 190 × 8 |
+| R3 | way too easy at the top: A1's add, one step, exactly as unrated |
+| R4 | every set at its target (185 × 10, 10, 9) rated way too easy counts as the top: one step, 190 × 8 |
+| R5 | one of them rated about right: the reps rule, as unrated |
+| R6 | rated way too easy with a set typed F: the reps rule |
+| R7 | rated way too easy but a set short (10, 9, 9 against 10, 10, 9): the reps rule |
+| R8 | way too easy on a cut: `hold` (confirm), and the why says it was his rating |
+| R9 | kilos: 85 kg × 10, 10, 9 rated way too easy: one of his 2.5 kg steps, 87.5 × 8, stored pounds |
+| R10 | too hard below the top changes nothing |
+| R11 | on a cut, the session before at the top but rated too hard is no first look: `hold` (confirm), not add |
+| R12 | on a cut, the session before rated way too easy at its target is the first look: add, one step |
+| R13 | the rated session marked: its ratings leave with it; the target from before it |
+| R14 | rated way too easy at a weight he chose over the target (190): the reps rule at 190 |
+| R15 | junk ratings (7, −1, 2.5) are unknown, never 0: A2's reps, exactly |
+| R16 | a string "0" is not a rating |
+
+Beside them:
+
+- over 1,800 swept histories rated at random (42 targets moved by a rating),
+  never more than one step heavier than unrated;
+- never heavier at all after an F or a too-hard set;
+- a rating on an old session moves nothing;
+- **unrated, `prescribe()` is rack-v53's byte for byte on all 57 rows and
+  4,400 swept histories.**
+
+### 81.3 `tools-check/coach-live.mjs` — the fence replaced, and two new sections
+
+- **E, the fence.** It used to say "a number to put on the bar must be a
+  quote". It now says every figure is a logged load or a `coach-prog.js`
+  target, in the account's unit. It is swept over 710 live sessions, 344 in lb
+  and 366 in kg:
+  - nothing heavier after 307 stops;
+  - no second step in a session;
+  - never more than one step over the target (41 steps up swept).
+- **H, the next set, each rule by name:**
+  - **the rules:** target, same, up by reps, up by rating, about right, stop by
+    rating, the step used, stop by F, stop by rep drop, a stop then way too
+    easy, down to a logged load, a load he chose under the target;
+  - **units:** kilos on his grid, a stop in kilos, a 2 kg dumbbell step;
+  - **no number:** an assisted lift, a lift Coach cannot target, targets off,
+    an edit, Basic, the switch off, an unreadable log, a session read as done;
+  - **the set rated:** the rated set across a duplicated block; a warm-up is
+    not a working set;
+  - **the words:** the chip line in lb, kg and bodyweight, the four answers
+    after a tap, and "one more set" never above a stop.
+- **I, two sessions in a day:**
+  - one session; a split pair (16 against a usual 16); a different-shape pair;
+  - a leg evening after a chest morning;
+  - 945 evening reads after five kinds of chest morning (441 answered), never
+    a switch to chest;
+  - `next` never offering what was done that morning;
+  - no next set on a day read as done;
+  - after the second finish: `post`, the evening's finish line, the evening's
+    compare, `done_today`, and the rest read's one date.
+
+### 81.4 `grey-last.mjs` (36) and `effort.mjs` (48), new
+
+**`grey-last.mjs`:**
+
+- A: positions, the repeat past the end, bodyweight's `''`, warm-ups skipped,
+  no last time, no units call.
+- B: `newExercise` in a live session, by every path that adds one.
+- C: `+ Set`, blank or typed; a routine's or builder's targets untouched.
+- D: an edit gets nothing, and "Last ·" and the grey numbers read one
+  session.
+- E: a tick adopts the grey numbers, and a typed box survives.
+- F: in kilos the placeholder is 83.9 and the set holds `'185'`.
+
+**`effort.mjs`:**
+
+- A: tick, rate, Finish: the record carries `rir`, in one whole write.
+- B: open, save, open keeps every rating, moved to another day or not. An old
+  record gains no `rir`. The history index is `w`, `r` and `type` only.
+- C: dup, `+ Set`, a routine, a saved routine and the builder all build fresh
+  sets.
+- D: *Use it for my next set* writes `tw`/`tr` only. The next unticked working
+  set gets it, including a later copy in a duplicated block, or else one new
+  set.
+- E: the chips appear only in the live sheet, over a ticked working set, on
+  the live chip's gate. A tap rates, reads as chosen, and a second tap clears.
+  Nothing pops up.
+
+### 81.5 The shipped batteries, unchanged
+
+`coach-prog` 57/0/0, `coach-overlap` 24/0/0, `coach-ready` 46/0/0,
+`coach-fuel` 16/0/0 and `finish` 12/0/0, in all three zones. No row moved.
+
+### 81.6 The other verifiers, changed on purpose
+
+| Verifier | What changed |
+|---|---|
+| `coach-surface` | G on an account with targets off, so its "no number" checks still mean something; the wiring regex for `liveOpts`; the three v54 classes exempted from the CSS check; **O**, the live sheet's order; **P**, the week's two answers on Train, the neglect line stamped once, and never on You |
+| `coach-voice` | J quotes Micah's "way too easy" as a chip label; **N**, every in-gym sentence in both units; **O**, every volume and balance sentence |
+| `tick-targets` | I: an untick deletes `rir` and nothing else |
+| `touch-target` + snapshot | the three chips: 44px at 390 and 320 wide |
+| `units` | one more display call site in each of `coach-prog.js` (the next set) and `coach-live.js` (the chip line and the answer after a tap); none fills an input |
+| `blocks` | lifts the helpers `newExercise` now calls, with an empty index: the shape its checks were written against |
+| `coach-pure` | A lets `coach.js` import `coach-volume.js`; **N** fences the new module (pure, no clock, its imports) |
+| `coach-rank`, `coach-state` | Train's `pre` and `done_today` lists gain the two week topics |
+| every verifier that stages `coach.js` | stages `coach-volume.js` too, the staging edit the brief allows |
+
+---
+
+## 82. WHAT I CORRECTED, AND WHY
+
+In the order they were found.
+
+1. **A why printed the step** ("5 lb"), a figure that is neither a quote nor
+   a target, and the new fence caught it. The why now names the target it
+   steps from: "One step over the target’s 190 lb, once in a session: your
+   usual jump on this lift."
+2. **The Why? bubble landed below "How was it?".** The reasons belong under
+   what they explain, so the rating rows move back below them when Why? opens.
+3. **"One more set" could sit above "call that the last set".** `anotherRead`
+   now says nothing on a lift whose next set is stopped. With targets off
+   there is no next set, and the rule is rack-v53's.
+4. **The volume topics were first put on You's lists as well.**
+   `coach-state.mjs` caught that You's lists are read on every card paint
+   (`leadQuestion`), and a card paint may not ask a new route. They are on
+   Train's sheet only.
+5. **"This week" on a rolling count.** `coach-units.mjs` caught it in a
+   `because`. Every volume sentence says "in the last 7 days", the defect v43
+   fixed on the greeting.
+6. **The spec's own sentence** for customs had "because" in it, and the
+   balance reason had "Only", which is on the shipped ban list. They became
+   "…aren’t in this split: Coach doesn’t know their movement." and "A split is
+   worth saying when it’s lopsided".
+7. **The live tick got 60% dearer.** `anotherRead` asked for the next set
+   before its own cheap test. The stop check now runs last, and the answer is
+   the same either way (§86).
+8. **The "Longest session ever" milestone** in `coach-live.mjs` I's evening
+   fixture came from its made-up durations, not from anything the rows
+   tested. The fixture no longer has them.
+
+---
+
+## 83. WHERE THE BRIEF WAS WRONG ABOUT THE CODE
+
+1. **§5.2 "`coach.js` hands it to `liveRead` through `liveInput`".**
+   - `coach.js` may not import `coach-prog.js`. `coach-pure.mjs` A lets it
+     reach `coach-prog.js` only through `coach-build.js` and
+     `coach-overlap.js`.
+   - So `coach-overlap.js` gained `nextSetFor(input, exId, sets, repDrop)`,
+     which uses the overlap's own performance log and marks.
+   - `liveInput()` hands in `nextSet: (exId, sets) => …`, a function that runs
+     only when asked. It is `null` with targets off or an unreadable log.
+2. **The next set is not a `liveRead()` answer.**
+   - `liveRead()`'s four answers and its short line are unchanged.
+     `setRead()` (`c.liveSet()`) is a second read, asked when the sheet opens
+     and after every tap.
+   - So the one quiet line under a finished exercise, which is `liveRead()`'s
+     short line, cannot carry a number, by construction.
+   - "Done first" holds: `setRead()` asks `doneRead` before it gives a number.
+3. **§7 "strength 6–15 for the groups carrying the main lifts".**
+   `coach-goal.js` `volumeFloor('strength')` is 6 for every group. It is the
+   stall ladder's floor too, so a second number would let the two disagree.
+   The code wins: 6–15 on every group.
+4. **§7 "stamped in `asked` the way other once-only lines are".**
+   - There were no once-only lines. `asked` held question stamps, and
+     `normSettings()` kept only `QUESTIONS` ids, so a `vol_neglect` stamp would
+     have been dropped on the next write.
+   - `ONCE_LINES = ['vol_neglect']` is kept beside them. It is a child of the
+     already-granted `settings/coach`, so no rules change.
+5. **§4 "an exercise that already carries `tw`/`tr` from a routine or the
+   builder".**
+   - Nothing on a set said where its targets came from.
+   - The grey sets carry `tl: true`. It is live only, and `collectFrom` strips
+     it with `tw` and `tr`.
+   - A set with `tw`/`tr` and no `tl` is a routine's or the builder's, and
+     `greyFor` leaves that exercise alone.
+   - *Use it for my next set* removes `tl`, because the number is Coach's now.
+6. **§5.4.1 "his question and Coach's answer, as today".** With no habit
+   answer, the sheet used to say "Nothing Coach can add…". Above a next set,
+   that is false. So when there is a next set and no habit answer, the next
+   set is the answer. With targets off it is exactly as before
+   (`coach-surface.mjs` O).
+7. **§6 "make each one right for two".** Each place that picks today's
+   session was already right for two (the list is in §80). Nothing there
+   changed.
+8. Confirmed true, for the next brief:
+   - `dupSet`, `+ Set`, `routines.js` and the builder's ghost sets all build
+     fresh;
+   - `collectFrom` spreads `rir` through;
+   - `persistSession` stores the whole session;
+   - the history index is folded from `{ w, r, type }`, and `rir` stays out of
+     it, since its one reader, `prescribe()`, reads the record.
+
+---
+
+## 84. EVERY ASSUMPTION I MADE
+
+**The grey numbers**
+
+- `+ Set`'s position counts the exercise's non-warm-up sets. A warm-up typed
+  first does not move last time along.
+- `greyFor` gives nothing if any set of the exercise has `tw` or `tr` without
+  `tl`.
+- A set with no reps is not one of last time's sets.
+
+**The rating**
+
+- `rateSet` stores an integer 0–5, and anything else deletes the key. The
+  sheet writes only 4, 2 and 0.
+- `rateLive` refuses a set that is not ticked, and never touches an edit.
+- *Use it for my next set* targets the next unticked set after the rated one
+  that is not a warm-up or a drop set. That includes a later copy of the same
+  exercise in a duplicated block. With none left, it adds one set.
+- After *Use it*, the sheet closes and the screen re-renders, the way it does
+  after *Add it*.
+
+**The next set**
+
+- The step is "used" once a working set today sits heavier than the target's
+  load.
+- `LOADED = ['add', 'reps', 'hold', 'reduce', 'reenter']`: only those modes
+  name a load for the next set. `UP_REPS = 2`, §3.10's "+2".
+- Down is one step to a load he has logged for this lift, or else the same
+  load.
+- A load he chose under the target is "the same again" at that load, never
+  a step.
+
+**`prescribe()` and the rating**
+
+- "At the target" is judged against a replay: the target Coach would have set
+  before that session, with no rating read and no group clock (`plain: true`,
+  `groupDaysSince: null`). Its load must match the session's top load within
+  the grid's tolerance. On a lift back from time off the replay can differ
+  from the target he saw, and a different load is no match, so the rule says
+  nothing, the safe way round.
+- A marked session's ratings leave with it (R13).
+
+**Today is a day**
+
+- "Earlier today" is a session on the live session's own date key that
+  started before it. `coach.js` works out the key; `coach-live.js` constructs
+  no Date.
+- "The same shape": the earlier visit's groups and this session's together
+  fall inside one of his recurring shapes. Only the earlier sessions inside
+  that shape count toward `done`.
+
+**The whole week**
+
+- Week 0 is the last 7 days, today in it: the shipped `setsThisWeek` window.
+  Week k is the seven days before that.
+- The log's age is the days since his oldest session. 21 are needed.
+- His normal is the median of the 8 weeks before this one. Weeks with no
+  session are left out, and 4 are needed. **Light weeks are not left out**:
+  the plateau read's "light week" is account-wide and about sets, and taking
+  it out here would read a deload as the normal's absence.
+- **Fatigue markers:** two of §6.4's four.
+  - The F share: F sets in the last 7 days at least 3, and at least twice his
+    8-week share of the group's sets.
+  - The rep drop: two or more of the group's lifts with a quarter's drop in
+    the last 7 days.
+  - Not used: the performance run, which needs `coach-overlap.js`'s lift
+    readings (`coach-volume.js` does not import it), and the load spike,
+    which is the 1.3× test itself. The rep drop is counted, not compared with
+    his 8-week rate of drops.
+- A cut's floor uses the 8 weeks before the aim was set, when the aim is a week
+  old or more and those weeks hold 4 with sessions. Otherwise it uses his
+  current normal.
+- The focus raise rounds to whole sets (10–20 → 13–26).
+- "Zero in 8 weeks" needs the log to be 8 weeks old.
+- **Balance counts a set once, whole, for its movement.** Fractional counting
+  shares a set between muscle groups, and a set has one movement.
+- Push is presses, flyes and extensions on chest, shoulders and arms. Pull is
+  rows and pulldowns.
+- `BALANCE_MIN = 8` is my addition: a split with fewer than 8 sets in it says
+  nothing. 4 pressing sets and no pulling is a coincidence, not a split.
+- "Customs over a quarter of a group" is over primary sets. It skips every
+  split that reads that group.
+- His focus ranks the splits that contain his group first.
+
+**The builder**
+
+- His focus group's exercises move to the top only when the proposal has
+  some of them and something else.
+- A session with lifting blocks keeps his order whole.
+- Nothing is added or dropped, and no set changes.
+- When anything moved, the reason says "Your focus, chest, comes first."
+- (`coach-volume.mjs` C, Bu1–Bu4.)
+
+---
+
+## 85. WHAT IS NOT DONE, AND WHAT NOBODY HAS SEEN
+
+1. **Nothing has been seen on a screen** (§79). Look at these first:
+   - the three chips at 320 px wide;
+   - the volume answer, seven bubbles long;
+   - *Use it for my next set* changing a grey number on the row.
+2. **Decision 7**, singles and lone heavy top sets at RIR ≥ 2, is logged in
+   BACKLOG as the next decision. Not built.
+3. **Rest-tolerance learning** (§13 S5) is deferred, per the brief.
+4. **Spec §6.3's frequency line** for the strength aim ("bench once a week;
+   twice is the more common pattern") is not built. The brief's §7 list left
+   it out.
+5. **§6.4's performance run and load spike** are not read (§84).
+6. **Ratings exist only live.** An edit shows no chips, by the brief. A set
+   can be rated only while the session is open.
+7. **The You tab's weekly review** still compares total volume week on week as
+   a percentage (`insights.js`), as BACKLOG's v53 section says. Not touched.
+8. **Native was not read.** `NEXT-NATIVE-V54.md` is the delta, with the
+   PROPOSED `rir` rule.
+
+---
+
+## 86. THE PAINT, AND THE TICK
+
+`AB=1 node report/coach-paint/bench.mjs 71cb16e ''` runs rack-v53 against the
+working tree, interleaved, 1,500 paints each, on the 200-session year. The
+second argument, `''`, is the working tree.
+
+```
+                   rack-v53     rack-v54
+pre        Pro     3.90 ms      3.91 ms    +0.00
+pre        Basic  10.39 ms     10.31 ms    -0.08
+post       Pro     5.36 ms      5.36 ms    +0.00
+post       Basic  11.85 ms     11.88 ms    +0.03
+done_today Pro     5.31 ms      5.30 ms    -0.00
+done_today Basic  11.81 ms     11.96 ms    +0.15
+live tick  Pro     1.04 ms      1.60 ms    +0.56
+```
+
+- **The card paint:** two earlier runs gave Basic +0.17 / +0.07 / +0.01 and
+  +0.28 / +0.16 / +0.14 (pre / post / done_today), and Pro within ±0.03. The
+  card reads nothing v54 added: the week's answers are sheet selectors, and
+  the next set is asked by the live sheet.
+- **The live tick** is new to the bench. It is `noteLiveTick()`'s `c.live()`
+  on a session in progress.
+  - At first it cost +0.65 ms on every tick of a lift with a target, because
+    the stop check built the overlap input before the cheap usual-count test.
+    Moved last (§82.7), it costs nothing extra on a tick that will not say
+    "one more set": 0.88 ms with targets on, 0.89 ms with them off.
+  - The bench's tick does say "one more set", so it pays +0.56 ms, for 1.6 ms
+    on a Mac. A phone is slower by some factor nobody has measured here.
+
+---
+
+## 87. MICAH'S DECISIONS — this brief's calls, recorded as decided
+
+| # | The call | What landed |
+|---|---|---|
+| 1 | The effort tap lives in the live Coach sheet; nothing on the set row, nothing pops up | **BUILT**: `effort.mjs` E, "nothing pops up" |
+| 2 | Three chips under "Set 3 · 135 lb × 8. How was it?" | **BUILT**: `rateAsk()`, `EFFORT` |
+| 3 | It rates the last ticked working set of the exercise in hand; none, no chips | **BUILT**: `ratedOf()`, across duplicated blocks |
+| 4 | `rir` 4 / 2 / 0; readers take 0–5; absent is unknown; the same chip clears; an untick deletes | **BUILT**: `rateSet`, `rirOf`, `tickSet`; R15/R16, `tick-targets` I |
+| 5 | A rating changes the next set; *Use it for my next set* writes `tw`/`tr` only, on a tap | **BUILT**: `nextSet`, `useNext`; `effort.mjs` D |
+| 6 | At the next session, one step at most, never after an F, never from a marked session | **BUILT**: `decide()`'s two rules; R1–R16 and the sweep |
+| 7 | Singles and lone heavy top sets stay untargeted | **KEPT**: logged in BACKLOG as the next decision |
+| 8 | Grey last-time numbers: live only, the "Last ·" session, by position, the final set repeated | **BUILT**: Phase A, `grey-last.mjs` |
+| 9 | Coach's targets are not the grey numbers | **KEPT**: the grey numbers are last time's; Coach's reach a row only through *Use it* |
+| 10 | Today is a day, not a session | **BUILT**: `dayOf()`; `coach-live.mjs` I |
+| 11 | Volume and balance are sheet answers only | **BUILT**: selectors, sheet surface, Train's sheet (§83) |
+| 12 | No health reasons, ever | **BUILT**: counts only; scanned in `coach-volume.mjs` E and `coach-voice.mjs` O |
+
+---
+
+## 88. IF THE NEXT RUN READS ONE THING
+
+**A rating belongs to the set that was done.**
+
+- `rir` is the second field stored on a record from outside the set's own
+  boxes, after v53's `feel`, and the first stored inside a set.
+- Every place that builds a set from another set must build it fresh. Those
+  places are `dupSet`, `+ Set`, a routine started or saved, and the builder's
+  ghosts. `effort.mjs` C lists them, and a new copy site belongs in that list
+  the day it is written.
+- Every place that rebuilds a record must carry `rir` through. Today that is
+  `editWorkout` into the edit, then `collectFrom` through `saveEdit`.
+  `effort.mjs` B proves open → save → open.
+- Miss either and the failure is silent: a copied rating tells `prescribe()` a
+  set was easy that he never rated, and a dropped one un-rates a session he
+  did.

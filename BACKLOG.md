@@ -7,7 +7,7 @@ Two things this file is not. It is not a design document — where a shape was
 already decided, the decision stays where it was written and this only points at
 it. And it is not a port brief: `NEXT-NATIVE.md`, `NEXT-NATIVE-UNITS.md`,
 `NEXT-NATIVE-V40.md`, `NEXT-NATIVE-V41.md`, `NEXT-NATIVE-V42.md`,
-`NEXT-NATIVE-V43.md`, `NEXT-NATIVE-V45.md`, `NEXT-NATIVE-V46.md`, `NEXT-NATIVE-V48.md`, `NEXT-NATIVE-V49.md`, `NEXT-NATIVE-V52.md` and `NEXT-NATIVE-V53.md` are the instructions for copying
+`NEXT-NATIVE-V43.md`, `NEXT-NATIVE-V45.md`, `NEXT-NATIVE-V46.md`, `NEXT-NATIVE-V48.md`, `NEXT-NATIVE-V49.md`, `NEXT-NATIVE-V52.md`, `NEXT-NATIVE-V53.md` and `NEXT-NATIVE-V54.md` are the instructions for copying
 work into `~/dev/rack-mobile`, and they stay. What is below is the list of
 things nobody has done yet.
 
@@ -134,9 +134,11 @@ twice. `AGENTS.md` (`steps/{date}`) says the same thing.
 
 `~/dev/rack-mobile`. Four briefs, each still partly open, plus Coach's:
 
-- **`NEXT-NATIVE-V48.md`, `NEXT-NATIVE-V49.md` and `NEXT-NATIVE-V52.md`** —
-  Coach trainer, stages one to four, each a delta on the one before. V52's §8
-  has the PROPOSED `marks` rule native's `settings/coach` validation needs.
+- **`NEXT-NATIVE-V48.md`, `NEXT-NATIVE-V49.md`, `NEXT-NATIVE-V52.md`,
+  `NEXT-NATIVE-V53.md` and `NEXT-NATIVE-V54.md`** — Coach trainer, stages one
+  to five and the finish, each a delta on the one before. V52's §8 has the
+  PROPOSED `marks` rule native's `settings/coach` validation needs, V53's §8
+  the `feel` rule, and V54's §10 the `rir` rule for a set.
 - **`NEXT-NATIVE-V45.md`** — the workout builder, all of it open. At `13f6b80`
   native has Coach (`src/pure/coach.js`, `src/ui/coach/`) and no
   `src/pure/coach-build.js`. Read it with `NEXT-NATIVE-V42.md` and
@@ -206,6 +208,82 @@ Carried from `NEXT-NATIVE.md` §7 so it survives that file. Do not "fix" these:
 
 ---
 
+## What v54 left open in its own work
+
+v54 is Coach trainer, **stage five, "in the gym"**:
+
+- grey last-time numbers on an exercise added by hand;
+- the next set in the live sheet, and the effort tap: `rir` on a set, which
+  changes the next set and, next session, the target;
+- today is a day: a second session sees the first;
+- the whole week: `coach-volume.js`'s *How's my weekly volume?* and *Is my
+  training balanced?*, and the focus group first in the builder.
+
+It is written up in `COACH-REPORT.md` §79–§88.
+
+**The next decision** (SHIP-V54-PROMPT.md decision 7):
+
+- **Singles and lone heavy top sets at RIR ≥ 2.** Spec §6.4 says the effort
+  tap makes them targetable when rated with two or more reps left. Micah's
+  decision 6 of 23 Sep keeps them untargeted, and that stands until he
+  decides. Not built.
+  - Building it touches `coach-prog.js` `decide()`'s single and top-set defer.
+  - A single rated "About right" is `rir` 2 and would qualify. A single rated
+    "Way too easy" is 4.
+  - The three chips cannot say 1, 3 or 5.
+
+**Deferred by the brief** (SHIP-V54-PROMPT.md §7, §12):
+
+- **Rest-tolerance learning** (spec §13 S5): learning from his own log how
+  long he rests between sets, and what it does to the next one.
+- The paywall and the tier scrap; the type box; the Your goal screen's layout;
+  the drop-set sub-list; save-as-meal; water in readiness; the You tab's GETs
+  per render; anything in native.
+
+**Found and deliberately not fixed:**
+
+- **Spec §6.3's frequency line** for the strength aim ("bench once a week;
+  twice is the more common pattern for strength") is not built. The brief's
+  §7 list left it out.
+- **"More than usual" reads two of §6.4's four fatigue markers:** the F share
+  and the rep drop.
+  - The performance run (two lifts declining) needs `coach-overlap.js`'s lift
+    readings, which `coach-volume.js` does not import.
+  - The load spike is the 1.3× test itself.
+  - The rep drop is counted on two of the group's lifts, not compared with his
+    own 8-week rate of drops.
+- **The week's two answers are on Train's sheet only.** You's topic lists are
+  read on every card paint (`leadQuestion`), and a paint may not ask a new
+  route. The per-open cache that v49 and v52 already ask for would let them
+  join You.
+- **The live tick costs +0.56 ms when it says "one more set"**, building the
+  overlap input for the stop check (`COACH-REPORT.md` §86). The same per-open
+  cache would take it back.
+- **A light week is part of his volume normal.** It is excluded from the
+  plateau read, not from this.
+- **Balance counts a set once, whole, for its movement.** The spec says
+  "fractional hard sets", but fractional counting shares a set between muscle
+  groups, and a set has one movement.
+- **The spec's sentence for customs** says "because Coach doesn't know their
+  movement". Web says "…aren’t in this split: Coach doesn’t know their
+  movement.", since "because" is a causal word. `COACH-TRAINER-SPEC.md` §6.5
+  still has the old wording.
+
+**Left open in v54's own work:**
+
+- **Nothing in this ship has been seen on a screen.** Driven through DOM
+  shims only, with no box model and no `rack.css`:
+  - the grey numbers, in kilos too;
+  - the three chips (44px reasoned in `touch-target.mjs`, never measured);
+  - *Use it for my next set*;
+  - the volume answer, seven bubbles long.
+- **A set can be rated only live.** An edit shows no chips, by the brief.
+- **Two commits landed after the version bump:** the live tick's speed fix
+  and two verifier sections. Both are part of rack-v54, which has not
+  shipped.
+- **Native was not read.** `NEXT-NATIVE-V54.md` says "the native run maps
+  this" wherever a native path would have been a guess.
+
 ## What v53 left open in its own work
 
 v53 is **the finish**: after a workout the first thing is warm and never a
@@ -220,8 +298,10 @@ Patterns. Five small fixes came first. It is written up in `COACH-REPORT.md`
 **Found and deliberately not fixed** (SHIP-V53-PROMPT.md §7):
 
 - **The Your goal screen's layout.** Micah: "looks messy — a later update".
-- **Stage five and the per-set effort tap** are next: mid-session targets,
-  volume bands, and an effort rating per set.
+- ~~**Stage five and the per-set effort tap** are next: mid-session targets,
+  volume bands, and an effort rating per set.~~ **Built in v54** (see *What
+  v54 left open* above). v53's session rating still moves nothing; v54's
+  per-set `rir` is what moves a target.
 - **A rating moves no target, window or baseline.** That is the effort tap's
   job. Tonight it is stated beside the numbers and read by the finish line and
   three Patterns, and nothing else.
@@ -290,10 +370,11 @@ with lazy food reads for Pro. It is written up in `COACH-REPORT.md` §59–§68.
   and it would move shipped numbers.
 - **The greeting can echo the card's line.**
 - **Goal pace sits in "Stalls and records".**
-- **A second session on the same day is invisible to the live-session facts.**
-- **Stage five:** mid-session targets, `coach-volume.js` (weekly volume bands
+- ~~**A second session on the same day is invisible to the live-session
+  facts.**~~ **Closed in v54**: `coach-live.js` `dayOf()`. Today is a day.
+- ~~**Stage five:** mid-session targets, `coach-volume.js` (weekly volume bands
   and balance), grey last-time targets on a hand-added exercise, and the focus
-  group's builder effects.
+  group's builder effects.~~ **Built in v54.**
 - **Micah's drop-set request** (a sub-list of the sets that make up a drop set)
   is a Train UI change, not a Coach one.
 - **Water in readiness**: decided "not yet", to be revisited after this stage.
@@ -361,11 +442,13 @@ goal step in onboarding, one target for Basic). Written up in `COACH-REPORT.md`
   fueling brain, readiness, the rest-day answer to *What should I train
   today?*, and the bad-day marks. *How did today compare?* says what the
   numbers were and nothing about why.
-- **Stage five**: mid-session targets, weekly volume bands and neglect, and the
+- ~~**Stage five**: mid-session targets, weekly volume bands and neglect, and the
   focus group's volume and builder effects (tonight it is read by goal pace
-  only).
-- **A second session on the same day is invisible to the live-session facts**
-  and **`record.groups` counts warm-ups** — both from v42, both untouched.
+  only).~~ **Built in v54.**
+- ~~**A second session on the same day is invisible to the live-session facts**
+  and **`record.groups` counts warm-ups** — both from v42, both untouched.~~
+  **Both closed**: `record.groups` counts working sets since `884ddd9` (23 Sep),
+  and a second session sees the first since v54.
 - **Anything in native** — see `NEXT-NATIVE-V49.md`.
 
 **Left open in v49's own work:**
@@ -427,15 +510,18 @@ written up in `COACH-REPORT.md` §40–§48.
 - ~~**`lift.stalled` and the new per-lift status disagree about "stalled".**~~
   **Closed in v49**: `stalled_lift` now also needs stage two's reading of the
   same lift, and answers with it (`COACH-REPORT.md` §50).
-- **`coach-live.js` still never names a weight**, mid-session. Stage five
-  replaces its fence ("a number to put on the bar must be a quote") with one
-  that allows a `coach-prog.js` target — not a deletion of it.
-- **Grey last-time numbers on a hand-added exercise** (Micah's 23 Sep request):
-  an exercise added from the picker mid-session opens with blank boxes. Stage
-  five, through `coach-prog.js`'s `exposuresFor` and `prescribe`.
-- **A second session on the same day is invisible to the live-session facts**
+- ~~**`coach-live.js` still never names a weight**, mid-session.~~ **Closed in
+  v54**: the fence now allows a quote or a `coach-prog.js` target, nothing
+  heavier after a stop and one step a session (`coach-live.mjs` E). It was
+  replaced, not deleted.
+- ~~**Grey last-time numbers on a hand-added exercise** (Micah's 23 Sep request):
+  an exercise added from the picker mid-session opens with blank boxes.~~
+  **Closed in v54.** The numbers are last time's, from the session the "Last ·"
+  line quotes, and not `prescribe()`'s (SHIP-V54-PROMPT decision 9). Coach's
+  number reaches a row only through *Use it for my next set*.
+- ~~**A second session on the same day is invisible to the live-session facts**
   and **`record.groups` counts warm-ups** — both already listed under v42 below,
-  both untouched by v48.
+  both untouched by v48.~~ **Both closed**: `884ddd9` and v54.
 - ~~**Basic accounts see no target at all.**~~ **Closed in v49**: the sheet
   shows Basic one real target above the Pro panel.
 
@@ -706,17 +792,14 @@ wanders into a neighbouring bug has scope-crept — and all of it is here.
   an entry with `sessions: 0` and every best at 0.** Coach skips those rather
   than reporting a lift whose record is zero pounds. Do not change
   `analytics.js` for this — several screens depend on the current shape.
-- **`record.groups` counts warm-ups.** `workout.js` builds it from
-  `collectFrom` output filtered on `s.done && s.r !== ''`, not on `isWorking()`,
-  so a session of nothing but warm-up bench claims chest. Coach never reads it;
-  every group it names is derived fresh from the sets. The calendar plate colours
-  still read it, which is where a fix would have to start.
-- **A second session on the same day is invisible to the live-session facts.**
-  `activeSession` in localStorage holds one, and finishing one and starting
-  another inside a day is not something Coach can see the shape of. Ship three
-  part one (v46) did not solve it, by instruction: `coach-live.js` reads the
-  active session and nothing else, so a morning session's sets count toward
-  neither "your usual" for today nor "done". See v46 below.
+- ~~**`record.groups` counts warm-ups.**~~ **Fixed in `884ddd9` (23 Sep 2026)**:
+  `workout.js` `recordGroups()` counts working sets (`isWorking()`), through
+  `runFinish` and `saveEdit`, fenced by `tools-check/record-groups.mjs`.
+- ~~**A second session on the same day is invisible to the live-session
+  facts.**~~ **Closed in v54.** `coach-live.js` `dayOf()` reads the sessions he
+  finished earlier that day from the window `coach.js` already hands in. What
+  they trained counts as trained today for `switch` and `next`, and the same
+  shape across two visits counts together for `done` (`coach-live.mjs` I).
 - **The You tab issues around seven live GETs per render.** Coach adds none per
   paint — `coach-data.js` gathers once per app open — but the underlying number
   is unchanged and is the thing worth attacking before anything else is added to
