@@ -5221,7 +5221,10 @@ function ask(d, u, id) {
                ...(v.id === 'session_compare' ? markView(d) : null),
                // v54: a once-only line in the answer (the neglected group,
                // once in four weeks): the sheet stamps `asked` as it draws it.
-               ...(v.id === 'week_volume' && volLines(d).once ? { once: volLines(d).once } : null) };
+               // v56: and the balance answer's, where a custom exercise's
+               // movement is set.
+               ...(v.id === 'week_volume' && volLines(d).once ? { once: volLines(d).once } : null),
+               ...(v.id === 'balance_read' && balLines(d).once ? { once: balLines(d).once } : null) };
     }
   }
   return {
@@ -5329,8 +5332,10 @@ export const COACH_SETTINGS_VERSION = 1;
    markAsked). Not questions: nothing is answered, and nothing here is in
    Settings. `vol_neglect` is the neglected group under "How's my weekly
    volume?", once in 28 days (coach-volume.js). A child of the already-granted
-   settings/coach, so no rules change. */
-export const ONCE_LINES = Object.freeze(['vol_neglect']);
+   settings/coach, so no rules change. v56: `bal_custom`, the line under "Is my
+   training balanced?" that says a custom exercise's movement can be set, once
+   in 28 days, the same way. */
+export const ONCE_LINES = Object.freeze(['vol_neglect', 'bal_custom']);
 
 export function normSettings(v) {
   const o = v && typeof v === 'object' && !Array.isArray(v) ? v : {};

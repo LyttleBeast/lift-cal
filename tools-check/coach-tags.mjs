@@ -252,6 +252,32 @@ section('G. the file stays the shape the next pass expects');
   check('an unknown pattern gets an empty list, not a throw', T.idsWithPattern('nonsense').length === 0);
 }
 
+/* ================= H. HIS OWN MOVEMENT (v56) =================
+   The tag read gained an optional second argument, the exercise's library
+   row, so a custom exercise can carry the movement he set on it (SHIP-V56-
+   PROMPT §3). Changed on purpose, and only here: the table above and every
+   check against it is untouched. tools-check/custom-movement.mjs drives the
+   editor, the write and Coach; this holds the accessor's contract. */
+section('H. v56 — the tag read takes a custom exercise’s own movement, and a built-in’s tags stay pinned');
+{
+  const custom = EX.makeCustomExercise('Micah’s Kickback', 'arms', 'cable');
+  const row = { group: 'arms', pattern: 'extension', angle: 'overhead' };
+  check('called with the id alone, it is what it always was: null for a custom exercise',
+        T.tagsFor(custom.id) === null && T.patternOf(custom.id) === null);
+  check('handed the row, it reads the movement he set — a pattern and an angle from the closed lists, no load or side',
+        JSON.stringify(T.tagsFor(custom.id, row)) === JSON.stringify({ id: custom.id, pattern: 'extension', angle: 'overhead', load: null, side: null }) &&
+        T.patternOf(custom.id, row) === 'extension' && Object.isFrozen(T.tagsFor(custom.id, row)));
+  check('a pattern the agreement table does not allow on the row’s group is no movement at all',
+        T.tagsFor(custom.id, { group: 'arms', pattern: 'squat' }) === null && T.ownMovement({ group: 'core', pattern: 'press' }) === null);
+  check('every built-in is pinned: a row handed in beside it changes nothing, for all ' + T.TAG_IDS.length,
+        T.TAG_IDS.every(id => T.tagsFor(id, { group: 'core', pattern: 'crunch', angle: 'decline' }) === T.TAGS[id]));
+  check('the angles offered are read off the table, never a list of their own',
+        T.PATTERNS.every(p => JSON.stringify(T.PATTERN_ANGLES[p]) ===
+          JSON.stringify(T.ANGLES.filter(a => T.TAG_IDS.some(id => T.TAGS[id].pattern === p && T.TAGS[id].angle === a)))));
+  check('and the patterns on a group are the agreement table’s', ['chest', 'back', 'legs', 'shoulders', 'arms', 'core']
+        .every(g => T.patternsOn(g).every(p => T.PATTERN_GROUPS[p].includes(g)) && T.patternsOn(g).length === T.PATTERNS.filter(p => T.PATTERN_GROUPS[p].includes(g)).length));
+}
+
 /* ---------- report ---------- */
 console.log('\nthe exercise tag sidecar agrees with the library\n');
 console.log(results.join('\n'));

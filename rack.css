@@ -615,6 +615,21 @@ body.peeking .view.active { padding-bottom: 65px; }
   transition: all var(--fast) var(--ease);
 }
 .chip.on { background: var(--chalk); color: var(--rack); border-color: var(--chalk); }
+/* v56: a custom exercise's Movement and Angle (picker.js movementRows). Not
+   the scrolling .filter-row above: every choice is a 44px chip that wraps
+   whole, so the whole list is in view at 320px, set in the type Your goal's
+   chips use — tools-check/touch-target.mjs G measures each label against its
+   chip in Archivo. */
+.move-opts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.move-opt {
+  min-height: 44px; padding: 8px 14px;
+  border: 1px solid var(--collar); border-radius: var(--r-sm);
+  background: var(--rack); color: var(--steel);
+  font-size: 12px; line-height: 1.25; white-space: nowrap;
+  font-variation-settings: 'wdth' 92, 'wght' 600;
+  transition: border-color var(--fast) var(--ease), background var(--fast) var(--ease);
+}
+.move-opt.on { border-color: var(--p-yellow); background: var(--collar); color: var(--chalk); }
 
 .ex-item {
   display: flex; align-items: center; gap: 10px;

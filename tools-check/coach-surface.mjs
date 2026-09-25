@@ -1453,7 +1453,9 @@ export async function write() {}
     .replace("from './usage.js'", "from './usage-stub.mjs'")
     .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href))
     .replace("from './exercises.js'", 'from ' + real('exercises.js'))
-    .replace("from './ui.js'", 'from ' + real('ui.js')));
+    .replace("from './ui.js'", 'from ' + real('ui.js'))
+    // v56: picker.js takes the movement vocabulary from coach-tags.js (pure, imports nothing).
+    .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js')));
   const P = await import(pathToFileURL(join(dir, 'picker.mjs')).href);
   const { EXERCISES } = await import(real('exercises.js').slice(1, -1));
   const byName = Object.fromEntries(EXERCISES.map(x => [x.name, x]));

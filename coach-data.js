@@ -440,13 +440,21 @@ function lastWeighIn() {
    the first paint or two. Coach reading a library that is missing somebody's
    custom exercises for half a second costs a session's group falling back to
    what the record itself stored, which is what coach.js does with an
-   unresolved id anyway. */
+   unresolved id anyway.
+
+   v56: and the movement he set on a custom exercise, `pattern` and `angle`,
+   carried as stored. coach-tags.js ownMovement() is what reads them, against
+   the row's group, and anything it does not recognise is no movement at all —
+   so nothing here judges them, and a row without them keeps the shipped
+   three fields. */
 function libIndex() {
   const list = safe(() => allExercises(), null) || EXERCISES;
   const out = {};
   (list.length ? list : EXERCISES).forEach(x => {
     if (!x || !x.id) return;
-    out[x.id] = { name: x.name, group: x.group, equipment: x.equipment };
+    out[x.id] = { name: x.name, group: x.group, equipment: x.equipment,
+                  ...(typeof x.pattern === 'string' ? { pattern: x.pattern } : null),
+                  ...(typeof x.angle === 'string' ? { angle: x.angle } : null) };
   });
   return out;
 }

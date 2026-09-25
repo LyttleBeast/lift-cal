@@ -34,6 +34,16 @@
 // in history, in every count Coach makes. Nothing in Rack may exclude somebody's
 // own exercise from anything.
 //
+// v56: UNLESS HE SAYS WHAT IT IS. The custom exercise editor (picker.js) has
+// an optional Movement: a pattern from PATTERNS that PATTERN_GROUPS allows on
+// the exercise's own primary group, and an angle where that pattern has one,
+// stored on the exercise itself (exercises/custom[i].pattern and .angle).
+// ownMovement() is the one reader of the two, and it fails safe: anything off
+// the closed vocabularies, or a pattern the table does not allow on the group,
+// reads as no movement at all — today's meaning, with nothing migrated. The
+// table below is untouched: a built-in's tags are pinned, and no row of his
+// can change one.
+//
 // Keyed by the same id exercises.js mints, so the sidecar and the library
 // cannot drift: tools-check/coach-tags.mjs fails unless the two id sets are
 // exactly equal.
@@ -347,18 +357,62 @@ export const TAGS = Object.freeze(Object.fromEntries(
 
 export const TAG_IDS = Object.freeze(RAW.map(r => r[0]));
 
+/* v56: HIS OWN WORD FOR AN EXERCISE HE MADE.
+
+   The angles each pattern is tagged with in the table above — the patterns
+   an angle is offered on, and the angles offered: press flat, incline,
+   decline or overhead; a fly flat, incline or decline; and the three the
+   table gives a curl, an extension and a crunch. Read off the rows, so it
+   cannot say what the table does not. */
+export const PATTERN_ANGLES = Object.freeze(Object.fromEntries(PATTERNS.map(p =>
+  [p, Object.freeze(ANGLES.filter(a => RAW.some(r => r[1] === p && r[2] === a)))])));
+
+// The words the editor shows for each, plain and short.
+export const PATTERN_LABELS = Object.freeze({
+  press: 'Press', row: 'Row', pulldown: 'Pulldown or pull-up', fly: 'Fly', raise: 'Raise', curl: 'Curl',
+  extension: 'Extension', hinge: 'Hinge', squat: 'Squat', lunge: 'Lunge', carry: 'Carry',
+  bridge: 'Bridge or thrust', crunch: 'Crunch or plank', rotation: 'Rotation', cardio: 'Cardio'
+});
+export const ANGLE_LABELS = Object.freeze({ flat: 'Flat', incline: 'Incline', decline: 'Decline', overhead: 'Overhead' });
+
+// The patterns the agreement table allows on a group, in vocabulary order.
+export function patternsOn(group) {
+  return PATTERNS.filter(p => PATTERN_GROUPS[p].includes(group));
+}
+
+/* A movement off an exercise's library row, { group, pattern, angle }: the
+   pattern only when it is one of PATTERNS the table allows on that group, the
+   angle only when that pattern is tagged with it, and null with no pattern.
+   The one reader of the two stored keys — the editor writes only what this
+   keeps, and Coach reads only what this keeps. */
+export function ownMovement(row) {
+  const r = row && typeof row === 'object' ? row : {};
+  const pattern = PATTERNS.includes(r.pattern) && PATTERN_GROUPS[r.pattern].includes(r.group) ? r.pattern : null;
+  if (!pattern) return null;
+  return { pattern, angle: PATTERN_ANGLES[pattern].includes(r.angle) ? r.angle : null };
+}
+
 /* The one accessor. A custom exercise, a hidden one, an id from a build older
    than this file — all of them come back with a null pattern and no angle, and
    every caller has to cope with that rather than assume a tag exists. Group is
    NOT supplied here: it belongs to the library (and to the account's own
    overrides of it), and this file having an opinion about it is how the two
-   would drift. */
-export function tagsFor(exId) {
-  return TAGS[exId] || null;
+   would drift.
+
+   v56: handed the exercise's library row as well, an id the table does not
+   have reads the movement he set on it, through ownMovement() — a pattern and
+   an angle, and no load or side, which he was never asked. An id the table
+   has reads the table, whatever the row says. Called with the id alone, it is
+   what it always was: the builder, the picker's swaps and the targets call it
+   that way, and none of them reads his movement tonight. */
+export function tagsFor(exId, row) {
+  if (TAGS[exId]) return TAGS[exId];
+  const own = row === undefined ? null : ownMovement(row);
+  return own ? Object.freeze({ id: exId, pattern: own.pattern, angle: own.angle, load: null, side: null }) : null;
 }
 
-export function patternOf(exId) {
-  const t = TAGS[exId];
+export function patternOf(exId, row) {
+  const t = tagsFor(exId, row);
   return t ? t.pattern : null;
 }
 

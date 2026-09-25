@@ -78,6 +78,8 @@ writeFileSync(
     .replace("from './exercises.js'", 'from ' + real('exercises.js'))
     .replace("from './ui.js'", 'from ' + real('ui.js'))
     .replace("from './units.js'", 'from ' + real('units.js'))
+    // v56: picker.js takes the movement vocabulary from coach-tags.js (pure, imports nothing).
+    .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
 );
 const P = await import(pathToFileURL(join(dir, 'picker.mjs')).href);
 const X = await import(pathToFileURL(join(HERE, '..', 'exercises.js')).href);

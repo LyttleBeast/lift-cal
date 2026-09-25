@@ -35,6 +35,7 @@
 //   F. (v55) measures every answer's label on the Your goal screen, in
 //      Archivo's own advance widths, against the chip the same cascade gives
 //      it at 320 and 390 wide: each fits on one line, so nothing wraps or clips.
+//   G. (v56) the same for a custom exercise's Movement and Angle chips.
 //
 // Two things are restated because node cannot read them off a screen, and
 // both are labelled where they are used: Archivo's vertical metrics (read from
@@ -46,7 +47,7 @@
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const HERE = fileURLToPath(new URL('.', import.meta.url));
 const SRC  = p => join(HERE, '..', p);
@@ -377,7 +378,13 @@ const BUTTONS = [
      onboarding's full-width choice rows held to 44px by .ask-opt (food.js
      openWhichOne). Never measured in Chrome at v46; widths join the snapshot. */
   ['Fuel · which one?', 'An option / None of these', ['food.js', /el\('button', 'ob-choice ask-opt'\)/],
-   'button.ob-choice.ask-opt < div.ob-choices.ask-opts < div < div.sheet', null]
+   'button.ob-choice.ask-opt < div.ob-choices.ask-opts < div < div.sheet', null],
+  /* v56, on purpose: a custom exercise's Movement and Angle (picker.js
+     movementRows) — a .move-opt, held to 44px by its own min-height, wrapping
+     whole in a .move-opts. Never measured in Chrome at v46; its widths join the
+     snapshot as they are tonight, and G measures every label against its chip. */
+  ['Exercise editor', 'Movement / Angle', ['picker.js', /el\('button', 'move-opt' \+ \(on \? ' on' : ''\), label\)/],
+   'button.move-opt < div.move-opts < div < div.sheet', null]
 ];
 
 /* The width snapshot, v46 (12b3a9d), produced by this file's own resolver
@@ -412,8 +419,8 @@ for (const [screen, name, [file, re]] of BUTTONS) check(`${screen} · ${name}: $
 
 section('B. the model, minimum taken out, reproduces the heights Chrome measured at v46');
 for (const [screen, name, , spec, chromeV46, row, kid] of BUTTONS) {
-  // v53's, v54's and v55's controls postdate the v46 measurement: there is nothing to reproduce.
-  if (chromeV46 == null) { results.push('  · ' + screen + ' · ' + name + ': added after v46 (v53, v54, v55), never measured in Chrome — A holds its 44px'); continue; }
+  // v53's to v56's controls postdate the v46 measurement: there is nothing to reproduce.
+  if (chromeV46 == null) { results.push('  · ' + screen + ' · ' + name + ': added after v46 (v53–v56), never measured in Chrome — A holds its 44px'); continue; }
   const bx = buttonBox(RULES, chain(spec), 390, { withMin: false, kid: kid ? chain(kid + ' < ' + spec) : null });
   if (typeof row === 'number') {
     check(`${screen} · ${name}: ${bx.natural}px of its own, stretched to the row's ${row}px (an input sets it) = Chrome's ${chromeV46}px — over 44 before v47 too`,
@@ -636,6 +643,48 @@ section('F. Your goal (v55): every answer’s label fits its chip on one line, a
                 t * HOLD + edge <= room && t + edge >= 44, 'wider than the row, or narrower than 44px');
         }
       }
+    }
+  }
+
+  /* G (v56), inside F's block so it measures in F's advance widths: a custom
+     exercise's Movement and Angle chips (picker.js movementRows) — "Not set"
+     and every label coach-tags.js offers, read from it and never restated —
+     against the row the same cascade gives them at 320 and 390 wide. Each
+     fits the row whole, and is 44px wide as a target. */
+  section('G. the custom exercise editor (v56): every Movement and Angle label fits its chip on one line, at 320 and 390 wide');
+  const TG = await import(pathToFileURL(SRC('coach-tags.js')).href);
+  const moveLabels = ['Not set'].concat(TG.PATTERNS.map(p => TG.PATTERN_LABELS[p]), TG.ANGLES.map(a => TG.ANGLE_LABELS[a]));
+  check(`coach-tags.js's labels were read: "Not set", ${TG.PATTERNS.length} movements and ${TG.ANGLES.length} angles`,
+        moveLabels.length === 1 + TG.PATTERNS.length + TG.ANGLES.length && moveLabels.every(l => typeof l === 'string' && l.length > 0));
+  const mspec = 'button.move-opt < div.move-opts < div < div.sheet';
+  for (const w of [390, 320]) {
+    const nodes = []; for (let x = chain(mspec).parent; x; x = x.parent) nodes.unshift(x);
+    let room = w;
+    for (const nd of nodes) {
+      const c = cascade(RULES, nd, w);
+      const v = p => (c[p] ? c[p].v : undefined);
+      const edge = sides(c, 'padding-left', 'padding-right') + sides(c, 'border-left-width', 'border-right-width');
+      let box = room - sides(c, 'margin-left', 'margin-right');
+      if (v('width') === '100%') box = Math.min(room, px(v('max-width')) ?? Infinity);
+      else if (v('width') !== undefined) throw new Error(nd.tag + '.' + nd.cls.join('.') + ' has width ' + v('width'));
+      room = box - edge;
+    }
+    const c = cascade(RULES, chain(mspec), w), row = cascade(RULES, chain(mspec).parent, w);
+    const v = p => (c[p] ? c[p].v : undefined);
+    const inherited = []; for (let x = chain(mspec).parent; x; x = x.parent) {
+      const a = cascade(RULES, x, w); ['letter-spacing', 'word-spacing', 'text-transform', 'font-variation-settings', 'font-size'].forEach(p => { if (a[p] && !(x.tag === 'html' || x.tag === 'body')) inherited.push(p); }); }
+    const fs = px(v('font-size'));
+    check(`${w}: the chip is set ${v('font-size')} in ${v('font-variation-settings')}, one line (white-space ${v('white-space')}), no letter-spacing or case change from it or above it`,
+          fs === 12 && v('font-variation-settings') === FACE && v('white-space') === 'nowrap' &&
+          v('letter-spacing') === undefined && v('text-transform') === undefined && !inherited.length,
+          'restate ADV for a new instance; ' + inherited.join(', '));
+    check(`${w}: chips wrap whole (flex-wrap ${(row['flex-wrap'] || {}).v}), ${(row.gap || {}).v} apart in ${room}px`,
+          (row.display || {}).v === 'flex' && (row['flex-wrap'] || {}).v === 'wrap');
+    const edge = sides(c, 'padding-left', 'padding-right') + sides(c, 'border-left-width', 'border-right-width');
+    for (const l of moveLabels) {
+      const t = textW(l, fs);
+      check(`${w} · “${l}”: ${(t * HOLD + edge).toFixed(1)}px with the 3% in ${room}px, and ${(t + edge).toFixed(1)}px wide as a target`,
+            t * HOLD + edge <= room && t + edge >= 44, 'wider than the row, or narrower than 44px');
     }
   }
 }

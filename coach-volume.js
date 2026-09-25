@@ -38,7 +38,8 @@
 // together, so a light high-rep working set still counts. The primary group
 // counts it whole; each secondary group (exercises.js's fourth field) half. A
 // custom exercise has no secondaries and no movement tag: primary only, and
-// out of the balance split, which says so. The shipped
+// out of the balance split, which says so — unless he has set its movement
+// (v56, coach-tags.js ownMovement()), and then the split reads it. The shipped
 // `group_under_weekly_normal` (coach.js) keeps its own primary-only count;
 // nothing here moves it.
 //
@@ -109,6 +110,10 @@ export const KNEE_HIP = 3;
 export const BALANCE_MIN = 8;
 // Customs over a quarter of a group's sets: its ratios are skipped.
 export const CUSTOM_SHARE = 0.25;
+// v56: when that is what hides a split, the balance answer says once in four
+// weeks that a custom exercise's movement can be set (settings/coach.asked's
+// `bal_custom`, stamped by the sheet as it draws the line, like vol_neglect).
+export const HINT_EVERY_DAYS = 28;
 
 /* THE TOP OF EACH AIM'S RANGE (§6.2, §8.2): building muscle and the middle
    road 10–20, strength 6–15, staying consistent 6–12, a cut no top at all
@@ -201,9 +206,14 @@ function countSession(rec, lib, repDrop) {
     add(out.prim, g, n);
     add(out.f, g, hard.filter(s => s.type === 'F').length);
     if (dropped(ex.sets, repDrop)) add(out.drops, g, 1);
-    if (!built) { add(out.custom, g, n); out.customSets += n; return; }
-    (built.secondary || []).forEach(s => { if (s !== g && GROUPS[s]) add(out.groups, s, n * SECONDARY); });
-    const t = tagsFor(ex.exId);
+    // v56: a custom exercise he has set a movement on is read by it — in the
+    // split, and not among the customs Coach cannot place, nor in their share
+    // of the group. Still its primary group only: nobody asked him about a
+    // second one.
+    const own = built ? null : tagsFor(ex.exId, row);
+    if (!built && !own) { add(out.custom, g, n); out.customSets += n; return; }
+    if (built) (built.secondary || []).forEach(s => { if (s !== g && GROUPS[s]) add(out.groups, s, n * SECONDARY); });
+    const t = own || tagsFor(ex.exId);
     if (!t) return;
     const P = out.pat[g] || (out.pat[g] = noPat());
     if (['press', 'fly', 'extension'].includes(t.pattern) && ['chest', 'shoulders', 'arms'].includes(g)) P.push += n;
@@ -400,7 +410,9 @@ export function volumeAnswer(read) {
    ================================================================
    balanceRead(input) -> { state: 'thin', days } | { state: 'read', ratios:
      [{ id, a, b, flagged, skipped, left }], custom, skipped: [groups],
-     heavy: [groups] }
+     heavy: [groups], hint, hintHeld }
+
+     input  volumeRead()'s, and `asked.bal_custom` for the hint's stamp
 
    Four splits over eight weeks of hard sets, by movement, from the tags:
    pushing (presses, flyes and extensions on chest, shoulders and arms) against
@@ -466,7 +478,13 @@ export function balanceRead(input) {
     const rank = r => (focus && r.groups.includes(focus) ? 0 : 1);
     ratios.sort((x, y) => rank(x) - rank(y) || SPLITS.findIndex(s => s.id === x.id) - SPLITS.findIndex(s => s.id === y.id));
     const skipped = heavy.filter(g => ratios.some(r => r.skipped && r.groups.includes(g)));
-    return { state: 'read', focus, ratios, custom: customSets, skipped, heavy };
+    // v56: customs hiding a split — a group skipped or left out for them —
+    // and the line that says their movement can be set, unless it was said
+    // in the last four weeks.
+    const stamp = i.asked && Number.isFinite(i.asked.bal_custom) ? i.asked.bal_custom : null;
+    const held = stamp != null && Number.isFinite(i.now) && daysBetween(stamp, i.now) < HINT_EVERY_DAYS;
+    return { state: 'read', focus, ratios, custom: customSets, skipped, heavy,
+             hint: heavy.length > 0 && !held, hintHeld: heavy.length > 0 && held };
   } catch {
     return null;
   }
@@ -513,9 +531,16 @@ export function balanceAnswer(read) {
   }
   read.skipped.forEach(g => notes.push({ text: 'Your ' + label(g) + ' work is more than a quarter custom exercises, so Coach leaves its split out.',
                                          reason: '' }));
+  // v56: where to tell Coach a custom exercise's movement — last, and once in
+  // four weeks; the sheet stamps `bal_custom` as it draws it.
+  if (read.hint) {
+    notes.push({ text: 'You can set the movement of a custom exercise in its settings, and Coach will count it.',
+                 reason: 'Coach mentions this once in four weeks.' });
+  }
+  const once = read.hint ? 'bal_custom' : null;
   const reason = 'Hard sets from the last 8 weeks, sorted by movement. A split is worth saying when it’s lopsided; there is no exact ratio to aim for.';
   if (!flagged.length) {
-    return { text: 'Nothing lopsided in the last 8 weeks.', reason, more: counts.concat(notes) };
+    return { text: 'Nothing lopsided in the last 8 weeks.', reason, more: counts.concat(notes), once };
   }
-  return { text: lines[0], reason, more: lines.slice(1).map(t => ({ text: t, reason: '' })).concat(notes) };
+  return { text: lines[0], reason, more: lines.slice(1).map(t => ({ text: t, reason: '' })).concat(notes), once };
 }

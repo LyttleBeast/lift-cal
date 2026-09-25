@@ -5,9 +5,13 @@
 // cycle the README's import graph forbids. So the shared half moved down here
 // and both import it. Nothing imports back.
 //
-//   exercises/custom    -> [ { id, name, group, equipment }, … ]
+//   exercises/custom    -> [ { id, name, group, equipment, pattern?, angle? }, … ]
 //   exercises/overrides -> { exId: { name, group, equipment } }
 //   exercises/hidden    -> [ exId, … ]
+//
+// v56: a custom exercise may carry its movement, `pattern` and `angle`, set in
+// its editor and read by Coach's balance split (coach-tags.js ownMovement(),
+// the one reader). Both optional; absent is what it always was.
 //
 // The last two are what make the 231 built-ins editable without editing code.
 // An override changes what a built-in is called and where it is filed; hiding
@@ -23,6 +27,9 @@ import { read, write } from './store.js';
 import { allSessions, mergeSessionExercises } from './analytics.js';
 import { bump } from './usage.js';
 import { el, sheet, toast, noteEl, confirmSheet } from './ui.js';
+// v56: the movement vocabulary a custom exercise's Movement row offers. Pure,
+// and it imports nothing, so this is still a one-way edge.
+import { PATTERN_ANGLES, PATTERN_LABELS, ANGLE_LABELS, patternsOn, ownMovement } from './coach-tags.js';
 
 let customEx  = [];
 let overrides = {};
@@ -77,9 +84,12 @@ function everyExercise() {
 function isHidden(id) { return hidden.includes(id); }
 function isCustom(id) { return customEx.some(x => x.id === id); }
 
+// v56: the list taken on once the write resolves, as the edit does, so a
+// refused write leaves no exercise here the database does not have.
 async function addCustom(x) {
-  customEx.push(x);
-  await write('exercises/custom', customEx);
+  const next = [...customEx, x];
+  await write('exercises/custom', next);
+  customEx = next;
 }
 
 /* ---------- Frequent ----------
@@ -419,6 +429,64 @@ export function openExerciseManager(onChange) {
   sh.appendChild(done);
 }
 
+/* ---------- a custom exercise's movement (v56) ----------
+   Optional, and "Not set" until he picks one. The patterns offered are the
+   ones coach-tags.js allows on the exercise's own group, so it follows the
+   group chips above it: a group that does not take the chosen movement sets
+   it back to "Not set" rather than keeping a pairing the table refuses. An
+   angle is offered only where that movement has one. `value()` is what
+   ownMovement() keeps of the choice — the only thing ever written — and null
+   for "Not set". Every choice is a 44px chip that wraps whole at 320px.
+
+   What reads it tonight is Coach's balance split, and nothing else: the
+   picker, the builder and the swaps suggest exactly what they did. */
+function movementRows(start, groupOf) {
+  const box = el('div');
+  const was = ownMovement({ group: groupOf(), ...(start || null) });
+  let pattern = was ? was.pattern : null, angle = was ? was.angle : null;
+  const chip = (label, on, pick) => {
+    const c = el('button', 'move-opt' + (on ? ' on' : ''), label);
+    c.onclick = () => { pick(); paint(); };
+    return c;
+  };
+  function paint() {
+    box.innerHTML = '';
+    const group = groupOf();
+    if (pattern && !patternsOn(group).includes(pattern)) { pattern = null; angle = null; }
+    box.appendChild(el('div', 'field-lbl', 'Movement'));
+    const rows = el('div', 'move-opts');
+    rows.appendChild(chip('Not set', !pattern, () => { pattern = null; angle = null; }));
+    patternsOn(group).forEach(p => rows.appendChild(chip(PATTERN_LABELS[p], pattern === p, () => {
+      if (pattern !== p) angle = null;
+      pattern = p;
+    })));
+    box.appendChild(rows);
+    if (pattern && PATTERN_ANGLES[pattern].length) {
+      box.appendChild(el('div', 'field-lbl', 'Angle'));
+      const angles = el('div', 'move-opts');
+      angles.appendChild(chip('Not set', !angle, () => { angle = null; }));
+      PATTERN_ANGLES[pattern].forEach(a => angles.appendChild(chip(ANGLE_LABELS[a], angle === a, () => { angle = a; })));
+      box.appendChild(angles);
+    }
+    box.appendChild(noteEl('Optional. Set it, and Coach counts this exercise by its movement when it reads your balance.'));
+  }
+  paint();
+  return { box, repaint: paint, value: () => ownMovement({ group: groupOf(), pattern, angle }) };
+}
+
+// Onto the stored row, by ownMovement()'s rules: a movement writes its
+// pattern, and its angle only when it has one; "Not set" removes both keys.
+function putMovement(row, mv) {
+  if (mv) {
+    row.pattern = mv.pattern;
+    if (mv.angle) row.angle = mv.angle; else delete row.angle;
+  } else {
+    delete row.pattern;
+    delete row.angle;
+  }
+  return row;
+}
+
 /* ---------- one exercise ---------- */
 function openExerciseEdit(id, onDone) {
   const x = everyExercise().find(e => e.id === id);
@@ -442,6 +510,8 @@ function openExerciseEdit(id, onDone) {
   sh.appendChild(nameWrap);
 
   let group = x.group;
+  // v56: his own exercise's Movement, below; a built-in's tags are pinned.
+  let move = null;
   sh.appendChild(el('div', 'field-lbl', 'Muscle group'));
   const gRow = el('div', 'filter-row');
   GROUP_ORDER.forEach(g => {
@@ -450,6 +520,7 @@ function openExerciseEdit(id, onDone) {
       group = g;
       gRow.querySelectorAll('.chip').forEach(n => n.classList.remove('on'));
       c.classList.add('on');
+      if (move) move.repaint();
     };
     gRow.appendChild(c);
   });
@@ -469,6 +540,11 @@ function openExerciseEdit(id, onDone) {
   });
   sh.appendChild(eRow);
 
+  if (mine) {
+    move = movementRows({ pattern: x.pattern, angle: x.angle }, () => group);
+    sh.appendChild(move.box);
+  }
+
   sh.appendChild(noteEl(mine
     ? 'The name and group show up on every future session. Workouts you have already logged keep the name they were logged with.'
     : 'Renaming a built-in keeps its history — every set you have ever logged under it stays attached.'));
@@ -483,9 +559,14 @@ function openExerciseEdit(id, onDone) {
     if (clash) { toast('“' + clash.name + '” already exists'); return; }
 
     if (mine) {
-      const row = customEx.find(e => e.id === id);
-      Object.assign(row, { name, group, equipment });
-      await write('exercises/custom', customEx);
+      /* v56: the row rebuilt with its movement, in the same whole-array write,
+         and the list taken on only once the write resolves — store.js write()'s
+         rule — so a refused or blocked write leaves this device holding what
+         the database holds. Every other custom exercise is the same object it
+         was, and goes out exactly as it came in. */
+      const next = customEx.map(e => (e.id === id ? putMovement({ ...e, name, group, equipment }, move.value()) : e));
+      await write('exercises/custom', next);
+      customEx = next;
     } else {
       const base = EXERCISES.find(e => e.id === id);
       // Store an override only where it actually differs, so a built-in edited
@@ -571,6 +652,7 @@ export function openCustomExercise(onCreate) {
   sh.appendChild(nameWrap);
 
   let group = 'chest';
+  let move = null;
   sh.appendChild(el('div', 'field-lbl', 'Muscle group'));
   const gRow = el('div', 'filter-row');
   GROUP_ORDER.forEach(g => {
@@ -579,6 +661,7 @@ export function openCustomExercise(onCreate) {
       group = g;
       gRow.querySelectorAll('.chip').forEach(x => x.classList.remove('on'));
       c.classList.add('on');
+      if (move) move.repaint();
     };
     gRow.appendChild(c);
   });
@@ -599,6 +682,10 @@ export function openCustomExercise(onCreate) {
   });
   sh.appendChild(eRow);
 
+  // v56: its Movement, optional — "Not set" unless he picks one.
+  move = movementRows(null, () => group);
+  sh.appendChild(move.box);
+
   const go = el('button', 'btn btn-primary btn-block btn-lg', 'Create');
   go.style.marginTop = '16px';
   go.onclick = () => {
@@ -608,7 +695,7 @@ export function openCustomExercise(onCreate) {
     if (dupe) { toast('“' + dupe.name + '” already exists'); return; }
     close();
     bump('exerciseCustom');
-    onCreate(makeCustomExercise(name, group, equipment));
+    onCreate(putMovement(makeCustomExercise(name, group, equipment), move.value()));
     toast('Added ' + name);
   };
   sh.appendChild(go);
