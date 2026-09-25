@@ -19,7 +19,7 @@ import { el, sheet, toast, noteEl, confirmSheet, segmented, LIMITS, clamp } from
 import { LS, uid, readExact, currentEmail, write, purgeDevice, logout,
          wu, hu, setUnits, refusedSaves, retryRefused, discardRefused } from './store.js';
 import { openTargets, openAiSettings, openRecallList, openImportPaste,
-         foodTargets, latestLb, goalId, previewGoal, setGoal, goalFits } from './food.js';
+         foodTargets, latestLb, goalId, previewGoal, setGoal, goalFits, misfitNote } from './food.js';
 import { openWaterSettings, waterSettings, fmtWater } from './water.js';
 import { openStepSettings, stepGoal } from './steps.js';
 import { openImport } from './importer.js';
@@ -659,10 +659,20 @@ export function openGoal(onEdit) {
     wrap.querySelectorAll('.ob-choice').forEach(b => b.classList.toggle('on', b.dataset.id === goal));
     if (goal === goal0 && !misfit) { note.textContent = 'Your current goal. Pick another and the calorie target moves to match.'; return; }
     const p = previewGoal(goal);
+    // v57: a cut or a gain says what the Fuel bar says, in its numbers
+    // (food.js targetNote); v56 said "at or below your maintenance" of a
+    // target 250 over it. It offers to move the target only when saving
+    // would move it.
+    const said = goal === goal0 ? misfitNote(goal) : null;
+    if (said) {
+      note.textContent = 'Your goal is ' + GOAL_LABEL[goal].toLowerCase() + '. ' + said +
+        (p.changed ? ' Save to move it to ' + p.cal.toLocaleString() + ' a day.' : '');
+      return;
+    }
+    // What is left here is a hold, whose target sits outside the band.
     if (goal === goal0) {
       note.textContent = 'Your goal is ' + GOAL_LABEL[goal].toLowerCase() + ', but your calorie target, ' + foodTargets().cal.toLocaleString() +
-        ', sits ' + (goal === 'cut' ? 'at or above' : goal === 'gain' ? 'at or below' : 'away from') + ' your maintenance of ' + p.maint.toLocaleString() +
-        '. Save to move it to ' + p.cal.toLocaleString() + ' a day.';
+        ', sits away from your maintenance of ' + p.maint.toLocaleString() + '. Save to move it to ' + p.cal.toLocaleString() + ' a day.';
       return;
     }
     note.textContent = p.maint

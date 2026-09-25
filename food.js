@@ -713,6 +713,26 @@ function goalSign(maintCal) {
   return d == null ? 0 : d;
 }
 
+/* v57: the words for a target the bar paints against the goal — pure, so
+   tools-check/maintenance.mjs can hold them to the numbers. `z` is
+   calorieZones(), `g` goalSign()'s -1, 0 or +1. Null unless the target sits
+   inside the hold band or past it on the wrong side: for a gain, at or under
+   the band's top (z.gainFrom), and for a cut at or over its bottom. That is
+   the bar's condition and always was; until v57 the words said "at or below
+   your maintenance", which a target of 3,470 against a maintenance of 3,220
+   is not. Now they say where it sits against the band, with the band's own
+   numbers, and what the bar reads eating to it as — the bar's reading, which
+   is a claim about the band, never one about his body. */
+export function targetNote(tcal, z, g) {
+  if (!z || !g || !Number.isFinite(tcal)) return null;
+  const zone = zoneOf(tcal, z);
+  if (zone === (g > 0 ? 'gain' : 'cut')) return null;
+  const n = v => Math.round(v).toLocaleString();
+  return 'Your target, ' + n(tcal) + ', sits ' + (zone === 'maintain' ? 'inside' : zone === 'cut' ? 'below' : 'above') +
+    ' your holding range (maintenance ' + n(z.maint) + ' ± ' + n(z.band) + '), so the calorie bar reads eating to it as ' +
+    (zone === 'maintain' ? 'holding' : zone === 'cut' ? 'cutting' : 'bulking') + ', not ' + (g > 0 ? 'bulking' : 'cutting') + '.';
+}
+
 function renderCalMeter(cal) {
   const wrap = el('div', 'cal-meter');
   const mi = maintInfo();
@@ -811,15 +831,14 @@ function renderCalMeter(cal) {
     // Eating to it will not do what the goal says, and nothing else on the
     // screen would ever say so.
     const g = goalSign(z.maint);
-    if ((g < 0 && targets.cal >= z.cutTop) || (g > 0 && targets.cal <= z.gainFrom)) {
+    const note = targetNote(targets.cal, z, g);
+    if (note) {
       // Setup wrote a calorie target off a formula; the measured maintenance
       // then came in lower, and the target ended up in the wrong band while
       // the goal word stayed right. The word being right is exactly why the
       // goal sheet had nothing to change — so the fix is offered here, where
       // the problem is visible, as one button that moves the number.
-      wrap.appendChild(noteEl('Your target is ' + (g < 0 ? 'at or above' : 'at or below') + ' your ' +
-        (mi.source === 'measured' ? 'measured ' : mi.source === 'setup' ? 'starting ' : '') +
-        'maintenance, so eating to it holds rather than ' + (g < 0 ? 'cuts' : 'bulks') + '.'));
+      wrap.appendChild(noteEl(note));
       const p = previewGoal(g < 0 ? 'cut' : 'gain');
       if (p.changed && p.cal > 0) {
         const fixBtn = el('button', 'btn btn-ghost btn-block', 'Move target to ' + p.cal.toLocaleString() + ' kcal');
@@ -3673,4 +3692,13 @@ export function goalFits(id = goalId()) {
   return id === 'cut' ? targets.cal < z.cutTop
        : id === 'gain' ? targets.cal > z.gainFrom
        : targets.cal >= z.cutTop && targets.cal <= z.gainFrom;
+}
+
+/* v57: the bar's note for a cut or a gain that does not fit, in its own words
+   (targetNote), for the goal sheet to say too. Null for a hold, or when it
+   fits, or with no maintenance to measure against. */
+export function misfitNote(id = goalId()) {
+  const mi = maintInfo();
+  if (!mi) return null;
+  return targetNote(targets.cal, calorieZones(mi.cal), id === 'cut' ? -1 : id === 'gain' ? 1 : 0);
 }

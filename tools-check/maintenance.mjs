@@ -23,6 +23,9 @@
 //   - typing a number pins it, blanking it clears both keys;
 //   - and a setup number expiring cannot move the calorie target outside the
 //     weekly gate, however far maintenance jumps.
+//   - v57 (SHIP-V57-PROMPT §B): the note under the calorie bar is true of the
+//     numbers it names — Micah's own case (maintenance 3,220, target 3,470, a
+//     gain) first, then every target across a grid of maintenances, both goals.
 
 import { mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -110,8 +113,8 @@ for (const [file, text] of sources) {
 }
 
 const load = f => import(pathToFileURL(join(dir, f)).href);
-const { effectiveMaint, autoTargets } = await load('tdee.mjs');
-const { maintPatch, autoPlan } = await load('food.mjs');
+const { effectiveMaint, autoTargets, calorieZones, zoneOf } = await load('tdee.mjs');
+const { maintPatch, autoPlan, targetNote } = await load('food.mjs');
 
 /* ---------- harness ---------- */
 
@@ -462,6 +465,95 @@ const GOAL = { on: true, rateWk: -1, pPerLb: 1, fPerLb: 0.35, floor: 0, lastAdj:
       .test(readFileSync(SRC('weight.js'), 'utf8')));
   check('and the old down-is-good rule is gone from it',
     !/rate <= 0 \? 'var\(--good\)'/.test(readFileSync(SRC('weight.js'), 'utf8')));
+}
+
+/* ================= v57: THE NOTE UNDER THE BAR SAYS SOMETHING TRUE =================
+   The bar's note fires for a gain when the target is at or under the hold
+   band's top (calorieZones().gainFrom), and for a cut at or over its bottom.
+   rack-v56 said "at or below your maintenance" either way, and Micah's Fuel
+   tab on 25 Sep showed it under a target 250 OVER his maintenance. The words
+   are food.js targetNote() now, pure, and every sentence it can print is held
+   here to the numbers in it — parsed back out, never compared to a copy. */
+{
+  const FOOD = readFileSync(SRC('food.js'), 'utf8');
+  const SET  = readFileSync(SRC('settings.js'), 'utf8');
+  const loc = v => Math.round(v).toLocaleString();
+  const num = s => Number(String(s).replace(/[^\d]/g, ''));
+  const SAID = /^Your target, ([\d,.\s]+), sits (inside|below|above) your holding range \(maintenance ([\d,.\s]+) ± ([\d,.\s]+)\), so the calorie bar reads eating to it as (holding|cutting|bulking), not (bulking|cutting)\.$/;
+  const READS = { maintain: 'holding', cut: 'cutting', gain: 'bulking' };
+  // Every way the sentence can be false about (target, zones, goal), or null when it holds.
+  const falsity = (note, t, z, g) => {
+    const m = SAID.exec(note || '');
+    if (!m) return 'not the sentence: ' + note;
+    const [, T, where, M, B, reads, not] = m;
+    if (num(T) !== Math.round(t) || num(M) !== z.maint || num(B) !== z.band) return 'numbers ' + [T, M, B].join(' / ');
+    const lo = num(M) - num(B), hi = num(M) + num(B);
+    const trueWhere = t < lo ? 'below' : t > hi ? 'above' : 'inside';
+    if (where !== trueWhere) return '"' + where + '" of ' + t + ' against ' + lo + '–' + hi;
+    if (reads !== READS[zoneOf(t, z)]) return 'reads as ' + reads + ', the bar paints ' + zoneOf(t, z);
+    if (not !== (g > 0 ? 'bulking' : 'cutting')) return 'the goal is ' + g + ', said "not ' + not + '"';
+    if (reads === not) return 'reads as the goal itself';
+    return null;
+  };
+
+  // --- his case ---
+  const z = calorieZones(3220);
+  check('Micah’s maintenance, 3,220: the band is ±250, not the brief’s 260 — 8% is 257.6, rounded to a 25 and capped at 250 — so the hold band is 2,970 to 3,470',
+    z.band === 250 && z.cutTop === 2970 && z.gainFrom === 3470, shape(z));
+  const his = targetNote(3470, z, 1);
+  check('his note, a gain goal and a target of 3,470: "' + his + '"',
+    his === 'Your target, ' + loc(3470) + ', sits inside your holding range (maintenance ' + loc(3220) + ' ± ' + loc(250) +
+            '), so the calorie bar reads eating to it as holding, not bulking.', his);
+  check('and it is true of the numbers beside it: 3,470 is 3,220 + 250, the top edge, and the bar paints the edge as holding',
+    falsity(his, 3470, z, 1) === null && zoneOf(3470, z) === 'maintain', falsity(his, 3470, z, 1));
+  const V56 = execFileSync('git', ['show', '04e87cc:food.js'], { cwd: SRC('.'), encoding: 'utf8', maxBuffer: 1 << 26 });
+  check('the control: rack-v56 said "at or below your measured maintenance" under the same condition — for him, of a target 250 over it',
+    V56.includes("(g < 0 ? 'at or above' : 'at or below') + ' your '") && V56.includes("(g > 0 && targets.cal <= z.gainFrom)") &&
+    3470 <= z.gainFrom && 3470 > z.maint);
+
+  // --- every target, both goals, a grid of maintenances ---
+  const MAINTS = [1200, 1875, 2000, 2400, 2968, 2969, 2970, 3000, 3220, 3225, 3500, 4200];
+  const wrong = [], fired = { inside: 0, below: 0, above: 0 };
+  let n = 0;
+  MAINTS.forEach(mc => {
+    const zz = calorieZones(mc);
+    for (let t = mc - 700; t <= mc + 700; t += 5) [-1, 0, 1].forEach(g => {
+      n++;
+      const note = targetNote(t, zz, g);
+      const was = (g < 0 && t >= zz.cutTop) || (g > 0 && t <= zz.gainFrom);
+      if ((note !== null) !== was) { wrong.push(mc + '/' + t + '/' + g + ': fires ' + (note !== null) + ', the bar’s condition ' + was); return; }
+      if (!note) return;
+      const f = falsity(note, t, zz, g);
+      if (f) wrong.push(mc + '/' + t + '/' + g + ': ' + f);
+      else fired[SAID.exec(note)[2]]++;
+    });
+  });
+  check('every target from 700 under to 700 over ' + MAINTS.length + ' maintenances, cut, hold and gain (' + n + '): the note fires exactly when v56’s did, and each sentence is true of its numbers — ' + shape(fired),
+    !wrong.length && fired.inside > 0 && fired.below > 0 && fired.above > 0, wrong.slice(0, 3).join(' | '));
+  check('no goal, no note — a hold has no wrong side, and nothing is known without zones',
+    targetNote(3000, z, 0) === null && targetNote(3000, null, 1) === null && targetNote(NaN, z, 1) === null && targetNote(undefined, z, -1) === null);
+  check('the target on the goal’s side says nothing: a gain at 3,480, a cut at 2,960',
+    targetNote(3480, z, 1) === null && targetNote(2960, z, -1) === null);
+  check('and a cut at the band’s bottom edge, 2,970, says so the same way: "' + targetNote(2970, z, -1) + '"',
+    falsity(targetNote(2970, z, -1), 2970, z, -1) === null && /sits inside .* as holding, not cutting\.$/.test(targetNote(2970, z, -1)));
+
+  // --- the band, in the numbers Micah decides from ---
+  const BULK = { on: true, rateWk: 0.5, pPerLb: 1, fPerLb: 0.35, floor: 0 };
+  check('Bulking is +0.5 lb a week (food.js GOAL_RATE) — 250 kcal a day at 3,500 a pound — and at his maintenance its own target is 3,470, the band’s top edge exactly',
+    /const GOAL_RATE = \{ cut: -1, hold: 0, gain: 0\.5 \};/.test(FOOD) && autoTargets(BULK, 3220, 200).cal === 3470 && autoTargets(BULK, 3220, 200).cal === z.gainFrom);
+  const edge = [];
+  for (let mc = 1500; mc <= 4500; mc += 10) {
+    const zz = calorieZones(mc), t = autoTargets(BULK, mc, 200).cal;
+    if ((zoneOf(t, zz) === 'maintain') !== (mc >= 2970)) edge.push(mc + ': ' + t + ' ' + zoneOf(t, zz));
+  }
+  check('for every measured maintenance (a round ten) from 1,500 to 4,500: Bulking’s own target reads as holding exactly from 2,970 up, where the band reaches 250',
+    !edge.length, edge.slice(0, 4).join(' | '));
+
+  // --- one sentence, two screens ---
+  check('the bar says it through targetNote(), and the old words are gone from food.js',
+    /const note = targetNote\(targets\.cal, z, g\);/.test(FOOD) && !/holds rather than/.test(FOOD) && !/'at or below'/.test(FOOD));
+  check('and Settings → Goal says the same sentence (misfitNote), offering Save only when it would move the target',
+    /misfitNote\(goal\)/.test(SET) && /p\.changed \? ' Save to move it to '/.test(SET) && !/'at or below'|'at or above'/.test(SET));
 }
 
 /* ---------- report ---------- */
