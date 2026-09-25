@@ -142,11 +142,19 @@ export function estimatePhoto(shot, text) {
    usually the better answer for it too. Naming a brand or a chain costs more
    than that — the Worker looks the official numbers up rather than recalling
    them — and takes longer, which is what the estimating screen is warning
-   about. Worth it: recalled menu macros are confidently wrong. */
-export function estimateText(text) {
+   about. Worth it: recalled menu macros are confidently wrong.
+
+   v55, "Which one?": a text estimate says it can take a question back,
+   `ask: 1` (the contract, estimate-ask.js). When every part of the order the
+   free path could not price is a menu phrase with more than one row behind
+   it, the Worker answers with the choices instead of paying the model. `{ ask:
+   false }` is "None of these": today's request, byte for byte. An older
+   Worker ignores the key. A photo never asks. */
+export function estimateText(text, opts) {
+  const ask = !(opts && opts.ask === false);
   return call('/estimate', {
     method: 'POST',
-    body: JSON.stringify({ mode: 'text', text: (text || '').slice(0, 600) })
+    body: JSON.stringify({ mode: 'text', text: (text || '').slice(0, 600), ...(ask ? { ask: 1 } : null) })
   });
 }
 

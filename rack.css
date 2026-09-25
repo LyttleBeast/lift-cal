@@ -1659,6 +1659,11 @@ body.peeking .view.active { padding-bottom: 65px; }
   font-variation-settings: 'wdth' 92, 'wght' 700;
 }
 .pe-save:active { color: var(--chalk); background: var(--collar); }
+/* v55: "Which one?" — onboarding's full-width choice rows, one per option and
+   "None of these" last, each a 44px target. The Worker writes the label, so a
+   long one wraps inside its row rather than running off a 320px screen. */
+.ask-opt { min-height: 44px; }
+.ask-opt .ob-choice-t { overflow-wrap: anywhere; }
 
 .ai-cost {
   font-size: 10px; color: var(--dim);

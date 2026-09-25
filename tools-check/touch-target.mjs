@@ -372,7 +372,12 @@ const BUTTONS = [
      row as a meal. Not a .btn; its own min-height holds it, never measured in
      Chrome at v46, and its widths join the snapshot as they are tonight. */
   ['Fuel · estimate', 'Save (a row as a meal)', ['food.js', /el\('button', 'pe-save', 'Save'\)/],
-   'button.pe-save < div.food-entry.pe-row < div.import-list < div < div.sheet', null]
+   'button.pe-save < div.food-entry.pe-row < div.import-list < div < div.sheet', null],
+  /* v55, on purpose: "Which one?" — an option, and "None of these", each one of
+     onboarding's full-width choice rows held to 44px by .ask-opt (food.js
+     openWhichOne). Never measured in Chrome at v46; widths join the snapshot. */
+  ['Fuel · which one?', 'An option / None of these', ['food.js', /el\('button', 'ob-choice ask-opt'\)/],
+   'button.ob-choice.ask-opt < div.ob-choices.ask-opts < div < div.sheet', null]
 ];
 
 /* The width snapshot, v46 (12b3a9d), produced by this file's own resolver

@@ -28,6 +28,7 @@ import { initRecall, lookup as recallLookup, remember as recallRemember,
 import { bump } from './usage.js';
 import { noteCoachFood } from './coach-data.js';
 import { estimateOrigin, originHeading, EDITED, mealName } from './estimate-origin.js';
+import { readAsk, withPicks, optionText, NONE_LABEL, NONE_NOTE } from './estimate-ask.js';
 import { goalDirection } from './insights.js';
 import { wIn, fmtW, labelW, unitW, rateIn, boxRate, perIn, boxPer,
          kcalPerUnit, limW, limRate, limPer } from './units.js';
@@ -2001,7 +2002,67 @@ async function runEstimate(ctx) {
     return;
   }
   done();
+  /* v55, "Which one?" (estimate-ask.js): a text reply that asks is asked of
+     him first. An ask that does not read whole is never drawn — the sentence
+     goes back as today's estimate, as if it had never been sent, because the
+     rows around a question are only part of what he ate. A photo never asks. */
+  if (ctx.mode === 'text' && !ctx.noAsk) {
+    const a = readAsk(res);
+    if (a.kind === 'ask') { openWhichOne(res, a.asks, ctx); return; }
+    if (a.kind === 'bad') { runEstimate(plainEstimate(ctx)); return; }
+  }
   openAiReview(res, ctx);
+}
+
+// The same sentence without `ask`: today's estimate. "None of these", and
+// where an ask cannot be drawn. It asks nothing back, so it never loops.
+function plainEstimate(ctx) {
+  return { ...ctx, noAsk: true, run: () => estimateText(ctx.text, { ask: false }) };
+}
+
+/* "Which one?" — the Worker's question, as it wrote it, one chip per option
+   and "None of these, estimate it" under them. A chip's calories are its
+   row's through normalizeImport, the result rows' own formatter, so the chip
+   and the row it becomes say the same number. With two asks, both are asked
+   before the result screen. A pick puts its row in at `at` and the reply is
+   the result screen's like any free answer; nothing is spent. */
+function openWhichOne(res, asks, ctx) {
+  const { sh, close } = sheet();
+  const body = el('div');
+  sh.appendChild(body);
+  const picks = [];
+  const calOf = item => { const e = normalizeImport({ items: [item] })[0]; return e ? e.cal : 0; };
+
+  function paint() {
+    body.innerHTML = '';
+    const a = asks[picks.length];
+    body.appendChild(el('h2', null, a.question));
+    const list = el('div', 'ob-choices ask-opts');
+    a.options.forEach((o, j) => {
+      const b = el('button', 'ob-choice ask-opt');
+      b.appendChild(el('div', 'ob-choice-t', optionText(o.label, calOf(o.item))));
+      b.onclick = () => {
+        picks.push(j);
+        if (picks.length < asks.length) { paint(); return; }
+        close();
+        const next = withPicks(res, asks, picks);
+        if (next) openAiReview(next, ctx);
+        else runEstimate(plainEstimate(ctx));
+      };
+      list.appendChild(b);
+    });
+    const none = el('button', 'ob-choice ask-opt');
+    none.append(el('div', 'ob-choice-t', NONE_LABEL), el('div', 'ob-choice-d', NONE_NOTE));
+    none.onclick = () => { close(); runEstimate(plainEstimate(ctx)); };
+    list.appendChild(none);
+    body.appendChild(list);
+
+    const cancel = el('button', 'btn btn-ghost btn-block', 'Cancel');
+    cancel.style.marginTop = '8px';
+    cancel.onclick = close;
+    body.appendChild(cancel);
+  }
+  paint();
 }
 
 function openEstimating(label) {
