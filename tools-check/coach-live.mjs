@@ -766,6 +766,117 @@ section('H. v54 — the next set (spec §3.10 with his rating), each rule by nam
         [liveOf(null), liveOf(0), s1, s4].every(s => { const a = read(s); return !a || !/\d\s*(lb|kg)\b/.test(a.short || ''); }));
 }
 
+/* ================= I. v54 — TODAY IS A DAY, NOT A SESSION ================= */
+section('I. v54 — a second session on the same day: what he trained this morning counts as trained today');
+{
+  /* SHIP-V54-PROMPT §6 and decision 10. Until v54 the live read saw the
+     active session and nothing else, so an evening session's Coach could call
+     chest "nothing in it yet" hours after a chest day. The morning here starts
+     at 00:20 on the live session's own day — the only hour that is earlier
+     the same day in every zone this runs in (01:05 in Auckland) — and is in
+     `sessions`, the window coach.js already hands in: nothing new is read. */
+  const liveStart = NOW - 40 * 60 * 1000;
+  const MORN = (() => { const d = new Date(liveStart); d.setHours(0, 20, 0, 0); return d.getTime(); })();
+  const morning = rows => ({ id: 'am', startedAt: MORN, endedAt: MORN + 30 * 60e3, durationSec: 1800, _date: key(MORN), exercises: rows });
+  const withAm = rows => ({ sessions: HISTORY.concat([morning(rows)]).sort((a, b) => a.startedAt - b.startedAt) });
+  const chestAm = [logged('bench', 4), logged('incline', 3), logged('fly', 3)];
+  const armsPm = live([['pushdown', n('pushdown', 3)], ['curl', n('curl', 3)]]);
+  check('the fixture: the morning is on the live session’s own day and before it, in every zone',
+        key(MORN) === key(liveStart) && MORN + 30 * 60e3 < liveStart);
+
+  // Control: no morning — arms has had its usual, and chest is "untouched".
+  const alone = read(armsPm);
+  check('control, one session: arms at its usual, and chest is the part with nothing in it yet — the old read',
+        alone && alone.kind === 'switch' && alone.group === 'chest', alone && alone.kind + ': ' + alone.text);
+
+  // A. The same shape split across two visits: counted together for done.
+  const split = read(armsPm, withAm(chestAm));
+  check('the same shape across two visits (chest this morning, arms now): their sets count together — "done", 16 against a usual 16',
+        split && split.kind === 'done' && split.text === 'You’re probably good for today — 16 working sets across today’s visits against a usual 16.',
+        split && split.kind + ': ' + split.text);
+  check('with the why saying where the sixteen came from',
+        split && split.why[0] === '16 working sets today, 6 of them this session and 10 earlier. Across your chest and arms days in the last twelve weeks, the median is 16.',
+        split && split.why[0]);
+  check('and its short line says today', split && split.short === 'You’re probably good for today: 16 working sets today.', split && split.short);
+
+  // B. Different shapes: two workouts are two workouts.
+  const chestBackAm = [logged('bench', 4), logged('incline', 3), logged('row', 4)];
+  const diff = read(armsPm, withAm(chestBackAm));
+  check('a different shape this morning (chest and back): done stays per session — not "good for today" off 6 + 11 sets',
+        !diff || diff.kind !== 'done', diff && diff.kind + ': ' + diff.text);
+  check('and chest, trained this morning, is never "nothing in it yet": no switch to it, nothing of it added',
+        !diff || (diff.group !== 'chest' && !(diff.add && diff.add.group === 'chest') && !/Chest is the part/.test(diff.text)),
+        diff && diff.kind + ': ' + diff.text);
+  const legs = read(live([['squat', n('squat', 4)], ['rdl', n('rdl', 3)]]), withAm(chestBackAm));
+  const legsAlone = read(live([['squat', n('squat', 4)], ['rdl', n('rdl', 3)]]));
+  check('a leg day this evening after a chest-and-back morning reads exactly as a leg day on its own would',
+        J(legs) === J(legsAlone), J(legs) + ' / ' + J(legsAlone));
+
+  // C. The sweep: an evening after a morning chest day never suggests chest.
+  const mornings = [chestAm, [logged('bench', 4), logged('incline', 3)], [logged('bench', 4, { warm: true }), logged('fly', 3), logged('curl', 3)],
+                    chestBackAm, [logged('fly', 3), logged('incline', 3), logged('pushdown', 3), logged('curl', 3)]];
+  const pool = ['curl', 'pushdown', 'row', 'pulldown', 'squat', 'rdl'];
+  const bad = [];
+  let reads = 0, answered = 0;
+  mornings.forEach((am, mi) => {
+    for (let mask = 1; mask < 64; mask++) {
+      const rows = pool.filter((_, b) => mask & (1 << b)).map(id => [id, n(id, 3)]);
+      [null, 0, rows.length - 1].forEach(cur => {
+        const a = read(live(rows), withAm(am), cur == null ? undefined : { current: cur });
+        reads++;
+        if (!a) return;
+        answered++;
+        const chesty = (a.group === 'chest') || (a.add && a.add.group === 'chest') || /\b(Chest is|chest with nothing)\b/.test(a.text);
+        if (chesty) bad.push('morning ' + mi + ', ' + rows.map(r => r[0]).join('+') + ': ' + a.kind + ' — ' + a.text);
+      });
+    }
+  });
+  check('over ' + reads + ' evening reads after five kinds of chest morning (' + answered + ' answered): never a switch to chest, never a chest exercise put in front of him',
+        reads > 900 && answered > 100 && !bad.length, list(bad));
+
+  // D. Next never offers what he did this morning.
+  const benchPm = live([['bench', n('bench', 4)]]);
+  const nextAlone = read(benchPm, {}, { current: 0 });
+  const nextAm = read(benchPm, withAm([logged('incline', 3), logged('fly', 3)]), { current: 0 });
+  check('control: after bench, the next exercise is usually incline', nextAlone && nextAlone.kind === 'next' && nextAlone.exId === 'incline',
+        nextAlone && nextAlone.kind + ': ' + nextAlone.text);
+  check('with incline and fly done this morning, neither is offered next — an exercise done earlier today is done',
+        !nextAm || !['incline', 'fly'].includes(nextAm.exId), nextAm && nextAm.kind + ': ' + nextAm.text);
+  const setAm = C.coach(input(withAm(chestAm))).liveSet(armsPm, { current: 1 });
+  check('and on a day read as done across its visits, no next-set number either', setAm && setAm.next === null && !!setAm.rated);
+
+  // E. After the second session is finished.
+  // No duration on it, like every session of this fixture — or it would be
+  // "Longest session ever." against a log that records none.
+  const eve = { id: 'pm', name: 'Evening session', startedAt: liveStart, endedAt: NOW - 5 * 60e3, _date: key(liveStart),
+                exercises: [logged('pushdown', 3), logged('curl', 3)] };
+  const day2 = { ...input({ live: { active: false } }), sessions: HISTORY.concat([morning(chestAm), eve]).sort((a, b) => a.startedAt - b.startedAt) };
+  const c2 = C.coach(day2);
+  const fin = C.finishRead(day2, eve);
+  check('the state after the second finish is "post" — the card and the sheet speak of a workout just done', C.stateOf(day2, NOW) === 'post' && c2.state === 'post');
+  check('the finish line is the evening’s: "Arms done: 6 sets." — never the morning’s chest',
+        fin.headline === 'Good work.' && fin.line === 'Arms done: 6 sets.' && c2.opening.text === fin.headline + ' ' + fin.line, fin.headline + ' ' + fin.line + ' / ' + c2.opening.text);
+  check('the card’s finish line is keyed to the evening session', c2.card.you.id === 'hype_finish' && c2.card.you.key === 'finish:pm', J(c2.card.you));
+  const cmp = c2.ask('ask_compare');
+  const cmpRows = [cmp.text].concat((cmp.more || []).map(m => m.text));
+  check('"How did today compare?" reads the session just finished: its lifts, never the morning’s',
+        cmp.id === 'session_compare' && cmpRows.some(t => /Barbell Curl|Triceps Pushdown/.test(t)) && !cmpRows.some(t => /Bench|Incline|Crossover/.test(t)),
+        list(cmpRows));
+  const later = { ...day2, now: NOW + 3.5 * 3600e3 };
+  check('three and a half hours on, "done_today" — the day is still a training day, and wherever "What should I train today?" is offered it asks "…next?"',
+        C.stateOf(later, later.now) === 'done_today' &&
+        C.coach(later).topicsFor('train').some(t => t.id === 'ask_shape' && t.label === 'What should I train next?') ===
+        C.coach(later).topicsFor('train').some(t => t.id === 'ask_shape'));
+  const R = await import(pathToFileURL(join(dir, 'coach-ready.mjs')).href);
+  const rr = R.restRead(C.readyInput(day2), NOW);
+  check('the rest read has chest and arms both trained today — the morning’s group and the evening’s, one date, sets added',
+        !!rr && rr.groups.chest.since === 0 && rr.groups.arms.since === 0 && !rr.groups.chest.ready && !rr.groups.arms.ready,
+        rr && J({ chest: rr.groups.chest, arms: rr.groups.arms }));
+  const rrOne = R.restRead(C.readyInput({ ...day2, sessions: HISTORY.concat([{ ...morning(chestAm.concat([logged('pushdown', 3), logged('curl', 3)])) }]).sort((a, b) => a.startedAt - b.startedAt) }), NOW);
+  check('and a group’s day is the same whether its sets came in one visit or two — the chest day’s count, the arms day’s count',
+        !!rrOne && ['chest', 'arms'].every(g => rrOne.groups[g].since === rr.groups[g].since && rrOne.groups[g].big === rr.groups[g].big));
+}
+
 /* ---------- report ---------- */
 console.log('\nCoach in the gym says what it can back with his own log, and nothing about the bar\n');
 console.log(results.join('\n'));

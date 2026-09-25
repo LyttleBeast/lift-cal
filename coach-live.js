@@ -85,10 +85,20 @@
 //             shows, hidden ones absent
 //   hidden    the ids taken out of the picker
 //
-// The live facts see the ACTIVE session and nothing else. A second session on
-// the same day — one already finished and saved this morning — is in the log
-// as a session of its own, and nothing here adds its sets to today's. That is
-// in BACKLOG.md rather than solved here.
+//   day       (v54) the live session's own day key, from coach.js — the one
+//             date this file compares, since it constructs no Date of its own
+//
+// TODAY IS A DAY, NOT A SESSION (v54, SHIP-V54-PROMPT decision 10). A session
+// he finished earlier today is in the log as a session of its own, and it is
+// read from `sessions` — the window coach.js already hands in, with its dates;
+// nothing new is read. Its groups and exercises count as trained today: switch
+// never calls one "nothing in it yet", and neither switch nor next ever puts an
+// exercise he did earlier today, or one of a group he trained earlier today
+// and has not come back to, in front of him. For DONE the day is one workout
+// only when it is one: when the earlier visit and this one are the same shape
+// (a workout split across two visits, their groups together one of his
+// shapes), their working sets count together against his usual for it; two
+// different workouts are two workouts, and done stays per session.
 //
 // Imports exercises.js, units.js and the session MATH of analytics.js. coach.js
 // imports this; nothing imports back.
@@ -265,6 +275,32 @@ function shapeOf(i, t) {
          null;
 }
 
+/* TODAY'S EARLIER SESSIONS (v54): the sessions in the window on the live
+   session's own day that started before it. Everything they trained counts as
+   trained today (`groups`, `ids`). And when their groups and today's list are,
+   together, one of his shapes — the day's shape — the ones inside it are the
+   same workout split across visits (`same`), and the day's working sets are
+   theirs added to this session's (`total`). Otherwise `shape` is null and the
+   day is two workouts. */
+function dayOf(i, t, history) {
+  const start = i.session && Number.isFinite(i.session.startedAt) ? i.session.startedAt : Infinity;
+  const earlier = typeof i.day === 'string' ? history.filter(s => s.date === i.day && s.startedAt < start) : [];
+  const groups = new Set(), ids = new Set();
+  earlier.forEach(s => s.order.forEach(ex => { ids.add(ex.exId); if (!ex.cardio && ex.group) groups.add(ex.group); }));
+  const sig = s => (s.key ? s.key.split('+') : []);
+  let shape = null, same = [];
+  if (earlier.length) {
+    const union = GROUP_ORDER.filter(g => t.planned.includes(g) || earlier.some(s => sig(s).includes(g)));
+    const shapes = Array.isArray(i.shapes) ? i.shapes : [];
+    shape = union.length ? (shapes.find(sh => (sh.members || []).includes(union.join('+'))) ||
+                            shapes.find(sh => union.every(g => (sh.groups || []).includes(g))) || null) : null;
+    same = shape ? earlier.filter(s => sig(s).length && sig(s).every(g => (shape.groups || []).includes(g))) : [];
+    if (!same.length) shape = null;
+  }
+  return { earlier, groups, ids, shape, same, total: t.total + same.reduce((a, s) => a + s.total, 0) };
+}
+const NO_DAY = Object.freeze({ earlier: [], groups: new Set(), ids: new Set(), shape: null, same: [], total: 0 });
+
 // "chest and arms days", or "Push A sessions" when the shape is named by his
 // own routine — a routine name is not a noun that takes an s. With a count,
 // the count leads: "7 chest and arms days".
@@ -322,17 +358,22 @@ const fatigueWords = f => (f.kind === 'failure' ? 'a set taken to failure'
    THE FOUR
    ================================================================ */
 
-function doneRead(i, t, history, shape) {
+function doneRead(i, t, history, shape, day = NO_DAY) {
   /* The usual length of a session like this one, in working sets — his
      sessions of this SHAPE, and nothing else. Every session in the window was
      the first draft's fallback, and it pooled short leg days with long chest
      days: "7 working sets against a usual 5.5" to somebody half way through a
      chest day. A usual length is only a usual length among sessions of the
      same kind, so without three of them there is no length at all, and only
-     fatigue can say stop. */
-  const mine = shape ? history.filter(s => (shape.members || []).includes(s.key)) : [];
+     fatigue can say stop.
+     v54: a workout split across two visits today is read as one — the day's
+     sets against his usual for its shape (dayOf); an earlier session of a
+     different shape is another workout, and counts for nothing here. */
+  const split = !!day.shape;
+  const total = split ? day.total : t.total;
+  const mine = shape ? history.filter(s => (shape.members || []).includes(s.key) && !day.same.includes(s)) : [];
   const usual = mine.length >= MIN_SESSIONS ? median(mine.map(s => s.total)) : null;
-  const long = usual != null && t.total > 0 && t.total >= usual;
+  const long = usual != null && t.total > 0 && total >= usual;
 
   // The last two exercises worked, and what their sets show — said in the
   // order he did them.
@@ -345,8 +386,11 @@ function doneRead(i, t, history, shape) {
 
   const why = [];
   if (long) {
-    why.push(plural(t.total, 'working set') + ' so far this session. Across your ' + kindOf(shape) +
-             ' in the last twelve weeks, the median is ' + one(usual) + '.');
+    why.push(split
+      ? plural(total, 'working set') + ' today, ' + t.total + ' of them this session and ' + (total - t.total) + ' earlier. Across your ' +
+        kindOf(shape) + ' in the last twelve weeks, the median is ' + one(usual) + '.'
+      : plural(t.total, 'working set') + ' so far this session. Across your ' + kindOf(shape) +
+        ' in the last twelve weeks, the median is ' + one(usual) + '.');
   }
   if (tired) lastTwo.forEach(x => why.push(x.e.name + ': ' + fatigueWords(x.f) + '.'));
   why.push('Coach leans to stopping when the log points both ways: a set left undone costs nothing.');
@@ -354,29 +398,34 @@ function doneRead(i, t, history, shape) {
   return {
     kind: 'done', exId: null, add: null,
     text: 'You’re probably good for today — ' + (long
-      ? plural(t.total, 'working set') + ' against a usual ' + one(usual) + '.'
+      ? plural(total, 'working set') + (split ? ' across today’s visits' : '') + ' against a usual ' + one(usual) + '.'
       : lastTwo.map(x => x.e.name + ', ' + fatigueWords(x.f)).join('; ') + '.'),
-    short: long ? 'You’re probably good for today: ' + plural(t.total, 'working set') + '.'
+    short: long ? 'You’re probably good for today: ' + plural(total, 'working set') + (split ? ' today.' : '.')
                 : 'You’re probably good for today.',
     why
   };
 }
 
-function switchRead(i, t, history, shape) {
+function switchRead(i, t, history, shape, day = NO_DAY) {
   const cur = t.current;
   if (!cur || cur.cardio || !cur.group || !shape) return null;
   const g = cur.group;
-  const had = t.groupSets[g] || 0;
-  if (!had) return null;
-  const counts = history.filter(s => s.groupSets[g] > 0).map(s => s.groupSets[g]);
+  // v54: on a workout split across today's visits, the group's sets today.
+  const split = !!day.shape;
+  const now = t.groupSets[g] || 0;
+  const had = now + (split ? day.same.reduce((a, s) => a + (s.groupSets[g] || 0), 0) : 0);
+  if (!now) return null;
+  const counts = history.filter(s => s.groupSets[g] > 0 && !day.same.includes(s)).map(s => s.groupSets[g]);
   if (counts.length < MIN_SESSIONS) return null;
   const usual = median(counts);
   if (had < usual) return null;
+  const when = split && had > now ? 'today' : 'this session';
 
   // What is left of the shape: its groups with no working set today, in the
-  // order his sessions of this kind usually reach them.
-  const members = history.filter(s => (shape.members || []).includes(s.key));
-  const left = (shape.groups || []).filter(x => x !== g && !(t.groupSets[x] > 0)).map(x => {
+  // order his sessions of this kind usually reach them. v54: TODAY — a group
+  // he trained in a session earlier today is not left.
+  const members = history.filter(s => (shape.members || []).includes(s.key) && !day.same.includes(s));
+  const left = (shape.groups || []).filter(x => x !== g && !(t.groupSets[x] > 0) && !day.groups.has(x)).map(x => {
     const at = members.map(s => s.order.findIndex(ex => !ex.cardio && ex.group === x)).filter(n => n >= 0);
     return { group: x, at: median(at) };
   }).filter(x => x.at != null)
@@ -398,20 +447,22 @@ function switchRead(i, t, history, shape) {
     if (s.startedAt > f.at) f.at = s.startedAt;
   });
   const lead = Object.values(firsts)
-    .filter(f => pickable(i, f.exId) && !t.ids.has(f.exId))
+    .filter(f => pickable(i, f.exId) && !t.ids.has(f.exId) && !day.ids.has(f.exId))
     .sort((a, b) => b.n - a.n || b.at - a.at || (a.exId < b.exId ? -1 : 1))[0] || null;
   const add = lead ? addOf(i, lead.exId) : null;
+  // With a session earlier today, "no working set" was checked across the day.
+  const untouched = day.earlier.length ? 'today' : 'this session';
 
   return {
     kind: 'switch', exId: add ? add.id : null, group: next, add,
-    text: Group(g) + ' has had its usual this session — ' + plural(had, 'working set') + ' against a median of ' +
+    text: Group(g) + ' has had its usual ' + when + ' — ' + plural(had, 'working set') + ' against a median of ' +
           one(usual) + '. ' + Group(next) + ' is the part of your ' + String(shape.name) + ' with nothing in it yet' +
           (add ? ', and ' + add.name + ' is how you usually start it.' : '.'),
     short: 'Usual ' + groupWord(g) + ' reached: ' + had + ' sets. ' + Group(next) + ' is untouched.',
     why: [
-      plural(had, 'working ' + groupWord(g) + ' set') + ' this session. Across your ' + plural(counts.length, 'session') +
+      plural(had, 'working ' + groupWord(g) + ' set') + ' ' + when + '. Across your ' + plural(counts.length, 'session') +
         ' with ' + groupWord(g) + ' in the last twelve weeks, the median is ' + one(usual) + '.',
-      Group(next) + ' is in your ' + String(shape.name) + ' and has no working set this session.',
+      Group(next) + ' is in your ' + String(shape.name) + ' and has no working set ' + untouched + '.',
       add ? add.name + ' came first for ' + groupWord(next) + ' in ' + lead.n + ' of those ' +
             plural(withGroup, 'session') + '.' : null,
       add ? lastTime(i, history, add.id, add.name) : null
@@ -452,21 +503,24 @@ function anotherRead(i, t, history) {
   };
 }
 
-function nextRead(i, t, history, shape) {
+function nextRead(i, t, history, shape, day = NO_DAY) {
   if (!shape || !t.worked.length) return null;
   const done = t.worked.slice().sort((a, b) => a.first - b.first);
-  const pool = history.filter(s => (shape.members || []).includes(s.key) &&
+  const pool = history.filter(s => (shape.members || []).includes(s.key) && !day.same.includes(s) &&
     done.every(d => s.order.some(ex => ex.exId === d.exId)));
   if (pool.length < MIN_SESSIONS) return null;
 
   // In each of those sessions, the exercise straight after the last of the
   // ones he has done today. If that is already on today's list, or cannot be
-  // put in front of him, the session is counted and votes for nothing.
+  // put in front of him, the session is counted and votes for nothing. v54:
+  // nor if he did it in a session earlier today, or it is of a group he
+  // trained earlier today and has not come back to in this one.
   const votes = {};
   pool.forEach(s => {
     const lastAt = Math.max(...done.map(d => s.order.findIndex(ex => ex.exId === d.exId)));
     const after = s.order[lastAt + 1];
     if (!after || t.ids.has(after.exId) || !pickable(i, after.exId)) return;
+    if (day.ids.has(after.exId) || (after.group && day.groups.has(after.group) && !t.planned.includes(after.group))) return;
     const v = votes[after.exId] || (votes[after.exId] = { exId: after.exId, n: 0, at: 0 });
     v.n++;
     if (s.startedAt > v.at) v.at = s.startedAt;
@@ -512,12 +566,15 @@ export function liveRead(input) {
     const t = todayOf(i);
     if (!t.worked.length) return null;
     const history = historyOf(i);
-    const shape = shapeOf(i, t);
+    // v54: today is a day — a workout split across today's visits reads as
+    // one shape, and what earlier sessions trained counts as trained.
+    const day = dayOf(i, t, history);
+    const shape = day.shape || shapeOf(i, t);
     const tries = {
-      done:    () => doneRead(i, t, history, shape),
-      switch:  () => switchRead(i, t, history, shape),
+      done:    () => doneRead(i, t, history, shape, day),
+      switch:  () => switchRead(i, t, history, shape, day),
       another: () => anotherRead(i, t, history),
-      next:    () => nextRead(i, t, history, shape)
+      next:    () => nextRead(i, t, history, shape, day)
     };
     for (const kind of LIVE_KINDS) {
       const a = tries[kind]();
@@ -566,7 +623,8 @@ export function setRead(input) {
     let next = null;
     if (!cur.cardio && typeof i.nextSet === 'function') {
       const history = historyOf(i);
-      if (!(t.worked.length && doneRead(i, t, history, shapeOf(i, t)))) next = nextOf(i, cur);
+      const day = t.worked.length ? dayOf(i, t, history) : NO_DAY;
+      if (!(t.worked.length && doneRead(i, t, history, day.shape || shapeOf(i, t), day))) next = nextOf(i, cur);
     }
     return { rated, next };
   } catch {

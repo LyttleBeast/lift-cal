@@ -4649,6 +4649,11 @@ function liveInput(d, session, current) {
     shapes: d.f('session.shapes') || [],
     lib: d.lib,
     hidden: Array.isArray(d.input.hidden) ? d.input.hidden : [],
+    /* v54: the live session's own day, so the read counts the sessions he
+       finished earlier that day from the window above — today is a day, not
+       a session (SHIP-V54-PROMPT decision 10). coach-live.js constructs no
+       Date, so the key is worked out here, the one place it always is. */
+    day: dayKey(session && Number.isFinite(session.startedAt) ? session.startedAt : d.now),
     /* v54: the next set's target (coach-prog.js nextSet(), spec §3.10), for
        the lift in hand — handed in the way the window is, so coach-live.js
        works out no weight and imports nothing that does. Off with the targets
