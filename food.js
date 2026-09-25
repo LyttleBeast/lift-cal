@@ -2269,7 +2269,7 @@ function openAiReview(res, ctx) {
         openProposedEdit(e, () => {
           if (origins[i] && was !== [e.name, e.qty, e.cal, e.p, e.c, e.f].join('|')) origins[i] = EDITED;
           paint();
-        });
+        }, o && o.desc);
       };
       row.appendChild(b);
       row.appendChild(el('div', 'fe-cal num', String(e.cal)));
@@ -2476,8 +2476,11 @@ function openRecallHit(hit, ctx) {
 }
 
 /* Correcting one line of an estimate, plus the option to keep it as a saved
-   food so the same thing never has to be guessed at twice. */
-function openProposedEdit(e, onDone) {
+   food so the same thing never has to be guessed at twice. `desc` (v58) is
+   USDA's own description of a generic row, from its origin
+   (estimate-origin.js), shown under the name so "which USDA row is this?" has
+   an answer; the name stays the everyday one, and `desc` is never written. */
+function openProposedEdit(e, onDone, desc) {
   const { sh, close } = sheet(onDone);
   sh.appendChild(el('h2', null, 'Fix this item'));
 
@@ -2494,6 +2497,7 @@ function openProposedEdit(e, onDone) {
   };
 
   const name = f('Name', e.name, 'text');
+  if (desc) name.appendChild(el('div', 'fe-sub pe-desc', 'USDA: ' + desc));
   const qty  = f('Amount', e.qty, 'text');
   sh.append(name, qty);
 

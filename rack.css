@@ -1678,6 +1678,10 @@ body.peeking .view.active { padding-bottom: 65px; }
   white-space: normal; overflow-wrap: anywhere;
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
 }
+/* v58: "USDA: Beef, steak, sirloin, NS as to fat eaten", under the name box
+   on the fix-it sheet — whole, however long, since it is the answer to
+   "which row is this?". */
+.pe-desc { margin-top: 5px; overflow-wrap: anywhere; }
 /* v55: "Save", on an estimate's row — that row as a meal of its own. The
    row's full height and never under 44px, in the row's quiet type. */
 .pe-save {

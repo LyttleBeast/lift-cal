@@ -100,7 +100,17 @@ function foodRow(s, res) {
   // published number and still better than a guess; it is just older than the
   // menu somebody is holding.
   if (s.stale) parts.push('may be out of date');
-  return { origin: venue ? 'menu' : 'usda', venue, label: parts.join(' · ') };
+  const row = { origin: venue ? 'menu' : 'usda', venue, label: parts.join(' · ') };
+  // v58: the Worker names a generic the everyday way ("Sirloin steak") and
+  // sends USDA's own description beside it, `src.desc` ("Beef, steak, sirloin,
+  // NS as to fat eaten"), which the fix-it sheet shows as "USDA: …". Carried
+  // only on a row USDA published — no venue, and `from` naming USDA — since
+  // that line says so; an older or cached reply has no `desc`, and a row
+  // without one is exactly the row it was. It rides the row, so a row
+  // corrected by hand (EDITED) drops it with the rest of its provenance.
+  const desc = typeof s.desc === 'string' ? s.desc.trim() : '';
+  if (desc && !venue && who === 'USDA') row.desc = desc;
+  return row;
 }
 
 const modelRow = origin => ({
