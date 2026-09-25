@@ -50,6 +50,12 @@
 // against pull — its sets, not the whole split — which says so; the two
 // direction splits and knees against hips are skipped whole, as before.
 //
+// v57, THE FLYES THAT PULL. A rear-delt fly, the reverse pec deck and a band
+// pull-apart are tagged `fly`, and a fly on shoulders counted as pushing. They
+// take the arms apart, so they are pulling now (coach-tags.js PULL_FLYES, and
+// his own fly filed under shoulders). Not among the rows: the spec's
+// horizontal pull is `row`, and the words say "rowing sets".
+//
 // PURE, and copied into the native tree verbatim (src/pure/coach-volume.js).
 // No reads, no DOM, no module state; the clock is `now`. Imports exercises.js
 // (groups, secondaries), analytics.js's session math, coach-tags.js (movement
@@ -58,7 +64,7 @@
 
 import { GROUPS, GROUP_ORDER, EXERCISE_BY_ID } from './exercises.js';
 import { isWorking, mergeSessionExercises } from './analytics.js';
-import { tagsFor } from './coach-tags.js';
+import { tagsFor, flyPulls } from './coach-tags.js';
 import { AIMS, volumeFloor, MAIN_LIFTS, MAIN_LIFT_AIMS, mainLiftGroups } from './coach-goal.js';
 
 const DAY = 864e5;
@@ -216,8 +222,12 @@ function countSession(rec, lib, repDrop) {
     const t = own || tagsFor(ex.exId);
     if (!t) return;
     const P = out.pat[g] || (out.pat[g] = noPat());
-    if (['press', 'fly', 'extension'].includes(t.pattern) && ['chest', 'shoulders', 'arms'].includes(g)) P.push += n;
-    if (t.pattern === 'row' || t.pattern === 'pulldown') P.pull += n;
+    // v57: a fly that takes the arms apart behind him — a rear-delt fly, the
+    // reverse pec deck, a band pull-apart — is pulling, not pushing
+    // (coach-tags.js flyPulls()). It is not a row, so it is not among the rows.
+    const pulls = t.pattern === 'fly' && flyPulls(ex.exId, row);
+    if (!pulls && ['press', 'fly', 'extension'].includes(t.pattern) && ['chest', 'shoulders', 'arms'].includes(g)) P.push += n;
+    if (pulls || t.pattern === 'row' || t.pattern === 'pulldown') P.pull += n;
     if (t.pattern === 'press' && ['flat', 'incline', 'decline'].includes(t.angle)) P.hPress += n;
     if (t.pattern === 'press' && t.angle === 'overhead') P.vPress += n;
     if (t.pattern === 'row') P.hPull += n;
@@ -416,11 +426,12 @@ export function volumeAnswer(read) {
 
    Four splits over eight weeks of hard sets, by movement, from the tags:
    pushing (presses, flyes and extensions on chest, shoulders and arms) against
-   pulling (rows and pulldowns), past two to one either way; flat, incline and
-   decline presses against overhead, and rows against pulldowns, when one side
-   is zero; knees (squats and lunges) against hips (hinges and bridges), past
-   three to one. A set is one set of its movement here: fractional counting
-   shares a set between muscle groups, and a set has one movement. Customs
+   pulling (rows and pulldowns, and since v57 the flyes that pull), past two to
+   one either way; flat, incline and decline presses against overhead, and rows
+   against pulldowns, when one side is zero; knees (squats and lunges) against
+   hips (hinges and bridges), past three to one. A set is one set of its
+   movement here: fractional counting shares a set between muscle groups, and
+   a set has one movement. Customs
    have no movement tag and are left out, and said to be; a group whose sets
    are over a quarter customs — `heavy` — has its splits skipped. Hidden
    exercises count — hiding only takes one out of the picker — and nothing

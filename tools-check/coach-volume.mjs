@@ -28,6 +28,14 @@
 // L11–L15, push against pull with a customs-heavy group left out rather than
 // the split; and M1–M4, Micah's two answers of 25 Sep, reconstructed and read
 // by rack-v55 (staged out of git) beside today's.
+//
+// v57 (SHIP-V57-PROMPT §A): the 55 rows are held. The new rows, R0–R16, are the
+// flyes that pull — the rear-delt flyes, the reverse pec deck and the band
+// pull-apart, which rack-v56 (staged out of git) counted as pushing — and every
+// other exercise the brief named, read against the rule and held. Beside them,
+// every built-in in the library read before and after, and a sweep proving
+// the pushing count falls, and the pulling count rises, by those flyes' sets
+// and nothing else.
 
 import { mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
@@ -71,6 +79,18 @@ FILES.forEach(f => writeFileSync(join(odir, f.replace(/\.js$/, '.mjs')),
     .replace(/from '\.\/([\w-]+)\.js'/g, (w, n) => 'from ' + (FILES.includes(n + '.js') ? oat(n + '.mjs') : real(n + '.js')))));
 const OC = await import(JSON.parse(oat('coach.mjs')));
 const OV = await import(JSON.parse(oat('coach-volume.mjs')));
+/* v57: rack-v56's stack (04e87cc, the ship this one starts from), staged the
+   same way — the "before" of the flyes that pull in R. */
+const V56 = '04e87cc';
+const sdir = mkdtempSync(join(tmpdir(), 'rack-coach-volume-v56-'));
+const sat = f => JSON.stringify(pathToFileURL(join(sdir, f)).href);
+writeFileSync(join(sdir, 'store-stub.mjs'), readFileSync(join(dir, 'store-stub.mjs'), 'utf8'));
+FILES.forEach(f => writeFileSync(join(sdir, f.replace(/\.js$/, '.mjs')),
+  execFileSync('git', ['show', V56 + ':' + f], { cwd: ROOT, encoding: 'utf8' })
+    .replace("from './store.js'", "from './store-stub.mjs'")
+    .replace(/from '\.\/([\w-]+)\.js'/g, (w, n) => 'from ' + (FILES.includes(n + '.js') ? sat(n + '.mjs') : real(n + '.js')))));
+const SC = await import(JSON.parse(sat('coach.mjs')));
+const SV = await import(JSON.parse(sat('coach-volume.mjs')));
 
 /* ---------- harness ---------- */
 let pass = 0, fail = 0;
@@ -104,7 +124,7 @@ const sess = (ago, exercises) => ({ id: 'v' + (++sid), startedAt: NOW - ago * DA
 // `weeks` sessions, week k's exercises from f(k).
 const weekly = (weeks, f) => Array.from({ length: weeks }, (_, k) => sess(7 * k + 2, f(k)).exercises.length ? sess(7 * k + 2, f(k)) : null).filter(Boolean);
 const inputOf = (sessions, o = {}) => ({
-  now: NOW, opens: 0, recentGreets: [], recentHype: [], u: o.u || 'lb', log: 'readable', sessions, lib: LIB,
+  now: NOW, opens: 0, recentGreets: [], recentHype: [], u: o.u || 'lb', log: 'readable', sessions, lib: o.lib || LIB,
   hidden: o.hidden || [], libReady: true, routines: [], live: { active: false }, tier: { pro: o.basic ? false : true },
   targets: null, targetsSet: null, summaries: {}, steps: { days: {} }, weighIns: [],
   weight: { latestLb: null, latestAt: null, rateWk: null, rateDays: null, goalDir: null, goalRateWk: null },
@@ -418,6 +438,118 @@ const chestWeeks = (now, was, o = {}) => weekly(9, k => [nx(o.id || 'pec-deck', 
   score('L15', 'every pushing group half customs: nothing left to push with, so push : pull is skipped whole — never "0 pushing sets"',
         { pp: pp(L15), skipped: L15.skipped }, { pp: { a: 24, b: 16, flagged: false, skipped: true, left: [] }, skipped: ['chest', 'shoulders', 'arms'] });
   hear(V.balanceAnswer(L15));
+
+  /* --- v57: the flyes that pull (SHIP-V57-PROMPT §A) ---
+     A rear-delt fly, the reverse pec deck and a band pull-apart take the arms
+     apart behind him: pulling. rack-v56 (SV, SC) counted each as pushing, a fly
+     on shoulders. The base week is bench 2, overhead press 1, a row and a
+     pulldown — 24 pushing and 16 pulling sets over 8 weeks — and each row adds
+     one set a week of what it reads. The other exercises the brief named are
+     read against the rule and held, each with its reason. */
+  const split = (Vm, Cm, sessions, id, o) => { const x = Vm.balanceRead(Cm.volumeInput(inputOf(sessions, o))).ratios.find(y => y.id === id); return { a: x.a, b: x.b, flagged: x.flagged }; };
+  const both = (sessions, o) => ({ now: split(V, C, sessions, 'pushPull', o), was: split(SV, SC, sessions, 'pushPull', o) });
+  const base = () => [nx('barbell-bench-press', 2), nx('overhead-press', 1), nx('barbell-row', 1), nx('lat-pulldown', 1)];
+  const plus = (...ids) => weekly(9, () => base().concat(ids.map(id => nx(id, 1))));
+  const R0 = plus('reverse-pec-deck', 'dumbbell-rear-delt-flye');
+  const said0 = a => [a.text].concat(a.more.map(m => m.text));
+  score('R0', 'rack-v56 called this week lopsided on its own miscount: 40 pushing against 16, two rear-delt fly sets a week among the pushing — they pull, and it is 24 against 32',
+        { ...both(R0), now_said: said0(V.balanceAnswer(bal(R0))), was_said: said0(SV.balanceAnswer(SV.balanceRead(SC.volumeInput(inputOf(R0))))) },
+        { now: { a: 24, b: 32, flagged: false }, was: { a: 40, b: 16, flagged: true },
+          now_said: ['Nothing lopsided in the last 8 weeks.', 'Over 8 weeks: 24 pushing sets, 32 pulling sets.'],
+          was_said: ['Over 8 weeks: 40 pushing sets, 16 pulling sets, more than two to one.'] });
+  hear(V.balanceAnswer(bal(R0)));
+  [['R1', 'dumbbell-rear-delt-flye'], ['R2', 'cable-rear-delt-flye'], ['R3', 'reverse-pec-deck'], ['R4', 'band-pull-apart']].forEach(([id, ex1]) => {
+    score(id, LIB[ex1].name + ' is pulling: 24 pushing sets, 24 pulling — rack-v56 counted its 8 as pushing, 32 against 16 — and it is not a row',
+          { ...both(plus(ex1)), rows: split(V, C, plus(ex1), 'pull') },
+          { now: { a: 24, b: 24, flagged: false }, was: { a: 32, b: 16, flagged: false }, rows: { a: 8, b: 8, flagged: false } });
+  });
+  // Refiled, an override he can make: the direction is the exercise's, not the group's.
+  const rpdBack = { ...LIB, 'reverse-pec-deck': { ...LIB['reverse-pec-deck'], group: 'back' } };
+  score('R5', 'the reverse pec deck refiled under back still pulls — rack-v56 counted it as neither there, 24 against 16',
+        both(plus('reverse-pec-deck'), { lib: rpdBack }), { now: { a: 24, b: 24, flagged: false }, was: { a: 24, b: 16, flagged: false } });
+  const pecShoulders = { ...LIB, 'pec-deck': { ...LIB['pec-deck'], group: 'shoulders' } };
+  score('R6', 'and the pec deck, a chest fly, refiled under shoulders still pushes — as it did',
+        both(plus('pec-deck'), { lib: pecShoulders }), { now: { a: 32, b: 16, flagged: false }, was: { a: 32, b: 16, flagged: false } });
+  const R7 = weekly(9, () => [nx('barbell-bench-press', 2), nx('overhead-press', 1), nx('lat-pulldown', 2), nx('dumbbell-rear-delt-flye', 1)]);
+  score('R7', 'not a row: pulldowns and rear-delt flyes and no rows is still "16 pulldown sets, no rows", before and after',
+        { now: split(V, C, R7, 'pull'), was: split(SV, SC, R7, 'pull'), said: V.balanceAnswer(bal(R7)).text },
+        { now: { a: 0, b: 16, flagged: true }, was: { a: 0, b: 16, flagged: true }, said: 'Over 8 weeks: 16 pulldown sets, no rows.' });
+  hear(V.balanceAnswer(bal(R7)));
+  // Held, each read against the rule: the brief's list, and the rest of the library's direction questions.
+  const holds = (id, label, ids, want, rows) => score(id, label, { ...both(plus(...ids)), ...(rows ? { rows: split(V, C, plus(...ids), 'pull') } : null) },
+                                                     { now: want, was: want, ...(rows ? { rows } : null) });
+  holds('R8', 'the rope face pull: pulling, and a row — held', ['rope-face-pull'], { a: 24, b: 24, flagged: false }, { a: 16, b: 8, flagged: false });
+  holds('R9', 'upright rows, barbell and cable: pulling, and rows by name — held', ['upright-row', 'cable-upright-row'], { a: 24, b: 32, flagged: false }, { a: 24, b: 8, flagged: false });
+  holds('R10', 'the library has no pullover; the straight-arm pulldown, its nearest, is pulling and a pulldown — held', ['straight-arm-pulldown'],
+       { a: 24, b: 24, flagged: false }, { a: 8, b: 16, flagged: false });
+  holds('R11', 'shrugs, all four: neither pushing nor pulling — held', ['barbell-shrug', 'dumbbell-shrug', 'trap-bar-shrug', 'cable-shrug'], { a: 24, b: 16, flagged: false });
+  holds('R12', 'lateral, front and Lu raises: neither — held', ['dumbbell-lateral-raise', 'cable-lateral-raise', 'machine-lateral-raise', 'leaning-lateral-raise',
+       'lu-raise', 'dumbbell-front-raise', 'plate-front-raise', 'cable-front-raise'], { a: 24, b: 16, flagged: false });
+  holds('R13', 'curls: neither, as the spec’s pieces have it (listed for Micah, not moved)', ['barbell-curl', 'hammer-curl', 'cable-curl'], { a: 24, b: 16, flagged: false });
+  holds('R14', 'the Cuban press, pike and handstand push-ups: pushing — held', ['barbell-cuban-press', 'pike-push-up', 'handstand-push-up'], { a: 48, b: 16, flagged: true });
+  // His own: a fly filed under shoulders is the rear-delt fly the editor names; under chest, a chest fly.
+  LIB['custom-my-rear-fly-m9n0p'] = { name: 'My Rear Fly', group: 'shoulders', equipment: 'cable', pattern: 'fly' };
+  LIB['custom-my-flye-q1r2s'] = { name: 'My Flye', group: 'chest', equipment: 'cable', pattern: 'fly' };
+  score('R15', 'his own fly under shoulders — "Rear-delt fly" in its editor — pulls; rack-v56 counted it as pushing',
+        both(plus('custom-my-rear-fly-m9n0p')), { now: { a: 24, b: 24, flagged: false }, was: { a: 32, b: 16, flagged: false } });
+  score('R16', 'and his own fly under chest pushes, as it did', both(plus('custom-my-flye-q1r2s')), { now: { a: 32, b: 16, flagged: false }, was: { a: 32, b: 16, flagged: false } });
+
+  /* Every built-in in the library, one set a week of it beside the base week,
+     read by rack-v56 and today: push : pull moves for the four flyes and no
+     other exercise, by exactly their 8 sets; the other three splits and the
+     weekly volume answer do not move for any of them. */
+  const moved = [], other = [], PULLERS = ['dumbbell-rear-delt-flye', 'cable-rear-delt-flye', 'reverse-pec-deck', 'band-pull-apart'];
+  EXERCISES.forEach(x => {
+    const log = plus(x.id);
+    const nb = bal(log), wb = SV.balanceRead(SC.volumeInput(inputOf(log)));
+    const pick = (r, id) => (({ a, b, flagged }) => ({ a, b, flagged }))(r.ratios.find(y => y.id === id));
+    if (J(pick(nb, 'pushPull')) !== J(pick(wb, 'pushPull'))) moved.push({ id: x.id, now: pick(nb, 'pushPull'), was: pick(wb, 'pushPull') });
+    if (['press', 'pull', 'kneeHip'].some(s => J(pick(nb, s)) !== J(pick(wb, s))) ||
+        J(vol(log)) !== J(SV.volumeRead(SC.volumeInput(inputOf(log))))) other.push(x.id);
+  });
+  check('every built-in (' + EXERCISES.length + ') read before and after: push : pull moves for the four flyes that pull and nothing else — ' + J(moved.map(m => m.id)),
+        J(moved.map(m => m.id).sort()) === J(PULLERS.slice().sort()) &&
+        moved.every(m => m.was.a - m.now.a === 8 && m.now.b - m.was.b === 8), J(moved));
+  check('and the press split, the pull split, knees against hips and the weekly volume answer move for none of them', !other.length, list(other));
+
+  /* A sweep: 300 histories of the four flyes among the lifts beside them, every
+     set type, warm-ups in disguise and all. Pushing falls, and pulling rises,
+     by the four flyes' own hard sets in the eight weeks — counted here from
+     V.hardSets(), never read off the answer — and nothing else moves. */
+  {
+    let seed = 57;
+    const rnd = k => { seed = (seed * 1103515245 + 12345) % 2147483648; return Math.floor(seed / 65536) % k; };
+    const POOL = ['barbell-bench-press', 'overhead-press', 'pec-deck', 'triceps-pushdown-rope', 'barbell-row', 'lat-pulldown', 'rope-face-pull', 'upright-row',
+                  'dumbbell-lateral-raise', 'barbell-curl', 'back-squat-high-bar', 'romanian-deadlift'].concat(PULLERS);
+    const bad = [];
+    let flips = 0, reached = 0;
+    for (let h = 0; h < 300; h++) {
+      const log = [];
+      let R = 0;
+      const weeks = 3 + rnd(10);
+      for (let k = 0; k < weeks; k++) {
+        for (let s = 0, per = 1 + rnd(3); s < per; s++) {
+          const bag = POOL.slice(), ids = [];
+          for (let n = 1 + rnd(6); n > 0; n--) ids.push(bag.splice(rnd(bag.length), 1)[0]);
+          const exs = ids.map(id => ex(id, Array.from({ length: 1 + rnd(5) }, () => S(rnd(4) === 0 ? 45 : 135, 3 + rnd(10), ['N', 'N', 'N', 'F', 'W', 'D'][rnd(6)]))));
+          const ago = 7 * k + rnd(7);
+          if (ago < 7 * 8) exs.forEach(e => { if (PULLERS.includes(e.exId)) R += V.hardSets(e.sets).length; });
+          log.push(sess(ago, exs));
+        }
+      }
+      const nb = bal(log), wb = SV.balanceRead(SC.volumeInput(inputOf(log)));
+      if (!nb || nb.state !== 'read') continue;
+      reached++;
+      const g = (r, id) => r.ratios.find(y => y.id === id);
+      const np = g(nb, 'pushPull'), wp = g(wb, 'pushPull');
+      if (wp.a - np.a !== R || np.b - wp.b !== R) bad.push('history ' + h + ': R ' + R + ', push ' + wp.a + '→' + np.a + ', pull ' + wp.b + '→' + np.b);
+      if (['press', 'pull', 'kneeHip'].some(id => J(g(nb, id)) !== J(g(wb, id)))) bad.push('history ' + h + ': another split moved');
+      if (np.flagged !== wp.flagged) flips++;
+      ['lb', 'kg'].forEach(u => hear(V.balanceAnswer(nb), u));
+    }
+    check('the sweep (' + reached + ' histories read): pushing falls and pulling rises by the four flyes’ hard sets, exactly, and no other split moves — ' +
+          flips + ' of them no longer lopsided, or newly so', reached > 200 && !bad.length, list(bad));
+  }
 
   /* --- M: Micah's two answers of 25 Sep (rack-v1054), reconstructed ---
      His log is not in this repo. This one is built to the shapes he read:

@@ -61,6 +61,9 @@
 //   agreement table below allows hinge on back as well as on legs.
 //   Dips, JM presses and diamond push-ups filed under arms are `extension`:
 //   they are elbow-extension exercises whatever the torso is doing.
+//   Rear-delt flyes, the reverse pec deck and the band pull-apart are `fly`,
+//   the arms moving apart where a chest fly brings them together. One word for
+//   the two directions, and PULL_FLYES below (v57) is what tells them apart.
 //
 // This module imports nothing and reads nothing.
 
@@ -357,6 +360,20 @@ export const TAGS = Object.freeze(Object.fromEntries(
 
 export const TAG_IDS = Object.freeze(RAW.map(r => r[0]));
 
+/* v57: THE FLYES THAT PULL. A chest fly brings the arms together in front of
+   him, which is pushing; a rear-delt fly, the reverse pec deck and a band
+   pull-apart take them apart behind, which is pulling. The fifteen words stay
+   fifteen and the rows above stay as they are: the direction is this list,
+   read by coach-volume.js in push against pull and nowhere else. It is every
+   fly the library files under shoulders — tools-check/coach-tags.mjs fails
+   the day a fly is filed there that is not on it — and it is by id, so one
+   he refiles under back still pulls. Not a row, so never one of the rows. */
+export const PULL_FLYES = Object.freeze(['dumbbell-rear-delt-flye', 'cable-rear-delt-flye', 'reverse-pec-deck', 'band-pull-apart']);
+// And where his own fly pulls: filed under shoulders, where every fly the
+// library files is one of the four, it is a rear-delt fly, and the editor
+// names it so (movementLabel below). Under chest it is a chest fly.
+export const PULL_FLY_GROUP = 'shoulders';
+
 /* v56: HIS OWN WORD FOR AN EXERCISE HE MADE.
 
    The angles each pattern is tagged with in the table above — the patterns
@@ -378,6 +395,12 @@ export const ANGLE_LABELS = Object.freeze({ flat: 'Flat', incline: 'Incline', de
 // The patterns the agreement table allows on a group, in vocabulary order.
 export function patternsOn(group) {
   return PATTERNS.filter(p => PATTERN_GROUPS[p].includes(group));
+}
+
+// v57: the word the editor shows for a pattern on a group — PATTERN_LABELS',
+// except a fly on shoulders, which is the rear-delt fly it counts as.
+export function movementLabel(pattern, group) {
+  return pattern === 'fly' && group === PULL_FLY_GROUP ? 'Rear-delt fly' : PATTERN_LABELS[pattern];
 }
 
 /* A movement off an exercise's library row, { group, pattern, angle }: the
@@ -414,6 +437,15 @@ export function tagsFor(exId, row) {
 export function patternOf(exId, row) {
   const t = tagsFor(exId, row);
   return t ? t.pattern : null;
+}
+
+/* v57: whether an exercise is a fly that pulls. A built-in by PULL_FLYES,
+   whatever group it is filed under; his own, handed its row, when the
+   movement he set is a fly and he filed it under shoulders. */
+export function flyPulls(exId, row) {
+  if (TAGS[exId]) return PULL_FLYES.includes(exId);
+  const own = row === undefined ? null : ownMovement(row);
+  return !!own && own.pattern === 'fly' && row.group === PULL_FLY_GROUP;
 }
 
 // Everything tagged with one pattern, ids only. Ship two's builder picks from

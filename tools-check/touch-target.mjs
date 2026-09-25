@@ -658,9 +658,13 @@ section('F. Your goal (v55): every answer’s label fits its chip on one line, a
      fits the row whole, and is 44px wide as a target. */
   section('G. the custom exercise editor (v56): every Movement and Angle label fits its chip on one line, at 320 and 390 wide');
   const TG = await import(pathToFileURL(SRC('coach-tags.js')).href);
-  const moveLabels = ['Not set'].concat(TG.PATTERNS.map(p => TG.PATTERN_LABELS[p]), TG.ANGLES.map(a => TG.ANGLE_LABELS[a]));
-  check(`coach-tags.js's labels were read: "Not set", ${TG.PATTERNS.length} movements and ${TG.ANGLES.length} angles`,
-        moveLabels.length === 1 + TG.PATTERNS.length + TG.ANGLES.length && moveLabels.every(l => typeof l === 'string' && l.length > 0));
+  // v57: and each group's own word for a pattern (movementLabel) — on shoulders, "Rear-delt fly".
+  const groupWords = [...new Set(['chest', 'back', 'legs', 'shoulders', 'arms', 'core'].flatMap(g => TG.patternsOn(g).map(p => TG.movementLabel(p, g))))]
+    .filter(l => !TG.PATTERNS.some(p => TG.PATTERN_LABELS[p] === l));
+  const moveLabels = ['Not set'].concat(TG.PATTERNS.map(p => TG.PATTERN_LABELS[p]), groupWords, TG.ANGLES.map(a => TG.ANGLE_LABELS[a]));
+  check(`coach-tags.js's labels were read: "Not set", ${TG.PATTERNS.length} movements, ${groupWords.length} group word (${groupWords.join(', ')}) and ${TG.ANGLES.length} angles`,
+        moveLabels.length === 1 + TG.PATTERNS.length + groupWords.length + TG.ANGLES.length && groupWords.includes('Rear-delt fly') &&
+        moveLabels.every(l => typeof l === 'string' && l.length > 0));
   const mspec = 'button.move-opt < div.move-opts < div < div.sheet';
   for (const w of [390, 320]) {
     const nodes = []; for (let x = chain(mspec).parent; x; x = x.parent) nodes.unshift(x);

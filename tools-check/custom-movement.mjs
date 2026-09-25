@@ -30,6 +30,10 @@
 //        set it is said once in 28 days. The builder and the picker suggest
 //        exactly what they did.
 //
+// v57 (SHIP-V57-PROMPT §A): on shoulders the fly chip reads "Rear-delt fly"
+// and is stored as the fly it always was (B), and Coach counts it as pulling
+// (D). Every v56 check here is held.
+//
 // NO COPY OF ANY RULE LIVES HERE. picker.js is driven for real through a DOM
 // shim, against the REAL store.js over a Firebase stub (destructive-write.mjs
 // and refused-write.mjs's rig); coach-tags.js is imported as it is; coach.js
@@ -354,6 +358,32 @@ section('B. the editor — "Not set" by default, the group’s patterns only, an
   check('a new exercise left "Not set" is today’s shape exactly — id, name, group, equipment, secondary, custom',
         J(Object.keys(plain)) === J(['id', 'name', 'group', 'equipment', 'secondary', 'custom']), J(plain));
   sheets().forEach(s => s.remove());
+
+  /* v57 (SHIP-V57-PROMPT §A): on shoulders the fly is named for what Coach
+     counts it as, "Rear-delt fly" — every fly the library files there is one —
+     and it is stored as the fly it always was. One chip, no second question,
+     nothing new written. */
+  P.openExerciseManager(() => {});
+  button(top(), '+  New exercise').onclick();
+  sh = top();
+  walk(sh).find(x => x.tag === 'input').value = 'My Rear Fly';
+  tap(sh, 'Shoulders');
+  check('v57: on shoulders the fly reads "Rear-delt fly", one chip in the fly’s place — ' + J(rowsOf(sh)),
+        J(rowsOf(sh)) === J({ Movement: ['Not set*', 'Press', 'Row', 'Rear-delt fly', 'Raise'] }), J(rowsOf(sh)));
+  tap(sh, 'Rear-delt fly');
+  button(sh, 'Create').onclick();
+  for (let k = 0; k < 5; k++) await tick();
+  const rear = server.get(U + PATH)[5] || {};
+  check('created as pattern "fly", and nothing new: no angle, no other key — today’s shape and the pattern',
+        rear.name === 'My Rear Fly' && rear.group === 'shoulders' && rear.pattern === 'fly' &&
+        J(Object.keys(rear)) === J(['id', 'name', 'group', 'equipment', 'secondary', 'custom', 'pattern']), J(rear));
+  check('and his first three byte for byte', J(server.get(U + PATH).slice(0, 3)) === J(SEED));
+  sheets().forEach(s => s.remove());
+  sh = await openEdit('My Rear Fly');
+  check('opened again: "Rear-delt fly" chosen', rowsOf(sh).Movement.includes('Rear-delt fly*'), J(rowsOf(sh)));
+  tap(sh, 'Chest');
+  check('refiled under chest, the same fly reads "Fly" — a chest fly, which pushes', J(rowsOf(sh).Movement) === J(['Not set', 'Press', 'Fly*']), J(rowsOf(sh)));
+  sheets().forEach(s => s.remove());
 }
 
 /* ================= C. THE WHOLE-ARRAY WRITE, THE GUARD AND A REFUSAL ================= */
@@ -469,6 +499,14 @@ section('D. Coach — a custom exercise with a movement counts in the split, the
         pinned.ratios.find(x => x.id === 'kneeHip').a === 24);
   const vB = V.volumeRead(C.volumeInput(input(plainLib))), vA = V.volumeRead(C.volumeInput(input(setLib)));
   check('How’s my weekly volume? reads the same either way — a movement moves no count of sets', J(vB) === J(vA));
+
+  // v57: his rear-delt fly, as the editor stores it, two sets a week beside the log above.
+  const REAR = { id: 'custom-my-rear-fly-t1u2v', name: 'My Rear Fly', group: 'shoulders', equipment: 'cable', secondary: [], custom: true, pattern: 'fly' };
+  const withRear = lib => { const i = input(lib); return { ...i, sessions: i.sessions.map(s => ({ ...s, exercises: s.exercises.concat([exOf(lib, REAR.id, 2)]) })) }; };
+  const rearPP = row => pp(V.balanceRead(C.volumeInput(withRear(libOf([KICK, row])))));
+  check('v57: his "Rear-delt fly", through libIndex(), is 16 pulling sets — pushing unmoved at 32, pulling 40 to 56 — ' + J(rearPP(REAR)),
+        J(rearPP(REAR)) === J({ a: 32, b: 56, left: ['arms'], skipped: false }));
+  check('and the same fly refiled under chest is 16 pushing sets, 48 against 40', J(rearPP({ ...REAR, group: 'chest' })) === J({ a: 48, b: 40, left: ['arms'], skipped: false }));
 
   // The pointer, once in four weeks.
   const eng = asked => C.coach(input(plainLib, asked)).ask('ask_balance');

@@ -29,7 +29,7 @@ import { bump } from './usage.js';
 import { el, sheet, toast, noteEl, confirmSheet } from './ui.js';
 // v56: the movement vocabulary a custom exercise's Movement row offers. Pure,
 // and it imports nothing, so this is still a one-way edge.
-import { PATTERN_ANGLES, PATTERN_LABELS, ANGLE_LABELS, patternsOn, ownMovement } from './coach-tags.js';
+import { PATTERN_ANGLES, ANGLE_LABELS, patternsOn, ownMovement, movementLabel } from './coach-tags.js';
 
 let customEx  = [];
 let overrides = {};
@@ -439,7 +439,12 @@ export function openExerciseManager(onChange) {
    for "Not set". Every choice is a 44px chip that wraps whole at 320px.
 
    What reads it tonight is Coach's balance split, and nothing else: the
-   picker, the builder and the swaps suggest exactly what they did. */
+   picker, the builder and the swaps suggest exactly what they did.
+
+   v57: on shoulders, Fly reads "Rear-delt fly" — every fly the library files
+   there is one — and counts as pulling (coach-tags.js movementLabel(),
+   flyPulls()). One chip, and nothing new stored: it is pattern `fly`, as it
+   was. */
 function movementRows(start, groupOf) {
   const box = el('div');
   const was = ownMovement({ group: groupOf(), ...(start || null) });
@@ -456,7 +461,7 @@ function movementRows(start, groupOf) {
     box.appendChild(el('div', 'field-lbl', 'Movement'));
     const rows = el('div', 'move-opts');
     rows.appendChild(chip('Not set', !pattern, () => { pattern = null; angle = null; }));
-    patternsOn(group).forEach(p => rows.appendChild(chip(PATTERN_LABELS[p], pattern === p, () => {
+    patternsOn(group).forEach(p => rows.appendChild(chip(movementLabel(p, group), pattern === p, () => {
       if (pattern !== p) angle = null;
       pattern = p;
     })));

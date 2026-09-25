@@ -278,6 +278,39 @@ section('H. v56 — the tag read takes a custom exercise’s own movement, and a
         .every(g => T.patternsOn(g).every(p => T.PATTERN_GROUPS[p].includes(g)) && T.patternsOn(g).length === T.PATTERNS.filter(p => T.PATTERN_GROUPS[p].includes(g)).length));
 }
 
+/* ================= I. THE FLYES THAT PULL (v57) =================
+   `fly` is one word for two directions, and PULL_FLYES is what tells them
+   apart without a sixteenth word (SHIP-V57-PROMPT §A). What has to hold is
+   that the list and the library agree: every id on it is a fly in the table,
+   and it is exactly the flyes exercises.js files under shoulders — so a new
+   fly filed there fails here until somebody decides which way it goes. The
+   table's own rows, and every check above, are untouched. */
+section('I. v57 — the flyes that pull are a list, not a sixteenth word, and it is every fly filed under shoulders');
+{
+  const shoulderFlyes = BUILTINS.filter(e => e.group === 'shoulders' && T.TAGS[e.id].pattern === 'fly').map(e => e.id);
+  check('the vocabulary is still fifteen words', T.PATTERNS.length === 15);
+  check('PULL_FLYES is frozen, and every id on it is a built-in tagged fly',
+        Object.isFrozen(T.PULL_FLYES) && T.PULL_FLYES.length > 0 && T.PULL_FLYES.every(id => BY_ID[id] && T.TAGS[id].pattern === 'fly'),
+        list(T.PULL_FLYES.filter(id => !BY_ID[id] || T.TAGS[id].pattern !== 'fly')));
+  check('and it is exactly the flyes the library files under shoulders — ' + list(shoulderFlyes),
+        shoulderFlyes.length === T.PULL_FLYES.length && shoulderFlyes.every(id => T.PULL_FLYES.includes(id)),
+        'filed under shoulders: ' + list(shoulderFlyes) + ' / on the list: ' + list(T.PULL_FLYES));
+  check('the four the brief read: the dumbbell and cable rear-delt flyes, the reverse pec deck, and the band pull-apart',
+        ['dumbbell-rear-delt-flye', 'cable-rear-delt-flye', 'reverse-pec-deck', 'band-pull-apart'].every(id => T.PULL_FLYES.includes(id)) && T.PULL_FLYES.length === 4);
+  check('no chest fly is on it', T.TAG_IDS.filter(id => T.TAGS[id].pattern === 'fly' && BY_ID[id].group === 'chest').every(id => !T.PULL_FLYES.includes(id)));
+  check('flyPulls(): a built-in by the list, whatever group a row hands in beside it',
+        T.flyPulls('reverse-pec-deck') && T.flyPulls('reverse-pec-deck', { group: 'back' }) && !T.flyPulls('pec-deck') && !T.flyPulls('pec-deck', { group: 'shoulders', pattern: 'fly' }) &&
+        !T.flyPulls('barbell-row') && !T.flyPulls('dumbbell-lateral-raise'));
+  const own = EX.makeCustomExercise('Micah’s Rear Fly', 'shoulders', 'cable');
+  check('his own, handed its row: a fly under shoulders pulls, a fly under chest does not, and with no row or no movement nothing does',
+        T.flyPulls(own.id, { group: 'shoulders', pattern: 'fly' }) && !T.flyPulls(own.id, { group: 'chest', pattern: 'fly' }) &&
+        !T.flyPulls(own.id) && !T.flyPulls(own.id, { group: 'shoulders' }) && !T.flyPulls(own.id, { group: 'shoulders', pattern: 'raise' }) &&
+        !T.flyPulls(own.id, { group: 'back', pattern: 'fly' }));
+  check('the editor’s word: a fly on shoulders is "Rear-delt fly", on chest "Fly", and every other pattern its own label on every group',
+        T.movementLabel('fly', 'shoulders') === 'Rear-delt fly' && T.movementLabel('fly', 'chest') === 'Fly' && T.PULL_FLY_GROUP === 'shoulders' &&
+        ['chest', 'back', 'legs', 'shoulders', 'arms', 'core'].every(g => T.patternsOn(g).every(p => (p === 'fly' && g === 'shoulders') || T.movementLabel(p, g) === T.PATTERN_LABELS[p])));
+}
+
 /* ---------- report ---------- */
 console.log('\nthe exercise tag sidecar agrees with the library\n');
 console.log(results.join('\n'));
