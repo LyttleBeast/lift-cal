@@ -7,7 +7,7 @@ Two things this file is not. It is not a design document — where a shape was
 already decided, the decision stays where it was written and this only points at
 it. And it is not a port brief: `NEXT-NATIVE.md`, `NEXT-NATIVE-UNITS.md`,
 `NEXT-NATIVE-V40.md`, `NEXT-NATIVE-V41.md`, `NEXT-NATIVE-V42.md`,
-`NEXT-NATIVE-V43.md`, `NEXT-NATIVE-V45.md`, `NEXT-NATIVE-V46.md`, `NEXT-NATIVE-V48.md`, `NEXT-NATIVE-V49.md`, `NEXT-NATIVE-V52.md`, `NEXT-NATIVE-V53.md`, `NEXT-NATIVE-V54.md` and `NEXT-NATIVE-V55.md` are the instructions for copying
+`NEXT-NATIVE-V43.md`, `NEXT-NATIVE-V45.md`, `NEXT-NATIVE-V46.md`, `NEXT-NATIVE-V48.md`, `NEXT-NATIVE-V49.md`, `NEXT-NATIVE-V52.md`, `NEXT-NATIVE-V53.md`, `NEXT-NATIVE-V54.md`, `NEXT-NATIVE-V55.md` and `NEXT-NATIVE-V56.md` are the instructions for copying
 work into `~/dev/rack-mobile`, and they stay. What is below is the list of
 things nobody has done yet.
 
@@ -142,6 +142,10 @@ twice. `AGENTS.md` (`steps/{date}`) says the same thing.
 - **`NEXT-NATIVE-V55.md`** — the Your goal layout, drop sets (`dp` and its
   PROPOSED rule, §4), Save as meal, and the client half of "Which one?", with
   the contract copied whole. A delta on V54.
+- **`NEXT-NATIVE-V56.md`** — the week read right (a range per group, push :
+  pull without a customs-heavy group), a custom exercise's movement (the
+  editor, and the PROPOSED `exercises/custom/$i` rule, §6), and v55's drop-set
+  and Save-as-meal leftovers. A delta on V55.
 - **`NEXT-NATIVE-V45.md`** — the workout builder, all of it open. At `13f6b80`
   native has Coach (`src/pure/coach.js`, `src/ui/coach/`) and no
   `src/pure/coach-build.js`. Read it with `NEXT-NATIVE-V42.md` and
@@ -211,6 +215,71 @@ Carried from `NEXT-NATIVE.md` §7 so it survives that file. Do not "fix" these:
 
 ---
 
+## What v56 left open in its own work
+
+v56 is **the week read right** (*Is my training balanced?* says push against
+pull without a group that is over a quarter customs, and names it; counts are
+joined by a comma; strength's 6–15 is for chest, back and legs only), **a custom
+exercise's movement** (optional, in its editor, counted by the balance split),
+and **v55's leftovers** (`+ Set` after a drop set, Coach's "Last time", the
+routine editor's groups and **+ Drop**, Save as meal on "Found in your log").
+The port note is `NEXT-NATIVE-V56.md`; what changed in Coach is
+`COACH-REPORT.md` §95–§101.
+
+**Waiting on something other than this repo:**
+
+- **Native's PROPOSED rules** need `pattern` and `angle` on
+  `exercises/custom/$i` if they validate it key by key
+  (`NEXT-NATIVE-V56.md` §6), and `asked.bal_custom` beside `vol_neglect` if
+  they enumerate `settings/coach.asked` (§7). The published rules take both as
+  they are.
+
+**Decisions this ship made that Micah may want back:**
+
+- **The stall ladder moved with the weekly range.** A plateaued shoulders or
+  arms lift on Get stronger or Powerlifting now reaches the "+N sets a week"
+  rung under 10 sets a week, not 6, because v54 made the two share one floor
+  and `coach-pure.mjs` refuses a second one (`COACH-REPORT.md` §96.3). Keeping
+  the ladder at 6 would be one argument in `coach-overlap.js` `rungOf`, and two
+  "common starting points" for one group.
+- **Get stronger's main lifts are Powerlifting's big three.** It is the only
+  list the code has. A lift target on another lift (say the overhead press)
+  does not make its group a main-lift group.
+- **Three of the brief's sentences were changed** (`COACH-REPORT.md` §98):
+  - "because" is banned, so it reads "Your arms work isn’t in this: more than a
+    quarter of it is custom exercises.";
+  - "pushing", not "pressing", since push counts flyes and extensions;
+  - a drop set in a Coach sentence carries its unit, "185 lb × 8 → 135 lb × 6".
+
+**Found and deliberately not fixed:**
+
+- **A custom exercise's movement is read by the balance split and nothing
+  else.** The builder, "Swap one", the variation rung and the targets'
+  rep band call `tagsFor(exId)` with the id alone, as the brief ordered:
+  suggesting customs by movement is its own decision.
+- **A custom exercise has no load or side**, only a movement and an angle, so
+  it would not help the targets' compound/isolation band even if they read it.
+- **The pointer says "in its settings"**. The path is Train → Exercises →
+  tap it. The sentence is the brief's; it does not name the path.
+- **The exercise manager's list does not show a movement** on a row; only the
+  editor does.
+- **"Found in your log"'s Save as meal names the meal by its first two items**
+  (`mealName`), like the estimate sheet, not by the sentence he typed.
+
+**Left open in v56's own work:**
+
+- **Nothing in this ship has been seen on a screen.** It was driven through DOM
+  shims with no box model:
+  - the Movement and Angle chips (44px and every label's width reasoned in
+    `touch-target.mjs` G from Archivo's metrics, never measured);
+  - the routine editor's grouped rows and **+ Drop**;
+  - "Found in your log"'s button;
+  - the week's two answers.
+- **The paint and the live tick were not measured.** The week's answers are
+  sheet-only, and the quotes' change is one pass over a short list.
+- **Native was not read.** `NEXT-NATIVE-V56.md` says "the native run maps this"
+  wherever a native path would have been a guess.
+
 ## What v55 left open in its own work
 
 v55 is four things Micah asked for: **the Your goal screen tidied** (every
@@ -235,17 +304,13 @@ ask. The port note is `NEXT-NATIVE-V55.md`; what changed in Coach is
 
 **Found and deliberately not fixed:**
 
-- **"+ Set" after a drop set copies the last drop's numbers** as a straight
-  set (95 × 5 after 185 → 135 → 95). It always copied the set above; drop sets
-  that read as groups make it visible. Copying the drop set's first set instead
-  is a behaviour change nobody asked for yet.
-- **Coach's quotes say "drop set" on every row of one.** `coach-live.js`
-  `lastTime`, `coach-build.js` `setsLine` and `coach-prog.js`'s "Last time"
-  read a drop set of three as three runs. True, and untidy; grouping them is a
-  Coach copy change.
-- **The routine editor draws a drop set flat**, with no **+ Drop**, and the
-  routine list's preview line (`routines.js:188`) prints no groups. Its badge
-  and swipe keep the grouping right.
+- ~~**"+ Set" after a drop set copies the last drop's numbers** as a straight
+  set (95 × 5 after 185 → 135 → 95).~~ **Fixed in v56**: it copies the drop
+  set's first set, as a normal set (`analytics.js` `repeatOf`).
+- ~~**Coach's quotes say "drop set" on every row of one.**~~ **Fixed in v56**:
+  all three say a drop set once, as a group, through `setsText`.
+- ~~**The routine editor draws a drop set flat**, with no **+ Drop**, and the
+  routine list's preview line prints no groups.~~ **Fixed in v56**, both.
 - **"+ Drop" starts with empty boxes**, never last time's drop in grey:
   `lastTargets` counts positions in working sets, drops included, and a grey
   number for a drop is its own design.
@@ -253,8 +318,8 @@ ask. The port note is `NEXT-NATIVE-V55.md`; what changed in Coach is
   set shows "D" on its badge. The same was already true of an F or a W.
 - **A drop's badge is "↳"**, which may fall back to the system font if
   Archivo's latin range does not carry it.
-- **"Found in your log"** (a recall hit) has no Save as meal; the brief scoped
-  it to the estimate result.
+- ~~**"Found in your log"** (a recall hit) has no Save as meal.~~ **Fixed in
+  v56**, through the same `saveAsMeal`.
 - **A saved meal's id is the millisecond it was begun** (`blankMeal`), so two
   builders opened in one millisecond would share one. No thumb can; a verifier
   can, and waits one out.

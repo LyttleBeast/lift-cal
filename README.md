@@ -102,8 +102,8 @@ node in the database. See *Access* below for what replaced them, and why.
 | `coach-overlap.js` | **Plateau or cut?** (v49) — a flat lift read against the bodyweight, the frequency and the sets beside it: a real plateau and the rung of the stall ladder, a cut that is holding, a slide, trained too rarely to say, or "Coach needs weigh-ins". Also the lighter week, the record day, "How are my lifts moving?", and the stage-three reads that need a target replayed or a lift's series (how today compared, what's next time, the lift target's pace). Pure; copied verbatim. `tools-check/coach-overlap.mjs` is its battery |
 | `coach-ready.js` | **Rest and recovery** (v52) — each group's recovery window from his own gaps, longer after a day big against his own normal (lifting sets only, cardio out); the rest read (rest, go lighter, a recovered group, or the recovered shape that has waited longest); the replayed "did you rest on days like this"; readiness, a list and never a score; what was different about a session, in both directions and never a cause. Never imports `coach-fuel.js`, so food moves no rest call. Pure; copied verbatim. `tools-check/coach-ready.mjs` is its battery |
 | `coach-fuel.js` | **Am I fueled?** (v52) — his food against his own normal and never a prescription: complete days, the food phase, his by-hour curve on training days, whether he logs as he goes or later, and the food rows beside readiness and a session. A half-logged day is "not fully logged", never low. Imports `coach-goal.js` and `units.js` only. Pure; copied verbatim. `tools-check/coach-fuel.mjs` is its battery |
-| `coach-volume.js` | **The whole week** (v54) — each muscle group's hard sets in the last 7 days against a common range for his goal and his own normal, the one group gone quiet (once in four weeks), and whether pushing and pulling, presses, pulls, knees and hips are lopsided over eight weeks. Counts only, never a reason about the body. Pure; copied verbatim. `tools-check/coach-volume.mjs` is its battery |
-| `coach-tags.js` | Movement pattern, angle, load and side for every built-in exercise. A sidecar keyed on `exercises.js`'s ids, so a tagging mistake can never reach the picker. Pure; imports nothing. The builder reads it: pattern for "Swap one", load for "Fewer exercises" |
+| `coach-volume.js` | **The whole week** (v54) — each muscle group's hard sets in the last 7 days against a common range for his goal and his own normal, the one group gone quiet (once in four weeks), and whether pushing and pulling, presses, pulls, knees and hips are lopsided over eight weeks. Counts only, never a reason about the body. Since v56 strength's 6–15 is for the main lifts' groups only, a group that is over a quarter customs is left out of push : pull by its sets rather than dropping the split, and a custom exercise with a movement set counts. Pure; copied verbatim. `tools-check/coach-volume.mjs` is its battery |
+| `coach-tags.js` | Movement pattern, angle, load and side for every built-in exercise. A sidecar keyed on `exercises.js`'s ids, so a tagging mistake can never reach the picker. Pure; imports nothing. The builder reads it: pattern for "Swap one", load for "Fewer exercises". Since v56 it is also the one reader of a custom exercise's own movement (`ownMovement()`), which only the balance split asks for; a built-in's tags stay pinned |
 | `coach-live.js` | **Coach in the gym** — during a live workout, what usually comes next, one more set, the next group, or "you're probably good for today", read off the session in progress against his own sessions of that shape, and (v54) the sessions he finished earlier that day. It works out no weight itself: since v54 it says the next set `coach-prog.js` gives, and the effort chips' words. Pure, and copied into the native tree verbatim like `coach.js` |
 | `coach-data.js` | The impure half — the one file the native port rewrites. Reads once per app open and never on a paint, except the food days *Am I fueled?* reads on an ask (v52: Pro, Food on, fifteen at most). Writes `settings/coach`, bad-day marks included. Since v53 `coachFinishRead()` for the recap and `noteCoachFood()`, which `food.js` calls after each day-summary write |
 | `coach-ui.js` | Coach's card (since v49 one earned line from his own log — the sheet opens on the finding; since v53 the finish line after a workout, and a warm line when nothing is earned), the COACH ME sheet with "More", the builder's recovery caution and the bad-day mark's chips (v52), the Settings switches and Your goal (aim, experience, focus, Lift target), and the live session's chip, sheet (since v54 the next set and the effort chips) and one-line nudge |
@@ -119,13 +119,13 @@ node in the database. See *Access* below for what replaced them, and why.
 | `auth.css` | Styles for the sign-in box, waiting screen, onboarding and People |
 | `ui.js` | Shared primitives — sheets, toasts, confirms, swipe, date/number helpers |
 | `units.js` | Pounds/kilos and inches/centimetres. Pure, imports nothing, reads nothing — every function takes the unit as an argument |
-| `analytics.js` | Training aggregates, personal-record detection, SVG chart builders — and (v53) the recap's comparison with sessions of the same kind, and `normFeel()`, the one reader of a session's rating. Since v55 the drop-set rule (`continuesDrop`, a drop's `dp: 1`) and the four edits that keep drop sets apart, shared by the workout screen, the routine editor and Coach |
+| `analytics.js` | Training aggregates, personal-record detection, SVG chart builders — and (v53) the recap's comparison with sessions of the same kind, and `normFeel()`, the one reader of a session's rating. Since v55 the drop-set rule (`continuesDrop`, a drop's `dp: 1`) and the four edits that keep drop sets apart, shared by the workout screen, the routine editor and Coach; since v56 `repeatOf()`, the set `+ Set` copies |
 | `stats.js` | The statistics page |
-| `workout.js` | Train tab — calendar, live session, editing, post-workout recap (v53: the win first, "How did that feel?", no percentage; v54: last time's numbers in grey on an exercise added by hand, and a set's effort rating, `rir`; v55: a drop set's drops indented under the set he changed, **+ Drop**, and "185×8 → 135×6 → 95×5" on the "Last ·" line, the recap and the day sheet) |
+| `workout.js` | Train tab — calendar, live session, editing, post-workout recap (v53: the win first, "How did that feel?", no percentage; v54: last time's numbers in grey on an exercise added by hand, and a set's effort rating, `rir`; v55: a drop set's drops indented under the set he changed, **+ Drop**, and "185×8 → 135×6 → 95×5" on the "Last ·" line, the recap and the day sheet; v56: `+ Set` after a drop set copies its first set, as a normal set) |
 | `blocks.js` | Lifting blocks — the pure model, shared by the workout screen and the routine editor. Imports nothing, reads nothing |
-| `picker.js` | Exercise library (static + custom) and the two picking sheets |
-| `routines.js` | Pre-planned routines — list, editor, start, save-a-session-as |
-| `food.js` | Fuel tab (v55: **Save as meal** on the estimate sheet, and the "Which one?" question) |
+| `picker.js` | Exercise library (static + custom) and the two picking sheets (v56: a custom exercise's optional **Movement** and **Angle**) |
+| `routines.js` | Pre-planned routines — list, editor, start, save-a-session-as (v56: drop sets drawn grouped in the editor, with **+ Drop**) |
+| `food.js` | Fuel tab (v55: **Save as meal** on the estimate sheet, and the "Which one?" question; v56: **Save as meal** on "Found in your log" too) |
 | `estimate-origin.js` | What the estimate sheet says about where each number came from — the menu, published nutrition, or an estimate — and (v55) the name a meal saved off it starts with. Pure, imports nothing; copied verbatim |
 | `estimate-ask.js` | **"Which one?"** (v55) — the client half of the estimator's ask: whether a reply's question can be drawn whole, where a pick goes, a chip's words. Pure, imports nothing; copied verbatim |
 | `ai.js` | AI estimator client — photo shrinking, the two estimate calls (since v55 a text one sends `ask: 1`), error shapes |
@@ -172,10 +172,11 @@ app.js → you.js       → coach-ui.js  → coach.js   → analytics.js ──�
                       → coach.js  coach-data.js (v53: the finish line; the check-in's words and gates)
                       → stats.js ──→ analytics.js ─────────→ ui.js
                       → picker.js ──────────────────────────→ ui.js
+                                  → coach-tags.js (v56: a custom exercise's movement)
                       → blocks.js
                       → routines.js → picker.js
                                     → blocks.js
-                                    → analytics.js (v55: the drop-set edits)
+                                    → analytics.js (v55: the drop-set edits; v56: its groups, + Drop, repeatOf)
       → food.js       → water.js ───────────────────────────→ ui.js
                       → coach-data.js (v53: noteCoachFood, after each day summary)
                       → recall.js ──────────────────────────→ store.js
@@ -552,7 +553,9 @@ shoulders, arms, core — and that is a hard ceiling. There is no biceps/triceps
 split and no quads/hamstrings split, so *you're behind on chest* is computable
 and *you never train hamstrings* is not. `coach-tags.js` is the sidecar that
 makes movement pattern computable: the workout builder reads it to swap a press
-for a press and to take an isolation lift out first.
+for a press and to take an isolation lift out first. A custom exercise has no
+tags unless you give it a movement in its editor (v56), and then the balance
+split, and nothing else, counts it by that movement.
 
 A **recurring session shape** is derived over the last 84 days: the set of
 primary groups in a session with two or more working sets, cardio excluded,
@@ -760,7 +763,9 @@ you forgot to mark out. A set counts whole for its main group and half for each
 group it works second.
 
 - Each line: the hard sets in the last 7 days, against a common range for your
-  goal. Building muscle is 10–20, strength 6–15 and staying consistent 6–12. A
+  goal. Building muscle is 10–20 and staying consistent 6–12. Strength and
+  powerlifting are 6–15 on the groups the squat, bench and deadlift are in —
+  chest, back and legs — and 10–20 on the rest (v56; the line says which). A
   cut is two thirds of your usual from before it. Your focus group's range is
   up 30%.
 - Then one flag:
@@ -779,8 +784,14 @@ group it works second.
   at zero;
 - squats and lunges against hinges and bridges, past three to one.
 
-Or "Nothing lopsided in the last 8 weeks.", with the counts. Custom exercises
-are left out, and it says so.
+Or "Nothing lopsided in the last 8 weeks.", with the counts, a line for each
+split: "Over 8 weeks: 37 squat and lunge sets, 36 hinge and bridge sets."
+Custom exercises are left out, and it says so. A group that is more than a
+quarter custom exercises still skips the splits read inside it, but since v56
+pushing against pulling is said without that group, naming it ("Your arms work
+isn’t in this…"), instead of not at all. Once in four weeks it adds that a
+custom exercise's movement can be set in its settings, and a custom exercise
+with one set counts in the split.
 
 Under three weeks of log, both say so and guess nothing. Neither ever gives a
 reason about your body: no health, no posture, no injury. Counts only.
@@ -881,7 +892,10 @@ honest place to keep it.
   under it adds the next drop, indented under it with ↳. Two drop sets stacked are two
   groups, and the "Last ·" line, the recap and the day sheet read one as "185×8 → 135×6 →
   95×5". A drop is a `'D'` carrying `dp: 1` (AGENTS.md); a drop set counts for exactly what
-  a `'D'` always did, and Coach no longer reads its falling reps as fatigue.
+  a `'D'` always did, and Coach no longer reads its falling reps as fatigue. Since v56
+  **+ Set** after a drop set gives the drop set's first set again, as a normal set; the
+  routine editor draws drop sets grouped with its own **+ Drop**; and Coach's "Last time"
+  says one once, as a group.
 - Records are **derived from the log**, never stored. There is no `records` node in the
   database; every statistic is computed from the workouts themselves.
 
@@ -917,7 +931,8 @@ the button.
 Since v55 the review screen can also keep what is on it: **Save as meal** saves
 the plate as it stands, and **Save** on a line saves that line, both through the
 meal builder, named "Panda Express · Grilled teriyaki chicken ×3.5" until you
-rename it. Re-logging a saved meal later spends no estimate.
+rename it. Re-logging a saved meal later spends no estimate. Since v56 "Found in
+your log", the free answer out of your own log, has the same **Save as meal**.
 
 And when a description names a menu item the venue publishes more than one of —
 "Panda Express 3.5 teriyaki chicken" — the Worker can ask **"Which teriyaki

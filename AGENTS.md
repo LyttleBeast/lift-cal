@@ -511,6 +511,10 @@ the drop set above":
 - **Unlike `rir`, every copy carries it** — it is what the set is: an edit, a
   duplicated block, a routine saved and started, the builder's proposal and
   Coach's target sets. `tools-check/drop-sets.mjs` proves open → save → open.
+- **`+ Set` is not a copy of a drop** (v56). After a drop set it copies the
+  drop set's first set — the one he changed to a drop set — as a normal set,
+  `'N'` with no `dp`, never the last drop (`analytics.js` `repeatOf`, which
+  the workout screen and the routine editor both ask).
 - The published rules take it (`workouts` carries a section-level `.write`).
   Native's PROPOSED rule is `NEXT-NATIVE-V55.md` §4.
 
@@ -741,6 +745,13 @@ most once in 28 days, and the sheet stamps it when the line is drawn
 the questions'. It is a child of the already-granted `settings/coach`, so no
 rules change.
 
+**v56 adds a second:** `asked.bal_custom`, epoch ms, the same way. It stamps
+the line under *Is my training balanced?* that says a custom exercise's
+movement can be set, said at most once in 28 days and only when a group's
+customs are hiding a split. Also a child of `settings/coach`, so no rules
+change. Native's PROPOSED rules need it beside `vol_neglect` if they enumerate
+`asked` (`NEXT-NATIVE-V56.md` §7).
+
 **v52's food reads — when, how many, and for whom.** *Am I fueled?*, *Should I
 rest or go lighter?* and *How did today compare?* read `food/log/{date}`
 through `coach-data.js` `loadFuel()`, reads only.
@@ -866,11 +877,35 @@ everything the array would, and two records of one fact is one too many.
 
 A drop set is stored here as it is in a record too (v55): a drop's `dp: 1`
 rides on its `{ tw, tr, type }`, carried by "Save as routine" and into the
-session a routine starts.
+session a routine starts. Since v56 the routine editor draws a drop set grouped,
+as the workout screen does, and its own **+ Drop** writes a drop with empty
+targets, `{ tw: '', tr: '', type: 'D', dp: 1 }`.
 
 ## The exercise library — three nodes
 
-`exercises/custom` → `[ { id, name, group, equipment }, … ]`
+`exercises/custom` → `[ { id, name, group, equipment, pattern?, angle? }, … ]`
+(the app also writes `secondary: []` and `custom: true`, from
+`exercises.js` `makeCustomExercise`).
+
+- **v56: `pattern` and `angle`**, both optional: the movement he sets in the
+  custom exercise's editor.
+  - `pattern` is one of `coach-tags.js`'s `PATTERNS`, and one its agreement
+    table allows on the exercise's own `group`.
+  - `angle` (`incline`, `flat`, `decline`, `overhead`) is written only where
+    the table tags that pattern with one.
+  - **Absent means today's meaning**: the exercise has no movement, as every
+    custom exercise before v56. Nothing migrates.
+  - `coach-tags.js` `ownMovement()` is the one reader, and anything off the
+    lists, or a pattern the table refuses on the group, reads as no movement.
+  - "Not set" deletes both keys; it never writes `null` or `''`.
+  - The write is the same whole-array PUT of `exercises/custom`, and the list in
+    memory is taken on only once it resolves.
+  - What reads it: Coach's balance split, and nothing else. The builder and the
+    picker suggest what they did.
+  - The published rules take it (`exercises` carries a section-level `.write`
+    and validates nothing under it). Native's PROPOSED rule is
+    `NEXT-NATIVE-V56.md` §6.
+
 `exercises/overrides` → `{ exId: { name, group, equipment } }` — a renamed or
 refiled built-in. **The id never changes**, which is the whole point: history
 and every logged set are keyed on it.
