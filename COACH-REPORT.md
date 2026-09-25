@@ -4431,3 +4431,162 @@ live tick  Pro     1.04 ms      1.60 ms    +0.56
 - Miss either and the failure is silent: a copied rating tells `prescribe()` a
   set was easy that he never rated, and a dropped one un-rates a session he
   did.
+
+---
+
+## 89. READ THIS FIRST — rack-v55, and what it changed in Coach
+
+Written at the end of an unattended run in `~/dev/ship-v55` (a fenced, full
+clone at rack-v54, `2e8da18`), against `SHIP-V55-PROMPT.md`. The fence was
+proved first: `echo GUARDTEST ping` was refused. Shipped as `rack-v55`. **Not
+pushed.**
+
+v55 is not a Coach ship. It is four things Micah asked for — the Your goal
+screen tidied, drop sets you can read, Save as meal off the estimate screen,
+and "Which one?" on the estimator — and this section exists because the second
+of them changed what two Coach reads say, which the brief allows only when a
+count was wrong, with the before and after shown.
+
+- **Before:** 46 verifiers, 46 exit 0 in each zone.
+- **After:** 49 verifiers, 49 exit 0 in `TZ=America/New_York`, `UTC` and
+  `Pacific/Auckland`. The new ones are `drop-sets.mjs`, `save-as-meal.mjs` and
+  `estimate-ask.mjs`.
+- The held batteries did not move: `coach-prog` **57 / 0 / 0** and its
+  ratings **16 / 0 / 0**, `coach-overlap` **24 / 0 / 0**, `coach-ready`
+  **46 / 0 / 0**, `coach-fuel` **16 / 0 / 0**, `finish` **12 / 0 / 0**,
+  `coach-volume` **40 / 0 / 0**.
+- `database.rules.json` is byte-identical to rack-v54.
+
+**What changed in Coach, in one line each:**
+
+1. **A drop set's falling reps are no longer read as fatigue** (§90). Five
+   rep-drop reads leave every `'D'` set out.
+2. **The live chips rate a drop set on the set he changed to a drop set,
+   never on a drop** (§90).
+3. **`dp` rides through the builder's proposal and Coach's target sets**, so a
+   drop set he did is proposed as one group. Nothing reads it.
+
+Nothing else Coach counts, says or reads moved: every count that reads a `'D'`
+set counts it exactly as before, with `dp` or without it.
+
+---
+
+## 90. WHAT CHANGED, WITH THE BEFORE AND AFTER
+
+**What a `D` row is.** Every engine has read a `'D'` as part of a drop set
+that never carries progression — out of `prescribe()`'s top sets and the e1RM
+series (`coach-prog.js`), out of the volume read's top load (`coach-volume.js`),
+skipped by the record day's rep search (`coach-overlap.js`) — and counted it
+as a working set everywhere (`isWorking`). v55 keeps that: the set he changes
+to a drop set is its first set, and its drops are `'D'` sets carrying `dp: 1`
+(`analytics.js`, `NEXT-NATIVE-V55.md` §1–§2).
+
+**The count that was wrong.** Five reads test for a rep drop — a later working
+set at the same or a lighter load with reps down a quarter from the first.
+Each took `'D'` sets in, so a drop set — whose whole point is fewer reps at a
+lighter weight — read as fatigue. Each now reads between the sets that are not
+a drop set's. `tools-check/drop-sets.mjs` F2 stages rack-v54's engines out of
+git at `2e8da18` beside today's and reads the same log through both:
+
+| Read | The log | rack-v54 | rack-v55 |
+|---|---|---|---|
+| `coach-live.js` `fatigueIn` (the live read's "done") | bench 185×8, then a drop set 185×8 → 135×6; flye 40×12, then 40×12 → 25×9 | "You’re probably good for today — Barbell Bench Press, reps from 8 to 6 at the same or a lighter weight; Dumbbell Flye, reps from 12 to 9 at the same or a lighter weight." | nothing |
+| `coach-prog.js` `nextSet` (the next set, mid-session) | on a 190 × 8 target: 190×8, then 190×8 → 140×6 | stop: "Your reps went from 8 to 6 at the same or a lighter weight today." | "Next set: 190 lb × 8." |
+| `coach-volume.js` `dropped` (*How's my weekly volume?*) | 14 chest sets against a usual 10, the only sign two drop sets | 14 hard sets, "more", `{ drops: 2 }` | 14 hard sets, "right" |
+| `coach.js` `repDrop` (the shaped `ldrop` coach-ready's big day reads) | the same week | 2 lifts | 0 |
+| `coach-overlap.js` the record day | bench climbing to 3×5 at 225, the last session ending 225×5 → 165×3 | nothing | "Good day for 6 at 225 lb on Barbell Bench Press, one more rep than your best there." |
+
+And what did not move, in the same file:
+
+- Straight sets whose reps really fell: the same answer before and after, in
+  every one of the five (the live read, "stop", `coach-volume.mjs`'s own F6,
+  its shaped drops, a record day after 225×3).
+- A straight set after a drop set that fell a quarter is still read: the drop
+  set is left out, not the day.
+- 60 generated logs with no drop set: the volume read, the shaped rep drops
+  and the record day are rack-v54's exactly.
+- F1: with `dp` or without it, the same working sets, volume, best set, hard
+  sets, target line, mode and load, shaped sessions and volume rows.
+
+**The chips.** `coach-live.js` `ratedOf` rated the last ticked working set,
+so after a drop set of three it asked "Set 4 · 100 lb × 5. How was it?" — the
+last strip of it. It now passes a drop over, so it asks "Set 2 · 190 lb × 8.
+How was it?", and the rating lands on the drop set's first set. Why: a drop is
+a working set for every count, but no reader of a rating reads one —
+`prescribe()`'s rules read top sets, and `nextSet` reads the last set that is
+not a `'D'` — so a rating stored on a drop would be read only by the stop
+("a set rated too hard"), which reads any set. On the first set it is read by
+exactly that stop, and by nothing that moves a target, because a `'D'` never
+carries one. A lone `'D'` with no `dp` is rated as it always was (F3).
+
+---
+
+## 91. THE BATTERIES, AND THE VERIFIERS CHANGED ON PURPOSE
+
+The six held batteries are in §89, unchanged in all three zones.
+
+| Verifier | What changed |
+|---|---|
+| `drop-sets.mjs` | NEW, 82 checks. A the rule; B the four edits; C the session screen; D Finish, the index, open → save → open, an old record; E every copy site, the builder's four views included; F1 the counts; F2 the before and after above; F3 the chips |
+| `coach-pure.mjs` | G: `coach-live.js` may take `continuesDrop` from `analytics.js` — set math, pure |
+| `coach-surface.mjs` | L: Your goal's answers are chips now (grid, line, wrap), the experience answers in Settings' short words; the class check names `coach-goal-opt` and `coach-goal-opts` |
+| `recap.mjs` | + E: *What you did* draws a drop set as one group |
+| `touch-target.mjs` | + F, the Your goal labels measured in Archivo against their chips at 320 and 390; the new controls held to 44px |
+| `blocks`, `effort`, `feel`, `grey-last`, `merge-invariant`, `month-erasure` | stage the real drop-set functions beside the ones they lift from `workout.js`; `effort` pins the save-as-routine map carrying `dp` |
+
+---
+
+## 92. WHERE THE BRIEF WAS WRONG ABOUT THE CODE
+
+1. **"Prefer none: if the order of sets plus the existing type can separate
+   two stacked drop sets, store nothing new."** It cannot, on Micah's own
+   model: the set he changes to a drop set is a `'D'`, and so is every drop
+   under it, so two stacked drop sets are six `'D'` sets in a row. Order plus
+   type would separate them only if the first set stayed `'N'`, which is not
+   what "a set changed to a drop set" means, and not what the walkthrough
+   does. So one optional field, `dp: 1`, the brief's own example.
+2. **"`isWorking`, hard sets, `prescribe`'s performance log, `coach-volume`'s
+   counts, `REP_DROP`, the e1RM and PR readers" — how each counts a `D`.** All
+   but one were right as they stood. `REP_DROP` is not a reader of its own: it
+   is a constant, read by five tests, and all five were the wrong count (§90).
+   The e1RM and PR readers in `analytics.js` (`bestSet`, `exerciseIndex`,
+   `detectPRs`) count a `'D'` as a working set, as before; a drop is lighter,
+   so it rarely wins, and nothing about that changed.
+
+---
+
+## 93. EVERY ASSUMPTION I MADE
+
+- `dp` is valid only as the number `1`, on a `'D'` directly under a `'D'`.
+  Anything else reads as absent, and the edits strip it rather than keep a
+  stray one.
+- A drop's boxes start empty on **+ Drop**. The set above is heavier by
+  definition; copying it would pre-fill a weight he did not lift.
+- The rep-drop tests leave out every `'D'`, the drop set's first set included.
+  It is part of the technique, and its reps say nothing about the straight
+  sets around it.
+- The chips pass over a drop, not a drop set's first set, so a drop set is
+  still rated — on its first set.
+- `dp` crosses every copy, where `rir` crosses none: it is what the set is,
+  not something about it.
+
+---
+
+## 94. WHAT IS NOT DONE, AND WHAT NOBODY HAS SEEN
+
+1. **Nothing in this ship has been on a screen.** The drop rows, **+ Drop**,
+   the Your goal chips, Save as meal and the ask sheet were driven through DOM
+   shims; the 44px heights and the Your goal widths are reasoned from
+   `rack.css` and Archivo's own metrics in `touch-target.mjs`, never measured
+   on a phone.
+2. **Coach's quotes still say "drop set" per row.** `coach-live.js`
+   `lastTime`, `coach-build.js` `setsLine` and `coach-prog.js`'s "Last time"
+   read a drop set of three as three runs ("1 × 8 at 185 lb drop set, 1 × 6 at
+   135 lb drop set, …"). True, and untidy. Grouping them there is a copy
+   change for a Coach ship (BACKLOG).
+3. **The routine editor** draws a drop set's rows flat and has no **+ Drop**.
+4. **Native was not read.** `NEXT-NATIVE-V55.md` is the delta.
+
+**If the next run reads one thing:** a drop belongs to the drop set above it
+because of one field, and every edit has to keep that true — the four in
+`analytics.js` exist so that no screen splices a list of sets by hand again.

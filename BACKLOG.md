@@ -7,7 +7,7 @@ Two things this file is not. It is not a design document — where a shape was
 already decided, the decision stays where it was written and this only points at
 it. And it is not a port brief: `NEXT-NATIVE.md`, `NEXT-NATIVE-UNITS.md`,
 `NEXT-NATIVE-V40.md`, `NEXT-NATIVE-V41.md`, `NEXT-NATIVE-V42.md`,
-`NEXT-NATIVE-V43.md`, `NEXT-NATIVE-V45.md`, `NEXT-NATIVE-V46.md`, `NEXT-NATIVE-V48.md`, `NEXT-NATIVE-V49.md`, `NEXT-NATIVE-V52.md`, `NEXT-NATIVE-V53.md` and `NEXT-NATIVE-V54.md` are the instructions for copying
+`NEXT-NATIVE-V43.md`, `NEXT-NATIVE-V45.md`, `NEXT-NATIVE-V46.md`, `NEXT-NATIVE-V48.md`, `NEXT-NATIVE-V49.md`, `NEXT-NATIVE-V52.md`, `NEXT-NATIVE-V53.md`, `NEXT-NATIVE-V54.md` and `NEXT-NATIVE-V55.md` are the instructions for copying
 work into `~/dev/rack-mobile`, and they stay. What is below is the list of
 things nobody has done yet.
 
@@ -139,6 +139,9 @@ twice. `AGENTS.md` (`steps/{date}`) says the same thing.
   to five and the finish, each a delta on the one before. V52's §8 has the
   PROPOSED `marks` rule native's `settings/coach` validation needs, V53's §8
   the `feel` rule, and V54's §10 the `rir` rule for a set.
+- **`NEXT-NATIVE-V55.md`** — the Your goal layout, drop sets (`dp` and its
+  PROPOSED rule, §4), Save as meal, and the client half of "Which one?", with
+  the contract copied whole. A delta on V54.
 - **`NEXT-NATIVE-V45.md`** — the workout builder, all of it open. At `13f6b80`
   native has Coach (`src/pure/coach.js`, `src/ui/coach/`) and no
   `src/pure/coach-build.js`. Read it with `NEXT-NATIVE-V42.md` and
@@ -208,6 +211,70 @@ Carried from `NEXT-NATIVE.md` §7 so it survives that file. Do not "fix" these:
 
 ---
 
+## What v55 left open in its own work
+
+v55 is four things Micah asked for: **the Your goal screen tidied** (every
+answer a 44px chip), **drop sets you can read** (drops indented under the set
+he changed, **+ Drop**, one optional field `dp: 1`), **Save as meal** off the
+estimate screen, and **"Which one?"**, the client half of the estimator's
+ask. The port note is `NEXT-NATIVE-V55.md`; what changed in Coach is
+`COACH-REPORT.md` §89–§94.
+
+**Waiting on something other than this repo:**
+
+- **"Which one?" does nothing until the Worker's half is deployed** from
+  `~/dev/rack-worker`. Either can ship first: an old Worker never answers with
+  `ask`, and ignores the key.
+- **A malformed ask re-sends the sentence without `ask`** (today's paid
+  estimate) rather than drawing the reply's resolved rows alone. The brief's
+  "drops back to today's path as if `ask` were absent" reads either way; this
+  build took the one that never shows a plate missing part of the order. It is
+  one branch in `food.js` `runEstimate` if Micah meant the other.
+- **Native's PROPOSED rules need `dp`** wherever they validate a set
+  (`NEXT-NATIVE-V55.md` §4). The published rules take it as they are.
+
+**Found and deliberately not fixed:**
+
+- **"+ Set" after a drop set copies the last drop's numbers** as a straight
+  set (95 × 5 after 185 → 135 → 95). It always copied the set above; drop sets
+  that read as groups make it visible. Copying the drop set's first set instead
+  is a behaviour change nobody asked for yet.
+- **Coach's quotes say "drop set" on every row of one.** `coach-live.js`
+  `lastTime`, `coach-build.js` `setsLine` and `coach-prog.js`'s "Last time"
+  read a drop set of three as three runs. True, and untidy; grouping them is a
+  Coach copy change.
+- **The routine editor draws a drop set flat**, with no **+ Drop**, and the
+  routine list's preview line (`routines.js:188`) prints no groups. Its badge
+  and swipe keep the grouping right.
+- **"+ Drop" starts with empty boxes**, never last time's drop in grey:
+  `lastTargets` counts positions in working sets, drops included, and a grey
+  number for a drop is its own design.
+- **The chips name a set by its row** ("Set 2 · …"), while a drop set's first
+  set shows "D" on its badge. The same was already true of an F or a W.
+- **A drop's badge is "↳"**, which may fall back to the system font if
+  Archivo's latin range does not carry it.
+- **"Found in your log"** (a recall hit) has no Save as meal; the brief scoped
+  it to the estimate result.
+- **A saved meal's id is the millisecond it was begun** (`blankMeal`), so two
+  builders opened in one millisecond would share one. No thumb can; a verifier
+  can, and waits one out.
+- **The ask counts as an `aiText` request** in the usage counters, and "None
+  of these" as a second one. The counters are approximate by design.
+
+**Left open in v55's own work:**
+
+- **Nothing in this ship has been seen on a screen.** Driven through DOM shims
+  with no box model:
+  - the Your goal chips at 320px (their widths measured from Archivo's own
+    advance widths in `touch-target.mjs` F, with 3% held back for kerning —
+    never rendered; if Archivo has not loaded, the system font is a little
+    wider);
+  - the drop rows' 10px badge indent and blue rail, and **+ Drop**;
+  - a row's **Save**, and the builder's save-only form;
+  - the ask sheet, and its rows at 320px.
+- **Native was not read.** `NEXT-NATIVE-V55.md` says "the native run maps
+  this" wherever a native path would have been a guess.
+
 ## What v54 left open in its own work
 
 v54 is Coach trainer, **stage five, "in the gym"**:
@@ -236,9 +303,9 @@ It is written up in `COACH-REPORT.md` §79–§88.
 
 - **Rest-tolerance learning** (spec §13 S5): learning from his own log how
   long he rests between sets, and what it does to the next one.
-- The paywall and the tier scrap; the type box; the Your goal screen's layout;
-  the drop-set sub-list; save-as-meal; water in readiness; the You tab's GETs
-  per render; anything in native.
+- The paywall and the tier scrap; the type box; ~~the Your goal screen's
+  layout; the drop-set sub-list; save-as-meal~~ (**built in v55**); water in
+  readiness; the You tab's GETs per render; anything in native.
 
 **Found and deliberately not fixed:**
 
@@ -297,7 +364,8 @@ Patterns. Five small fixes came first. It is written up in `COACH-REPORT.md`
 
 **Found and deliberately not fixed** (SHIP-V53-PROMPT.md §7):
 
-- **The Your goal screen's layout.** Micah: "looks messy — a later update".
+- ~~**The Your goal screen's layout.** Micah: "looks messy — a later
+  update".~~ **Built in v55** (see *What v55 left open* above).
 - ~~**Stage five and the per-set effort tap** are next: mid-session targets,
   volume bands, and an effort rating per set.~~ **Built in v54** (see *What
   v54 left open* above). v53's session rating still moves nothing; v54's

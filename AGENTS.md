@@ -432,6 +432,12 @@ A saved meal is an **ingredient list**, not a total — the builder reopens it a
 each component can be re-portioned before it is logged. `items` are entry-shaped
 objects without `id`/`t`.
 
+Since v55 the estimate sheet saves here too — **Save as meal** for the plate,
+**Save** on a row — through the same builder and the same write, in the same
+shape: each item is what `cleanIng` keeps (name, qty, the numbers, the micros),
+with no `src`. Re-logged, it is `src: 'meal'` like any saved meal, and spends
+no estimate.
+
 ## `food/recall` → `{ key: { q, kind, items, n, last } }`
 
 The lookup cache in front of the AI estimator, so the same sentence is never
@@ -481,6 +487,33 @@ from volume, records and history. `exId` must match an exercise in
 `exercises.js` or one in `exercises/custom`. Personal records are **derived**,
 never stored.
 
+**v55: `dp: 1` on a drop.** A drop set is the set he changed to a drop set —
+type `'D'` — and the drops under it, each a `'D'` carrying `dp: 1`, "continues
+the drop set above":
+
+- `{ "w": "185", "r": "8", "type": "D" }, { "w": "135", "r": "6", "type": "D",
+  "dp": 1 }, { "w": "95", "r": "5", "type": "D", "dp": 1 }` is one drop set,
+  read "185×8 → 135×6 → 95×5".
+- A `'D'` with no `dp` — every one logged before v55 — is a drop set of its
+  own, which is what it always meant. **Nothing migrates.** `dp` is read only
+  as the number `1`, on a `'D'` whose set above is a `'D'`; anything else is
+  absent. It is needed because two stacked drop sets are all `'D'`s: order
+  and type alone cannot separate them.
+- **What a `'D'` counts for is unchanged**, with `dp` or without it: a working
+  set everywhere, never a top set or a target. Since v55 the rep-drop reads
+  (Coach's "reps down a quarter") leave `'D'` sets out, because a drop set's
+  reps fall by design (`COACH-REPORT.md` §90).
+- **Written and kept** through `analytics.js`'s four edits (`retypeSet`,
+  `removeSet`, `addDrop`, `keepSets`), so a swipe, a type change or a set left
+  unlogged at Finish never stitches one drop set onto another. It rides in the
+  one whole write at Finish, like `rir`; it is not a child write and not a
+  node.
+- **Unlike `rir`, every copy carries it** — it is what the set is: an edit, a
+  duplicated block, a routine saved and started, the builder's proposal and
+  Coach's target sets. `tools-check/drop-sets.mjs` proves open → save → open.
+- The published rules take it (`workouts` carries a section-level `.write`).
+  Native's PROPOSED rule is `NEXT-NATIVE-V55.md` §4.
+
 An exercise object may also carry **`block`** — a whole number, the lifting
 block it was performed in, numbered 1..N by position within the session. It is a
 grouping annotation and nothing more: there is no extra nesting level, and an
@@ -514,7 +547,8 @@ it felt* hides the card):
 
 **v54: `rir` on a set, his effort rating of that one set.** In a live workout,
 the Coach sheet's three chips store it on the last ticked working set of the
-exercise in hand: *Way too easy* `4`, *About right* `2`, *Too hard* `0`.
+exercise in hand: *Way too easy* `4`, *About right* `2`, *Too hard* `0`. Since
+v55, never on a drop: a drop set is rated on the set he changed to a drop set.
 
 - **The shape:** an integer 0–5 (reps he had left). Readers take any integer
   in that range (`coach-prog.js` `rirOf()`); anything else, the string `"0"`
@@ -532,8 +566,8 @@ exercise in hand: *Way too easy* `4`, *About right* `2`, *Too hard* `0`.
   **Every place that builds a set from another set builds it fresh**, with no
   rating: `dupSet`, `+ Set`, a routine started or saved, and the builder.
   `tools-check/effort.mjs` proves both.
-- **Not in `history/{exId}`**, which stays `{ w, r, type }`. Its one reader,
-  `prescribe()`, reads the record.
+- **Not in `history/{exId}`**, which stays `{ w, r, type }` (and, since v55, a
+  drop's `dp`). Its one reader, `prescribe()`, reads the record.
 - **What it moves:**
   - the next set, mid-session (a set rated too hard stops the lift going
     heavier today; way too easy at the target allows the one step);
@@ -541,8 +575,9 @@ exercise in hand: *Way too easy* `4`, *About right* `2`, *Too hard* `0`.
     at the target rated way too easy counts as the top, one step at most).
   - Nothing else reads it.
 
-`history/{exId}` → `[ { date, sets: [ {w,r,type} ] }, … ]`, newest first, 20 max
-— the per-exercise "last time" index.
+`history/{exId}` → `[ { date, sets: [ {w,r,type,dp?} ] }, … ]`, newest first, 20 max
+— the per-exercise "last time" index. `dp` (v55) is a drop's, so the "Last ·"
+line can draw a drop set as one group.
 
 ## `water/log/{YYYY-MM-DD}` → `{ entryId: { ml, t, src } }`
 
@@ -828,6 +863,10 @@ on the exercise objects, and nothing else. A routine **never** carries a
 `blocks` array — the routine editor holds the block order in memory while the
 sheet is open and strips it on save, because the annotations already say
 everything the array would, and two records of one fact is one too many.
+
+A drop set is stored here as it is in a record too (v55): a drop's `dp: 1`
+rides on its `{ tw, tr, type }`, carried by "Save as routine" and into the
+session a routine starts.
 
 ## The exercise library — three nodes
 

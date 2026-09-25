@@ -119,14 +119,16 @@ node in the database. See *Access* below for what replaced them, and why.
 | `auth.css` | Styles for the sign-in box, waiting screen, onboarding and People |
 | `ui.js` | Shared primitives — sheets, toasts, confirms, swipe, date/number helpers |
 | `units.js` | Pounds/kilos and inches/centimetres. Pure, imports nothing, reads nothing — every function takes the unit as an argument |
-| `analytics.js` | Training aggregates, personal-record detection, SVG chart builders — and (v53) the recap's comparison with sessions of the same kind, and `normFeel()`, the one reader of a session's rating |
+| `analytics.js` | Training aggregates, personal-record detection, SVG chart builders — and (v53) the recap's comparison with sessions of the same kind, and `normFeel()`, the one reader of a session's rating. Since v55 the drop-set rule (`continuesDrop`, a drop's `dp: 1`) and the four edits that keep drop sets apart, shared by the workout screen, the routine editor and Coach |
 | `stats.js` | The statistics page |
-| `workout.js` | Train tab — calendar, live session, editing, post-workout recap (v53: the win first, "How did that feel?", no percentage; v54: last time's numbers in grey on an exercise added by hand, and a set's effort rating, `rir`) |
+| `workout.js` | Train tab — calendar, live session, editing, post-workout recap (v53: the win first, "How did that feel?", no percentage; v54: last time's numbers in grey on an exercise added by hand, and a set's effort rating, `rir`; v55: a drop set's drops indented under the set he changed, **+ Drop**, and "185×8 → 135×6 → 95×5" on the "Last ·" line, the recap and the day sheet) |
 | `blocks.js` | Lifting blocks — the pure model, shared by the workout screen and the routine editor. Imports nothing, reads nothing |
 | `picker.js` | Exercise library (static + custom) and the two picking sheets |
 | `routines.js` | Pre-planned routines — list, editor, start, save-a-session-as |
-| `food.js` | Fuel tab |
-| `ai.js` | AI estimator client — photo shrinking, the two estimate calls, error shapes |
+| `food.js` | Fuel tab (v55: **Save as meal** on the estimate sheet, and the "Which one?" question) |
+| `estimate-origin.js` | What the estimate sheet says about where each number came from — the menu, published nutrition, or an estimate — and (v55) the name a meal saved off it starts with. Pure, imports nothing; copied verbatim |
+| `estimate-ask.js` | **"Which one?"** (v55) — the client half of the estimator's ask: whether a reply's question can be drawn whole, where a pick goes, a chip's words. Pure, imports nothing; copied verbatim |
+| `ai.js` | AI estimator client — photo shrinking, the two estimate calls (since v55 a text one sends `ask: 1`), error shapes |
 | `ai-config.js` | The Worker URL. A public address, not a credential. The Worker itself is **not in this repo** — it is `~/dev/rack-worker`, its own private repo |
 | `water.js` | Water card, log sheet, goal and sizes |
 | `weight.js` | Weight tab — log, trend chart, time-of-day curve, maintenance |
@@ -173,9 +175,11 @@ app.js → you.js       → coach-ui.js  → coach.js   → analytics.js ──�
                       → blocks.js
                       → routines.js → picker.js
                                     → blocks.js
+                                    → analytics.js (v55: the drop-set edits)
       → food.js       → water.js ───────────────────────────→ ui.js
                       → coach-data.js (v53: noteCoachFood, after each day summary)
                       → recall.js ──────────────────────────→ store.js
+                      → estimate-origin.js  estimate-ask.js (both import nothing)
                       → ai.js → ai-config.js
                               → store.js (idToken only)
                       → tdee.js → weightmodel.js ───────────→ ui.js
@@ -873,6 +877,11 @@ honest place to keep it.
   ticked set that still has no reps is named at Finish rather than dropped without a word.
   A lifting block's own check box does the same for every set in the block. Finishing any workout offers **Save as routine**, which is usually the fastest
   way to make one, because it captures what you actually did.
+- **Drop sets** (v55): tap a set's badge round to **D** and it is a drop set; **+ Drop**
+  under it adds the next drop, indented under it with ↳. Two drop sets stacked are two
+  groups, and the "Last ·" line, the recap and the day sheet read one as "185×8 → 135×6 →
+  95×5". A drop is a `'D'` carrying `dp: 1` (AGENTS.md); a drop set counts for exactly what
+  a `'D'` always did, and Coach no longer reads its falling reps as fatigue.
 - Records are **derived from the log**, never stored. There is no `records` node in the
   database; every statistic is computed from the workouts themselves.
 
@@ -904,6 +913,18 @@ Every estimate lands on a review screen before anything is written. Each line is
 tappable to fix the name, the portion or any macro, has a ✕ to drop it, and can
 be kept in your saved foods on the way past. Nothing is logged until you press
 the button.
+
+Since v55 the review screen can also keep what is on it: **Save as meal** saves
+the plate as it stands, and **Save** on a line saves that line, both through the
+meal builder, named "Panda Express · Grilled teriyaki chicken ×3.5" until you
+rename it. Re-logging a saved meal later spends no estimate.
+
+And when a description names a menu item the venue publishes more than one of —
+"Panda Express 3.5 teriyaki chicken" — the Worker can ask **"Which teriyaki
+chicken?"** instead of guessing (a text estimate sends `ask: 1`). Pick one and
+the plate is the menu's numbers, free; **None of these, estimate it** re-sends
+the sentence as an ordinary estimate. The contract is in `NEXT-NATIVE-V55.md`
+§7, and it needs the Worker's half deployed from `~/dev/rack-worker`.
 
 **The API key is not in the app**, and cannot be. GitHub Pages serves every file
 in this repo to every visitor; there is no private half of a static site. The
