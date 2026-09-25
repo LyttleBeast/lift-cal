@@ -2223,6 +2223,29 @@ body.peeking .view.active { padding-bottom: 65px; }
 .tog.on { background: rgba(240,190,30,.28); }
 .tog.on::after { transform: translateX(18px); background: var(--p-yellow); }
 
+/* ---------- Your goal (v55) ----------
+   Settings → Coach → Your goal, and the sheet "Yes, update my goal" opens.
+   Every answer is one kind of chip, 44px tall and in one type: the aims two to
+   a row, a question of three answers or fewer on one line with each chip as
+   wide as its label, the focus groups wrapping whole. No label wraps — each
+   fits its chip on one line at 320px wide, which tools-check/touch-target.mjs
+   measures in Archivo — and the chosen one reads as chosen the way
+   onboarding's choice rows do. */
+.coach-goal-opts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.coach-goal-opts.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.coach-goal-opts.line { flex-wrap: nowrap; }
+.coach-goal-opt {
+  min-height: 44px; padding: 8px 14px;
+  border: 1px solid var(--collar); border-radius: var(--r-sm);
+  background: var(--rack); color: var(--steel);
+  font-size: 12px; line-height: 1.25; white-space: nowrap;
+  font-variation-settings: 'wdth' 92, 'wght' 600;
+  transition: border-color var(--fast) var(--ease), background var(--fast) var(--ease);
+}
+.coach-goal-opts.grid .coach-goal-opt, .coach-goal-opts.line .coach-goal-opt { padding: 8px 6px; }
+.coach-goal-opts.line .coach-goal-opt { flex: 1 1 auto; }
+.coach-goal-opt.on { border-color: var(--p-yellow); background: var(--collar); color: var(--chalk); }
+
 /* Two buttons sharing a row need to be allowed to shrink, or a long label
    pushes its neighbour off the edge instead of ellipsing inside its half.
    .add-row has always carried this; .btn-split did not, and Train's new

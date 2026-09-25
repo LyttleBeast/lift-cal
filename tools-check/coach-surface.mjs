@@ -1571,29 +1571,58 @@ section('L. v48 — the target line, the goal question under its answer, and You
   check('with both goal questions under it', labels.includes('What are you training for right now?') &&
         labels.includes('How long have you been lifting consistently?'), list(labels));
   /* v49: the focus question sits under Your goal too, as seven more rows, so
-     the aim's rows are read from its own field. */
-  const fieldOf = text => walk(host).find(n => n.classList.contains('field') &&
+     the aim's rows are read from its own field.
+     v55, on purpose: Your goal was tidied (SHIP-V55-PROMPT §2). The aims were
+     six full-width choice rows and experience a segmented pill; every answer
+     is now a .coach-goal-opt chip — the aims two to a row (.grid), experience
+     on one line (.line) in Settings' short words, the focus groups wrapping
+     (.wrap). The same answers are written through the same calls, and
+     touch-target.mjs F measures the labels. */
+  const fieldOf = (h, text) => walk(h).find(n => n.classList.contains('field') &&
     walk(n).some(x => x.tag === 'label' && x.textContent === text));
-  const rows = find(fieldOf('What are you training for right now?') || mkEl('div'), 'ob-choice');
-  check('six aims as vertical choice rows, nothing selected', rows.length === 6 && !rows.some(r => r.classList.contains('on')),
-        rows.length + ' rows');
-  check('three experience answers on the segmented control, nothing selected',
-        find(host, 'seg-btn').length === 3 && !find(host, 'seg-btn').some(b => b.classList.contains('on')));
+  const optsOf = (h, text) => find(fieldOf(h, text) || mkEl('div'), 'coach-goal-opts')[0] || mkEl('div');
+  const aimBox = optsOf(host, 'What are you training for right now?');
+  const rows = find(aimBox, 'coach-goal-opt');
+  check('six aims as chips two to a row, in coach.js’s words, nothing selected',
+        rows.length === 6 && aimBox.classList.contains('grid') && !rows.some(r => r.classList.contains('on')) &&
+        rows.map(r => r.textContent).join() === 'Get stronger,Powerlifting,Build muscle,Lose fat, keep strength,Recomp,Stay consistent' &&
+        rows.every(r => r.getAttribute('aria-pressed') === 'false'),
+        rows.length + ' chips: ' + list(rows.map(r => r.textContent)));
+  const expBox = optsOf(host, 'How long have you been lifting consistently?');
+  const exp = find(expBox, 'coach-goal-opt');
+  check('three experience answers on one line, in Settings’ short words, nothing selected',
+        exp.length === 3 && expBox.classList.contains('line') && !exp.some(b => b.classList.contains('on')) &&
+        exp.map(b => b.textContent).join('|') === 'Under 6 months|6 months–2 years|2+ years', list(exp.map(b => b.textContent)));
+  const focBox = optsOf(host, 'Is there one muscle group you most want to bring up?');
+  check('the seven focus groups as chips that wrap', find(focBox, 'coach-goal-opt').length === 7 && focBox.classList.contains('wrap'));
   rows[4].onclick();
-  check('a tap saves the answer through setAim() and marks that row', rows[4].classList.contains('on') &&
+  check('a tap saves the answer through setAim() and marks that chip, and only that one', rows[4].classList.contains('on') &&
+        rows[4].getAttribute('aria-pressed') === 'true' && rows.filter(r => r.classList.contains('on')).length === 1 &&
         state.calls.some(x => x[0] === 'setAim' && x[1] === 'recomp'), JSON.stringify(state.calls));
+  rows[1].onclick();
+  check('a second tap moves the mark and saves the new aim', rows[1].classList.contains('on') && !rows[4].classList.contains('on') &&
+        rows[4].getAttribute('aria-pressed') === 'false' && state.calls.some(x => x[0] === 'setAim' && x[1] === 'powerlifting'));
+  state.calls.length = 0;
+  exp[1].onclick();
+  check('a short label saves the stored value it always meant: "6 months–2 years" is some',
+        state.calls.some(x => x[0] === 'answerQuestion' && x[1] === 'q_experience' && x[2] === 'some') && exp[1].classList.contains('on'),
+        JSON.stringify(state.calls));
   const answered = mkEl('div');
-  state.input = { ...BUILD, settings: { ...BUILD.settings, answers: { q_goal_aim: 'cut', q_experience: 'years' } } };
+  state.input = { ...BUILD, settings: { ...BUILD.settings, answers: { q_goal_aim: 'cut', q_experience: 'years', q_goal_direction: 'down' } } };
   UI.coachAnswerRows(answered, () => {});
+  const onIn = (h, text) => find(optsOf(h, text), 'coach-goal-opt').filter(r => r.classList.contains('on')).map(r => r.textContent).join();
   check('an answered goal shows its answers selected',
-        find(answered, 'ob-choice').filter(r => r.classList.contains('on')).map(r => textOf(r)).join() === 'Lose fat, keep strength' &&
-        find(answered, 'seg-btn').filter(b => b.classList.contains('on')).map(b => b.textContent).join() === 'Two years or more');
+        onIn(answered, 'What are you training for right now?') === 'Lose fat, keep strength' &&
+        onIn(answered, 'How long have you been lifting consistently?') === '2+ years');
+  check('an answered question above Your goal is chips on one line too',
+        optsOf(answered, 'Which way are you trying to go right now?').classList.contains('line') &&
+        onIn(answered, 'Which way are you trying to go right now?') === 'Down');
   state.pro = false;
   const basic = mkEl('div');
   state.input = BUILD;
   UI.coachAnswerRows(basic, () => {});
   check('a basic account sees no Your goal block — the goal turns the targets, and the targets are Pro',
-        !find(basic, 'you-sec-t').length && !find(basic, 'ob-choice').length);
+        !find(basic, 'you-sec-t').length && !find(basic, 'coach-goal-opt').length);
   state.pro = true; state.input = BASE; body.children.length = 0;
 }
 
@@ -1934,7 +1963,11 @@ section('N. v52 — the caution before a proposal, the mark’s chips, and "Shou
      sit in (rack.css, with the chips' 44px). Named here, three and no more;
      the chips themselves are Coach chips. */
   const V54 = ['coach-rate', 'coach-rate-after', 'coach-rate-q'];
-  const added = [...cls(src('coach-ui.js'))].filter(c => !was.has(c) && !V54.includes(c));
+  /* v55, on purpose: Your goal's answers are chips now (SHIP-V55-PROMPT §2),
+     in a box of their own (rack.css, 44px, measured by touch-target.mjs F).
+     The chip and its box, and no more. */
+  const V55 = ['coach-goal-opt', 'coach-goal-opts'];
+  const added = [...cls(src('coach-ui.js'))].filter(c => !was.has(c) && !V54.includes(c) && !V55.includes(c));
   check('no new CSS class: the caution and the mark are Coach bubbles and chips', !added.length, list(added));
   // ---- Phase B: "Am I fueled?" ----
   /* A month of food logged as he goes, training every other day; now is

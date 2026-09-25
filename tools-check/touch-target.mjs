@@ -31,7 +31,10 @@
 //   D. sweeps every rule in both stylesheets: no rule that can reach a .btn
 //      sets height, max-height or min-height, except the one this ship added;
 //   E. checks the one layout the minimum reached beyond a button — the parked
-//      workout bar, whose Resume grew and whose reserved space had to follow.
+//      workout bar, whose Resume grew and whose reserved space had to follow;
+//   F. (v55) measures every answer's label on the Your goal screen, in
+//      Archivo's own advance widths, against the chip the same cascade gives
+//      it at 320 and 390 wide: each fits on one line, so nothing wraps or clips.
 //
 // Two things are restated because node cannot read them off a screen, and
 // both are labelled where they are used: Archivo's vertical metrics (read from
@@ -174,7 +177,15 @@ function matches(cs, n) {
 
 // Shorthands the height and width questions touch, expanded into longhands.
 function expand(prop, val) {
-  const box = v => { const p = v.split(/\s+/); return [p[0], p[1] ?? p[0], p[2] ?? p[0], p[3] ?? p[1] ?? p[0]]; };
+  /* v55: split on the spaces outside parentheses, so `.sheet`'s
+     `padding: 10px var(--pad) calc(24px + env(…))` is three values, not five —
+     section F reads the sheet's side padding. No button's padding has a
+     parenthesis in it, so nothing in A–E reads differently (C holds). */
+  const words = v => { const out = []; let depth = 0, cur = '';
+    for (const ch of v.trim()) { if (ch === '(') depth++; else if (ch === ')') depth--;
+      if (/\s/.test(ch) && depth === 0) { if (cur) out.push(cur); cur = ''; } else cur += ch; }
+    if (cur) out.push(cur); return out; };
+  const box = v => { const p = words(v); return [p[0], p[1] ?? p[0], p[2] ?? p[0], p[3] ?? p[1] ?? p[0]]; };
   if (prop === 'padding' || prop === 'margin') {
     const [t, r, b, l] = box(val);
     return { [prop + '-top']: t, [prop + '-right']: r, [prop + '-bottom']: b, [prop + '-left']: l };
@@ -340,7 +351,18 @@ const BUTTONS = [
   ['Coach · live', 'Way too easy / About right / Too hard', ['coach-ui.js', /'coach-chip coach-effort'/],
    'button.coach-chip.coach-effort < div.coach-chips < div.coach-rate < div.coach-thread < div.sheet.coach-sheet.coach-live', null],
   ['Coach · live', 'Use it for my next set', ['coach-ui.js', /el\('button', 'btn btn-primary btn-block', 'Use it for my next set'\)/],
-   'button.btn.btn-primary.btn-block < div.coach-rate-after < div.coach-thread < div.sheet.coach-sheet.coach-live', null]
+   'button.btn.btn-primary.btn-block < div.coach-rate-after < div.coach-thread < div.sheet.coach-sheet.coach-live', null],
+  /* v55, on purpose: Settings → Coach → Your goal, tidied — every answer is a
+     chip (coach-ui.js coachAnswerRows), in one of the three boxes goalLayout()
+     puts it in. Never measured in Chrome at v46, so B names them and leaves
+     them to A; their widths join the snapshot as they are tonight, and F
+     measures every label against its chip. */
+  ['Your goal', 'Aims, two to a row', ['coach-ui.js', /el\('button', 'coach-goal-opt'/],
+   'button.coach-goal-opt < div.coach-goal-opts.grid < div.field < div.you-sec < div.sheet', null],
+  ['Your goal', 'Three answers or fewer, one line', ['coach-ui.js', /el\('div', 'coach-goal-opts ' \+ goalLayout\(q\)\)/],
+   'button.coach-goal-opt < div.coach-goal-opts.line < div.field < div.you-sec < div.sheet', null],
+  ['Your goal', 'Focus groups, wrapping', ['coach-ui.js', /q\.options\.length <= 3 \? 'line' : 'wrap'/],
+   'button.coach-goal-opt < div.coach-goal-opts.wrap < div.field < div.you-sec < div.sheet', null]
 ];
 
 /* The width snapshot, v46 (12b3a9d), produced by this file's own resolver
@@ -375,8 +397,8 @@ for (const [screen, name, [file, re]] of BUTTONS) check(`${screen} · ${name}: $
 
 section('B. the model, minimum taken out, reproduces the heights Chrome measured at v46');
 for (const [screen, name, , spec, chromeV46, row, kid] of BUTTONS) {
-  // v53's and v54's controls postdate the v46 measurement: there is nothing to reproduce.
-  if (chromeV46 == null) { results.push('  · ' + screen + ' · ' + name + ': added after v46 (v53, v54), never measured in Chrome — A holds its 44px'); continue; }
+  // v53's, v54's and v55's controls postdate the v46 measurement: there is nothing to reproduce.
+  if (chromeV46 == null) { results.push('  · ' + screen + ' · ' + name + ': added after v46 (v53, v54, v55), never measured in Chrome — A holds its 44px'); continue; }
   const bx = buttonBox(RULES, chain(spec), 390, { withMin: false, kid: kid ? chain(kid + ' < ' + spec) : null });
   if (typeof row === 'number') {
     check(`${screen} · ${name}: ${bx.natural}px of its own, stretched to the row's ${row}px (an input sets it) = Chrome's ${chromeV46}px — over 44 before v47 too`,
@@ -479,6 +501,126 @@ section('E. the parked-workout bar, which grew with its Resume button');
       check(`with the minimum: Resume is 44px and the bar ${barH}px (Chrome: 64)`, b.used === 44 && barH === 64, barH);
       check(`and the reservation is ${reserved}px, so the gap above the bar is ${gap.toFixed(1)}px — kept, not closed (Chrome: 7.1)`, gap >= 6, gap);
       check('at 58px it would have been ' + (58 + sp - 10 - barH).toFixed(1) + 'px — flush against the page\'s last button', (58 + sp - 10 - barH) < 1);
+    }
+  }
+}
+
+section('F. Your goal (v55): every answer’s label fits its chip on one line, at 320 and 390 wide');
+{
+  /* Archivo's advance widths at the one instance the chips are set in, 'wdth'
+     92 'wght' 600, in font units (unitsPerEm 1000, rounded to the unit).
+     Restated because node cannot read them off a screen, like ASC and DESC
+     above: read on 25 Sep 2026 from the variable font Google Fonts serves a
+     browser for rack.css's @import (the latin range,
+     fonts.gstatic.com/s/archivo/v25/k3kQo8UDI-1M0wlSfdnoLmvDIaI.woff2) — its
+     hmtx plus its HVAR deltas at those coordinates. The same reading at four
+     of Google's static instances (700 at wdth 100 and 87.5, 400 at 100, 300 at
+     62.5) agreed with their own hmtx to one unit on every glyph below.
+     Kerning is not modelled, so 3% of every label is held back for it and for
+     the pixel snapping the model does not do either. */
+  const FACE = "'wdth' 92, 'wght' 600", HOLD = 1.03;
+  const ADV = {
+    '0':539, '1':528, '2':540, '3':540, '4':538, '5':541, '6':540, '7':531, '8':538, '9':539, ' ':184,
+    '!':283, '"':419, '#':557, '$':501, '%':901, '&':680, "'":233, '(':353, ')':353, '*':399, '+':604,
+    ',':279, '-':313, '.':279, '/':291, ':':312, ';':312, '<':604, '=':604, '>':604, '?':566, '@':929,
+    'A':657, 'B':655, 'C':673, 'D':679, 'E':623, 'F':562, 'G':736, 'H':682, 'I':269, 'J':545, 'K':652,
+    'L':531, 'M':802, 'N':683, 'O':729, 'P':625, 'Q':729, 'R':668, 'S':618, 'T':581, 'U':674, 'V':625,
+    'W':895, 'X':641, 'Y':635, 'Z':595, '[':333, '\\':291, ']':333, '^':604, '_':471, '`':197, 'a':524,
+    'b':552, 'c':512, 'd':552, 'e':527, 'f':292, 'g':546, 'h':544, 'i':240, 'j':237, 'k':510, 'l':239,
+    'm':806, 'n':545, 'o':557, 'p':552, 'q':552, 'r':338, 's':501, 't':296, 'u':544, 'v':489, 'w':712,
+    'x':510, 'y':489, 'z':476, '{':382, '|':233, '}':382, '~':604, '–':460, '’':261
+  };
+  const textW = (s, fs) => { let u = 0; for (const ch of s) { if (!(ch in ADV)) return NaN; u += ADV[ch]; } return u * fs / 1000; };
+
+  /* The labels, from the real sources: every question in coach.js's QUESTIONS
+     that Settings may draw (all but `settings: false`), with coach-ui.js's
+     SHORT_LABELS over them, and the box each is drawn in decided by
+     coach-ui.js's own goalLayout() — read and run, never restated. */
+  const CS = read('coach.js'), UIS = CODE['coach-ui.js'];
+  const qs = CS.slice(CS.indexOf('export const QUESTIONS = Object.freeze(['));
+  const qBlock = qs.slice(0, qs.indexOf('\n]);'));
+  const at = [...qBlock.matchAll(/^    id: '(q_\w+)',$/gm)];
+  const QS = at.map((m, i) => {
+    const body = qBlock.slice(m.index, i + 1 < at.length ? at[i + 1].index : qBlock.length);
+    return { id: m[1], settings: !/^\s+settings: false,$/m.test(body),
+             options: [...body.matchAll(/\{\s*value:\s*'([^']+)',\s*label:\s*'([^']+)'\s*\}/g)].map(o => ({ value: o[1], label: o[2] })) };
+  }).filter(q => q.settings);
+  const shortSrc = (/const SHORT_LABELS = Object\.freeze\(\{([\s\S]*?)\n\}\);/.exec(UIS) || [])[1] || '';
+  const SHORT = Object.fromEntries([...shortSrc.matchAll(/(q_\w+): Object\.freeze\(\{([^}]*)\}\)/g)]
+    .map(m => [m[1], Object.fromEntries([...m[2].matchAll(/(\w+): '([^']+)'/g)].map(x => [x[1], x[2]]))]));
+  const layoutSrc = (/const goalLayout = (q => [^\n]+);\n/.exec(UIS) || [])[1];
+  const goalLayout = layoutSrc ? new Function('return (' + layoutSrc + ')')() : () => null;
+  const n = id => (QS.find(q => q.id === id) || { options: [] }).options.length;
+  check(`coach.js's questions were read: ${QS.map(q => q.id + ' ' + q.options.length).join(', ')} — the aims 6, experience 3, the focus groups 7`,
+        n('q_goal_aim') === 6 && n('q_experience') === 3 && n('q_focus_group') === 7 && QS.every(q => q.options.length >= 2));
+  check('coach-ui.js’s SHORT_LABELS were read, and each names a stored value of its question: ' + JSON.stringify(SHORT),
+        Object.keys(SHORT).length >= 1 && Object.entries(SHORT).every(([id, m]) => {
+          const q = QS.find(x => x.id === id); return !!q && Object.keys(m).every(v => q.options.some(o => o.value === v));
+        }));
+  check('and goalLayout() was read and run: the aims a grid, experience a line, the focus groups wrapping',
+        !!layoutSrc && goalLayout({ id: 'q_goal_aim', options: [1, 2, 3, 4, 5, 6] }) === 'grid' &&
+        goalLayout({ id: 'q_experience', options: [1, 2, 3] }) === 'line' && goalLayout({ id: 'q_focus_group', options: [1, 2, 3, 4, 5, 6, 7] }) === 'wrap');
+
+  const spec = lay => `button.coach-goal-opt < div.coach-goal-opts.${lay} < div.field < div.you-sec < div.sheet`;
+  const sides = (c, a, b) => [a, b].reduce((s, p) => { const v = c[p] ? c[p].v : '0px'; const x = px(v); if (x == null) throw new Error(p + ' is ' + v); return s + x; }, 0);
+  for (const w of [390, 320]) {
+    // The chips' container, outermost in: html and body have no margin or
+    // padding; the sheet is 100% wide up to its max-width, border-box.
+    const content = lay => {
+      const nodes = []; for (let x = chain(spec(lay)).parent; x; x = x.parent) nodes.unshift(x);
+      let inner = w;
+      for (const nd of nodes) {
+        const c = cascade(RULES, nd, w);
+        const v = p => (c[p] ? c[p].v : undefined);
+        const edge = sides(c, 'padding-left', 'padding-right') + sides(c, 'border-left-width', 'border-right-width');
+        let box = inner - sides(c, 'margin-left', 'margin-right');
+        if (v('width') === '100%') box = Math.min(inner, px(v('max-width')) ?? Infinity);
+        else if (v('width') !== undefined) throw new Error(nd.tag + '.' + nd.cls.join('.') + ' has width ' + v('width'));
+        if (v('width') !== undefined && v('box-sizing') !== 'border-box') throw new Error('not border-box');
+        inner = box - edge;
+      }
+      return inner;
+    };
+    for (const lay of ['grid', 'line', 'wrap']) {
+      const c = cascade(RULES, chain(spec(lay)), w), box = cascade(RULES, chain(spec(lay)).parent, w);
+      const v = p => (c[p] ? c[p].v : undefined);
+      const inherited = []; for (let x = chain(spec(lay)).parent; x; x = x.parent) {
+        const a = cascade(RULES, x, w); ['letter-spacing', 'word-spacing', 'text-transform', 'font-variation-settings', 'font-size'].forEach(p => { if (a[p] && !(x.tag === 'html' || x.tag === 'body')) inherited.push(p); }); }
+      const fs = px(v('font-size'));
+      check(`${w} ${lay}: the chip is set ${v('font-size')} in ${v('font-variation-settings')}, one line (white-space ${v('white-space')}), no letter-spacing or case change from it or above it`,
+            fs === 12 && v('font-variation-settings') === FACE && v('white-space') === 'nowrap' &&
+            v('letter-spacing') === undefined && v('text-transform') === undefined && !inherited.length,
+            'restate ADV for a new instance; ' + inherited.join(', '));
+      const room = content(lay), gap = px((box.gap || {}).v) ?? 0;
+      const edge = sides(c, 'padding-left', 'padding-right') + sides(c, 'border-left-width', 'border-right-width');
+      const qsHere = QS.filter(q => goalLayout(q) === lay);
+      check(`${w} ${lay}: questions drawn here — ${qsHere.map(q => q.id).join(', ')}`, qsHere.length >= 1);
+      const lab = (q, o) => (SHORT[q.id] || {})[o.value] || o.label;
+      if (lay === 'grid') {
+        const col = (room - gap) / 2, avail = col - edge;
+        check(`${w} grid: ${(box['grid-template-columns'] || {}).v}, ${gap}px apart in ${room}px — each chip ${col}px, ${avail}px for its label`,
+              (box.display || {}).v === 'grid' && (box['grid-template-columns'] || {}).v === 'repeat(2, minmax(0, 1fr))');
+        for (const q of qsHere) for (const o of q.options) {
+          const t = textW(lab(q, o), fs);
+          check(`${w} grid · “${lab(q, o)}”: ${t.toFixed(1)}px (+3% ${(t * HOLD).toFixed(1)}) in ${avail}px`, t * HOLD <= avail, 'wider than its chip');
+        }
+      } else if (lay === 'line') {
+        check(`${w} line: one row that does not wrap, each chip as wide as its label (flex ${v('flex-grow')} ${v('flex-shrink')} ${v('flex-basis')})`,
+              (box.display || {}).v === 'flex' && (box['flex-wrap'] || {}).v === 'nowrap' && v('flex-basis') === 'auto');
+        for (const q of qsHere) {
+          const ws = q.options.map(o => textW(lab(q, o), fs));
+          const need = ws.reduce((s, t) => s + t * HOLD + edge, 0) + gap * (q.options.length - 1);
+          check(`${w} line · ${q.id}: ${q.options.map((o, i) => '“' + lab(q, o) + '” ' + ws[i].toFixed(1)).join(', ')} — ${need.toFixed(1)}px with the 3%, padding, borders and gaps, in ${room}px`,
+                need <= room, 'the row is wider than its box');
+        }
+      } else {
+        check(`${w} wrap: chips wrap whole (flex-wrap ${(box['flex-wrap'] || {}).v})`, (box.display || {}).v === 'flex' && (box['flex-wrap'] || {}).v === 'wrap');
+        for (const q of qsHere) for (const o of q.options) {
+          const t = textW(lab(q, o), fs);
+          check(`${w} wrap · “${lab(q, o)}”: ${(t * HOLD + edge).toFixed(1)}px with the 3% in ${room}px, and ${(t + edge).toFixed(1)}px wide as a target`,
+                t * HOLD + edge <= room && t + edge >= 44, 'wider than the row, or narrower than 44px');
+        }
+      }
     }
   }
 }

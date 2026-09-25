@@ -23,7 +23,7 @@
 // hands in rather than an import here, and why "Add it" in a live session is
 // the picker's own callback handed in the same way.
 
-import { el, sheet, noteEl, segmented, toast } from './ui.js';
+import { el, sheet, noteEl, toast } from './ui.js';
 import { GROUPS } from './exercises.js';
 import { coach, CATEGORIES, QUESTIONS, PRO_ADDS, LIVE_NONE, isMuted, TOPICS_SHOWN, MARK_ASK, FUEL_ROUTES,
          EFFORT, rateAsk, rateAnswer } from './coach.js';
@@ -957,9 +957,10 @@ function toggle(cat, onChange) {
    marked `always` — what he trains for, and how long he has been at it — is
    shown answered or not, nothing selected until it is, because it is how he
    sets the goal his targets are turned by. Pro only: the targets are, and a
-   goal that changes nothing a basic account can see is a survey. Six answers
-   do not fit the segmented control on a phone, so a question with more than
-   three is drawn as the vertical choice rows Settings' own goal sheet uses. */
+   goal that changes nothing a basic account can see is a survey. Until v55 a
+   question with more than three answers was drawn as full-width choice rows
+   and the rest as the segmented pill; since v55 every answer is a chip
+   (SHORT_LABELS, below). */
 /* v50: one plain line under a Your goal question that needs saying what it is
    FOR. The focus group shipped in v49 as a bare list of groups, and on the
    phone it read as a question with no reason behind it. Here rather than in
@@ -967,6 +968,28 @@ function toggle(cat, onChange) {
 const ROW_NOTES = Object.freeze({
   q_focus_group: 'Coach reports this group’s weekly sets and its main lifts when you ask how you’re tracking toward your goal.'
 });
+
+/* v55: the Your goal screen, tidied (Micah, 24 Sep, on the phone: "this UI
+   looks messy" — six full-width aim rows, seven full-width focus rows, and
+   "SIX MONTHS TO TWO YEARS" wrapped onto two lines of a segmented pill).
+   Every answer is now one kind of chip, 44px tall, laid out one of three ways:
+
+     grid  two to a row — the aims;
+     line  one row, each chip as wide as its label — a question of three
+           answers or fewer (experience, which way, when he logs);
+     wrap  chips that wrap whole — the focus groups.
+
+   Layout and labels only: the same answers are written, through the same
+   save(), to the same keys. SHORT_LABELS are Settings' own words for a stored
+   value, here and not in coach.js for ROW_NOTES' reason, and because
+   coach.js spells every figure out (coach-units.mjs refuses a typed one) —
+   the Coach sheet still asks in its words. The stored values and what they
+   mean are unchanged. tools-check/touch-target.mjs measures every label here
+   in Archivo against its chip at 320px wide. */
+const SHORT_LABELS = Object.freeze({
+  q_experience: Object.freeze({ new: 'Under 6 months', some: '6 months–2 years', years: '2+ years' })
+});
+const goalLayout = q => (q.id === 'q_goal_aim' ? 'grid' : q.options.length <= 3 ? 'line' : 'wrap');
 
 export function coachAnswerRows(host, onChange) {
   const answers = coachSettings().answers || {};
@@ -989,25 +1012,26 @@ export function coachAnswerRows(host, onChange) {
     f.style.marginTop = '14px';
     f.appendChild(el('label', null, q.text));
     if (ROW_NOTES[q.id]) f.appendChild(noteEl(ROW_NOTES[q.id]));
-    if (q.options.length <= 3) {
-      f.appendChild(segmented(q.options.map(op => [op.value, op.label]), answers[q.id], v => save(q, v)));
-    } else {
-      let sel = answers[q.id];
-      const wrap = el('div', 'ob-choices');
-      q.options.forEach(op => {
-        const b = el('button', 'ob-choice' + (op.value === sel ? ' on' : ''));
-        b.appendChild(el('div', 'ob-choice-t', op.label));
-        b.onclick = () => {
-          if (op.value === sel) return;
-          sel = op.value;
-          wrap.querySelectorAll('.ob-choice').forEach(x => x.classList.remove('on'));
-          b.classList.add('on');
-          save(q, op.value);
-        };
-        wrap.appendChild(b);
-      });
-      f.appendChild(wrap);
-    }
+    // `sel` is live, not answers[q.id], for segmented()'s reason (ui.js).
+    let sel = answers[q.id];
+    const short = SHORT_LABELS[q.id] || {};
+    const wrap = el('div', 'coach-goal-opts ' + goalLayout(q));
+    wrap.setAttribute('role', 'group');
+    wrap.setAttribute('aria-label', q.text);
+    q.options.forEach(op => {
+      const b = el('button', 'coach-goal-opt' + (op.value === sel ? ' on' : ''), short[op.value] || op.label);
+      b.setAttribute('aria-pressed', op.value === sel ? 'true' : 'false');
+      b.onclick = () => {
+        if (op.value === sel) return;
+        sel = op.value;
+        wrap.querySelectorAll('.coach-goal-opt').forEach(x => { x.classList.remove('on'); x.setAttribute('aria-pressed', 'false'); });
+        b.classList.add('on');
+        b.setAttribute('aria-pressed', 'true');
+        save(q, op.value);
+      };
+      wrap.appendChild(b);
+    });
+    f.appendChild(wrap);
     host.appendChild(f);
   };
 
