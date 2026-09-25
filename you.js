@@ -29,10 +29,11 @@
 // their own state, own live listeners, and — in weight.js's case — pull
 // workout.js and its 250 ms session timer in behind them. Importing all four to
 // read eight numbers would double the module graph sitting in the boot path and
-// tie the opening screen to four tabs' initialisation order. store.read() is
-// mirror-cached, so re-reading is nearly free on a warm device and correct on a
-// cold one, and the coupling that remains is the shared math in tdee.js and
-// analytics.js, which is where it belongs.
+// tie the opening screen to four tabs' initialisation order. store.read() is a
+// live GET whenever the device is online, with the mirror as its fallback, so
+// this screen reads each node once per app open and after that only a node
+// that changed (refreshLogged, v57), and the coupling that remains is the
+// shared math in tdee.js and analytics.js, which is where it belongs.
 //
 // The two numbers that must not be re-derived independently, because they are
 // printed elsewhere too:
@@ -63,7 +64,7 @@
 // onboarding.js and the two new modules it owns the entry points to. Nothing
 // imports back.
 
-import { read, LS, todayKey, isOwner, wu } from './store.js';
+import { read, LS, todayKey, isOwner, wu, onChange } from './store.js';
 import { $, el, noteEl, parseKey, fmtDate, compact, fmtDuration, sheet } from './ui.js';
 import { assess, keysBack as keysBackI, streakOf, fmtRange,
          goalDirection, rateVerdict } from './insights.js';
@@ -188,10 +189,10 @@ export async function initYou(ctx = {}) {
 function loadHeavy() {
   /* Coach's snapshot is NOT started here — initYou() fires it before its own
      first await, which is a stage and a half earlier. What is true either way
-     is that everything Coach needs is read once and never on a paint: this
-     screen already issues around seven live GETs per render and a card that
-     read anything would multiply that by every unawaited load that repaints
-     it. */
+     is that everything Coach needs is read once and never on a paint: a card
+     that read anything would multiply by every unawaited load that repaints
+     it. Since v57 this screen's own render reads nothing either, unless a node
+     it quotes has changed (refreshLogged). */
   allSessions()
     .then(list => { sessions = list || []; sessionsFp = fpOf(sessions); render(); })
     .catch(() => { sessions = []; sessionsFp = fpOf(sessions); render(); });
@@ -247,60 +248,72 @@ function refreshSessions() {
   refreshLogged();
 }
 
-/* The same problem as the sessions above, for the three nodes whose numbers
+/* The same problem as the sessions above, for the seven nodes whose numbers
    this screen quotes alongside live module state. weightmodel.js refits on
    every weigh-in and trendWeight() reads that fit directly, so leaving `entries`
    frozen at boot prints yesterday's "Latest lb" directly above today's
    normalised trend; leaving `summaries` frozen lets the maintenance number here
    disagree with the one on Fuel, which is the single thing this file exists to
-   prevent. read() answers from the localStorage mirror, so this is a local
-   comparison and not a round trip per node per tab switch.
+   prevent. The name, the step goal and the water goal are in here too: they
+   move from the settings sheet, which opens over this tab, so the card being
+   contradicted is still on screen behind it.
 
-   The name, the step goal and the water goal are in here too. They do not move
-   on their own, but they all move from the settings sheet — which opens over
-   this tab, so the card being contradicted is still on screen behind it. The
-   gear passes a callback for that case; this is what heals the number anyway on
-   the next render if that callback ever stops being wired. */
-let liveFp = '';
+   v57: READ ONCE, THEN ONLY WHAT CHANGED. Until v57 every render re-read all
+   seven to find out, nearly always, that nothing had moved — seven live GETs on
+   every switch to this tab and every repaint its own loads trigger, because
+   read() is a get() whenever the device is online. Now store.js onChange()
+   names every write on this device and every node a live listener delivers,
+   and the node it touches is marked: `stale`, read on the next render, or
+   `fresh`, when a listener handed the node over whole and there is nothing to
+   read. A render with nothing marked reads nothing, and one with a node marked
+   reads that node (tools-check/you-reads.mjs pins both). A change made on
+   another device reaches this screen through a listener another tab keeps open
+   on it — weight/entries and steps — and the rest at the next app open. */
+const LIVE_NODES = ['weight/entries', 'food/targets', 'food/daySummaries', 'steps', 'profile', 'settings/steps', 'settings/water'];
+const stale = new Set();
+const fresh = new Map();
+onChange((path, value) => LIVE_NODES.forEach(n => {
+  if (path === n && value !== undefined) { fresh.set(n, value); stale.delete(n); }
+  else if (path === n || path.startsWith(n + '/') || n.startsWith(path + '/')) { stale.add(n); fresh.delete(n); }
+}));
 let reloading = false;
 
+// One node onto this screen's state, the way the boot read puts it there.
+function take(n, v) {
+  if (n === 'weight/entries')    entries   = v || {};
+  if (n === 'food/targets')      targets   = v || null;
+  if (n === 'food/daySummaries') summaries = v || {};
+  if (n === 'steps')             stepDays  = v || {};
+  // A failed read is a null, not an empty profile — keep what we had rather
+  // than blanking the name on a flaky connection.
+  if (n === 'profile' && v)        profile  = v;
+  if (n === 'settings/steps' && v) stepSet  = v;
+  if (n === 'settings/water' && v) waterSet = v;
+}
+const liveState = () => JSON.stringify([entries, targets, summaries, stepDays, profile, stepSet, waterSet]);
+
 function refreshLogged() {
-  if (reloading || !loaded) return;
+  if (reloading || !loaded || (!stale.size && !fresh.size)) return;
   reloading = true;
-  Promise.all([
-    read('weight/entries',    null),
-    read('food/targets',      null),
-    read('food/daySummaries', null),
-    read('steps',             null),
-    read('profile',           null),
-    read('settings/steps',    null),
-    read('settings/water',    null)
-  ])
-    .then(async ([we, t, ds, sd, p, ss, ws]) => {
+  const want = [...stale], got = new Map(fresh);
+  stale.clear();
+  fresh.clear();
+  Promise.all(want.map(n => read(n, null)))
+    .then(async vals => {
       reloading = false;
-      const fp = JSON.stringify([we, t, ds, sd, p, ss, ws]);
-      if (fp === liveFp) return;
-      const first = !liveFp;
-      liveFp = fp;
-      if (first) return;              // the boot values; nothing has changed yet
-      entries   = we || {};
-      targets   = t  || null;
-      summaries = ds || {};
-      stepDays  = sd || {};
-      // A failed read is a null, not an empty profile — keep what we had rather
-      // than blanking the name on a flaky connection.
-      if (p)  profile  = p;
-      if (ss) stepSet  = ss;
-      if (ws) waterSet = ws;
+      want.forEach((n, i) => got.set(n, vals[i]));
+      const was = liveState();
+      got.forEach((v, n) => take(n, v));
+      if (liveState() === was) return;
       try { await refreshModel(entries); } catch {}
       // The same bargain as the sessions above: these four are the nodes Coach
-      // quotes and this screen has just re-read all of them, so Coach's numbers
-      // stay exactly as fresh as the ones drawn underneath it rather than being
-      // a second opinion about the same data.
+      // quotes and this screen has just taken them on, so Coach's numbers stay
+      // exactly as fresh as the ones drawn underneath it rather than being a
+      // second opinion about the same data.
       noteCoachData({ entries, targets, summaries, stepDays });
       render();
     })
-    .catch(() => { reloading = false; });
+    .catch(() => { reloading = false; want.forEach(n => stale.add(n)); });
 }
 
 /* ================= SMALL HELPERS ================= */
@@ -653,7 +666,7 @@ function hero() {
   } else {
     av.textContent = initials(name);
   }
-  av.onclick = () => { if (loaded) pickProfilePhoto(() => { liveFp = ''; refreshLogged(); }); };
+  av.onclick = () => { if (loaded) pickProfilePhoto(() => render()); };
   h.appendChild(av);
 
   // The greeting is the headline and the name rides in it, so the first
@@ -685,9 +698,12 @@ function hero() {
     '<path d="M19.5 14.6a1.5 1.5 0 0 0 .3 1.7l.1.1a1.9 1.9 0 1 1-2.7 2.7l-.1-.1a1.5 1.5 0 0 0-2.6 1.1v.2a1.9 1.9 0 1 1-3.8 0v-.1a1.5 1.5 0 0 0-2.6-1.1l-.1.1a1.9 1.9 0 1 1-2.7-2.7l.1-.1a1.5 1.5 0 0 0-1.1-2.6h-.2a1.9 1.9 0 1 1 0-3.8h.1a1.5 1.5 0 0 0 1.1-2.6l-.1-.1a1.9 1.9 0 1 1 2.7-2.7l.1.1a1.5 1.5 0 0 0 2.6-1.1v-.2a1.9 1.9 0 1 1 3.8 0v.1a1.5 1.5 0 0 0 2.6 1.1l.1-.1a1.9 1.9 0 1 1 2.7 2.7l-.1.1a1.5 1.5 0 0 0 1.1 2.6h.2a1.9 1.9 0 1 1 0 3.8h-.1a1.5 1.5 0 0 0-1.4.9z"/>' +
     '</svg>';
   // The sheet opens over this tab, so a goal or a name changed inside it is
-  // contradicting a card that is still on screen behind it. Re-read and repaint
-  // the moment it lands rather than waiting for a tab switch.
-  gear.onclick = () => openSettings(() => { liveFp = ''; refreshLogged(); });
+  // contradicting a card that is still on screen behind it. Repaint the moment
+  // it lands rather than waiting for a tab switch, and the repaint reads what
+  // the sheet wrote (refreshLogged). Until v57 this emptied a fingerprint first,
+  // which made the read it asked for look like the boot's and be thrown away:
+  // a name saved here did not reach this screen until something else changed.
+  gear.onclick = () => openSettings(() => render());
   h.appendChild(gear);
 
   return h;
@@ -916,7 +932,7 @@ function fuelCard(maint) {
     c.appendChild(noteEl('No daily targets set yet. Setup writes a starting set from your height, weight and goal — if you skipped it, the gear at the top of this screen is where they live.'));
     const b = el('button', 'btn btn-ghost btn-block', 'Set your daily targets');
     b.style.marginTop = '12px';
-    b.onclick = () => openSettings(() => { liveFp = ''; refreshLogged(); });
+    b.onclick = () => openSettings(() => render());
     c.appendChild(b);
     return c;
   }
@@ -1567,7 +1583,7 @@ function trajectoryCard(found, est, maint) {
 function goalBtn(label, where = 'goal') {
   const b = el('button', 'btn btn-ghost btn-block', label);
   b.style.marginTop = '12px';
-  const back = () => { liveFp = ''; refreshLogged(); };
+  const back = () => render();
   b.onclick = () => (where === 'targets' ? openDailyTargets(back) : openGoal(back));
   return b;
 }

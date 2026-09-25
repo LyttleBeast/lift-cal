@@ -322,6 +322,7 @@ export async function retryRefused(key) {
     LS.set('mirror:' + short, item.value);
     clearPartial(short);
   }
+  changed(item.path.slice(mine.length));
   // Re-read rather than reusing `list`: a retry awaits the network, and
   // anything could have been added or discarded while it did.
   const after = refusedItems();
@@ -355,6 +356,7 @@ export async function flushQueue() {
     try {
       if (item.merge) await update(ref(db, item.path), item.value);
       else            await set(ref(db, item.path), item.value);
+      changed(item.path.slice(mine.length));
     }
     catch (e) {
       /* Dead-lettered, not kept. This one was queued while offline, so nothing
@@ -370,6 +372,7 @@ export async function flushQueue() {
         clearPartial(short);
         pushRefused(item.path, item.value, item.merge, (e && e.message) || '');
         refused(short, e);
+        changed(short);
         continue;
       }
       remaining.push(item);
@@ -637,6 +640,21 @@ async function writePlan(path, value, intent) {
 /* ---------- generic read/write, always inside users/{uid} ---------- */
 function userPath(p) { return `users/${UID}/${p}`; }
 
+/* ---------- what changed, on this device (v57) ----------
+   The path, under users/{uid}, of every write this device makes and every node
+   a live listener delivers. A screen that quotes a node it read once asks here
+   instead of re-reading it on every paint: the You tab re-read seven nodes on
+   every switch to it until v57, each one a live GET, to learn that nothing had
+   moved (tools-check/you-reads.mjs).
+
+   `value` is the node itself when a listener delivered it whole, and
+   undefined for a write — a write can still be refused, and the mirror it
+   sets is this device's word, not the database's. A subscriber that throws is
+   skipped for that change and kept for the next. */
+const changeFeed = new Set();
+export function onChange(cb) { changeFeed.add(cb); return () => changeFeed.delete(cb); }
+function changed(path, value) { changeFeed.forEach(cb => { try { cb(path, value); } catch {} }); }
+
 /**
  * @param {string} path   under users/{uid}
  * @param {*}      value  the whole node — write() is a set(), a PUT, except on
@@ -673,6 +691,7 @@ export async function write(path, value, intent) {
   // a picture of the server, and saying so is what keeps the next write from
   // treating it as one.
   if (plan.merge) markPartial(path); else clearPartial(path);
+  changed(path);
   const full = userPath(path);
   if (plan.merge) {
     if (!online.value) { pushQueue(full, plan.merge, true); return; }
@@ -752,6 +771,7 @@ export function watch(path, cb) {
       const v = snap.exists() ? snap.val() : null;
       LS.set('mirror:' + path, v);
       clearPartial(path);
+      changed(path, v);
       cb(v);
     }, () => {});
   } catch {
@@ -762,6 +782,7 @@ export function watch(path, cb) {
 export async function mergeUpdate(path, obj) {
   if (!UID) return;
   try { await update(ref(db, userPath(path)), obj); } catch {}
+  changed(path);
 }
 
 /* ---------- shared nodes, outside users/ ----------
