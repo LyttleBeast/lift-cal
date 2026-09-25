@@ -677,9 +677,10 @@ function derive(input) {
 /* v52: a rep drop in one exercise's sets — a working set at the same or a
    lighter load than the first, with reps down by REP_DROP or more. The test
    coach-live.js's fatigueIn() applies mid-session; REP_DROP is its constant,
-   imported. Sets with no reps logged are not sets to drop from. */
+   imported. Sets with no reps logged are not sets to drop from. v55: nor is a
+   drop set's ('D'), whose reps fall at a lighter weight by design. */
 function repDrop(sets) {
-  const w = (sets || []).filter(s => isWorking(s) && parseInt(s.r, 10) >= 1);
+  const w = (sets || []).filter(s => isWorking(s) && s.type !== 'D' && parseInt(s.r, 10) >= 1);
   if (w.length < 2) return false;
   const load = s => parseFloat(s.w) || 0, reps = s => parseInt(s.r, 10);
   return w.slice(1).some(s => load(s) <= load(w[0]) && reps(s) <= reps(w[0]) * (1 - REP_DROP));

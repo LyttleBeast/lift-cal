@@ -800,11 +800,14 @@ function record(i, now) {
     const tail = tops.slice(-3);
     for (let k = 1; k < tail.length; k++) if (daysBetween(tail[k - 1].startedAt, tail[k].startedAt) > RECORD_GAP_DAYS) return;
     // The last session: no set to failure, and no set 25% or more under the
-    // first at the same weight or lighter.
+    // first at the same weight or lighter. v55: read between the sets that
+    // are not a drop set's — a drop set's reps fall at a lighter weight by
+    // design, and that is not a day to hold a record back for.
     if (last.sets.some(s => s.type === 'F')) return;
-    const first = last.sets[0];
+    const main = last.sets.filter(s => s.type !== 'D');
+    const first = main[0];
     if (!first) return;
-    if (last.sets.slice(1).some(s => s.load <= first.load + TOL && s.reps <= first.reps * (1 - RECORD_DROP))) return;
+    if (main.slice(1).some(s => s.load <= first.load + TOL && s.reps <= first.reps * (1 - RECORD_DROP))) return;
     // The group rested: two days, or his quickest quarter of gaps if longer.
     const gDays = Number.isFinite(ex.groupDaysSince) ? ex.groupDaysSince : null;
     if (gDays == null || gDays < restOf(i.shaped, ex.group, now)) return;

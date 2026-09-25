@@ -97,7 +97,10 @@ const stubs = {
   el: UI.el, LIMITS: UI.LIMITS, setNum: UI.setNum,
   wu: () => S.u, limW: U.limW, fmtSetW: U.fmtSetW, wOut: U.wOut, wIn: U.wIn,
   bump: () => {}, noteLiveTick: () => null, persistSession: () => {}, render: () => {}, startRest: () => {},
-  swipeToDelete: row => row
+  swipeToDelete: row => row,
+  // v55, on purpose: collectFrom keeps each drop set whole, and a set row's
+  // badge and swipe go through the drop-set edits — the real ones.
+  keepSets: A.keepSets, retypeSet: A.retypeSet, removeSet: A.removeSet
 };
 const NAMES = Object.keys(stubs);
 const W = new Function(...NAMES, `

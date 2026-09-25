@@ -231,7 +231,11 @@ const copySet = s => ({
   type: (s && s.type) || 'N',
   // v54: his effort rating rides along when it is one — and only then, so an
   // unrated set is the same three keys it always was.
-  ...(rirOf(s) != null ? { rir: rirOf(s) } : null)
+  ...(rirOf(s) != null ? { rir: rirOf(s) } : null),
+  // v55: and a drop's `dp` (analytics.js), so the target's sets keep a drop
+  // set as one group. Nothing here reads it: every 'D' is left out of the top
+  // sets whether it is a drop or not, exactly as before.
+  ...(s && s.dp === 1 ? { dp: 1 } : null)
 });
 
 /* v54: HIS RATING OF A SET — `rir`, reps he had left, an integer 0 to 5
@@ -592,7 +596,7 @@ function decide(ex, c) {
 
   // Last time's numbers, set by set: the default for every set a target does
   // not touch, and every top set's ghost weight when the target names no number.
-  const keep = last.all.map(s => ({ type: s.type, tw: s.w, tr: s.r }));
+  const keep = last.all.map(s => ({ type: s.type, tw: s.w, tr: s.r, ...(s.dp === 1 ? { dp: 1 } : null) }));
   const reps = rs => rs.join(', ');
   // Last time, said the way somebody says it: "3 × 8 at 185 lb", or "405 lb
   // for 1, then 315 lb for 5", or "185 lb for 12, 5, 11". Runs of one weight
@@ -1178,8 +1182,10 @@ function nextOf(ex, c, today) {
 
   // STOP — any set typed F, any rated too hard, or reps down a quarter from the
   // first working set at the same or a lighter weight (REP_DROP, handed in).
-  const first = W[0];
-  const drop = W.slice(1).find(s => s.L <= first.L && s.R <= first.R * (1 - c.repDrop));
+  // v55: the rep drop is read between the sets that are not a drop set's
+  // (`done`): a drop set's reps fall at a lighter weight by design.
+  const first = done[0];
+  const drop = done.slice(1).find(s => s.L <= first.L && s.R <= first.R * (1 - c.repDrop));
   const why0 = W.some(s => s.type === 'F') ? 'A set of it went to failure today.'
     : W.some(s => s.rir === 0) ? 'You rated a set of it too hard today.'
     : drop ? 'Your reps went from ' + first.R + ' to ' + drop.R + ' at the same or a lighter weight today.' : null;

@@ -537,6 +537,21 @@ body.peeking .view.active { padding-bottom: 65px; }
 .ex-actions { display: flex; gap: 8px; padding: 10px 12px 12px; }
 .ex-actions .btn { flex: 1; padding: 9px; font-size: 12px; }
 
+/* v55: a drop set. Its drops sit indented under the set he changed to a drop
+   set, on a rail in the drop badge's blue, and "+ Drop" under the last one
+   adds the next. A second drop set stacked under it starts back at the left,
+   so two are visibly two groups. Only the badge moves in, inside its own
+   column: the weight and reps boxes are exactly as wide as every other row's,
+   so a drop in a lifting block at 320px wide has as much room as a set. */
+.set-row.drop { position: relative; }
+.set-row.drop::before {
+  content: ''; position: absolute; left: 15px; top: 0; bottom: 0;
+  width: 2px; border-radius: 1px; background: rgba(46,127,217,.45);
+}
+.set-row.drop .set-idx { margin-left: 10px; }
+.drop-add-row { padding: 4px 12px 6px 22px; }
+.drop-add { padding: 6px 14px; font-size: 12px; color: var(--p-blue); border-color: rgba(46,127,217,.35); }
+
 /* lifting block — the container the exercise cards above sit inside. It has no
    set rows of its own on purpose: a block repeats whole exercises, it is not a
    new kind of set. */

@@ -12,7 +12,8 @@ import {
 import {
   allSessions, invalidate, detectPRs, sessionMilestones, sameKindComparison,
   sessionReps, isWorking, groupColor,
-  mergeSessionExercises, prDetail, normFeel, FEEL_STRENGTH
+  mergeSessionExercises, prDetail, normFeel, FEEL_STRENGTH,
+  dropHeads, setsText, keepSets, retypeSet, removeSet, addDrop
 } from './analytics.js';
 // One-way dependency: this file imports stats.js, stats.js never imports back.
 import { openStats, isStatsOpen, renderStats, refresh as refreshStats } from './stats.js';
@@ -274,11 +275,16 @@ function historyRows(v) {
 // Exported for the same reason computeVolume is: a bodyweight set has to reach
 // the "last time" index like any other, and that is a claim a verifier should
 // be able to make rather than a comment.
+//
+// v55: a drop's `dp` rides into the index too, so the "Last ·" line can draw
+// a drop set as one group. keepSets is what drops the warm-ups, so a drop set
+// is never stitched to another across one.
 export function foldSessionIntoHistory(h, dateK, exercises) {
   const out = { ...h };
   mergeSessionExercises(exercises).forEach(ex => {
     if (!ex.exId) return;
-    const sets = (ex.sets || []).filter(isWorking).map(s => ({ w: s.w, r: s.r, type: s.type }));
+    const sets = keepSets(ex.sets || [], isWorking)
+      .map(s => ({ w: s.w, r: s.r, type: s.type, ...(s.dp === 1 ? { dp: 1 } : null) }));
     if (!sets.length) return;
     const list = historyRows(out[ex.exId]);
     const at = list.findIndex(e => e.date === dateK);
@@ -626,8 +632,9 @@ function openDay(mk, dd) {
       tag.style.background = groupColor(ex.group);
       const body = el('div', 'day-ex-body');
       body.appendChild(el('div', 'day-ex-name', ex.name));
-      const sets = (ex.sets || []).filter(s => s.done !== false)
-        .map(s => `${fmtSetLoad(s.w || 0, wu())}×${s.r || 0}${s.type !== 'N' ? s.type : ''}`).join('   ');
+      // v55: a drop set reads as one group, "185×8 → 135×6 → 95×5".
+      const sets = setsText(keepSets(ex.sets, s => s.done !== false),
+        (s, inRun) => `${fmtSetLoad(s.w || 0, wu())}×${s.r || 0}${!inRun && s.type !== 'N' ? s.type : ''}`, '   ');
       body.appendChild(el('div', 'day-ex-sets num', sets));
       r.append(tag, body);
       c.appendChild(r);
@@ -767,8 +774,10 @@ function editWorkout(record, mk, dd) {
       ...(ex.block ? { block: ex.block } : null),
       // v54: his effort rating comes too, exactly as stored, so saveEdit's
       // record carries it (collectFrom spreads it) and an edit erases nothing.
+      // v55: and a drop's `dp`, so a drop set is still one group after Save.
       sets: (ex.sets || []).map(s => ({ w: s.w, r: s.r, type: s.type || 'N', done: true,
-                                        ...(s.rir != null ? { rir: s.rir } : null) }))
+                                        ...(s.rir != null ? { rir: s.rir } : null),
+                                        ...(s.dp != null ? { dp: s.dp } : null) }))
     })),
     blockOrder(record.exercises)
   );
@@ -883,9 +892,11 @@ function commitBlocks(next) {
 // an unticked copy made while editing a past session would silently disappear
 // on save. In a live workout `editing` is false and nothing is ticked, which is
 // the case the feature is about. tw/tr are deliberately not carried: a repeat
-// of a block is real work, not a plan for it.
+// of a block is real work, not a plan for it. v55: a drop's `dp` is carried —
+// it is what the set IS, not something about it — so a duplicated drop set is
+// still one group. A rating (rir) never is.
 function dupSet(editing) {
-  return x => ({ w: x.w, r: x.r, type: x.type || 'N', done: !!editing });
+  return x => ({ w: x.w, r: x.r, type: x.type || 'N', done: !!editing, ...(x.dp != null ? { dp: x.dp } : null) });
 }
 
 // One shape for a new exercise, so one added inside a block is the same object
@@ -1205,10 +1216,11 @@ function renderExercise(ex, exIdx) {
   hd.appendChild(menu);
   block.appendChild(hd);
 
-  // previous performance — the single most useful thing on the screen
+  // previous performance — the single most useful thing on the screen. v55: a
+  // drop set reads as one group, "185×8 → 135×6 → 95×5".
   const prev = lastEntry(ex.exId);
   if (prev) {
-    const txt = prev.sets.map(s => `${fmtSetLoad(s.w, wu())}×${s.r}`).join('  ');
+    const txt = setsText(prev.sets, s => `${fmtSetLoad(s.w, wu())}×${s.r}`, '  ');
     block.appendChild(el('div', 'ex-prev', `Last · ${fmtDate(prev.date)}   ${txt}`));
   } else {
     block.appendChild(el('div', 'ex-prev', 'No previous record'));
@@ -1218,7 +1230,15 @@ function renderExercise(ex, exIdx) {
   ['Set', unitW(wu()), 'Reps', 'e1RM', ''].forEach(t => shd.appendChild(el('span', null, t)));
   block.appendChild(shd);
 
-  ex.sets.forEach((s, i) => block.appendChild(renderSet(ex, exIdx, s, i)));
+  /* v55: a drop set's drops sit indented under the set he changed to a drop
+     set, and "+ Drop" under its last one adds the next (Micah, 23 Sep). Two
+     drop sets stacked are two groups: the second starts back at the left, and
+     each has its own "+ Drop". The grouping is analytics.js's (dropHeads). */
+  const heads = dropHeads(ex.sets);
+  ex.sets.forEach((s, i) => {
+    block.appendChild(renderSet(ex, exIdx, s, i, heads[i] != null && heads[i] !== i));
+    if (heads[i] != null && heads[i + 1] !== heads[i]) block.appendChild(dropAddRow(ex, i));
+  });
 
   // While the coach mark is up the first exercise's hint line says what the
   // pulsing box is for instead — the pulse draws the eye, the words say why.
@@ -1260,15 +1280,34 @@ function renderExercise(ex, exIdx) {
   return block;
 }
 
-function renderSet(ex, exIdx, s, i) {
-  const row = el('div', 'set-row' + (s.done ? ' done' : ''));
+// "+ Drop", under a drop set's last set. The new drop's boxes start empty — a
+// drop is lighter by definition, so copying the set above would put a weight
+// he did not lift in the box — and it is ticked in an edit, where a set that
+// is not ticked is not saved, exactly as "+ Set" does.
+function dropAddRow(ex, i) {
+  const wrap = el('div', 'drop-add-row');
+  const b = el('button', 'btn btn-ghost drop-add', '+ Drop');
+  b.setAttribute('aria-label', 'Add a drop to this drop set');
+  b.onclick = () => {
+    ex.sets = addDrop(ex.sets, i, { w: '', r: '', done: !!session._edit });
+    persistSession(); render();
+  };
+  wrap.appendChild(b);
+  return wrap;
+}
 
-  // set type cycles N → W → F → D
-  const idx = el('button', 'set-idx t-' + s.type, s.type === 'N' ? String(i + 1) : s.type);
-  idx.title = 'Tap to cycle: normal, warm-up, failure, drop set';
+function renderSet(ex, exIdx, s, i, drop) {
+  const row = el('div', 'set-row' + (s.done ? ' done' : '') + (drop ? ' drop' : ''));
+
+  // set type cycles N → W → F → D. v55: through retypeSet, so a set changed to
+  // a drop set starts one of its own and one that stops being one takes no
+  // drop set with it; a drop's badge is the arrow its row hangs from.
+  const idx = el('button', 'set-idx t-' + s.type, drop ? '↳' : s.type === 'N' ? String(i + 1) : s.type);
+  idx.title = drop ? 'A drop in the drop set above. Tap to cycle: normal, warm-up, failure, drop set'
+                   : 'Tap to cycle: normal, warm-up, failure, drop set';
   idx.onclick = () => {
     const order = ['N', 'W', 'F', 'D'];
-    s.type = order[(order.indexOf(s.type) + 1) % 4];
+    ex.sets = retypeSet(ex.sets, i, order[(order.indexOf(s.type) + 1) % 4]);
     persistSession(); render();
   };
   row.appendChild(idx);
@@ -1331,10 +1370,12 @@ function renderSet(ex, exIdx, s, i) {
   row.appendChild(chk);
 
   // Drag the row left to reveal a delete action. Solves overshooting when you
-  // add sets before knowing how many you'll actually do.
+  // add sets before knowing how many you'll actually do. v55: through
+  // removeSet, so a drop set's first set going leaves its drops as a drop set
+  // of their own rather than stitched to the one above.
   return swipeToDelete(row, {
     label: 'Delete',
-    onDelete: () => { ex.sets.splice(i, 1); persistSession(); render(); }
+    onDelete: () => { ex.sets = removeSet(ex.sets, i); persistSession(); render(); }
   });
 }
 
@@ -1482,7 +1523,10 @@ export function collectFrom(exercises) {
       ...ex,
       // tw/tr are routine targets — live-session scaffolding, not part of the record.
       // tl (v54) only says whose targets they were, and goes with them.
-      sets: ex.sets.filter(s => s.done && s.r !== '')
+      // v55: keepSets, so a drop whose drop set's first set went unlogged is
+      // never stitched to the drop set above it; a drop's `dp` is spread
+      // through like every other key.
+      sets: keepSets(ex.sets, s => s.done && s.r !== '')
                    .map(({ tw, tr, tl, ...keep }) => ({ ...keep, w: keep.w === '' ? '0' : keep.w }))
     }))
     .filter(ex => ex.sets.length);
@@ -2112,8 +2156,9 @@ function renderSummary() {
     tag.style.background = groupColor(ex.group);
     const body = el('div', 'day-ex-body');
     body.appendChild(el('div', 'day-ex-name', ex.name));
+    // v55: a drop set reads as one group, "185×8 → 135×6 → 95×5".
     body.appendChild(el('div', 'day-ex-sets num',
-      ex.sets.map(s => `${fmtSetLoad(s.w, u)}×${s.r}${s.type !== 'N' ? s.type : ''}`).join('   ')));
+      setsText(ex.sets, (s, inRun) => `${fmtSetLoad(s.w, u)}×${s.r}${!inRun && s.type !== 'N' ? s.type : ''}`, '   ')));
     r.append(tag, body);
     recap.appendChild(r);
   });

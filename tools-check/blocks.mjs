@@ -113,7 +113,9 @@ const SHARED = [
 writeFileSync(
   join(dir, 'blocks.mjs'),
   'import { ' + SHARED.join(', ') + ' } from ' + real('blocks.js') + ';\n' +
-  'import { isWorking } from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href) + ';\n' +
+  // v55, on purpose: collectFrom keeps each drop set whole through
+  // analytics.js keepSets — the real one, in scope under its own name.
+  'import { isWorking, keepSets } from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href) + ';\n' +
   'let session = null;\n' +
   'let history = {};\n' +
   'function render() {}\n' +

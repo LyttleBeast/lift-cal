@@ -25,6 +25,8 @@ import {
   duplicateBlock, deleteBlock, sessionLayout
 } from './blocks.js';
 import { openPicker } from './picker.js';
+// v55: a drop set's grouping — the rule, and the two edits the editor makes.
+import { retypeSet, removeSet } from './analytics.js';
 import { bump } from './usage.js';
 import { el, sheet, toast, noteEl, confirmSheet, swipeToDelete, fmtDate, setNum, LIMITS } from './ui.js';
 import { wIn, fmtSetW, unitW, limW } from './units.js';
@@ -231,7 +233,8 @@ function openRoutine(id, onStart) {
 // The block annotation is carried straight through. startWorkout sets no
 // `blocks` on the session, so sessionBlocks falls back to blockOrder and reads
 // the blocks back off these annotations — which is why a routine needs no
-// stored blocks array of its own, and must not grow one.
+// stored blocks array of its own, and must not grow one. v55: so is a drop's
+// `dp` (analytics.js), so a drop set starts as one group.
 function toSession(r) {
   return {
     name: r.name || 'Workout',
@@ -240,7 +243,8 @@ function toSession(r) {
       ...(ex.block ? { block: ex.block } : null),
       sets: (ex.sets || []).map(s => ({
         w: '', r: '', type: s.type || 'N', done: false,
-        tw: s.tw || '', tr: s.tr || ''
+        tw: s.tw || '', tr: s.tr || '',
+        ...(s.dp != null ? { dp: s.dp } : null)
       }))
     }))
   };
@@ -398,9 +402,11 @@ function openEditor(draft, isNew, onStart) {
       const idx = el('button', 'set-idx t-' + (s.type || 'N'),
         (s.type || 'N') === 'N' ? String(si + 1) : s.type);
       idx.title = 'Tap to cycle: normal, warm-up, failure, drop set';
+      // v55: through retypeSet, as on the workout screen, so no drop set is
+      // stitched to another when one set's type changes.
       idx.onclick = () => {
         const order = ['N', 'W', 'F', 'D'];
-        s.type = order[(order.indexOf(s.type || 'N') + 1) % 4];
+        ex.sets = retypeSet(ex.sets, si, order[(order.indexOf(s.type || 'N') + 1) % 4]);
         paint();
       };
       row.appendChild(idx);
@@ -429,7 +435,7 @@ function openEditor(draft, isNew, onStart) {
 
       row.appendChild(el('span'));
       sets.appendChild(swipeToDelete(row, {
-        onDelete: () => { ex.sets.splice(si, 1); paint(); }
+        onDelete: () => { ex.sets = removeSet(ex.sets, si); paint(); }
       }));
     });
     block.appendChild(sets);
@@ -525,7 +531,8 @@ export function saveSessionAsRoutine(record, onDone) {
     r.exercises = (record.exercises || []).map(ex => ({
       exId: ex.exId, name: ex.name, group: ex.group, equipment: ex.equipment,
       ...(ex.block ? { block: ex.block } : null),
-      sets: (ex.sets || []).map(s => ({ tw: s.w || '', tr: s.r || '', type: s.type || 'N' }))
+      // v55: a drop's `dp` too, so a drop set is saved as one group.
+      sets: (ex.sets || []).map(s => ({ tw: s.w || '', tr: s.r || '', type: s.type || 'N', ...(s.dp != null ? { dp: s.dp } : null) }))
     }));
     routines[r.id] = r;
     await persist();

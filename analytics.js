@@ -135,6 +135,124 @@ export function mergeSessionExercises(exercises) {
   return out;
 }
 
+/* ---------- drop sets (v55) ----------
+   Micah, 23 Sep 2026: when a set is changed to a drop set, "a little sub-menu
+   of sets to appear under it — the individual sub-sets that make up that drop
+   set — so it's clear which sub-sets belong to that drop set versus another
+   drop set stacked beneath it."
+
+   A DROP SET is the set he changed to a drop set — type 'D' — and the drops
+   under it. A DROP is a set of type 'D' carrying `dp: 1`, "continues the drop
+   set above": it belongs to the drop set of the set directly above it, when
+   that set is a 'D' too. Nothing else is a drop. A 'D' with no `dp` — every one
+   logged before v55 — starts a drop set of its own, which is what it always
+   meant, so nothing migrates; `dp` on any other set, or of any other value, is
+   read as absent. Two drop sets stacked one after the other are two groups
+   because the second one's first set carries no `dp`: the order of the sets and
+   their type cannot say that on their own, since every set of both is a 'D'.
+
+   What a 'D' set counts for is exactly what it was. Every one, drop or not, is
+   a working set (isWorking above). No engine reads one for a load, a target or
+   a rep drop — coach-prog.js leaves them out of the top sets, and since v55 the
+   rep-drop reads leave them out too, because a drop set's reps fall by design.
+   Pure, and here beside isWorking so the port copies one rule, and every file
+   that reads a set already imports this one. */
+export function continuesDrop(sets, j) {
+  const s = sets && sets[j], up = sets && j > 0 ? sets[j - 1] : null;
+  return !!(s && up && s.type === 'D' && s.dp === 1 && up.type === 'D');
+}
+
+// The drop set each set is in, as the index of the set it starts from; null
+// for a set that is in none.
+export function dropHeads(sets) {
+  const list = Array.isArray(sets) ? sets : [];
+  const out = [];
+  list.forEach((s, j) => { out.push(!s || s.type !== 'D' ? null : continuesDrop(list, j) ? out[j - 1] : j); });
+  return out;
+}
+
+// The sets as they read on a line: a drop set with drops in it is one run —
+// its first set, then its drops — and every other set is a run of its own.
+export function dropRuns(sets) {
+  const list = Array.isArray(sets) ? sets : [];
+  const heads = dropHeads(list), runs = [];
+  list.forEach((s, j) => {
+    if (heads[j] != null && heads[j] !== j) runs[runs.length - 1].push(s);
+    else runs.push([s]);
+  });
+  return runs;
+}
+
+// One exercise's sets as one line: `one(set, inRun)` says a set, a drop set's
+// sets are joined with " → " ("185×8 → 135×6 → 95×5"), and runs with `sep`.
+export function setsText(sets, one, sep) {
+  return dropRuns(sets).map(run => (run.length > 1 ? run.map(s => one(s, true)).join(' → ') : one(run[0], false))).join(sep);
+}
+
+/* Every change to a list of sets goes through the four below, so a drop set
+   is never stitched to the one above it by accident. Each set is tagged with
+   the drop set it was in; after the change, a 'D' keeps `dp: 1` only when the
+   set now above it is a 'D' of the SAME drop set, and loses it otherwise.
+   Nothing is changed in place: each returns a new list, and a set whose `dp`
+   is already right is the same object. */
+function relinked(list, tags) {
+  return list.map((s, k) => {
+    if (!s) return s;
+    const joins = s.type === 'D' && k > 0 && !!list[k - 1] && list[k - 1].type === 'D' && tags[k] != null && tags[k] === tags[k - 1];
+    if (joins) return s.dp === 1 ? s : { ...s, dp: 1 };
+    if (!('dp' in s)) return s;
+    const { dp, ...rest } = s;
+    return rest;
+  });
+}
+
+// The sets `keep(set, j)` keeps — collectFrom's ticked sets with reps, the
+// "last time" index's working sets — each still in its own drop set. A drop
+// whose drop set's first set was left out becomes the first of what is left.
+export function keepSets(sets, keep) {
+  const list = Array.isArray(sets) ? sets : [];
+  const heads = dropHeads(list), out = [], tags = [];
+  list.forEach((s, j) => { if (keep(s, j)) { out.push(s); tags.push(heads[j]); } });
+  return relinked(out, tags);
+}
+
+// A tap on a set's badge. A set that becomes a 'D' starts a drop set of its
+// own; a set that stops being one leaves its drop set, and the drops that were
+// under it go on as a drop set of their own.
+export function retypeSet(sets, j, type) {
+  const list = (Array.isArray(sets) ? sets : []).slice();
+  if (!list[j] || list[j].type === type) return list;
+  const tags = dropHeads(list);
+  const { dp, ...rest } = list[j];
+  list[j] = { ...rest, type };
+  tags[j] = type === 'D' ? -1 - j : null;
+  return relinked(list, tags);
+}
+
+// A set swiped away. The first set of a drop set going leaves its drops as a
+// drop set of their own, never stitched to the one above.
+export function removeSet(sets, j) {
+  const list = (Array.isArray(sets) ? sets : []).slice();
+  const tags = dropHeads(list);
+  list.splice(j, 1); tags.splice(j, 1);
+  return relinked(list, tags);
+}
+
+// "+ Drop": the next drop of the drop set set `j` is in, made from `fresh`
+// (its boxes), put after that drop set's last set. The list as it was when
+// `j` is in no drop set.
+export function addDrop(sets, j, fresh) {
+  const list = (Array.isArray(sets) ? sets : []).slice();
+  const tags = dropHeads(list);
+  const h = tags[j];
+  if (h == null) return list;
+  let end = j;
+  while (end + 1 < list.length && tags[end + 1] === h) end++;
+  list.splice(end + 1, 0, { ...(fresh || null), type: 'D', dp: 1 });
+  tags.splice(end + 1, 0, h);
+  return relinked(list, tags);
+}
+
 /* ================================================================
    3.  PER-EXERCISE INDEX
    ================================================================ */

@@ -154,8 +154,9 @@ export function hardSets(sets, assisted) {
 // A rep drop in one exercise's working sets: a later set at the same or a
 // lighter load, reps down by REP_DROP or more from the first. coach.js's
 // repDrop() and coach-live.js's fatigue test, with the constant handed in.
+// v55: a drop set's sets ('D') are not read for it, as in both of those.
 function dropped(sets, repDrop) {
-  const w = (sets || []).filter(s => s && isWorking(s) && parseInt(s.r, 10) >= 1);
+  const w = (sets || []).filter(s => s && isWorking(s) && s.type !== 'D' && parseInt(s.r, 10) >= 1);
   if (w.length < 2 || !(repDrop > 0)) return false;
   const load = s => parseFloat(s.w) || 0, reps = s => parseInt(s.r, 10);
   return w.slice(1).some(s => load(s) <= load(w[0]) && reps(s) <= reps(w[0]) * (1 - repDrop));

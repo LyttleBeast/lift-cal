@@ -119,6 +119,8 @@ const STUBS = {
   wu: () => state.u,
   groupColor: A.groupColor, prDetail: A.prDetail, isWorking: A.isWorking, sessionReps: A.sessionReps,
   sameKindComparison: A.sameKindComparison, normFeel: A.normFeel, FEEL_STRENGTH: A.FEEL_STRENGTH,
+  // v55, on purpose: "What you did" draws a drop set as one group (setsText).
+  setsText: A.setsText,
   wOut: U.wOut, fmtSetLoad: U.fmtSetLoad, fmtVol: U.fmtVol, unitW: U.unitW,
   // coach-data.js's coachFinishRead(), on this file's snapshot: finishRead()
   // on coachInput() — the one thing the real one does.
@@ -305,6 +307,23 @@ section('D. the order, top to bottom — the win, how it felt, the wins, the til
   const feelTexts = find(page, 'feel-card').flatMap(f => texts(f));
   check('and the check-in is where his own "%" lives — "80% or less" … "120%+" — which B leaves to him',
         ['80% or less', '90%', '100%', '110%', '120%+'].every(t => feelTexts.includes(t)), list(feelTexts));
+}
+
+/* ================= E. A DROP SET (v55) =================
+   On purpose: SHIP-V55-PROMPT §3 — "What you did" draws a drop set as one
+   group. tools-check/drop-sets.mjs holds the rest. */
+section('E. v55 — a drop set in "What you did" is one group, "185×8 → 135×6 → 95×5"');
+{
+  const D = (w, r, dp) => ({ ...set(w, r, 'D'), ...(dp ? { dp: 1 } : null) });
+  const today = rec(0, [['barbell-bench-press', [set(185, 8), set(185, 8), D(185, 8), D(135, 6, true), D(95, 5, true), D(185, 7), D(135, 5, true)]],
+                        ['triceps-pushdown-rope', [set(50, 12), set(50, 12, 'F'), set(30, 12, 'D')]]]);
+  const { page } = draw([7, 14, 21, 28].map(CHEST), today);
+  const card = page.children.find(c => eyebrows(c)[0] === 'What you did');
+  const lines = find(card || mkEl('x'), 'day-ex-sets').map(x => x.textContent);
+  check('two drop sets stacked read as two groups, the type letter only outside one: ' + lines[0],
+        lines[0] === '185×8   185×8   185×8 → 135×6 → 95×5   185×7 → 135×5', list(lines));
+  check('and a D logged the way every one before v55 was — no drops under it — reads exactly as it did: ' + lines[1],
+        lines[1] === '50×12   50×12F   30×12D', list(lines));
 }
 
 console.log('\nthe first thing after a workout is the win, and there is no percentage on the page\n');

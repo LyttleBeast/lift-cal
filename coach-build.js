@@ -233,11 +233,15 @@ function lastSeenIndex(i) {
 
 // A logged set as the builder carries it: the three fields that matter, EXACTLY
 // as stored. A bodyweight set is w:'0' in the record and it stays '0' here —
-// "fixing" it to blank would turn a logged set into an unfilled one.
+// "fixing" it to blank would turn a logged set into an unfilled one. v55: and
+// a drop's `dp` (analytics.js), so a drop set he did is proposed as one group;
+// nothing here reads it. dpOf is how every view below carries it.
+const dpOf = s => (s && s.dp === 1 ? { dp: 1 } : null);
 const copySet = s => ({
   w: s && s.w != null ? s.w : '',
   r: s && s.r != null ? s.r : '',
-  type: (s && s.type) || 'N'
+  type: (s && s.type) || 'N',
+  ...dpOf(s)
 });
 
 /* ================================================================
@@ -548,7 +552,7 @@ function build(i, o, top) {
       sets = seen[exId].sets.map(copySet);
       source = seen[exId];
     } else if (swapped) {
-      sets = (r.ex.sets || []).map(s => ({ w: '', r: '', type: copySet(s).type }));
+      sets = (r.ex.sets || []).map(s => ({ w: '', r: '', type: copySet(s).type, ...dpOf(s) }));
     } else {
       sets = (r.ex.sets || []).map(copySet);
     }
@@ -641,14 +645,14 @@ function build(i, o, top) {
     name,
     exercises: laid.map(e => ({
       ...shell(e),
-      sets: e.sets.map(s => ({ w: '', r: '', type: s.type, done: false, tw: s.w || '', tr: s.r || '' }))
+      sets: e.sets.map(s => ({ w: '', r: '', type: s.type, done: false, tw: s.w || '', tr: s.r || '', ...dpOf(s) }))
     }))
   };
   const lastNumbers = layoff ? null : {
     name,
     exercises: laid.map(e => ({
       ...shell(e),
-      sets: e.sets.map(s => ({ w: s.w, r: s.r, type: s.type, done: false, tw: s.w || '', tr: s.r || '' }))
+      sets: e.sets.map(s => ({ w: s.w, r: s.r, type: s.type, done: false, tw: s.w || '', tr: s.r || '', ...dpOf(s) }))
     }))
   };
   // What saveSessionAsRoutine() is handed: a record's shape, whose weights it
@@ -657,7 +661,7 @@ function build(i, o, top) {
     name,
     exercises: laid.map(e => ({
       ...shell(e),
-      sets: e.sets.map(s => ({ w: s.w || '', r: s.r || '', type: s.type }))
+      sets: e.sets.map(s => ({ w: s.w || '', r: s.r || '', type: s.type, ...dpOf(s) }))
     }))
   };
 
@@ -670,7 +674,7 @@ function build(i, o, top) {
      the rows in order — only when they add up exactly, and otherwise every
      row of it keeps its placeholders rather than guess which set is whose.
      Null when no row has a target with sets. */
-  const ghost = s => ({ w: '', r: '', type: s.type, done: false, tw: s.tw, tr: s.tr });
+  const ghost = s => ({ w: '', r: '', type: s.type, done: false, tw: s.tw, tr: s.tr, ...dpOf(s) });
   const offset = new Map();
   const targetSets = laid.map((e, n) => {
     const t = targets[n];
@@ -686,7 +690,7 @@ function build(i, o, top) {
     name,
     exercises: laid.map((e, n) => ({
       ...shell(e),
-      sets: targetSets[n] || e.sets.map(s => ({ w: '', r: '', type: s.type, done: false, tw: s.w || '', tr: s.r || '' }))
+      sets: targetSets[n] || e.sets.map(s => ({ w: '', r: '', type: s.type, done: false, tw: s.w || '', tr: s.r || '', ...dpOf(s) }))
     }))
   } : null;
 

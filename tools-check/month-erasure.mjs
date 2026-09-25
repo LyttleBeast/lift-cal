@@ -76,6 +76,12 @@ const lift = name => liftFrom(SRC, 'workout.js', name);
 const mergeSessionExercises = new Function(
   liftFrom(ASRC, 'analytics.js', 'mergeSessionExercises').replace(/^export /, '') +
   '\nreturn mergeSessionExercises;')();
+/* v55, on purpose: the fold (and collectFrom) keep each drop set whole
+   through analytics.js keepSets, lifted out of the real file the same way,
+   with the three it is built from. */
+const keepSets = new Function(
+  ['continuesDrop', 'dropHeads', 'relinked', 'keepSets'].map(n => liftFrom(ASRC, 'analytics.js', n)).join('\n') +
+  '\nreturn keepSets;')();
 
 /* ---------- RTDB + store.js, modelled ----------
    set() replaces a node outright, and storing `{}` or null is a DELETE — that
@@ -162,7 +168,9 @@ const STUBS = [
   // above the button that just changed it. Stubbed here for the same reason
   // `invalidate` and `render` are: this file is about month erasure, and what a
   // card does afterwards is somebody else's verifier.
-  'refreshCoachSessions'
+  'refreshCoachSessions',
+  // v55: the real keepSets, lifted above.
+  'keepSets'
 ];
 
 function build(body, store, held) {
@@ -187,7 +195,8 @@ function build(body, store, held) {
     clearRest: () => {},
     render: () => {},
     rebuildHistoryFromLog: async () => {},
-    refreshCoachSessions: async () => true
+    refreshCoachSessions: async () => true,
+    keepSets
   };
   const src = DECLS + body + `
 return {

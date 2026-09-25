@@ -152,7 +152,10 @@ function harness(o = {}) {
     render: () => { S.renders++; }, invalidate: () => {}, rebuildHistoryFromLog: async () => {},
     refreshCoachSessions: async () => true, allSessions: async () => [],
     detectPRs: A.detectPRs, sessionMilestones: A.sessionMilestones, isWorking: A.isWorking, mergeSessionExercises: A.mergeSessionExercises,
-    normalizeBlocks: B.normalizeBlocks, blockOrder: B.blockOrder, wu: () => 'lb'
+    normalizeBlocks: B.normalizeBlocks, blockOrder: B.blockOrder, wu: () => 'lb',
+    // v55, on purpose: collectFrom and the "last time" fold keep each drop
+    // set whole through analytics.js keepSets — the real one.
+    keepSets: A.keepSets
   };
   const NAMES = Object.keys(stubs);
   const api = new Function(...NAMES, `
@@ -297,8 +300,11 @@ section('C. a copied set never carries a rating: a duplicated block, "+ Set", a 
   const started = toSession({ name: 'R', exercises: [{ ...exOf('barbell-bench-press', [{ tw: '185', tr: '8', type: 'N', rir: 4 }]) }] });
   check('a routine started: { w, r, type, done, tw, tr } built fresh — a stray rir on a routine row does not cross',
         J(Object.keys(started.exercises[0].sets[0])) === J(['w', 'r', 'type', 'done', 'tw', 'tr']));
-  check('a session saved as a routine, and a routine row added or grown in the editor, are built { tw, tr, type } fresh',
-        RSRC.includes("sets: (ex.sets || []).map(s => ({ tw: s.w || '', tr: s.r || '', type: s.type || 'N' }))") &&
+  /* v55, on purpose: saving a session as a routine carries a drop's `dp` —
+     what the set is, so a drop set stays one group — and still never a
+     rating. */
+  check('a session saved as a routine, and a routine row added or grown in the editor, are built { tw, tr, type } fresh (a drop’s dp, never a rir)',
+        RSRC.includes("sets: (ex.sets || []).map(s => ({ tw: s.w || '', tr: s.r || '', type: s.type || 'N', ...(s.dp != null ? { dp: s.dp } : null) }))") &&
         RSRC.includes("ex.sets.push({ tw: last.tw || '', tr: last.tr || '', type: 'N' });") &&
         RSRC.includes("sets: [{ tw: '', tr: '', type: 'N' }]"));
   // The builder: every view of a proposal, built from a log whose sets are rated.

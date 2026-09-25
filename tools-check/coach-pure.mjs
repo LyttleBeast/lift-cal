@@ -500,8 +500,11 @@ section('G. coach-live.js — the in-session read is copied byte for byte as wel
         !imports.some(i => /coach/.test(i.from)));
   const a = imports.find(i => i.from === './analytics.js');
   const named = a ? a.names.replace(/[{}]/g, '').split(',').map(s => s.trim()).filter(Boolean) : [];
+  /* v55, on purpose: continuesDrop — which drop set a set is in — is set math
+     too, pure, and the rule the live chips pass a drop over by
+     (SHIP-V55-PROMPT §3). */
   check('it takes only session math from analytics.js',
-        named.length > 0 && named.every(n => ['e1rm', 'isWorking', 'setVolume', 'mergeSessionExercises', 'exerciseIndex'].includes(n)),
+        named.length > 0 && named.every(n => ['e1rm', 'isWorking', 'setVolume', 'mergeSessionExercises', 'exerciseIndex', 'continuesDrop'].includes(n)),
         list(named));
   check('and never names store.js, reads or writes',
         !/store\.js/.test(LCODE) && !/\bread\s*\(|\breadExact\s*\(|\bwrite\s*\(/.test(LCODE));

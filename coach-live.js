@@ -104,7 +104,7 @@
 // imports this; nothing imports back.
 
 import { GROUPS, GROUP_ORDER } from './exercises.js';
-import { isWorking, mergeSessionExercises } from './analytics.js';
+import { isWorking, mergeSessionExercises, continuesDrop } from './analytics.js';
 import { fmtSetLoad, unitW } from './units.js';
 
 /* Three sessions before any habit is called one. Two is a coincidence and a
@@ -338,13 +338,18 @@ function lastTime(i, history, exId, name) {
    FATIGUE
    ================================================================
    Today's working sets of one exercise, in the order they were done. Returns
-   what the log shows, or null when it shows nothing. */
+   what the log shows, or null when it shows nothing.
+   v55: a drop set's sets ('D') are not read for the rep drop. Its reps fall at
+   a lighter weight by design — that is what a drop set is — so "reps from 8 to
+   6 at the same or a lighter weight" was being said of the technique, not of
+   him. The rep drop is read between the other working sets, as it always was. */
 function fatigueIn(sets) {
   if (!sets.length) return null;
   if (sets.some(s => s.type === 'F')) return { kind: 'failure' };
-  const first = sets[0];
-  for (let k = 1; k < sets.length; k++) {
-    const s = sets[k];
+  const main = sets.filter(s => s.type !== 'D');
+  const first = main[0];
+  for (let k = 1; k < main.length; k++) {
+    const s = main[k];
     if (load(s) <= load(first) && reps(s) <= reps(first) * (1 - REP_DROP)) {
       return { kind: 'drop', from: reps(first), to: reps(s) };
     }
@@ -647,11 +652,15 @@ function nextOf(i, e) {
 
 // The last ticked working set of an exercise, in the order the screen shows
 // it — across every occurrence of it in a duplicated block — with where it is.
+// v55: never a drop. A drop set is rated whole, on the set he changed to a
+// drop set (analytics.js continuesDrop): a drop is a working set for every
+// count, but no reader of a rating reads one, and "How was it?" of the last
+// strip of a drop set asks about a part of it.
 function ratedOf(raw, exId) {
   let at = null;
   raw.forEach((e, k) => {
     if (!e || e.exId !== exId) return;
-    (e.sets || []).forEach((s, j) => { if (liveWorking(s)) at = { exIdx: k, setIdx: j, s }; });
+    (e.sets || []).forEach((s, j) => { if (liveWorking(s) && !continuesDrop(e.sets, j)) at = { exIdx: k, setIdx: j, s }; });
   });
   if (!at) return null;
   return { exIdx: at.exIdx, setIdx: at.setIdx, n: at.setIdx + 1, exId,

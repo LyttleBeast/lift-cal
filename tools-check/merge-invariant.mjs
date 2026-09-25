@@ -405,7 +405,8 @@ function fnSource(src, name) {
 
 writeFileSync(
   join(dir, 'workout-history.mjs'),
-  "import { mergeSessionExercises, isWorking } from './analytics.mjs';\n" +
+  // v55, on purpose: the fold keeps each drop set whole through keepSets.
+  "import { mergeSessionExercises, isWorking, keepSets } from './analytics.mjs';\n" +
   // Both helpers read one exercise's rows through this, because `history` comes
   // straight off the wire and RTDB hands an array back as an object the moment
   // its keys stop being contiguous.

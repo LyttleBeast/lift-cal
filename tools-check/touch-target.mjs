@@ -362,7 +362,12 @@ const BUTTONS = [
   ['Your goal', 'Three answers or fewer, one line', ['coach-ui.js', /el\('div', 'coach-goal-opts ' \+ goalLayout\(q\)\)/],
    'button.coach-goal-opt < div.coach-goal-opts.line < div.field < div.you-sec < div.sheet', null],
   ['Your goal', 'Focus groups, wrapping', ['coach-ui.js', /q\.options\.length <= 3 \? 'line' : 'wrap'/],
-   'button.coach-goal-opt < div.coach-goal-opts.wrap < div.field < div.you-sec < div.sheet', null]
+   'button.coach-goal-opt < div.coach-goal-opts.wrap < div.field < div.you-sec < div.sheet', null],
+  /* v55, on purpose: "+ Drop", under a drop set's last set (workout.js
+     dropAddRow). A .btn, so the minimum holds it; never measured in Chrome at
+     v46 either, and its widths join the snapshot as they are tonight. */
+  ['Train · session', '+ Drop', ['workout.js', /el\('button', 'btn btn-ghost drop-add', '\+ Drop'\)/],
+   `button.btn.btn-ghost.drop-add < div.drop-add-row < div.ex-block < div.screen-pad < ${V}`, null]
 ];
 
 /* The width snapshot, v46 (12b3a9d), produced by this file's own resolver

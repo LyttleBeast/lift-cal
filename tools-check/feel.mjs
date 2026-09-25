@@ -149,6 +149,9 @@ function harness(o = {}) {
     el: UI.el, noteEl: UI.noteEl, fmtDateFull: UI.fmtDateFull, fmtDuration: UI.fmtDuration,
     groupColor: A.groupColor, prDetail: A.prDetail, sessionReps: A.sessionReps, sameKindComparison: A.sameKindComparison,
     normFeel: A.normFeel, FEEL_STRENGTH: A.FEEL_STRENGTH,
+    // v55, on purpose: collectFrom and the fold keep each drop set whole
+    // (keepSets), and the recap draws one as a group (setsText) — the real ones.
+    keepSets: A.keepSets, setsText: A.setsText,
     wOut: U.wOut, fmtSetLoad: U.fmtSetLoad, fmtVol: U.fmtVol, unitW: U.unitW,
     feelHarder: C.feelHarder, canMark: C.canMark, isMuted: C.isMuted, MARK_ASK: C.MARK_ASK, FEEL_S_WORDS: C.FEEL_S_WORDS,
     coachSettings: () => S.settings,
