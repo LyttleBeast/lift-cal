@@ -7,7 +7,7 @@ Two things this file is not. It is not a design document — where a shape was
 already decided, the decision stays where it was written and this only points at
 it. And it is not a port brief: `NEXT-NATIVE.md`, `NEXT-NATIVE-UNITS.md`,
 `NEXT-NATIVE-V40.md`, `NEXT-NATIVE-V41.md`, `NEXT-NATIVE-V42.md`,
-`NEXT-NATIVE-V43.md`, `NEXT-NATIVE-V45.md`, `NEXT-NATIVE-V46.md`, `NEXT-NATIVE-V48.md`, `NEXT-NATIVE-V49.md`, `NEXT-NATIVE-V52.md`, `NEXT-NATIVE-V53.md`, `NEXT-NATIVE-V54.md`, `NEXT-NATIVE-V55.md`, `NEXT-NATIVE-V56.md` and `NEXT-NATIVE-V57.md` are the instructions for copying
+`NEXT-NATIVE-V43.md`, `NEXT-NATIVE-V45.md`, `NEXT-NATIVE-V46.md`, `NEXT-NATIVE-V48.md`, `NEXT-NATIVE-V49.md`, `NEXT-NATIVE-V52.md`, `NEXT-NATIVE-V53.md`, `NEXT-NATIVE-V54.md`, `NEXT-NATIVE-V55.md`, `NEXT-NATIVE-V56.md`, `NEXT-NATIVE-V57.md` and `NEXT-NATIVE-V58.md` are the instructions for copying
 work into `~/dev/rack-mobile`, and they stay. What is below is the list of
 things nobody has done yet.
 
@@ -150,6 +150,10 @@ twice. `AGENTS.md` (`steps/{date}`) says the same thing.
   and `coach-volume.js` re-copied), the Fuel note's words, the movement tip's
   path, and the You tab reading once per open and then only what changed
   (`store.js` `onChange`). Nothing new stored, no rules. A delta on V56.
+- **`NEXT-NATIVE-V58.md`** — the holding band capped at 200 (`tdee.js`
+  re-copied) and *Reading the bar*'s words, `src.desc` on the fix-it sheet
+  (`estimate-origin.js` re-copied), and the estimate row's centre line. Nothing
+  new stored, no rules. A delta on V57.
 - **`NEXT-NATIVE-V45.md`** — the workout builder, all of it open. At `13f6b80`
   native has Coach (`src/pure/coach.js`, `src/ui/coach/`) and no
   `src/pure/coach-build.js`. Read it with `NEXT-NATIVE-V42.md` and
@@ -219,6 +223,91 @@ Carried from `NEXT-NATIVE.md` §7 so it survives that file. Do not "fix" these:
 
 ---
 
+## What v58 left open in its own work
+
+v58 is **the rows line up and the bulk reads as a bulk**: an estimate row's
+calorie number on the same centre line as Save and ✕, with two lines for a
+long name (Phase A); the holding band capped at 200, so Bulking's own target
+reads as gaining at every maintenance, and *Reading the bar* saying what the
+yellow comes to (Phase B); a generic row's USDA description, `src.desc`, on the
+fix-it sheet (Phase C); and README's Fuel paragraphs made true (Phase D). The
+port note is `NEXT-NATIVE-V58.md`.
+
+### The band, decided
+
+Micah's decision (made by Cowork on his standing instruction, and his to
+reverse): `tdee.js` `calorieZones` caps the band at **200**, not 250. The 8%
+and the rounding to 25 stay. His case, maintenance 3,220 and target 3,470: the
+holding range was 2,970 to 3,470 with his target on its top edge, holding, and
+the note fired; it is 3,020 to 3,420 now, his target 50 past it, gaining, and
+no note.
+
+**Where a preset's colour changed** (`maintenance.mjs`, every whole
+maintenance from 1,500 to 4,500): **Bulking**, from holding to gaining, at
+every maintenance from 2,969 up whose target, + 250 to the nearest ten, did not
+round past v57's edge — for a measured or setup maintenance, always a round
+ten, every one from 2,970 up. **Cutting and Maintaining**: nowhere. Any other
+target moved only where it was more than 200 from maintenance and within v57's
+band (225 from 2,657, 250 from 2,969): a typed rate of about 0.4 to 0.5 lb a
+week either way, or a cut the floor lifted there. The Weight tab's rate colour
+and the You tab's insights read `insights.js` `HOLD_RATE_LB`, 0.5 lb a week,
+and did not move.
+
+### Decisions this ship made that Micah may want back
+
+- **The ✕ on an estimate row is 44px tall now.** It was 24 — its 12px glyph
+  and 12px of padding — though the brief took it as 44 already. Its width is
+  unchanged (its glyph and 16px of padding), so a name keeps its room; a
+  44px-wide ✕ would take that room from the name at 320.
+- **Save still takes the row's full height**, as v55 made it, rather than a
+  44px box in the middle. Its word is on the centre line either way; the
+  number is what moved.
+- **"USDA: …" only where the row's publisher is USDA** — no venue, and `from`
+  naming USDA. A `desc` on any other row is not shown, since the line would say
+  USDA of it. And **it goes when the row is corrected by hand**, with the
+  row's "USDA · published …" line, because the numbers are his then.
+- ***Reading the bar*'s new words** say what the band is and what it comes to a
+  week at 3,500 kcal a pound: "3,020 to 3,420 kcal: within 200 of maintenance
+  either way, which Rack counts as holding. Eating at its edge every day comes
+  to about 0.4 lb a week, up or down." A target in the yellow says its distance
+  and its week ("150 over maintenance, so Rack reads hitting it every day as
+  holding — about 0.3 lb a week up"); only a target at maintenance itself still
+  says "holds your weight", which is true there.
+
+### Found and deliberately not fixed
+
+- **`recall.js` files every logged food under its own name**, not only the
+  sentence he typed. The brief said it keys on what was typed; the sentence
+  is keyed that way, but `addEntries` also calls `rememberEntry`, keyed on the
+  entry's name. Under the long USDA names that key was never typed. Under the
+  Worker's short ones it will be: after "8 oz steak" is logged as "Sirloin
+  steak", typing "sirloin steak" alone opens *Found in your log* with the 8 oz,
+  exact and free, where it used to spend an estimate. A quantity typed with it
+  still has to match ("12 oz sirloin steak" does not take the 8 oz row), the
+  portion is on screen, and *Not this — ask Claude* is under it. It is how
+  every food logged by hand has always behaved. Leaving estimator rows out of
+  it would be a new gate, so it is his call (`usda-desc.mjs` D pins it as it
+  is).
+- **The balance line was not added.** "Curls and other arm isolation aren't
+  counted as push or pull" is untrue of `coach-volume.js`: triceps extensions
+  are arm isolation, and all 16 built-in ones count as pushing. Curls (23) and
+  the carries count as neither. A line that would be true, if he wants one:
+  "Curls aren't counted as push or pull; triceps extensions count as pushing."
+
+### Left open in v58's own work
+
+- **Nothing in this ship has been seen on a screen.** The row was measured in
+  `touch-target.mjs`'s cascade model — the name in Archivo's advance widths,
+  the number, Save and ✕ as bounds — and one thing is restated from the
+  browsers, not measured: a button centres its own content, which is how Save
+  and the body put their words on the centre line. The fix-it sheet and
+  *Reading the bar* were driven through a DOM shim and pure functions.
+- **The Worker's half could not be seen.** `src.desc` is tested against
+  fixtures shaped by the brief's contract. Until FOOD4 is live, every generic
+  keeps its long name and no "USDA:" line appears.
+- **Native was not read.** `NEXT-NATIVE-V58.md` says "the native run maps
+  this" wherever a native path would have been a guess.
+
 ## What v57 left open in its own work
 
 v57 is **three truths and a faster You tab**: rear-delt flyes counted as pulling
@@ -229,6 +318,9 @@ changed (Phase D). The port note is `NEXT-NATIVE-V57.md`; what changed in Coach
 is `COACH-REPORT.md` §102–§108.
 
 ### The holding band — Micah's decision, with the numbers
+
+**Decided in v58: capped at 200** (see *What v58 left open*). What follows is
+the v57 reading he decided from, left as it was.
 
 **How it is worked out.** `tdee.js` `calorieZones(maint)`: the band is 8% of
 maintenance, rounded to the nearest 25 kcal, and held between 150 and 250.
@@ -318,15 +410,18 @@ line, on one fixture in both builds. `store.js` `onChange()` is the change feed;
   leans every split toward pushing for anyone who trains arms. It is the spec's
   table, so it is his call; counting curls as pulling is one condition in
   `coach-volume.js` `countSession` and moves every account's pulling count by
-  its curl sets (`COACH-REPORT.md` §107).
-- **"Reading the bar" says the yellow band "holds your weight"** and that the
+  its curl sets (`COACH-REPORT.md` §107). The rule stays (v58); the line v58
+  was offered for the grey reason was untrue and was not added — see v58.
+- ~~**"Reading the bar" says the yellow band "holds your weight"** and that the
   scale "will not move in any direction that matters" inside it. At the band's
   edge that is half a pound a week. Those sentences are the band's own claim
-  and move with the band decision above.
-- **`README.md`'s "The big number is the deficit"** does not match the code:
+  and move with the band decision above.~~ **Fixed in v58**: `food.js`
+  `holdWords()` and `markWords()` say where the yellow sits in kcal and what it
+  comes to a week.
+- ~~**`README.md`'s "The big number is the deficit"** does not match the code:
   `food.js` `renderSummary` says the big number is what is left to today's
   target, with the distance from maintenance under the bar. Not this ship's
-  change, so not edited here.
+  change, so not edited here.~~ **Fixed in v58.**
 - **A custom reverse fly filed under back** cannot be a Rear-delt fly: the
   agreement table allows no fly on back. Row is the nearest, and counts among
   the rows.
