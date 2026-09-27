@@ -1,0 +1,576 @@
+{
+  "vibe": "iron-age",
+  "kind": "provenance",
+  "written": "2026-09-27",
+  "about": "Every image Iron Age ships, one entry each (V59 §14). Photo entries are written by vibes-night/tools/ia-v-photos-place.mjs from the untouched originals, the build log (ia-v-photos.mjs) and the pixel measurements (ia-v-photos-check.mjs). No AI tool touched any file; every transform is listed as the command that made it. Nothing is approved: micah_approved is false on every entry.",
+  "build": {
+    "scripts": {
+      "tools/ia-v-photos.mjs": "309ed67f56ebf56c162ef9c92ed89b5097d940a555ba2d35a321a5f738963328",
+      "tools/gap8a/palpng.mjs": "bca0ae46c85c8bfae5cf09036dc9ff3baa96a03903e024db86266a5108ecc8fc"
+    },
+    "node": "v24.20.0",
+    "pngjs": "7.0.0",
+    "sips": "sips-316",
+    "stock": "#e6dec9",
+    "ink": "#1c1712",
+    "pitch_px": 6,
+    "coverage": [
+      0.04,
+      1
+    ]
+  },
+  "imagery_bytes_photos": 162288,
+  "entries": [
+    {
+      "kind": "photo",
+      "file": "img/you.png",
+      "paths": {
+        "web": "vibes/iron-age/img/you.png",
+        "native": "assets/vibes/iron-age/img/you.png"
+      },
+      "slot": "youHero",
+      "use": "band mode: an 80 pt strip across the top of the hero box, no word on it (design/iron-age.md §10); cover-cropped round the file's centre (focal .5 / .5)",
+      "sha256": "a0907bc6ce2e233f35a6f839b4b175d0ceb2bf5d657e220c441c6265950e5df1",
+      "bytes": 36279,
+      "dims": "1170x235",
+      "format": "4-bit indexed PNG, 10 colours, all on the ink #1c1712 - stock #e6dec9 line",
+      "title": "\"Teamsters' Warning\", Figs. 21-22 - Sargent, Health, Strength & Power (1904), plate at leaf 205",
+      "subject": "Fig. 21: the model standing with both arms flung out level; Fig. 22: the same model in a wide squat with arms folded. Halftones cut out over a flat grey panel, lettered \"Teamsters' Warning\".",
+      "creator": "Uncredited photographer; halftones made \"from numerous photographs of a well-trained model\" (author's preface) for D. A. Sargent, Health, Strength & Power (1904)",
+      "creator_died": "anonymous (no photographer named); book author Dudley Allen Sargent 1849-1924 (IA record); copyright claimant H. M. Caldwell Co. (a company)",
+      "created": "before publication in 1904 (the preface is dated \"Cambridge, July,\" with the year garbled in the OCR)",
+      "first_published": {
+        "year": "1904",
+        "venue": "Dudley Allen Sargent, Health, Strength & Power (New York and Boston: H. M. Caldwell Co., 1904). Title-page verso: \"Copyright, 1904, By H. M. Caldwell Co.\", full-page halftone plate"
+      },
+      "source_institution": "Internet Archive (scan of a Brigham Young University, Harold B. Lee Library copy)",
+      "source_url": "https://archive.org/details/healthstrengthpo1904sarg",
+      "source_id": "healthstrengthpo1904sarg, leaf 0205 (file _0205.jp2)",
+      "rights_statement_verbatim": "(none: the item record carries no rights, licenseurl or possible-copyright-status field; metadata API, retrieved 2026-09-27)",
+      "pd_basis_us": "Published in New York and Boston in 1904 with a copyright notice, before 1931: US term expired.",
+      "pd_basis_worldwide": "The photographer is not named (anonymous): the EU/UK anonymous term is 70 years from publication, 1904 + 70 = 1974. The book's author, Sargent, died 1924 (life + 70 ended 31 Dec 1994); the claimant is a company. Test 2 passes on every reading.",
+      "retrieved": "2026-09-27",
+      "original_file": "research/iron-age/originals/sargent-1904-leaf0205-teamsters-warning.jp2",
+      "original_sha256": "e532ac53f9b5a10b62fb8e8b02e525239c9fba0052fea2edcadea2ec559b70bf",
+      "original_dims": "3291x4579",
+      "download_url": "https://archive.org/download/healthstrengthpo1904sarg/healthstrengthpo1904sarg_jp2.zip/healthstrengthpo1904sarg_jp2%2Fhealthstrengthpo1904sarg_0205.jp2",
+      "crop_px": {
+        "x": 82,
+        "y": 70,
+        "w": 3094,
+        "h": 621
+      },
+      "crop_why": "Fig. 21 only: the head, the arms flung out level and both hands, over the top of the grey panel. The hint's full width (x .025-.965); top at 70 px, 67 px above the hint's .03 (137 px), into the clean page margin, so the face rule clears the hair with room (the page-top view shows plain stock there); \"Fig. 21.\" (y ~1246) and all lettering far below.",
+      "transforms": [
+        "sips-316 -s format png research/iron-age/originals/sargent-1904-leaf0205-teamsters-warning.jp2 --out <work>.png  (whole original, lossless)",
+        "sips-316 -c 621 3094 --cropOffset 70 82 ia-photos/work/sargent-1904-leaf0205-teamsters-warning.png --out ia-photos/crop/you-crop.png",
+        "sips-316 -z 235 1170 ia-photos/crop/you-crop.png --out ia-photos/crop/you-sized.png",
+        "node v24.20.0 + pngjs 7.0.0, tools/ia-v-photos.mjs sha256 309ed67f56ebf56c162ef9c92ed89b5097d940a555ba2d35a321a5f738963328: ink-on-stock tone map (Rec. 709 Y, linear sRGB -> L*; levels on the crop's own P0.5 = L* 0.567, P99.5 = L* 75.038; linear in L* to coverage a in [0.04, 1], exact in luminance against stock #e6dec9 / ink #1c1712)",
+        "node (same script): AM halftone, pitch 6 px, 45 deg, dot area = a, round dot <= .5 / round stock hole on the dual lattice above, 3 x 3 supersampled, ink #1c1712 and stock #e6dec9 mixed in linear light (10 levels)",
+        "node (same script), tools/gap8a/palpng.mjs sha256 bca0ae46c85c8bfae5cf09036dc9ff3baa96a03903e024db86266a5108ecc8fc: 4-bit indexed PNG, 10-colour palette, zlib level 9, lossless"
+      ],
+      "clothing_check": "PASS. In frame: the model's head, arms and hands, and the top of his bare chest (the plate: knitted gymnasium tights to the ankle, belt, soft shoes, bare torso; an exercise pose, not a statue pose). No nudity, no drape, no fig leaf. Unnamed model.",
+      "likeness": "Unnamed model; no name printed anywhere in the book that was found. No likeness constraint beyond \"never imply endorsement\".",
+      "face_rule": {
+        "rule": "a head box (hair top to chin, ear to ear, read by eye off gridded views, +-10 source px) grown 15 % of its height above and below and 10 % of its width each side must be wholly visible in every box",
+        "head_boxes_source_px": [
+          {
+            "x0": 1288,
+            "y0": 175,
+            "x1": 1621,
+            "y1": 525
+          }
+        ],
+        "boxes": [
+          {
+            "client": "native",
+            "box": "288x80",
+            "min_margin_asset_px": 19.9
+          },
+          {
+            "client": "native",
+            "box": "343x80",
+            "min_margin_asset_px": 19.9
+          },
+          {
+            "client": "native",
+            "box": "358x80",
+            "min_margin_asset_px": 19.9
+          },
+          {
+            "client": "native",
+            "box": "398x80",
+            "min_margin_asset_px": 19.9
+          },
+          {
+            "client": "web",
+            "box": "288x80",
+            "min_margin_asset_px": 19.9
+          },
+          {
+            "client": "web",
+            "box": "358x80",
+            "min_margin_asset_px": 19.9
+          }
+        ],
+        "result": "PASS at every box"
+      },
+      "lettering": [
+        "\"Fig. 21.\": outside the crop",
+        "\"Fig. 22.\": outside the crop"
+      ],
+      "contrast": {
+        "text_on_plate": "none (band mode)",
+        "plate_range": 13.26,
+        "declared_fallback_stock_scrim_054_every_word_ink": {
+          "native 288x80": 4.544,
+          "native 343x80": 4.544,
+          "native 358x80": 4.544,
+          "native 398x80": 4.544,
+          "web 288x80": 4.544,
+          "web 358x80": 4.544
+        },
+        "note": "Only if a client drew the declared scrim over the whole box instead of the band: ink text against the darkest scrimmed pixel of the box's visible window, worst of encoded sRGB at .54, linear light at .54, and encoded at .53 (Chrome's run-time loss). Any other text colour on that fallback fails (spec §5.1)."
+      },
+      "tier": "A",
+      "confidence": "high",
+      "credit_line": "From D. A. Sargent, Health, Strength & Power (New York: H. M. Caldwell Co., 1904). Brigham Young University copy via Internet Archive.",
+      "reverified": "Re-opened 2026-09-27: https://archive.org/metadata/healthstrengthpo1904sarg — creator \"Sargent, Dudley Allen, 1849-1924\", publisher \"New York, Boston, H. M. Caldwell co\", date \"1904\", no rights field; the item's text layer (_djvu.txt) reads \"Copyright^ igo4 / By H. M. Caldwell Co.\" (OCR of \"Copyright, 1904\") and the preface's \"photographs of a well-trained model\".",
+      "micah_approved": false
+    },
+    {
+      "kind": "photo",
+      "file": "img/recap.png",
+      "paths": {
+        "web": "vibes/iron-age/img/recap.png",
+        "native": "assets/vibes/iron-age/img/recap.png"
+      },
+      "slot": "summaryHero",
+      "use": "band mode: an 80 pt strip across the top of the hero box, no word on it (design/iron-age.md §10); cover-cropped round the file's centre (focal .5 / .5)",
+      "sha256": "863fa567592d463fe06a83879c4515227d1d88dff5348e67b8eabfa16ace2e5b",
+      "bytes": 21220,
+      "dims": "1170x235",
+      "format": "4-bit indexed PNG, 10 colours, all on the ink #1c1712 - stock #e6dec9 line",
+      "title": "[Man in loose trunks lunging at a wall pulley-weight machine] — Anderson's Physical Education (1897), unnumbered plate p. [98]",
+      "subject": "A curly-haired athlete in loose light trunks and soft shoes, lunging sideways with one arm pulling the cord out and up, on a black studio ground.",
+      "creator": "Uncredited halftone photograph in W. G. Anderson, Anderson's Physical Education (New York: A. D. Dana, 1897)",
+      "creator_died": "anonymous (uncredited in the book); book author William Gilbert Anderson, 9 Sep 1860 – 7 Jul 1947 (IA record \"1860-1947\"; Wikipedia)",
+      "created": "before 1897",
+      "first_published": {
+        "year": "1897",
+        "venue": "William Gilbert Anderson, Anderson's physical education: health and strength, grace and symmetry (New York: A. D. Dana, 1897), unnumbered plate between pp. 97 and 100"
+      },
+      "source_institution": "Internet Archive (scan of a University of California Libraries copy, SRLF:LAGE-4008101)",
+      "source_url": "https://archive.org/details/andersonsphysica00andeiala",
+      "source_id": "andersonsphysica00andeiala, file _0100.jp2 (BookReader n99)",
+      "rights_statement_verbatim": "No rights statement displayed. IA metadata field possible-copyright-status: \"NOT_IN_COPYRIGHT\" (metadata API, retrieved 2026-09-26); collections: cdl, americana.",
+      "pd_basis_us": "Published in New York in 1897, before 1931: US term expired.",
+      "pd_basis_worldwide": "The photographs are uncredited (anonymous): EU/UK anonymous term is 70 years from publication, 1897+70 = 1967. Book author W. G. Anderson died 1947: life+70 ended 31 Dec 2017.",
+      "retrieved": "2026-09-26",
+      "original_file": "research/iron-age/originals/anderson-pulleys-man-lunge-1897.jp2",
+      "original_sha256": "20f49dde450942c00146734c75e5575036a4f75b04f16ef16395171afdf8f920",
+      "original_dims": "1684x2684",
+      "download_url": {
+        "source_file": "https://archive.org/download/andersonsphysica00andeiala/andersonsphysica00andeiala_jp2.zip/andersonsphysica00andeiala_jp2%2Fandersonsphysica00andeiala_0100.jp2",
+        "served_from": "https://ia801608.us.archive.org/view_archive.php?archive=/24/items/andersonsphysica00andeiala/andersonsphysica00andeiala_jp2.zip&file=andersonsphysica00andeiala_jp2%2Fandersonsphysica00andeiala_0100.jp2"
+      },
+      "crop_px": {
+        "x": 84,
+        "y": 699,
+        "w": 1507,
+        "h": 303
+      },
+      "crop_why": "The lunge's top: the pulling arm and its handle at the left, the head, the shoulders, the cords at the right, on the plate's black ground. The hint's full width (x .05-.945).",
+      "transforms": [
+        "sips-316 -s format png research/iron-age/originals/anderson-pulleys-man-lunge-1897.jp2 --out <work>.png  (whole original, lossless)",
+        "sips-316 -c 303 1507 --cropOffset 699 84 ia-photos/work/anderson-pulleys-man-lunge-1897.png --out ia-photos/crop/recap-crop.png",
+        "sips-316 -z 235 1170 ia-photos/crop/recap-crop.png --out ia-photos/crop/recap-sized.png",
+        "node v24.20.0 + pngjs 7.0.0, tools/ia-v-photos.mjs sha256 309ed67f56ebf56c162ef9c92ed89b5097d940a555ba2d35a321a5f738963328: ink-on-stock tone map (Rec. 709 Y, linear sRGB -> L*; levels on the crop's own P0.5 = L* 0.058, P99.5 = L* 64.404; linear in L* to coverage a in [0.04, 1], exact in luminance against stock #e6dec9 / ink #1c1712)",
+        "node (same script): AM halftone, pitch 6 px, 45 deg, dot area = a, round dot <= .5 / round stock hole on the dual lattice above, 3 x 3 supersampled, ink #1c1712 and stock #e6dec9 mixed in linear light (10 levels)",
+        "node (same script), tools/gap8a/palpng.mjs sha256 bca0ae46c85c8bfae5cf09036dc9ff3baa96a03903e024db86266a5108ecc8fc: 4-bit indexed PNG, 10-colour palette, zlib level 9, lossless"
+      ],
+      "clothing_check": "PASS. In frame: the athlete's head, pulling arm and handle, bare shoulders and the top of his chest (the plate: loose trunks, bare torso, light shoes; an exercise at the wall pulleys). No nudity, no drape. Unnamed model.",
+      "likeness": "Unnamed model; no name printed with the plate. No likeness constraint beyond \"never imply endorsement\".",
+      "face_rule": {
+        "rule": "a head box (hair top to chin, ear to ear, read by eye off gridded views, +-10 source px) grown 15 % of its height above and below and 10 % of its width each side must be wholly visible in every box",
+        "head_boxes_source_px": [
+          {
+            "x0": 644,
+            "y0": 740,
+            "x1": 832,
+            "y1": 960
+          }
+        ],
+        "boxes": [
+          {
+            "client": "native",
+            "box": "288x80",
+            "min_margin_asset_px": 6.2
+          },
+          {
+            "client": "native",
+            "box": "343x80",
+            "min_margin_asset_px": 6.2
+          },
+          {
+            "client": "native",
+            "box": "358x80",
+            "min_margin_asset_px": 6.2
+          },
+          {
+            "client": "native",
+            "box": "398x80",
+            "min_margin_asset_px": 6.2
+          },
+          {
+            "client": "web",
+            "box": "288x80",
+            "min_margin_asset_px": 6.2
+          },
+          {
+            "client": "web",
+            "box": "358x80",
+            "min_margin_asset_px": 6.2
+          }
+        ],
+        "result": "PASS at every box"
+      },
+      "lettering": "none on the plate",
+      "contrast": {
+        "text_on_plate": "none (band mode)",
+        "plate_range": 13.26,
+        "declared_fallback_stock_scrim_054_every_word_ink": {
+          "native 288x80": 4.544,
+          "native 343x80": 4.544,
+          "native 358x80": 4.544,
+          "native 398x80": 4.544,
+          "web 288x80": 4.544,
+          "web 358x80": 4.544
+        },
+        "note": "Only if a client drew the declared scrim over the whole box instead of the band: ink text against the darkest scrimmed pixel of the box's visible window, worst of encoded sRGB at .54, linear light at .54, and encoded at .53 (Chrome's run-time loss). Any other text colour on that fallback fails (spec §5.1)."
+      },
+      "tier": "A",
+      "confidence": "high",
+      "credit_line": "From W. G. Anderson, Anderson's Physical Education (New York, 1897). University of California Libraries copy via Internet Archive. Plate p. [98].",
+      "reverified": "Re-opened 2026-09-27: https://archive.org/metadata/andersonsphysica00andeiala — creator \"Anderson, William Gilbert, 1860-1947\", date \"1897\", possible-copyright-status \"NOT_IN_COPYRIGHT\", copyright-evidence \"visible notice of copyright; stated date is 1897\"; the text layer reads \"COPYRIGHT 1897, BV W. G. ANDERSON, NEW HAVEN, CONN.\"",
+      "micah_approved": false
+    },
+    {
+      "kind": "photo",
+      "file": "img/steps.png",
+      "paths": {
+        "web": "vibes/iron-age/img/steps.png",
+        "native": "assets/vibes/iron-age/img/steps.png"
+      },
+      "slot": "stepsToday",
+      "use": "band mode: an 80 pt strip across the top of the hero box, no word on it (design/iron-age.md §10); cover-cropped round the file's centre (focal .5 / .5)",
+      "sha256": "878b4a519b3e5f6abb2a318fde15ebb284194bc8a1ee200411a86eb886a4eaab",
+      "bytes": 34315,
+      "dims": "1170x235",
+      "format": "4-bit indexed PNG, 10 colours, all on the ink #1c1712 - stock #e6dec9 line",
+      "title": "[Gymnasium interior, U.S. Naval Academy]",
+      "subject": "Empty gymnasium under a timber truss roof: climbing ropes, pommel horse, mats, rings, gallery, dumbbell racks along the far wall.",
+      "creator": "Detroit Publishing Co. (publisher); photographer unrecorded",
+      "creator_died": "anonymous (Detroit Publishing staff photographer)",
+      "created": "between 1890 and 1901",
+      "first_published": {
+        "year": "1901 (catalogue)",
+        "venue": "Detroit Publishing Co., Catalogue J (1901), no. 021344 — LoC: \"Title and date from Detroit, Catalogue J (1901)\""
+      },
+      "source_institution": "Library of Congress, Prints & Photographs Division (Detroit Publishing Company Collection)",
+      "source_url": "https://www.loc.gov/item/2016804446/",
+      "source_id": "LC-DIG-det-4a15039 (call no. LC-D4-21344)",
+      "rights_statement_verbatim": "No known restrictions on publication.",
+      "pd_basis_us": "Offered for sale in Detroit Publishing Co. catalogue (1901), before 1931.",
+      "pd_basis_worldwide": "Anonymous corporate photograph made public by 1901: 70-year anonymous term expired.",
+      "retrieved": "2026-09-26",
+      "original_file": "research/iron-age/originals/gym-naval-academy.tif",
+      "original_sha256": "84830ed7ab375fbeecbba95cdc48e20f35677e44bcf085f26aaa9b7191638f5d",
+      "original_dims": "5102x4070",
+      "download_url": "https://tile.loc.gov/storage-services/master/pnp/det/4a10000/4a15000/4a15000/4a15039u.tif",
+      "crop_px": {
+        "x": 153,
+        "y": 1150,
+        "w": 2650,
+        "h": 532
+      },
+      "crop_why": "The ropes and the trusses: the knotted and the plain climbing rope, the roof trusses and a chandelier, the top of the gallery windows. The left half of the frame, inside the tightened hint (x .03-.955, y .05-.93, gap8a photos.mjs: the negative border and the \"M.H.\" out). No people.",
+      "transforms": [
+        "sips-316 -s format png research/iron-age/originals/gym-naval-academy.tif --out <work>.png  (whole original, lossless)",
+        "sips-316 -c 532 2650 --cropOffset 1150 153 ia-photos/work/gym-naval-academy.png --out ia-photos/crop/steps-crop.png",
+        "sips-316 -z 235 1170 ia-photos/crop/steps-crop.png --out ia-photos/crop/steps-sized.png",
+        "node v24.20.0 + pngjs 7.0.0, tools/ia-v-photos.mjs sha256 309ed67f56ebf56c162ef9c92ed89b5097d940a555ba2d35a321a5f738963328: ink-on-stock tone map (Rec. 709 Y, linear sRGB -> L*; levels on the crop's own P0.5 = L* 15.16, P99.5 = L* 93.748; linear in L* to coverage a in [0.04, 1], exact in luminance against stock #e6dec9 / ink #1c1712)",
+        "node (same script): AM halftone, pitch 6 px, 45 deg, dot area = a, round dot <= .5 / round stock hole on the dual lattice above, 3 x 3 supersampled, ink #1c1712 and stock #e6dec9 mixed in linear light (10 levels)",
+        "node (same script), tools/gap8a/palpng.mjs sha256 bca0ae46c85c8bfae5cf09036dc9ff3baa96a03903e024db86266a5108ecc8fc: 4-bit indexed PNG, 10-colour palette, zlib level 9, lossless"
+      ],
+      "clothing_check": "PASS. No people in frame (ropes, trusses, a chandelier, gallery windows).",
+      "likeness": "No people in frame.",
+      "face_rule": {
+        "rule": "a head box (hair top to chin, ear to ear, read by eye off gridded views, +-10 source px) grown 15 % of its height above and below and 10 % of its width each side must be wholly visible in every box",
+        "head_boxes_source_px": [],
+        "boxes": [
+          {
+            "client": "native",
+            "box": "288x80",
+            "min_margin_asset_px": null
+          },
+          {
+            "client": "native",
+            "box": "343x80",
+            "min_margin_asset_px": null
+          },
+          {
+            "client": "native",
+            "box": "358x80",
+            "min_margin_asset_px": null
+          },
+          {
+            "client": "native",
+            "box": "398x80",
+            "min_margin_asset_px": null
+          },
+          {
+            "client": "web",
+            "box": "288x80",
+            "min_margin_asset_px": null
+          },
+          {
+            "client": "web",
+            "box": "358x80",
+            "min_margin_asset_px": null
+          }
+        ],
+        "result": "no people"
+      },
+      "lettering": [
+        "handwritten \"M.H.\": outside the crop"
+      ],
+      "contrast": {
+        "text_on_plate": "none (band mode)",
+        "plate_range": 13.26,
+        "declared_fallback_stock_scrim_054_every_word_ink": {
+          "native 288x80": 4.544,
+          "native 343x80": 4.544,
+          "native 358x80": 4.544,
+          "native 398x80": 4.544,
+          "web 288x80": 4.544,
+          "web 358x80": 4.544
+        },
+        "note": "Only if a client drew the declared scrim over the whole box instead of the band: ink text against the darkest scrimmed pixel of the box's visible window, worst of encoded sRGB at .54, linear light at .54, and encoded at .53 (Chrome's run-time loss). Any other text colour on that fallback fails (spec §5.1)."
+      },
+      "tier": "A",
+      "confidence": "high",
+      "credit_line": "Detroit Publishing Co. Library of Congress, Prints & Photographs Division, LC-DIG-det-4a15039",
+      "reverified": "Re-opened 2026-09-27: https://www.loc.gov/item/2016804446/?fo=json — rights_advisory \"No known restrictions on publication.\"; notes \"Title and date from Detroit, Catalogue J (1901).\" and \"Detroit Publishing Co. no. 021344.\"; reproduction number LC-DIG-det-4a15039; creator \"Detroit Publishing Co., publisher\".",
+      "micah_approved": false
+    },
+    {
+      "kind": "photo",
+      "file": "img/weight.png",
+      "paths": {
+        "web": "vibes/iron-age/img/weight.png",
+        "native": "assets/vibes/iron-age/img/weight.png"
+      },
+      "slot": "weightLog",
+      "use": "band mode: an 80 pt strip across the top of the hero box, no word on it (design/iron-age.md §10); cover-cropped round the file's centre (focal .5 / .5)",
+      "sha256": "51c40080c90a2ff5df54b217ffd82fd04bfef92bdfd5df7df1ad9590fe6c5669",
+      "bytes": 51917,
+      "dims": "1170x235",
+      "format": "4-bit indexed PNG, 10 colours, all on the ink #1c1712 - stock #e6dec9 line",
+      "title": "[Gymnasium interior, U.S. Naval Academy]",
+      "subject": "Empty gymnasium under a timber truss roof: climbing ropes, pommel horse, mats, rings, gallery, dumbbell racks along the far wall.",
+      "creator": "Detroit Publishing Co. (publisher); photographer unrecorded",
+      "creator_died": "anonymous (Detroit Publishing staff photographer)",
+      "created": "between 1890 and 1901",
+      "first_published": {
+        "year": "1901 (catalogue)",
+        "venue": "Detroit Publishing Co., Catalogue J (1901), no. 021344 — LoC: \"Title and date from Detroit, Catalogue J (1901)\""
+      },
+      "source_institution": "Library of Congress, Prints & Photographs Division (Detroit Publishing Company Collection)",
+      "source_url": "https://www.loc.gov/item/2016804446/",
+      "source_id": "LC-DIG-det-4a15039 (call no. LC-D4-21344)",
+      "rights_statement_verbatim": "No known restrictions on publication.",
+      "pd_basis_us": "Offered for sale in Detroit Publishing Co. catalogue (1901), before 1931.",
+      "pd_basis_worldwide": "Anonymous corporate photograph made public by 1901: 70-year anonymous term expired.",
+      "retrieved": "2026-09-26",
+      "original_file": "research/iron-age/originals/gym-naval-academy.tif",
+      "original_sha256": "84830ed7ab375fbeecbba95cdc48e20f35677e44bcf085f26aaa9b7191638f5d",
+      "original_dims": "5102x4070",
+      "download_url": "https://tile.loc.gov/storage-services/master/pnp/det/4a10000/4a15000/4a15000/4a15039u.tif",
+      "crop_px": {
+        "x": 850,
+        "y": 2330,
+        "w": 3000,
+        "h": 603
+      },
+      "crop_why": "THE FALLBACK: the spec's plate, anderson-pulleys-woman-front-1897, fails the face rule on every band box (her head, bun to chin, grown by the rule, is 351 px; the widest band the plate allows is 308 px). So the naval gym, a different strip from Steps': the pommel horse, the dumbbell racks along the wall, the vaulting buck and the mats. No people.",
+      "transforms": [
+        "sips-316 -s format png research/iron-age/originals/gym-naval-academy.tif --out <work>.png  (whole original, lossless)",
+        "sips-316 -c 603 3000 --cropOffset 2330 850 ia-photos/work/gym-naval-academy.png --out ia-photos/crop/weight-crop.png",
+        "sips-316 -z 235 1170 ia-photos/crop/weight-crop.png --out ia-photos/crop/weight-sized.png",
+        "node v24.20.0 + pngjs 7.0.0, tools/ia-v-photos.mjs sha256 309ed67f56ebf56c162ef9c92ed89b5097d940a555ba2d35a321a5f738963328: ink-on-stock tone map (Rec. 709 Y, linear sRGB -> L*; levels on the crop's own P0.5 = L* 11.264, P99.5 = L* 90.589; linear in L* to coverage a in [0.04, 1], exact in luminance against stock #e6dec9 / ink #1c1712)",
+        "node (same script): AM halftone, pitch 6 px, 45 deg, dot area = a, round dot <= .5 / round stock hole on the dual lattice above, 3 x 3 supersampled, ink #1c1712 and stock #e6dec9 mixed in linear light (10 levels)",
+        "node (same script), tools/gap8a/palpng.mjs sha256 bca0ae46c85c8bfae5cf09036dc9ff3baa96a03903e024db86266a5108ecc8fc: 4-bit indexed PNG, 10-colour palette, zlib level 9, lossless"
+      ],
+      "clothing_check": "PASS. No people in frame (pommel horse, dumbbell racks, vaulting buck, mats).",
+      "likeness": "No people in frame.",
+      "face_rule": {
+        "rule": "a head box (hair top to chin, ear to ear, read by eye off gridded views, +-10 source px) grown 15 % of its height above and below and 10 % of its width each side must be wholly visible in every box",
+        "head_boxes_source_px": [],
+        "boxes": [
+          {
+            "client": "native",
+            "box": "288x80",
+            "min_margin_asset_px": null
+          },
+          {
+            "client": "native",
+            "box": "343x80",
+            "min_margin_asset_px": null
+          },
+          {
+            "client": "native",
+            "box": "358x80",
+            "min_margin_asset_px": null
+          },
+          {
+            "client": "native",
+            "box": "398x80",
+            "min_margin_asset_px": null
+          },
+          {
+            "client": "web",
+            "box": "288x80",
+            "min_margin_asset_px": null
+          },
+          {
+            "client": "web",
+            "box": "358x80",
+            "min_margin_asset_px": null
+          }
+        ],
+        "result": "no people"
+      },
+      "lettering": [
+        "handwritten \"M.H.\": outside the crop"
+      ],
+      "contrast": {
+        "text_on_plate": "none (band mode)",
+        "plate_range": 13.26,
+        "declared_fallback_stock_scrim_054_every_word_ink": {
+          "native 288x80": 4.544,
+          "native 343x80": 4.544,
+          "native 358x80": 4.544,
+          "native 398x80": 4.544,
+          "web 288x80": 4.544,
+          "web 358x80": 4.544
+        },
+        "note": "Only if a client drew the declared scrim over the whole box instead of the band: ink text against the darkest scrimmed pixel of the box's visible window, worst of encoded sRGB at .54, linear light at .54, and encoded at .53 (Chrome's run-time loss). Any other text colour on that fallback fails (spec §5.1)."
+      },
+      "tier": "A",
+      "confidence": "high",
+      "credit_line": "Detroit Publishing Co. Library of Congress, Prints & Photographs Division, LC-DIG-det-4a15039",
+      "reverified": "Re-opened 2026-09-27: https://www.loc.gov/item/2016804446/?fo=json — rights_advisory \"No known restrictions on publication.\"; notes \"Title and date from Detroit, Catalogue J (1901).\" and \"Detroit Publishing Co. no. 021344.\"; reproduction number LC-DIG-det-4a15039; creator \"Detroit Publishing Co., publisher\".",
+      "micah_approved": false
+    },
+    {
+      "kind": "photo",
+      "file": "img/pick.png",
+      "paths": {
+        "web": "vibes/iron-age/img/pick.png",
+        "native": "assets/vibes/iron-age/img/pick.png"
+      },
+      "slot": "thumb",
+      "use": "the Vibes card thumbnail, 112 x 88 pt, under the definition's stock .54 scrim, `315` in ink over it",
+      "sha256": "3c9ddcc9f4632cb7033675c340d7fc14ff36165b9c377296e2b6c2b9cce69f05",
+      "bytes": 18557,
+      "dims": "336x264",
+      "format": "4-bit indexed PNG, 10 colours, all on the ink #1c1712 - stock #e6dec9 line",
+      "title": "[Gymnasium interior, U.S. Naval Academy]",
+      "subject": "Empty gymnasium under a timber truss roof: climbing ropes, pommel horse, mats, rings, gallery, dumbbell racks along the far wall.",
+      "creator": "Detroit Publishing Co. (publisher); photographer unrecorded",
+      "creator_died": "anonymous (Detroit Publishing staff photographer)",
+      "created": "between 1890 and 1901",
+      "first_published": {
+        "year": "1901 (catalogue)",
+        "venue": "Detroit Publishing Co., Catalogue J (1901), no. 021344 — LoC: \"Title and date from Detroit, Catalogue J (1901)\""
+      },
+      "source_institution": "Library of Congress, Prints & Photographs Division (Detroit Publishing Company Collection)",
+      "source_url": "https://www.loc.gov/item/2016804446/",
+      "source_id": "LC-DIG-det-4a15039 (call no. LC-D4-21344)",
+      "rights_statement_verbatim": "No known restrictions on publication.",
+      "pd_basis_us": "Offered for sale in Detroit Publishing Co. catalogue (1901), before 1931.",
+      "pd_basis_worldwide": "Anonymous corporate photograph made public by 1901: 70-year anonymous term expired.",
+      "retrieved": "2026-09-26",
+      "original_file": "research/iron-age/originals/gym-naval-academy.tif",
+      "original_sha256": "84830ed7ab375fbeecbba95cdc48e20f35677e44bcf085f26aaa9b7191638f5d",
+      "original_dims": "5102x4070",
+      "download_url": "https://tile.loc.gov/storage-services/master/pnp/det/4a10000/4a15000/4a15000/4a15039u.tif",
+      "crop_px": {
+        "x": 1790,
+        "y": 2208,
+        "w": 1100,
+        "h": 864
+      },
+      "crop_why": "The Vibes card (112 x 88 pt @3x): the pommel horse, close, the dumbbell rack and the windows behind. No people.",
+      "transforms": [
+        "sips-316 -s format png research/iron-age/originals/gym-naval-academy.tif --out <work>.png  (whole original, lossless)",
+        "sips-316 -c 864 1100 --cropOffset 2208 1790 ia-photos/work/gym-naval-academy.png --out ia-photos/crop/pick-crop.png",
+        "sips-316 -z 264 336 ia-photos/crop/pick-crop.png --out ia-photos/crop/pick-sized.png",
+        "node v24.20.0 + pngjs 7.0.0, tools/ia-v-photos.mjs sha256 309ed67f56ebf56c162ef9c92ed89b5097d940a555ba2d35a321a5f738963328: ink-on-stock tone map (Rec. 709 Y, linear sRGB -> L*; levels on the crop's own P0.5 = L* 32.748, P99.5 = L* 91.293; linear in L* to coverage a in [0.04, 1], exact in luminance against stock #e6dec9 / ink #1c1712)",
+        "node (same script): AM halftone, pitch 6 px, 45 deg, dot area = a, round dot <= .5 / round stock hole on the dual lattice above, 3 x 3 supersampled, ink #1c1712 and stock #e6dec9 mixed in linear light (10 levels)",
+        "node (same script), tools/gap8a/palpng.mjs sha256 bca0ae46c85c8bfae5cf09036dc9ff3baa96a03903e024db86266a5108ecc8fc: 4-bit indexed PNG, 10-colour palette, zlib level 9, lossless"
+      ],
+      "clothing_check": "PASS. No people in frame (pommel horse, dumbbell rack, windows).",
+      "likeness": "No people in frame.",
+      "face_rule": {
+        "rule": "as for the bands",
+        "boxes": [
+          "112x88"
+        ],
+        "result": "no people"
+      },
+      "lettering": [
+        "handwritten \"M.H.\": outside the crop"
+      ],
+      "contrast": {
+        "text_on_plate": "`315`, loadNum 35, chalk #1c1712",
+        "scrim": "rack #e6dec9 at .54 (the definition's STOCK_SCRIM, drawn at run time)",
+        "worst_pixel_and_ratio": {
+          "encoded": {
+            "worstPixel": "#898275",
+            "ink": 4.67
+          },
+          "linear": {
+            "worstPixel": "#b0a999",
+            "ink": 7.607
+          },
+          "encoded_minus_01": {
+            "worstPixel": "#878073",
+            "ink": 4.544
+          }
+        },
+        "worst": 4.544
+      },
+      "tier": "A",
+      "confidence": "high",
+      "credit_line": "Detroit Publishing Co. Library of Congress, Prints & Photographs Division, LC-DIG-det-4a15039",
+      "reverified": "Re-opened 2026-09-27: https://www.loc.gov/item/2016804446/?fo=json — rights_advisory \"No known restrictions on publication.\"; notes \"Title and date from Detroit, Catalogue J (1901).\" and \"Detroit Publishing Co. no. 021344.\"; reproduction number LC-DIG-det-4a15039; creator \"Detroit Publishing Co., publisher\".",
+      "micah_approved": false
+    }
+  ],
+  "not_used": [
+    {
+      "plate": "anderson-pulleys-woman-front-1897",
+      "slot": "weightLog",
+      "spec": "design/iron-age.md §10 names it for weightLog, pending Q-Q2",
+      "why": "Fails the face rule on every band box. Her head (bun top 627 to chin 897, 742-925 across, source px) grown by the rule spans 351 px; the widest band the plate allows (its crop hint, 1533 px wide, at the band's 4.98:1) is 308 px tall. Rights and clothing pass; the geometry does not. The spec's fallback, gym-naval-academy, is used (img/weight.png)."
+    }
+  ],
+  "decisions_left_to_micah": [
+    "Halftone pitch 6 device px (2.0 pt on the @3x thumbnail, 2.04 pt on the bands) in place of the spec's 3.0 pt (§10 pipeline step 4): at 3.0 pt an 80 pt band holds 26 dot rows and the naval plate and the thumbnail read as a checkerboard. The spec-exact set (IA_PITCH=9) is built and checked too: ~/dev/vibes-night/ia-photos/out-p9/ (all checks pass).",
+    "weightLog falls back to the naval gym (the woman plate fails the face rule), so the naval plate appears on Steps, Weight and the Vibes card, in three different crops (spec §16 names the risk).",
+    "The Sargent crop takes 67 px of plain page margin above the plate's crop hint, so the face rule clears his hair by 20 asset px rather than 7.",
+    "No scrim is baked into any file (band mode needs none; the thumbnail's is the definition's, drawn at run time)."
+  ]
+}
