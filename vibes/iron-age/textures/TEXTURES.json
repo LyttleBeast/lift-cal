@@ -1,0 +1,750 @@
+{
+  "vibe": "iron-age",
+  "spec": "design/iron-age.md §11 (textures) and §10 (the halftone pipeline); prompt V59 §11; research/07-iron-age-period.md G.2 (grain), G.3 (rules), G.4 (tone map)",
+  "generator": {
+    "script": "/Users/micahflunker/dev/vibes-night/tools/iron-age-textures/textures.mjs",
+    "sha256": "d55244fa78acb9fdd2e3e888005926ebdfc1ea2c27b751033d085817b6645182",
+    "command": "node /Users/micahflunker/dev/vibes-night/tools/iron-age-textures/textures.mjs build",
+    "check": "node /Users/micahflunker/dev/vibes-night/tools/iron-age-textures/textures.mjs verify",
+    "node": "v24.20.0",
+    "pngjs": "7.0.0",
+    "deterministic": "seeded mulberry32 only; no clock, no Math.random; re-running gives the same bytes",
+    "definition": {
+      "path": "wt/web-design/vibes/defs/iron-age.js",
+      "sha256": "38e4cec692bab9b9a7eb27fe85769d0d90e5a2be93c86be3e6788e3d1ec7d191",
+      "read": [
+        "colors.rack",
+        "shape.rule.ink",
+        "shape.rule.hair",
+        "shape.rule.sub",
+        "shape.rule.total",
+        "shape.rule.head"
+      ]
+    }
+  },
+  "recipes": {
+    "grain": "preset manual = Sandow 1897 book stock, sigma .744% of luma per device pixel; inside the measured period range .30–1.41% (G.2.1: specimen/magazine .30–.45, book .74–1.41) and under the 1.35% cap. Zero mean, so the flat hex holds.",
+    "rules": "gain is +0.10 iOS pt per edge = +0.055 period pt (the measured +0.05–0.06 on ½–¾ pt faces, G.3.2) × 1.8 period-to-iOS (G.3.3), on the two lines drawn from ATF nominal faces only (sub 1.2 and head's thin 1.2); hair and total are printed widths with no gain; none from 1 period pt up. Wander .03 / .015 pt rms, 1.33–16 pt wavelengths; no halo, pooling, breaks or bite.",
+    "halftone": "tone map G.4.2 (Rec. 709 Y -> L* -> levels on the crop's P0.5/P99.5 -> a in [.04, 1] -> linear-light mix of stock and ink; no sepia matrix), then a 3.0 pt 45° Euclidean screen, dot area = a, no gain curve, 3 × 3 supersampled, 4-bit indexed PNG."
+  },
+  "use": {
+    "grain": "the page (`rack`) only: never sheets, plates, fields, the dock, the status band or a photo band. Web: background-image image-set(grain-manual@2x.png 2x, grain-manual@3x.png 3x), background-size 72px 72px, repeat. Native: <Image source={require(\".../grain-manual.png\")} resizeMode=\"repeat\"> (Metro picks @2x / @3x) behind the page.",
+    "rules": "each strip is pt[1] tall and repeats along x every 144pt; its first line's printed top is inkTopPt (1pt) below the strip's top, so place the strip 1pt above where the vector rule starts. Web: background image-set(... 2x, ... 3x) repeat-x, background-size 144px <pt[1]>px. Native: <Image resizeMode=\"repeat\" style={{ height: pt[1], alignSelf: \"stretch\" }}>. Draw the vector rule at the same widths until the strip loads (spec §11).",
+    "halftone": "photographs only (the four bands and the thumbnail): `node textures.mjs halftone <in.png> <out.png> [pitchPt=3] [scale=3]` after sips has cropped and sized the plate. The photos job owns the plates and their PROVENANCE.json."
+  },
+  "files": [
+    {
+      "file": "grain-manual@2x.png",
+      "bytes": 11980,
+      "sha256": "32ab2e01be51a2dee681feac4b556bdde826841bbac7cf62d6ead3a28a74f7cd",
+      "texture": "paper grain",
+      "preset": "manual",
+      "seed": 1897,
+      "stock": "#e6dec9",
+      "scale": 2,
+      "px": [
+        144,
+        144
+      ],
+      "pt": [
+        72,
+        72
+      ],
+      "devicePxUm": 77.914,
+      "octavePitchesPx": [
+        1,
+        3,
+        6,
+        12,
+        24
+      ],
+      "octaveSigmaPct": [
+        0,
+        0.425,
+        0.536,
+        0.292,
+        0
+      ],
+      "targetSigmaPct": {
+        "px": 0.744,
+        "0.1mm": 0.744,
+        "0.25mm": 0.666,
+        "0.5mm": 0.564,
+        "1mm": 0.4,
+        "2mm": 0.263
+      },
+      "achievedSigmaPct": {
+        "px": 0.732,
+        "0.1mm": 0.732,
+        "0.25mm": 0.654,
+        "0.5mm": 0.527,
+        "1mm": 0.376,
+        "2mm": 0.24
+      },
+      "clipPct": 2.539,
+      "meanLuma": 222.18,
+      "flatLuma": 222.18,
+      "darkest": "#e0d8c4",
+      "lightest": "#ece4ce",
+      "seamMaxStep": 2,
+      "innerMaxStep": 3,
+      "contrastOnDarkest": {
+        "chalk": {
+          "hex": "#1c1712",
+          "flat": 13.261,
+          "grainDarkest": 12.526,
+          "need": 4.5,
+          "pass": true
+        },
+        "steel": {
+          "hex": "#4a3f31",
+          "flat": 7.65,
+          "grainDarkest": 7.226,
+          "need": 4.5,
+          "pass": true
+        },
+        "dim": {
+          "hex": "#565450",
+          "flat": 5.633,
+          "grainDarkest": 5.32,
+          "need": 4.5,
+          "pass": true
+        },
+        "faint": {
+          "hex": "#565450",
+          "flat": 5.633,
+          "grainDarkest": 5.32,
+          "need": 4.5,
+          "pass": true
+        },
+        "accent": {
+          "hex": "#a1374f",
+          "flat": 4.932,
+          "grainDarkest": 4.658,
+          "need": 4.5,
+          "pass": true
+        },
+        "focus": {
+          "hex": "#a1374f",
+          "flat": 4.932,
+          "grainDarkest": 4.658,
+          "need": 4.5,
+          "pass": true
+        },
+        "danger": {
+          "hex": "#82180c",
+          "flat": 7.509,
+          "grainDarkest": 7.093,
+          "need": 4.5,
+          "pass": true
+        },
+        "good": {
+          "hex": "#0e5f40",
+          "flat": 5.736,
+          "grainDarkest": 5.418,
+          "need": 4.5,
+          "pass": true
+        },
+        "warn": {
+          "hex": "#6e4d08",
+          "flat": 5.739,
+          "grainDarkest": 5.421,
+          "need": 4.5,
+          "pass": true
+        },
+        "bad": {
+          "hex": "#82180c",
+          "flat": 7.509,
+          "grainDarkest": 7.093,
+          "need": 4.5,
+          "pass": true
+        },
+        "done": {
+          "hex": "#0e5f40",
+          "flat": 5.736,
+          "grainDarkest": 5.418,
+          "need": 4.5,
+          "pass": true
+        },
+        "pRed": {
+          "hex": "#82180c",
+          "flat": 7.509,
+          "grainDarkest": 7.093,
+          "need": 4.5,
+          "pass": true
+        },
+        "pBlue": {
+          "hex": "#1f4a72",
+          "flat": 6.865,
+          "grainDarkest": 6.484,
+          "need": 4.5,
+          "pass": true
+        },
+        "pGreen": {
+          "hex": "#0e5f40",
+          "flat": 5.736,
+          "grainDarkest": 5.418,
+          "need": 4.5,
+          "pass": true
+        },
+        "pWhite": {
+          "hex": "#2a241d",
+          "flat": 11.44,
+          "grainDarkest": 10.806,
+          "need": 4.5,
+          "pass": true
+        },
+        "pYellow": {
+          "hex": "#8b6600",
+          "flat": 3.916,
+          "grainDarkest": 3.699,
+          "need": 3,
+          "pass": true
+        },
+        "pChrome": {
+          "hex": "#6a6d6c",
+          "flat": 3.898,
+          "grainDarkest": 3.682,
+          "need": 3,
+          "pass": true
+        },
+        "knurl": {
+          "hex": "#77736a",
+          "flat": 3.522,
+          "grainDarkest": 3.327,
+          "need": 3,
+          "pass": true
+        },
+        "grip": {
+          "hex": "#7b6c52",
+          "flat": 3.81,
+          "grainDarkest": 3.599,
+          "need": 3,
+          "pass": true
+        }
+      }
+    },
+    {
+      "file": "grain-manual@3x.png",
+      "bytes": 24574,
+      "sha256": "390af5d6096ec44bce2e6f20125bb5d87ec181c69879ea3bab5473fdb06d3330",
+      "texture": "paper grain",
+      "preset": "manual",
+      "seed": 1897,
+      "stock": "#e6dec9",
+      "scale": 3,
+      "px": [
+        216,
+        216
+      ],
+      "pt": [
+        72,
+        72
+      ],
+      "devicePxUm": 55.217,
+      "octavePitchesPx": [
+        1,
+        2,
+        4,
+        9,
+        18,
+        36
+      ],
+      "octaveSigmaPct": [
+        0,
+        0,
+        0.495,
+        0.443,
+        0.364,
+        0
+      ],
+      "targetSigmaPct": {
+        "px": 0.744,
+        "0.1mm": 0.744,
+        "0.25mm": 0.666,
+        "0.5mm": 0.564,
+        "1mm": 0.4,
+        "2mm": 0.263
+      },
+      "achievedSigmaPct": {
+        "px": 0.768,
+        "0.1mm": 0.744,
+        "0.25mm": 0.668,
+        "0.5mm": 0.559,
+        "1mm": 0.426,
+        "2mm": 0.244
+      },
+      "clipPct": 2.655,
+      "meanLuma": 222.18,
+      "flatLuma": 222.18,
+      "darkest": "#e0d8c4",
+      "lightest": "#ece4ce",
+      "seamMaxStep": 2,
+      "innerMaxStep": 2.72,
+      "contrastOnDarkest": {
+        "chalk": {
+          "hex": "#1c1712",
+          "flat": 13.261,
+          "grainDarkest": 12.526,
+          "need": 4.5,
+          "pass": true
+        },
+        "steel": {
+          "hex": "#4a3f31",
+          "flat": 7.65,
+          "grainDarkest": 7.226,
+          "need": 4.5,
+          "pass": true
+        },
+        "dim": {
+          "hex": "#565450",
+          "flat": 5.633,
+          "grainDarkest": 5.32,
+          "need": 4.5,
+          "pass": true
+        },
+        "faint": {
+          "hex": "#565450",
+          "flat": 5.633,
+          "grainDarkest": 5.32,
+          "need": 4.5,
+          "pass": true
+        },
+        "accent": {
+          "hex": "#a1374f",
+          "flat": 4.932,
+          "grainDarkest": 4.658,
+          "need": 4.5,
+          "pass": true
+        },
+        "focus": {
+          "hex": "#a1374f",
+          "flat": 4.932,
+          "grainDarkest": 4.658,
+          "need": 4.5,
+          "pass": true
+        },
+        "danger": {
+          "hex": "#82180c",
+          "flat": 7.509,
+          "grainDarkest": 7.093,
+          "need": 4.5,
+          "pass": true
+        },
+        "good": {
+          "hex": "#0e5f40",
+          "flat": 5.736,
+          "grainDarkest": 5.418,
+          "need": 4.5,
+          "pass": true
+        },
+        "warn": {
+          "hex": "#6e4d08",
+          "flat": 5.739,
+          "grainDarkest": 5.421,
+          "need": 4.5,
+          "pass": true
+        },
+        "bad": {
+          "hex": "#82180c",
+          "flat": 7.509,
+          "grainDarkest": 7.093,
+          "need": 4.5,
+          "pass": true
+        },
+        "done": {
+          "hex": "#0e5f40",
+          "flat": 5.736,
+          "grainDarkest": 5.418,
+          "need": 4.5,
+          "pass": true
+        },
+        "pRed": {
+          "hex": "#82180c",
+          "flat": 7.509,
+          "grainDarkest": 7.093,
+          "need": 4.5,
+          "pass": true
+        },
+        "pBlue": {
+          "hex": "#1f4a72",
+          "flat": 6.865,
+          "grainDarkest": 6.484,
+          "need": 4.5,
+          "pass": true
+        },
+        "pGreen": {
+          "hex": "#0e5f40",
+          "flat": 5.736,
+          "grainDarkest": 5.418,
+          "need": 4.5,
+          "pass": true
+        },
+        "pWhite": {
+          "hex": "#2a241d",
+          "flat": 11.44,
+          "grainDarkest": 10.806,
+          "need": 4.5,
+          "pass": true
+        },
+        "pYellow": {
+          "hex": "#8b6600",
+          "flat": 3.916,
+          "grainDarkest": 3.699,
+          "need": 3,
+          "pass": true
+        },
+        "pChrome": {
+          "hex": "#6a6d6c",
+          "flat": 3.898,
+          "grainDarkest": 3.682,
+          "need": 3,
+          "pass": true
+        },
+        "knurl": {
+          "hex": "#77736a",
+          "flat": 3.522,
+          "grainDarkest": 3.327,
+          "need": 3,
+          "pass": true
+        },
+        "grip": {
+          "hex": "#7b6c52",
+          "flat": 3.81,
+          "grainDarkest": 3.599,
+          "need": 3,
+          "pass": true
+        }
+      }
+    },
+    {
+      "file": "rule-hair@2x.png",
+      "bytes": 1051,
+      "sha256": "59a11dc0e2c82849da3aad18870f8e55fd4cf9d5534752f5460657b5cf3404c5",
+      "texture": "ink bleed along a rule",
+      "token": "hair",
+      "def": "shape.rule.hair",
+      "defValue": [
+        0.5
+      ],
+      "seed": 1912,
+      "scale": 2,
+      "px": [
+        288,
+        4
+      ],
+      "pt": [
+        144,
+        2
+      ],
+      "inkTopPt": 1,
+      "lines": [
+        {
+          "topPt": 1,
+          "printedPt": 0.5,
+          "nominalPt": 0.5,
+          "gainPerEdgePt": 0,
+          "wanderRmsPt": 0.03
+        }
+      ],
+      "inkPt": 0.5,
+      "measuredInkPt": 0.5,
+      "perColumnInkSdPx": 0.081,
+      "maxEdgeWanderPt": 0.113,
+      "haloPx": 0
+    },
+    {
+      "file": "rule-sub@2x.png",
+      "bytes": 1092,
+      "sha256": "cc9c589c2b081928972a85c1f083fc2999265e21f6c005962a413a4a023b86a7",
+      "texture": "ink bleed along a rule",
+      "token": "sub",
+      "def": "shape.rule.sub",
+      "defValue": [
+        1.2
+      ],
+      "seed": 1912,
+      "scale": 2,
+      "px": [
+        288,
+        6
+      ],
+      "pt": [
+        144,
+        3
+      ],
+      "inkTopPt": 1,
+      "lines": [
+        {
+          "topPt": 1,
+          "printedPt": 1.2,
+          "nominalPt": 1,
+          "gainPerEdgePt": 0.1,
+          "wanderRmsPt": 0.03
+        }
+      ],
+      "inkPt": 1.2,
+      "measuredInkPt": 1.2,
+      "perColumnInkSdPx": 0.08,
+      "maxEdgeWanderPt": 0.105,
+      "haloPx": 0
+    },
+    {
+      "file": "rule-total@2x.png",
+      "bytes": 2570,
+      "sha256": "7e9b6d5dc4f3b79b2f4e55756ef9f49248d40da7a29370b7a714b6b6ce8b85bc",
+      "texture": "ink bleed along a rule",
+      "token": "total",
+      "def": "shape.rule.total",
+      "defValue": [
+        1,
+        2,
+        1
+      ],
+      "seed": 1912,
+      "scale": 2,
+      "px": [
+        288,
+        12
+      ],
+      "pt": [
+        144,
+        6
+      ],
+      "inkTopPt": 1,
+      "lines": [
+        {
+          "topPt": 1,
+          "printedPt": 1,
+          "nominalPt": 1,
+          "gainPerEdgePt": 0,
+          "wanderRmsPt": 0.03
+        },
+        {
+          "topPt": 4,
+          "printedPt": 1,
+          "nominalPt": 1,
+          "gainPerEdgePt": 0,
+          "wanderRmsPt": 0.03
+        }
+      ],
+      "inkPt": 2,
+      "measuredInkPt": 2,
+      "perColumnInkSdPx": 0.116,
+      "maxEdgeWanderPt": 0.105,
+      "haloPx": 0
+    },
+    {
+      "file": "rule-head@2x.png",
+      "bytes": 2167,
+      "sha256": "5699f78645402ad19e484aaf68ad8ed38588dae9e74318c78a3b067cf0342b92",
+      "texture": "ink bleed along a rule",
+      "token": "head",
+      "def": "shape.rule.head",
+      "defValue": [
+        3,
+        2,
+        1.2
+      ],
+      "seed": 1912,
+      "scale": 2,
+      "px": [
+        288,
+        16
+      ],
+      "pt": [
+        144,
+        8
+      ],
+      "inkTopPt": 1,
+      "lines": [
+        {
+          "topPt": 1,
+          "printedPt": 3,
+          "nominalPt": 3,
+          "gainPerEdgePt": 0,
+          "wanderRmsPt": 0.015
+        },
+        {
+          "topPt": 6,
+          "printedPt": 1.2,
+          "nominalPt": 1,
+          "gainPerEdgePt": 0.1,
+          "wanderRmsPt": 0.03
+        }
+      ],
+      "inkPt": 4.2,
+      "measuredInkPt": 4.2,
+      "perColumnInkSdPx": 0.093,
+      "maxEdgeWanderPt": 0.109,
+      "haloPx": 0
+    },
+    {
+      "file": "rule-hair@3x.png",
+      "bytes": 1566,
+      "sha256": "59b69501e67bd743783860245ccdf60dc11be219d0fd92ec8491d0484e40e3fa",
+      "texture": "ink bleed along a rule",
+      "token": "hair",
+      "def": "shape.rule.hair",
+      "defValue": [
+        0.5
+      ],
+      "seed": 1912,
+      "scale": 3,
+      "px": [
+        432,
+        6
+      ],
+      "pt": [
+        144,
+        2
+      ],
+      "inkTopPt": 1,
+      "lines": [
+        {
+          "topPt": 1,
+          "printedPt": 0.5,
+          "nominalPt": 0.5,
+          "gainPerEdgePt": 0,
+          "wanderRmsPt": 0.03
+        }
+      ],
+      "inkPt": 0.5,
+      "measuredInkPt": 0.5,
+      "perColumnInkSdPx": 0.126,
+      "maxEdgeWanderPt": 0.114,
+      "haloPx": 0
+    },
+    {
+      "file": "rule-sub@3x.png",
+      "bytes": 1581,
+      "sha256": "e0dcb5b776e048c7633be688643ee7c4ae3a24174ab313f852af315ebbc6dc1a",
+      "texture": "ink bleed along a rule",
+      "token": "sub",
+      "def": "shape.rule.sub",
+      "defValue": [
+        1.2
+      ],
+      "seed": 1912,
+      "scale": 3,
+      "px": [
+        432,
+        9
+      ],
+      "pt": [
+        144,
+        3
+      ],
+      "inkTopPt": 1,
+      "lines": [
+        {
+          "topPt": 1,
+          "printedPt": 1.2,
+          "nominalPt": 1,
+          "gainPerEdgePt": 0.1,
+          "wanderRmsPt": 0.03
+        }
+      ],
+      "inkPt": 1.2,
+      "measuredInkPt": 1.2,
+      "perColumnInkSdPx": 0.125,
+      "maxEdgeWanderPt": 0.106,
+      "haloPx": 0
+    },
+    {
+      "file": "rule-total@3x.png",
+      "bytes": 3627,
+      "sha256": "01e44e187df36d8279c6dfbfcf538bd922d38d3d95f39947db213a5df32a0c76",
+      "texture": "ink bleed along a rule",
+      "token": "total",
+      "def": "shape.rule.total",
+      "defValue": [
+        1,
+        2,
+        1
+      ],
+      "seed": 1912,
+      "scale": 3,
+      "px": [
+        432,
+        18
+      ],
+      "pt": [
+        144,
+        6
+      ],
+      "inkTopPt": 1,
+      "lines": [
+        {
+          "topPt": 1,
+          "printedPt": 1,
+          "nominalPt": 1,
+          "gainPerEdgePt": 0,
+          "wanderRmsPt": 0.03
+        },
+        {
+          "topPt": 4,
+          "printedPt": 1,
+          "nominalPt": 1,
+          "gainPerEdgePt": 0,
+          "wanderRmsPt": 0.03
+        }
+      ],
+      "inkPt": 2,
+      "measuredInkPt": 2,
+      "perColumnInkSdPx": 0.18,
+      "maxEdgeWanderPt": 0.105,
+      "haloPx": 0
+    },
+    {
+      "file": "rule-head@3x.png",
+      "bytes": 3216,
+      "sha256": "0acc0181d39c1ee1da4b9a52f3de60270febb7c2e617876d3ce45275906a3cd7",
+      "texture": "ink bleed along a rule",
+      "token": "head",
+      "def": "shape.rule.head",
+      "defValue": [
+        3,
+        2,
+        1.2
+      ],
+      "seed": 1912,
+      "scale": 3,
+      "px": [
+        432,
+        24
+      ],
+      "pt": [
+        144,
+        8
+      ],
+      "inkTopPt": 1,
+      "lines": [
+        {
+          "topPt": 1,
+          "printedPt": 3,
+          "nominalPt": 3,
+          "gainPerEdgePt": 0,
+          "wanderRmsPt": 0.015
+        },
+        {
+          "topPt": 6,
+          "printedPt": 1.2,
+          "nominalPt": 1,
+          "gainPerEdgePt": 0.1,
+          "wanderRmsPt": 0.03
+        }
+      ],
+      "inkPt": 4.2,
+      "measuredInkPt": 4.2,
+      "perColumnInkSdPx": 0.145,
+      "maxEdgeWanderPt": 0.11,
+      "haloPx": 0
+    }
+  ],
+  "totals": {
+    "bytesAt2x": 18860,
+    "bytesAt3x": 34564,
+    "bytesAll": 53424
+  }
+}
