@@ -142,6 +142,11 @@ function lint(id, css, exists, sizeOf = () => 0) {
   walk(0, src.length);
   for (const [ln, u] of urls) {
     if (/^data:/i.test(u)) continue;
+    // A paint server vibe.js puts in the page itself (<svg id="vibe-patterns">,
+    // one <pattern id="vibe-hatch-<token>"> per colour token, under a chart
+    // look that hatches): a fragment of this document, not a file. Any other
+    // fragment names something no vibe owns.
+    if (/^#vibe-hatch-[a-z0-9-]+$/.test(u)) continue;
     const n = normalize(u);
     if (/^[a-z][a-z0-9+.-]*:/i.test(u) || u.startsWith('/') || u.startsWith('//') || n.startsWith('..') || !n.startsWith(id + '/')) {
       probs.push(`line ${ln}: url(${u}) — a vibe's files are under vibes/${id}/ (or a data: URL); nothing remote, nothing outside its folder`);
@@ -199,7 +204,8 @@ section('C  canaries — each rule fails on a sample that breaks it');
     `@media (max-width: 380px) { [data-vibe="t"] .card { padding: 10px; } }\n` +
     `@font-face { font-family: 't Display'; src: url(t/display.woff2) format('woff2'); }\n` +
     `@keyframes t-pulse { to { opacity: .5; } }\n[data-vibe="t"] .hero { background: url('t/hero.jpg'); }\n` +
-    `[data-vibe="t"] .ex-block .set-row, [data-vibe="t"] [class^="set-row-"] { color: var(--chalk); }\n`;
+    `[data-vibe="t"] .ex-block .set-row, [data-vibe="t"] [class^="set-row-"] { color: var(--chalk); }\n` +
+    `[data-vibe="t"] rect.chart-bar-dim { fill: url(#vibe-hatch-p-blue); }\n`;
   expect(!lint('t', good, yes).length, 'a well-scoped sample passes' + (lint('t', good, yes).length ? ' — ' + lint('t', good, yes).join('; ') : ''));
   const cases = [
     ['.card { color: red; }', /not scoped/, 'a bare selector'],
@@ -214,6 +220,7 @@ section('C  canaries — each rule fails on a sample that breaks it');
     ['[data-vibe="t"] .a { background: url(https://example.com/x.jpg); }', /nothing remote/, 'a remote url()'],
     ['[data-vibe="t"] .a { background: url(../v1/x.jpg); }', /nothing remote|outside its folder/, 'a url() outside the vibe\'s folder'],
     ['[data-vibe="t"] .a { background: url(t/missing.jpg); }', /does not exist/, 'a url() to a missing file'],
+    ['[data-vibe="t"] .a { fill: url(#someone-else); }', /nothing outside its folder/, 'a url(#fragment) that is not one of vibe.js\'s hatch patterns'],
     ['[data-vibe="t"] [class^="set-row"] { color: red; }', /matches the workout's \.set-row/, 'a [class^="set-row"] that catches the settings rows'],
     ['[data-vibe="t"] [class*="set-"] { color: red; }', /matches the workout's \.set-row/, 'a [class*="set-"] that catches both']
   ];

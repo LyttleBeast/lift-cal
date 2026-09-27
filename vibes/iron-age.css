@@ -131,3 +131,1323 @@
 }
 :root[data-vibe="iron-age"]::before { content: ''; position: fixed; top: 0; left: 0; right: 0; height: var(--safe-top); background: var(--band); pointer-events: none; z-index: 400; }
 /* vibes-css:end */
+
+/* ==========================================================================
+   Iron Age — the hand-written half. Ink on cream, circa 1900: a physical-
+   culture manual printed about 1904. The spec, block by block, is
+   ~/dev/vibes-night/design/iron-age.md (§7 the looks, §8 the screens); the
+   looks are VOCAB.md's, drawn from the tokens above and the `shape` params
+   (--shape-*), so the geometry lives in the definition and only the drawing
+   lives here.
+
+   THE RULES THIS FILE KEEPS
+   - Every selector starts [data-vibe="iron-age"] (tools-check/vibes-scope.mjs).
+     Rules for the Vibes sheet's own tile are [data-vibe="iron-age"].vibe-in,
+     so they reach Iron Age's tile and no other, whichever vibe is worn.
+   - Looks, never words. No rule here writes a character (every ::before and
+     ::after is content ''), and no text is transformed except undone: v1's
+     caps labels show as they were written (type.* upper: 0).
+   - Weight is set only through font-variation-settings. The three faces are
+     Besley v4, latin subsets, each keeping its wght axis (FONTS.json).
+     Besley sets heads, card heads, the greeting, the challenge figure and
+     the running meta; Archivo, v1's, sets everything else — every value,
+     delta, button, chip, the dock and the Coach card.
+   - No !important: nothing here beats an inline size (V59 §5.9 would allow
+     it; nothing needed it).
+   - Rules are ink. Each is drawn as vector rules at the definition's widths
+     (--shape-rule-*) with the ink-bleed strip (textures/rule-*.png, seed
+     1912) laid over them, so a strip that has not loaded yet leaves the
+     vector rule, never a gap (spec §11).
+   ========================================================================== */
+
+/* ---------- the faces (vibes/iron-age/fonts; OFL.txt and FONTS.json beside
+   them). Family names are the vibe's. The weight ranges are descriptors, so
+   a heavier request than a face holds is never synthesised. ---------- */
+@font-face {
+  font-family: 'iron-age Besley';
+  src: url(iron-age/fonts/iron-age-besley.woff2) format('woff2');
+  font-weight: 600 800; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'iron-age Besley Italic';
+  src: url(iron-age/fonts/iron-age-besley-italic.woff2) format('woff2');
+  font-weight: 400 500; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'iron-age Besley Digits';
+  src: url(iron-age/fonts/iron-age-besley-digits.woff2) format('woff2');
+  font-weight: 600 800; font-style: normal; font-display: swap;
+}
+
+/* ---------- the page: book stock with the `manual` grain (seed 1897), on
+   the page only — never a sheet, plate, field, the dock or a photo band ---------- */
+:root[data-vibe="iron-age"],
+:root[data-vibe="iron-age"] body,
+[data-vibe="iron-age"] #auth,
+[data-vibe="iron-age"] #gate,
+[data-vibe="iron-age"] #onboard:not(.ob-tour) {
+  background-color: var(--rack);
+  background-image: url(iron-age/textures/grain-manual@3x.png);
+  background-image: -webkit-image-set(url(iron-age/textures/grain-manual@2x.png) 2x, url(iron-age/textures/grain-manual@3x.png) 3x);
+  background-size: 72px 72px;
+  background-repeat: repeat;
+}
+
+/* ---------- type: the heads in Besley ---------- */
+[data-vibe="iron-age"] h1,
+[data-vibe="iron-age"] h2,
+[data-vibe="iron-age"] h3 {
+  font-family: var(--font-display);
+  font-variation-settings: 'wght' 800;
+  letter-spacing: 0;
+  font-synthesis: none;
+}
+[data-vibe="iron-age"] h1 { font-size: 24px; line-height: 1.1; }
+[data-vibe="iron-age"] h2 { font-size: 18px; line-height: 1.15; }
+
+/* eyebrow · v1, its type role Besley SemiBold 15, sentence case, ink */
+[data-vibe="iron-age"] .eyebrow,
+[data-vibe="iron-age"] .chart-sub {
+  font-family: var(--font-display);
+  font-size: 15px; line-height: 1.2;
+  letter-spacing: 0; text-transform: none;
+  color: var(--chalk);
+  font-variation-settings: 'wght' 600;
+  font-synthesis: none;
+}
+/* The running meta (type.meta): Besley Italic 14, steel — the masthead's
+   running head, a sheet's kicker, a card's "last 7 days", dates. */
+[data-vibe="iron-age"] .cal-hd .eyebrow,
+[data-vibe="iron-age"] .summary-hero .eyebrow,
+[data-vibe="iron-age"] .sheet .eyebrow:has(+ h2),
+[data-vibe="iron-age"] .ob-kicker,
+[data-vibe="iron-age"] .card-sub,
+[data-vibe="iron-age"] .you-sub,
+[data-vibe="iron-age"] .you-since,
+[data-vibe="iron-age"] .summary-date {
+  font-family: var(--font-italic);
+  font-size: 14px; line-height: 1.3;
+  letter-spacing: 0; text-transform: none;
+  color: var(--steel);
+  font-variation-settings: 'wght' 400;
+  font-synthesis: none;
+}
+/* A figure's unit, on its baseline in Archivo 13 steel as written
+   ("kcal left today", "to go", "ml of 2,500 ml") — Besley never sets a unit. */
+[data-vibe="iron-age"] .fuel-top .eyebrow,
+[data-vibe="iron-age"] .st-hero-side .eyebrow,
+[data-vibe="iron-age"] .water-right .eyebrow {
+  font-family: var(--font);
+  font-size: 13px; line-height: 1.3;
+  color: var(--steel);
+  font-variation-settings: 'wdth' 100, 'wght' 600;
+}
+
+/* The challenge figure (headline · rule, loadNum): Besley ExtraBold, tabular
+   lining figures, at each site's own size. */
+[data-vibe="iron-age"] .load-num,
+[data-vibe="iron-age"] .headline-v {
+  font-family: var(--font-display);
+  font-variation-settings: 'wght' 800;
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: 'tnum' 1, 'lnum' 1;
+  letter-spacing: 0; line-height: 1;
+  font-synthesis: none;
+}
+[data-vibe="iron-age"] .headline-v { font-size: 28px; }
+
+/* Archivo's figures at its own width: v1 stamps them wide (108–118); a
+   manual's table sets them at the text's. */
+[data-vibe="iron-age"] .stat-val,
+[data-vibe="iron-age"] .kpi-val,
+[data-vibe="iron-age"] .fe-cal,
+[data-vibe="iron-age"] .pb-val,
+[data-vibe="iron-age"] .rank-val,
+[data-vibe="iron-age"] .sess-e1,
+[data-vibe="iron-age"] .pr-val,
+[data-vibe="iron-age"] .mini-stat-v,
+[data-vibe="iron-age"] .adm-n,
+[data-vibe="iron-age"] .ob-num-v,
+[data-vibe="iron-age"] .thesis-line b,
+[data-vibe="iron-age"] .donut-top,
+[data-vibe="iron-age"] .ring-top,
+[data-vibe="iron-age"] .st-ring-n,
+[data-vibe="iron-age"] .review-take-t {
+  font-variation-settings: 'wdth' 100, 'wght' 800;
+  letter-spacing: 0;
+}
+[data-vibe="iron-age"] .review-take-t { font-variation-settings: 'wdth' 100, 'wght' 400; }
+
+/* v1's small caps labels, as written, at 11–12 (nothing new under 11). */
+[data-vibe="iron-age"] .stat-lbl,
+[data-vibe="iron-age"] .kpi-lbl,
+[data-vibe="iron-age"] .field label,
+[data-vibe="iron-age"] .field-lbl,
+[data-vibe="iron-age"] .mini-stat-l,
+[data-vibe="iron-age"] .ring-lbl,
+[data-vibe="iron-age"] .sess-e1lbl {
+  font-size: 12px; letter-spacing: 0; text-transform: none;
+  color: var(--steel);
+  font-variation-settings: 'wdth' 100, 'wght' 600;
+}
+[data-vibe="iron-age"] .field label .opt { letter-spacing: 0; color: var(--dim); }
+[data-vibe="iron-age"] .field-hint { font-size: 12px; }
+[data-vibe="iron-age"] .kpi-unit,
+[data-vibe="iron-age"] .headline-u {
+  font-size: 13px; letter-spacing: 0; text-transform: none; color: var(--steel);
+  font-variation-settings: 'wdth' 100, 'wght' 600;
+}
+[data-vibe="iron-age"] .headline-u { margin-left: -6px; }
+[data-vibe="iron-age"] .kpi-prev { font-size: 12px; letter-spacing: 0; color: var(--steel); }
+[data-vibe="iron-age"] .card-sub,
+[data-vibe="iron-age"] .fe-sub,
+[data-vibe="iron-age"] .pr-sub,
+[data-vibe="iron-age"] .pb-sub,
+[data-vibe="iron-age"] .rank-sub,
+[data-vibe="iron-age"] .sess-sub,
+[data-vibe="iron-age"] .set-row-sub,
+[data-vibe="iron-age"] .coach-build-w,
+[data-vibe="iron-age"] .person-sub,
+[data-vibe="iron-age"] .rt-meta,
+[data-vibe="iron-age"] .rt-pv-sets,
+[data-vibe="iron-age"] .day-ex-sets,
+[data-vibe="iron-age"] .feel-sub { font-size: 12px; }
+[data-vibe="iron-age"] .card-sub { font-size: 14px; }
+[data-vibe="iron-age"] .ex-item .eq,
+[data-vibe="iron-age"] .legend-item,
+[data-vibe="iron-age"] .vol-name,
+[data-vibe="iron-age"] .vol-val,
+[data-vibe="iron-age"] .macro-pct,
+[data-vibe="iron-age"] .cal-status,
+[data-vibe="iron-age"] .cal-status .cal-maint,
+[data-vibe="iron-age"] .traj-ends,
+[data-vibe="iron-age"] .chart-foot,
+[data-vibe="iron-age"] .ring-of,
+[data-vibe="iron-age"] .st-src {
+  font-size: 12px; letter-spacing: 0; text-transform: none;
+}
+[data-vibe="iron-age"] .legend-val { font-size: 11px; }
+[data-vibe="iron-age"] .ai-cost,
+[data-vibe="iron-age"] .cal-legend-item,
+[data-vibe="iron-age"] .gate-sep,
+[data-vibe="iron-age"] .swipe-hint {
+  font-size: 11px; letter-spacing: 0; text-transform: none;
+}
+[data-vibe="iron-age"] .gate-sep { color: var(--steel); }
+[data-vibe="iron-age"] .sync-pip {
+  font-size: 11px; letter-spacing: 0; text-transform: none;
+  font-variation-settings: 'wdth' 100, 'wght' 600;
+}
+[data-vibe="iron-age"] .note {
+  font-size: 13px; line-height: 1.5; color: var(--dim);
+}
+
+/* ---------- the rules ----------
+   Oxford (shape.rule.head [3, 2, 1.2]): chapters only — a section head, the
+   masthead, a sheet's top edge. Sub (shape.rule.sub [1.2]): an article's
+   head — a card head, an exercise's name, the challenge figure. Total
+   (shape.rule.total [1, 2, 1]): over the recap's totals and the estimate's.
+   Hair (shape.rule.hair .5): rows, cells, columns. */
+
+/* screenHeader · masthead: the running head in italic meta, the h1 in Besley
+   ExtraBold, then the Oxford rule across the full measure. The nav buttons
+   keep their place and their 34. */
+[data-vibe="iron-age"] .cal-hd {
+  position: relative;
+  align-items: flex-end;
+  padding-bottom: 14px;
+  margin-bottom: 18px;
+}
+[data-vibe="iron-age"] .cal-hd::after,
+[data-vibe="iron-age"] .you-sec-t::after,
+[data-vibe="iron-age"] .summary-hero h1::after,
+[data-vibe="iron-age"] .auth-title::after {
+  content: '';
+  position: absolute; left: 0; right: 0; bottom: 0;
+  height: calc(var(--shape-rule-head-0) + var(--shape-rule-head-1) + var(--shape-rule-head-2));
+  background:
+    -webkit-image-set(url(iron-age/textures/rule-head@2x.png) 2x, url(iron-age/textures/rule-head@3x.png) 3x) 0 -1px / 144px 8px repeat-x,
+    linear-gradient(var(--shape-rule-ink), var(--shape-rule-ink)) 0 0 / 100% var(--shape-rule-head-0) no-repeat,
+    linear-gradient(var(--shape-rule-ink), var(--shape-rule-ink)) 0 calc(var(--shape-rule-head-0) + var(--shape-rule-head-1)) / 100% var(--shape-rule-head-2) no-repeat;
+}
+[data-vibe="iron-age"] .cal-hd h1 { margin-top: 2px; }
+[data-vibe="iron-age"] .cal-nav button {
+  background: var(--bar);
+  border: var(--shape-keyline-width) solid var(--shape-keyline-ink);
+  color: var(--chalk);
+}
+[data-vibe="iron-age"] .cal-nav button:active { background: var(--raised); }
+[data-vibe="iron-age"] .cal-nav button .glyph { width: 16px; height: 16px; }
+[data-vibe="iron-age"] .cal-nav .gear-btn svg { stroke-width: 1.75; }
+
+/* sectionHeader · rule: the chapter head, h3 (Besley ExtraBold 18), sitting
+   on the Oxford rule; 36 above, 12 below; no trailing hairline. */
+[data-vibe="iron-age"] .you-sec { margin-top: 36px; }
+[data-vibe="iron-age"] .you-sec-t {
+  display: block; position: relative;
+  padding-bottom: 12px; margin-bottom: 14px;
+  font-family: var(--font-display);
+  font-size: 18px; line-height: 1.2;
+  letter-spacing: 0; text-transform: none;
+  color: var(--chalk);
+  font-variation-settings: 'wght' 800;
+  font-synthesis: none;
+}
+[data-vibe="iron-age"] .you-sec-t::after { flex: none; }
+
+/* card · ruled (and youCard · ruled): no ground, no box, no corner. The head
+   row sits on the single rule at full width, the content runs to the rule's
+   width, cards part by 24. */
+[data-vibe="iron-age"] .card {
+  background: none;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  margin-bottom: 24px;
+}
+[data-vibe="iron-age"] .card-hd {
+  position: relative;
+  padding-bottom: 8px;
+  margin-bottom: 12px;
+}
+[data-vibe="iron-age"] .card-hd::after,
+[data-vibe="iron-age"] .ex-hd::after,
+[data-vibe="iron-age"] .headline::after,
+[data-vibe="iron-age"] .fuel-top::after {
+  content: '';
+  position: absolute; left: 0; right: 0; bottom: 0;
+  height: var(--shape-rule-sub-0);
+  background:
+    -webkit-image-set(url(iron-age/textures/rule-sub@2x.png) 2x, url(iron-age/textures/rule-sub@3x.png) 3x) 0 -1px / 144px 3px repeat-x,
+    linear-gradient(var(--shape-rule-ink), var(--shape-rule-ink)) 0 0 / 100% var(--shape-rule-sub-0) no-repeat;
+}
+/* "Doing well" on a viridian rule, "Could improve" on an amber one, in place
+   of v1's side stripes; which is which stays in the title words. */
+[data-vibe="iron-age"] .card-wins,
+[data-vibe="iron-age"] .card-improve { border-left: 0; }
+[data-vibe="iron-age"] .card-wins .card-hd::after { background: var(--good); height: 2px; }
+[data-vibe="iron-age"] .card-improve .card-hd::after { background: var(--warn); height: 2px; }
+[data-vibe="iron-age"] .you-pair { gap: 16px; }
+[data-vibe="iron-age"] .you-pair .card { padding: 0; }
+[data-vibe="iron-age"] .meal-blank { padding-bottom: 0; }
+[data-vibe="iron-age"] .meal-kcal { font-size: 13px; color: var(--steel); }
+[data-vibe="iron-age"] .meal-blank .meal-kcal { font-size: 13px; letter-spacing: 0; text-transform: none; color: var(--dim); }
+[data-vibe="iron-age"] .pr-card,
+[data-vibe="iron-age"] .install-card { background: none; border-color: transparent; }
+
+/* The lead plate: the tab's one boxed card — Fuel's summary, Weight's log,
+   Steps' today, You's greeting, the recap's hero. Bar paper in a 1pt ink
+   keyline (shape.lead.keyline), square, padding 20. The only thing in the
+   vibe with both a fill and a border. */
+[data-vibe="iron-age"] .card.fuel-sum,
+[data-vibe="iron-age"] #view-steps .cal-hd + .card,
+[data-vibe="iron-age"] #view-weight .cal-hd + .card,
+[data-vibe="iron-age"] .you-hero,
+[data-vibe="iron-age"] .summary-hero {
+  position: relative;
+  background: var(--bar);
+  border: var(--shape-keyline-width) solid var(--shape-keyline-ink);
+  border-radius: 0;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+/* BAND MODE (images.<slot>.band): the plate's halftone in a strip 80 tall
+   across the top of its box, the box's padding grown by as much, so no word,
+   control or colour sits on the photograph. Cover-cropped round the centre
+   (the files are cut round their subjects: focal .5 / .5); the face rule was
+   measured for exactly this crop at every box width. No photo on Fuel, the
+   Coach card or Start workout (spec §10). */
+[data-vibe="iron-age"] .you-hero { padding-top: calc(20px + var(--photo-band-you-hero)); }
+[data-vibe="iron-age"] .summary-hero { padding-top: calc(20px + var(--photo-band-summary-hero)); }
+[data-vibe="iron-age"] #view-steps .cal-hd + .card { padding-top: calc(20px + var(--photo-band-steps-today)); }
+[data-vibe="iron-age"] #view-weight .cal-hd + .card { padding-top: calc(20px + var(--photo-band-weight-log)); }
+[data-vibe="iron-age"] .you-hero::before,
+[data-vibe="iron-age"] .summary-hero::before,
+[data-vibe="iron-age"] #view-steps .cal-hd + .card::before,
+[data-vibe="iron-age"] #view-weight .cal-hd + .card::before {
+  content: '';
+  position: absolute; left: 0; right: 0; top: 0;
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  border-bottom: var(--shape-keyline-width) solid var(--shape-keyline-ink);
+}
+[data-vibe="iron-age"] .you-hero::before { height: var(--photo-band-you-hero); background-image: url(iron-age/img/you.png); }
+[data-vibe="iron-age"] .summary-hero::before { height: var(--photo-band-summary-hero); background-image: url(iron-age/img/recap.png); }
+[data-vibe="iron-age"] #view-steps .cal-hd + .card::before { height: var(--photo-band-steps-today); background-image: url(iron-age/img/steps.png); }
+[data-vibe="iron-age"] #view-weight .cal-hd + .card::before { height: var(--photo-band-weight-log); background-image: url(iron-age/img/weight.png); }
+
+/* ---------- youHero · banner ----------
+   Under the band, in v1's order: the avatar (52, round, a 1pt ink ring),
+   the greeting and the name in Besley ExtraBold 25, all one ink, and the
+   gear (36, a square bar plate with a knurl edge). The date in italic meta. */
+[data-vibe="iron-age"] .you-avatar {
+  background: var(--raised); color: var(--chalk);
+  box-shadow: 0 0 0 var(--shape-keyline-width) var(--shape-keyline-ink);
+  font-variation-settings: 'wdth' 100, 'wght' 800;
+}
+[data-vibe="iron-age"] .you-greet {
+  font-family: var(--font-display);
+  font-size: 25px; line-height: 1.08; letter-spacing: 0;
+  font-variation-settings: 'wght' 800;
+  font-synthesis: none;
+}
+[data-vibe="iron-age"] .you-greet-name { color: var(--chalk); }
+[data-vibe="iron-age"] .you-hero .you-sub { margin-top: 6px; }
+[data-vibe="iron-age"] .you-gear {
+  background: var(--bar);
+  border: 1px solid var(--knurl);
+  border-radius: 0;
+  color: var(--chalk);
+}
+[data-vibe="iron-age"] .you-gear svg { width: 18px; height: 18px; stroke-width: 1.75; }
+[data-vibe="iron-age"] .you-gear:active { background: var(--raised); }
+[data-vibe="iron-age"] .you-since { margin: 10px 0 16px; }
+
+/* the recap's hero: the masthead inside its plate */
+[data-vibe="iron-age"] .summary-hero h1 { position: relative; margin-top: 4px; padding-bottom: 14px; margin-bottom: 10px; }
+[data-vibe="iron-age"] .summary-line { font-size: 15px; }
+[data-vibe="iron-age"] .summary-date { margin-top: 6px; }
+
+/* ---------- coachCard · ruled ----------
+   Skin only. No ground; only the top and bottom of its 1pt border, in ink;
+   square. The height (190 / 164), the padding, the border's width, the face
+   and every line's clamp are v1's — cardLayout()'s — so the copy fits
+   exactly as it does in v1. The balloon, COACH, COACH ME and the chevron are
+   the rubric, the screen's one red. */
+[data-vibe="iron-age"] .coach-card,
+[data-vibe="iron-age"] .coach-card:active {
+  background: none;
+  border-color: var(--shape-rule-ink) transparent;
+  border-radius: 0;
+}
+[data-vibe="iron-age"] .coach-go { border-top-color: var(--shape-rule-ink); }
+[data-vibe="iron-age"] .coach-go-x .glyph { width: 15px; height: 15px; vertical-align: -2px; }
+
+/* ---------- sheetHost · full, sheetTitle · rule ---------- */
+[data-vibe="iron-age"] .sheet-backdrop { background: rgba(var(--shade-rgb), .45); }
+[data-vibe="iron-age"] .sheet {
+  border-radius: 0;
+  border-top: 0;
+  padding-top: 16px;
+  background:
+    -webkit-image-set(url(iron-age/textures/rule-head@2x.png) 2x, url(iron-age/textures/rule-head@3x.png) 3x) 0 -1px / 144px 8px repeat-x,
+    linear-gradient(var(--shape-rule-ink), var(--shape-rule-ink)) 0 0 / 100% var(--shape-rule-head-0) no-repeat,
+    linear-gradient(var(--shape-rule-ink), var(--shape-rule-ink)) 0 calc(var(--shape-rule-head-0) + var(--shape-rule-head-1)) / 100% var(--shape-rule-head-2) no-repeat,
+    var(--bar);
+}
+[data-vibe="iron-age"] .sheet-grab { border-radius: 0; }
+[data-vibe="iron-age"] .sheet h2 {
+  padding-bottom: 8px;
+  margin-bottom: 10px;
+  border-bottom: var(--shape-rule-hair) solid var(--shape-rule-ink);
+}
+[data-vibe="iron-age"] .sheet .eyebrow:has(+ h2) { margin-bottom: 2px; }
+
+/* ---------- statRow · folio ----------
+   The period folio line: a hairline above and below, three columns on one
+   baseline parted by hairline verticals; values Archivo 20/800 tabular, in
+   the caller's colour; labels under them, 12/600 steel. No fill, no box. */
+[data-vibe="iron-age"] .stat-row {
+  gap: 0;
+  padding: 9px 0;
+  border-top: var(--shape-rule-hair) solid var(--shape-rule-ink);
+  border-bottom: var(--shape-rule-hair) solid var(--shape-rule-ink);
+}
+[data-vibe="iron-age"] .stat {
+  background: none;
+  border: 0;
+  border-left: var(--shape-rule-hair) solid var(--shape-rule-ink);
+  border-radius: 0;
+  padding: 1px 10px;
+  min-width: 0;
+}
+[data-vibe="iron-age"] .stat:first-child { border-left: 0; padding-left: 0; }
+[data-vibe="iron-age"] .stat-lbl { margin-top: 5px; }
+[data-vibe="iron-age"] .mini-stats {
+  gap: 0; padding: 7px 0;
+  border-top: var(--shape-rule-hair) solid var(--shape-rule-ink);
+  border-bottom: var(--shape-rule-hair) solid var(--shape-rule-ink);
+}
+[data-vibe="iron-age"] .mini-stat {
+  background: none; border: 0; border-radius: 0;
+  border-left: var(--shape-rule-hair) solid var(--shape-rule-ink);
+  padding: 0 8px;
+}
+[data-vibe="iron-age"] .mini-stat:first-child { border-left: 0; padding-left: 0; }
+[data-vibe="iron-age"] .mini-stat-v { font-size: 16px; }
+/* The recap's session totals: the folio line under the double rule
+   (shape.rule.total), the form's totals line. */
+[data-vibe="iron-age"] .summary-page > .stat-row {
+  border-top: 0;
+  padding-top: calc(var(--shape-rule-total-0) + var(--shape-rule-total-1) + var(--shape-rule-total-2) + 9px);
+  margin-bottom: 24px;
+  background:
+    -webkit-image-set(url(iron-age/textures/rule-total@2x.png) 2x, url(iron-age/textures/rule-total@3x.png) 3x) 0 -1px / 144px 6px repeat-x,
+    linear-gradient(var(--shape-rule-ink), var(--shape-rule-ink)) 0 0 / 100% var(--shape-rule-total-0) no-repeat,
+    linear-gradient(var(--shape-rule-ink), var(--shape-rule-ink)) 0 calc(var(--shape-rule-total-0) + var(--shape-rule-total-1)) / 100% var(--shape-rule-total-2) no-repeat;
+}
+
+/* ---------- kpi · word ----------
+   No tile, no corner tint, no top band. The label with the delta in its pill
+   at the right (the copy names the pill, you.js:802): the one rounded, tinted
+   thing in the vibe, at tint.pill* — .06 ink, .10 of good, bad or warn. The
+   22pt value, "last week …" in steel, a word-sized sparkline, the seven round
+   day dots, today ringed in ink. The 2 × 2 grid and its order kept. */
+[data-vibe="iron-age"] .kpi-grid { gap: 22px 18px; }
+[data-vibe="iron-age"] .kpi {
+  background: none;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+}
+[data-vibe="iron-age"] .kpi-val { font-size: 22px; margin-top: 7px; }
+[data-vibe="iron-age"] .delta-pill { background: rgba(var(--lift-rgb), .06); }
+[data-vibe="iron-age"] .delta-pill.up { background: rgba(var(--good-rgb), .10); }
+[data-vibe="iron-age"] .delta-pill.down { background: rgba(var(--bad-rgb), .10); }
+[data-vibe="iron-age"] .delta-pill.warn { background: rgba(var(--warn-rgb), .10); }
+[data-vibe="iron-age"] .delta-pill .delta-v { font-size: 12px; }
+[data-vibe="iron-age"] .delta-pill .delta-a { font-size: 11px; }
+[data-vibe="iron-age"] .delta-v,
+[data-vibe="iron-age"] .delta-a { font-variation-settings: 'wdth' 100, 'wght' 800; }
+[data-vibe="iron-age"] .delta-l { font-size: 12px; letter-spacing: 0; }
+[data-vibe="iron-age"] .kpi .chart-spark { width: 72px; margin-top: 8px; }
+[data-vibe="iron-age"] .kpi-days { margin-top: 9px; }
+
+/* ---------- headline · rule: the challenge line ----------
+   The figure in Besley, its unit on the same baseline in Archivo, the single
+   rule under it. At most one figure of 32 or more a screen. */
+[data-vibe="iron-age"] .headline { position: relative; padding-bottom: 10px; margin-bottom: 4px; }
+[data-vibe="iron-age"] .fuel-top { position: relative; padding-bottom: 12px; margin-bottom: 16px; padding-right: 30px; }
+
+/* ---------- chip · stamp, segmented · boxes ---------- */
+[data-vibe="iron-age"] .chip,
+[data-vibe="iron-age"] .coach-chip,
+[data-vibe="iron-age"] .move-opt,
+[data-vibe="iron-age"] .coach-goal-opt {
+  border-radius: 0;
+  background: none;
+  border: var(--shape-keyline-width) solid var(--shape-keyline-ink);
+  color: var(--chalk);
+  font-size: 12px;
+  font-variation-settings: 'wdth' 100, 'wght' 600;
+}
+[data-vibe="iron-age"] .coach-chip { font-size: 13px; }
+[data-vibe="iron-age"] .chip.on,
+[data-vibe="iron-age"] .move-opt.on,
+[data-vibe="iron-age"] .coach-goal-opt.on,
+[data-vibe="iron-age"] .feel-card .coach-chip.on,
+[data-vibe="iron-age"] .coach-effort.on {
+  background: var(--inverse);
+  border-color: var(--inverse);
+  color: var(--knockout);
+}
+[data-vibe="iron-age"] .coach-chip:active { border-color: var(--shape-keyline-ink); background: var(--raised); }
+[data-vibe="iron-age"] .seg {
+  gap: 0; padding: 0;
+  background: none;
+  border: var(--shape-keyline-width) solid var(--shape-keyline-ink);
+  border-radius: 0;
+}
+[data-vibe="iron-age"] .seg-btn {
+  min-height: 38px;
+  border-radius: 0;
+  border-left: var(--shape-keyline-width) solid var(--shape-keyline-ink);
+  font-size: 12px; letter-spacing: 0; text-transform: none;
+  font-variation-settings: 'wdth' 100, 'wght' 600;
+}
+[data-vibe="iron-age"] .seg-btn:first-child { border-left: 0; }
+[data-vibe="iron-age"] .seg-btn.on { background: var(--inverse); color: var(--knockout); }
+
+/* ---------- btn · inverse ----------
+   Primary: a solid ink block, knocked-out words, square. Plain: raised
+   paper. Ghost: no box — steel words underlined 1pt, the 44 kept. Danger: a
+   square 1.5pt Indian-red keyline. Start workout is a clean ink block. */
+[data-vibe="iron-age"] .btn {
+  border-radius: 0;
+  font-variation-settings: 'wdth' 100, 'wght' 700;
+  letter-spacing: .01em;
+}
+[data-vibe="iron-age"] .btn-primary { background: var(--inverse); color: var(--knockout); }
+[data-vibe="iron-age"] .btn-ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--steel);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+}
+[data-vibe="iron-age"] .btn-ghost:active { color: var(--chalk); }
+/* A ghost that holds only a drawn glyph (− + ⋯) has no word to underline:
+   it is a square keyline plate at its v1 size. */
+[data-vibe="iron-age"] .btn-ghost:has(> .glyph:only-child),
+[data-vibe="iron-age"] .qty-row .btn-ghost {
+  border-color: var(--shape-keyline-ink);
+  color: var(--chalk);
+}
+[data-vibe="iron-age"] .btn-ghost .glyph { width: 18px; height: 18px; }
+[data-vibe="iron-age"] .btn-danger { border-width: 1.5px; border-color: var(--danger); }
+[data-vibe="iron-age"] .btn-lg { font-size: 16px; letter-spacing: .01em; text-transform: none; }
+[data-vibe="iron-age"] .linkish {
+  color: var(--steel);
+  text-decoration-color: var(--steel);
+}
+[data-vibe="iron-age"] .back-btn { font-size: 13px; letter-spacing: 0; font-variation-settings: 'wdth' 100, 'wght' 700; }
+[data-vibe="iron-age"] .back-btn .glyph { width: 15px; height: 15px; }
+[data-vibe="iron-age"] .cnt,
+[data-vibe="iron-age"] .add-secondary .cnt {
+  border-radius: 0;
+  border-color: var(--steel);
+  color: var(--steel);
+  font-size: 11px;
+  text-decoration: none;
+}
+[data-vibe="iron-age"] .badge { border-radius: 0; background: var(--inverse); color: var(--knockout); }
+
+/* ---------- field · square ----------
+   Bar ground, square, a 1pt knurl keyline (3:1 on bar); focus turns it
+   madder. It stays a box: the copy says "this box" (food.js:3320). */
+[data-vibe="iron-age"] .field input,
+[data-vibe="iron-age"] .field select,
+[data-vibe="iron-age"] .field textarea,
+[data-vibe="iron-age"] .qty-row input,
+[data-vibe="iron-age"] .picker-search input,
+[data-vibe="iron-age"] .paste-box,
+[data-vibe="iron-age"] .wpe-row input {
+  background: var(--bar);
+  border-color: var(--knurl);
+  border-radius: 0;
+}
+[data-vibe="iron-age"] .field input:focus,
+[data-vibe="iron-age"] .field select:focus,
+[data-vibe="iron-age"] .field textarea:focus,
+[data-vibe="iron-age"] .qty-row input:focus,
+[data-vibe="iron-age"] .picker-search input:focus,
+[data-vibe="iron-age"] .paste-box:focus { border-color: var(--focus); }
+[data-vibe="iron-age"] .qty-row input { font-variation-settings: 'wdth' 100, 'wght' 800; }
+
+/* ---------- note · rule: a footnote under a short hairline ---------- */
+[data-vibe="iron-age"] .note::before {
+  content: '';
+  display: block;
+  width: 16px;
+  margin-bottom: 6px;
+  border-top: var(--shape-rule-hair) solid var(--shape-rule-ink);
+}
+[data-vibe="iron-age"] .note + .note::before,
+[data-vibe="iron-age"] .ai-busy .note::before,
+[data-vibe="iron-age"] .gate-body > .note::before { content: none; }
+
+/* ---------- toast · square ---------- */
+[data-vibe="iron-age"] .toast {
+  border-radius: 0;
+  font-variation-settings: 'wdth' 100, 'wght' 700;
+}
+
+/* ---------- settingsRow · ledger ----------
+   Label … drawn leader dots … value, and the drawn ›. No rules between rows;
+   one hairline under the group. Leaders are Settings' only. */
+[data-vibe="iron-age"] .set-list { border-bottom: var(--shape-rule-hair) solid var(--shape-rule-ink); }
+[data-vibe="iron-age"] .set-row-nav,
+[data-vibe="iron-age"] .set-row-tog { border-top: 0; }
+[data-vibe="iron-age"] .set-row-nav { min-height: 44px; }
+[data-vibe="iron-age"] .set-row-nav .set-row-l {
+  display: flex; align-items: baseline; gap: 6px;
+  font-variation-settings: 'wdth' 100, 'wght' 600;
+}
+[data-vibe="iron-age"] .set-row-nav .set-row-l::after {
+  content: '';
+  flex: 1 1 auto;
+  min-width: var(--shape-leader-min);
+  height: var(--shape-leader-dot);
+  background: radial-gradient(circle, var(--shape-leader-ink) 0 calc(var(--shape-leader-dot) / 2), transparent calc(var(--shape-leader-dot) / 2 + .25px))
+    0 0 / var(--shape-leader-pitch) var(--shape-leader-dot) repeat-x;
+}
+[data-vibe="iron-age"] .set-row-x .glyph { width: 16px; height: 16px; vertical-align: -3px; }
+[data-vibe="iron-age"] .set-row-nav:active { background: rgba(var(--lift-rgb), .04); }
+/* The switch: off on grip, on in madder, and the knob's side. */
+[data-vibe="iron-age"] .tog::after { background: var(--bar); }
+[data-vibe="iron-age"] .tog.on { background: var(--accent); }
+[data-vibe="iron-age"] .tog.on::after { background: var(--bar); }
+
+/* ---------- listRow · plain ----------
+   No rules between rows — the head rules part the groups — on a 44 pitch.
+   Names 14/600, values 15/800 tabular, sub-lines 12 dim. */
+[data-vibe="iron-age"] .food-entry,
+[data-vibe="iron-age"] .pb-row,
+[data-vibe="iron-age"] .pr-hit,
+[data-vibe="iron-age"] .pr-row,
+[data-vibe="iron-age"] .rank-row,
+[data-vibe="iron-age"] .sess-row,
+[data-vibe="iron-age"] .ex-item,
+[data-vibe="iron-age"] .find-row,
+[data-vibe="iron-age"] .review-row,
+[data-vibe="iron-age"] .rt-pv-row,
+[data-vibe="iron-age"] .day-ex,
+[data-vibe="iron-age"] .st-row,
+[data-vibe="iron-age"] .guide-row,
+[data-vibe="iron-age"] .install-step,
+[data-vibe="iron-age"] .adm-r,
+[data-vibe="iron-age"] .water-entry {
+  border-top: 0;
+  border-bottom: 0;
+  background: none;
+  min-height: 44px;
+}
+[data-vibe="iron-age"] .rt-item,
+[data-vibe="iron-age"] .person {
+  background: none;
+  border: 0;
+  border-radius: 0;
+  padding-left: 0;
+  padding-right: 0;
+  margin-bottom: 0;
+  min-height: 44px;
+}
+[data-vibe="iron-age"] .water-entry { padding-left: 0; padding-right: 0; }
+[data-vibe="iron-age"] .fe-name,
+[data-vibe="iron-age"] .pr-name,
+[data-vibe="iron-age"] .rank-name,
+[data-vibe="iron-age"] .ex-item .nm,
+[data-vibe="iron-age"] .pb-lbl,
+[data-vibe="iron-age"] .sess-date { font-variation-settings: 'wdth' 100, 'wght' 600; }
+[data-vibe="iron-age"] .fe-cal { font-size: 15px; }
+[data-vibe="iron-age"] .sess-row.is-pr { background: rgba(var(--lift-rgb), .06); }
+/* A chosen row: the darker leaf plus a drawn tick, never colour alone. */
+[data-vibe="iron-age"] .ex-item.sel { background: rgba(var(--lift-rgb), .06); }
+[data-vibe="iron-age"] .ex-item.sel::after {
+  content: '';
+  flex: none;
+  width: 6px; height: 11px;
+  margin: 0 6px 3px 2px;
+  border: solid var(--chalk);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+[data-vibe="iron-age"] .ex-go .glyph,
+[data-vibe="iron-age"] .rt-go .glyph { width: 16px; height: 16px; vertical-align: -3px; }
+[data-vibe="iron-age"] .ex-del .glyph { width: 13px; height: 13px; vertical-align: -2px; }
+[data-vibe="iron-age"] .ex-menu .glyph { width: 18px; height: 18px; vertical-align: -3px; }
+
+/* Swipe to delete. The rows lie on the page, so the front takes no ground,
+   and the Indian-red panel is only there while a row is pulled aside. */
+[data-vibe="iron-age"] .swipe-front { background: transparent; }
+[data-vibe="iron-age"] .swipe-back { background: none; visibility: hidden; }
+[data-vibe="iron-age"] .swipe:has(> .swipe-front[style*="translate"]) > .swipe-back { visibility: visible; }
+[data-vibe="iron-age"] .swipe-del {
+  background: var(--danger);
+  font-size: 13px; letter-spacing: 0; text-transform: none;
+  font-variation-settings: 'wdth' 100, 'wght' 700;
+}
+
+/* ---------- setTable · ruled, setRow · ruled ---------- */
+[data-vibe="iron-age"] .ex-block {
+  background: none;
+  border: 0;
+  border-radius: 0;
+  margin-bottom: 28px;
+}
+[data-vibe="iron-age"] .ex-hd { position: relative; padding: 0 0 8px; }
+[data-vibe="iron-age"] .ex-name {
+  font-family: var(--font-display);
+  font-size: 16px; line-height: 1.2;
+  font-variation-settings: 'wght' 600;
+  font-synthesis: none;
+}
+[data-vibe="iron-age"] .ex-prev { padding: 7px 0 8px 14px; font-size: 13px; color: var(--steel); }
+[data-vibe="iron-age"] .ex-block .set-hd,
+[data-vibe="iron-age"] .ex-block .set-row { padding-left: 0; padding-right: 0; }
+[data-vibe="iron-age"] .set-hd,
+[data-vibe="iron-age"] .rt-sets .set-hd {
+  font-size: 12px; letter-spacing: 0; text-transform: none;
+  color: var(--steel);
+  font-variation-settings: 'wdth' 100, 'wght' 600;
+}
+[data-vibe="iron-age"] .ex-block .set-row,
+[data-vibe="iron-age"] .rt-sets .set-row { border-top: var(--shape-rule-hair) solid var(--shape-rule-ink); }
+[data-vibe="iron-age"] .ex-block .set-hd + .swipe .set-row,
+[data-vibe="iron-age"] .rt-sets .set-hd + .swipe .set-row,
+[data-vibe="iron-age"] .rt-sets .set-hd + .set-row { border-top-width: var(--shape-rule-sub-0); }
+[data-vibe="iron-age"] .ex-block .set-idx,
+[data-vibe="iron-age"] .rt-sets .set-idx { background: transparent; color: var(--steel); }
+[data-vibe="iron-age"] .ex-block .set-idx.t-W,
+[data-vibe="iron-age"] .rt-sets .set-idx.t-W { background: transparent; color: var(--tag-ink-w); }
+[data-vibe="iron-age"] .ex-block .set-idx.t-F,
+[data-vibe="iron-age"] .rt-sets .set-idx.t-F { background: transparent; color: var(--tag-ink-f); }
+[data-vibe="iron-age"] .ex-block .set-idx.t-D,
+[data-vibe="iron-age"] .rt-sets .set-idx.t-D { background: transparent; color: var(--tag-ink-d); }
+[data-vibe="iron-age"] .set-idx .glyph { width: 13px; height: 13px; }
+[data-vibe="iron-age"] .ex-block .set-row input,
+[data-vibe="iron-age"] .rt-sets .set-row input {
+  background: transparent;
+  border-color: transparent transparent var(--chalk);
+  border-radius: 0;
+}
+[data-vibe="iron-age"] .ex-block .set-row input:focus,
+[data-vibe="iron-age"] .rt-sets .set-row input:focus { border-color: transparent transparent var(--focus); background: rgba(var(--accent-rgb), .06); }
+[data-vibe="iron-age"] .set-e1rm { font-size: 12px; }
+[data-vibe="iron-age"] .set-check { border-radius: 0; }
+[data-vibe="iron-age"] .set-check .glyph { width: 16px; height: 16px; }
+[data-vibe="iron-age"] .ex-block .set-row.flash { animation-name: iron-age-set-flash; }
+@keyframes iron-age-set-flash {
+  0%   { background: rgba(var(--accent-rgb), .14); }
+  100% { background: rgba(var(--done-rgb), .07); }
+}
+[data-vibe="iron-age"] .set-row.drop::before { border-radius: 0; background: rgba(var(--p-blue-rgb), .75); }
+[data-vibe="iron-age"] .drop-add { border-color: transparent; }
+[data-vibe="iron-age"] .ex-actions { padding: 10px 0 0; }
+[data-vibe="iron-age"] .swipe-hint { padding-left: 14px; }
+
+/* A lifting block: framed by the double rule above and below its
+   exercises, under its title in Besley SemiBold 15, ink. */
+[data-vibe="iron-age"] .wk-block,
+[data-vibe="iron-age"] .rt-pv-block {
+  border: 0;
+  border-radius: 0;
+  padding-top: 5px;
+  padding-bottom: 5px;
+  background:
+    -webkit-image-set(url(iron-age/textures/rule-total@2x.png) 2x, url(iron-age/textures/rule-total@3x.png) 3x) 0 -1px / 144px 6px repeat-x,
+    linear-gradient(var(--shape-rule-ink), var(--shape-rule-ink)) 0 0 / 100% var(--shape-rule-total-0) no-repeat,
+    linear-gradient(var(--shape-rule-ink), var(--shape-rule-ink)) 0 calc(var(--shape-rule-total-0) + var(--shape-rule-total-1)) / 100% var(--shape-rule-total-2) no-repeat,
+    linear-gradient(var(--shape-rule-ink), var(--shape-rule-ink)) 0 100% / 100% var(--shape-rule-total-2) no-repeat,
+    linear-gradient(var(--shape-rule-ink), var(--shape-rule-ink)) 0 calc(100% - var(--shape-rule-total-2) - var(--shape-rule-total-1)) / 100% var(--shape-rule-total-0) no-repeat;
+}
+[data-vibe="iron-age"] .wk-block-body { padding-left: 0; padding-right: 0; }
+[data-vibe="iron-age"] .wk-block-hd { padding-left: 0; padding-right: 0; }
+[data-vibe="iron-age"] .wk-block-title {
+  font-family: var(--font-display);
+  font-size: 15px; letter-spacing: 0; text-transform: none;
+  color: var(--chalk);
+  font-variation-settings: 'wght' 600;
+  font-synthesis: none;
+}
+
+/* ---------- plateStrip · stamp ----------
+   Each plate a stamped square: a 1pt keyline in its own plate's ink, no
+   fill, the figures in ink. The plate's colour is the chip's inline
+   background (workout.js renderPlates); the chip keeps it in its 1pt border
+   (background-clip border-box under a transparent border) and covers the
+   rest with the page, so no inline value is overridden. */
+[data-vibe="iron-age"] .plate-strip { padding-left: 14px; padding-right: 0; gap: 5px; }
+[data-vibe="iron-age"] .plate-strip .lbl {
+  font-size: 12px; letter-spacing: 0; text-transform: none;
+  color: var(--steel);
+  font-variation-settings: 'wdth' 100, 'wght' 600;
+}
+[data-vibe="iron-age"] .plate-chip {
+  border: var(--shape-keyline-width) solid transparent;
+  background-clip: border-box;
+  box-shadow: inset 0 0 0 20px var(--rack);
+  color: var(--chalk);
+  font-size: 12px;
+  font-variation-settings: 'wdth' 100, 'wght' 800;
+}
+
+/* ---------- calCell · ruled: a printed calendar ---------- */
+[data-vibe="iron-age"] .cal-dow { gap: 0; }
+[data-vibe="iron-age"] .cal-dow span {
+  font-size: 11px; letter-spacing: 0;
+  color: var(--steel);
+  font-variation-settings: 'wdth' 100, 'wght' 600;
+}
+[data-vibe="iron-age"] .cal-grid {
+  gap: 0;
+  border-top: var(--shape-rule-hair) solid var(--shape-rule-ink);
+  border-left: var(--shape-rule-hair) solid var(--shape-rule-ink);
+}
+[data-vibe="iron-age"] .cal-day,
+[data-vibe="iron-age"] .cal-day.empty,
+[data-vibe="iron-age"] .cal-day.has-work {
+  background: none;
+  border: 0;
+  border-right: var(--shape-rule-hair) solid var(--shape-rule-ink);
+  border-bottom: var(--shape-rule-hair) solid var(--shape-rule-ink);
+  border-radius: 0;
+}
+[data-vibe="iron-age"] .cal-day.pad { visibility: visible; }
+[data-vibe="iron-age"] .cal-day.today { box-shadow: inset 0 0 0 2px var(--chalk); }
+[data-vibe="iron-age"] .cal-daynum { font-variation-settings: 'wdth' 100, 'wght' 600; }
+[data-vibe="iron-age"] .cal-day.has-work .cal-daynum { color: var(--chalk); font-variation-settings: 'wdth' 100, 'wght' 700; }
+[data-vibe="iron-age"] .cal-day.today .cal-daynum { color: var(--chalk); font-variation-settings: 'wdth' 100, 'wght' 800; }
+[data-vibe="iron-age"] .cal-legend-item { color: var(--steel); }
+
+/* ---------- chart · print ----------
+   2pt lines with square ends and no area or glow; square-topped bars; the
+   day that is not over hatched in its own colour (vibe.js's patterns) in
+   place of dimmed; targets dashed in ink; a collar grid; rings with butt
+   ends; axis text at 11. analytics.js is pinned: this restyles what it
+   draws and adds no geometry. */
+[data-vibe="iron-age"] .chart path[stroke="none"][fill^="url(#"],
+[data-vibe="iron-age"] .spark-glow { display: none; }
+[data-vibe="iron-age"] .chart-line { stroke-width: 2; stroke-linecap: square; stroke-linejoin: miter; }
+[data-vibe="iron-age"] .chart-line2 { stroke-linecap: butt; stroke-linejoin: miter; opacity: 1; }
+[data-vibe="iron-age"] .spark-line,
+[data-vibe="iron-age"] .spark-line-dim { stroke-width: 2; stroke-linecap: square; stroke-linejoin: miter; }
+[data-vibe="iron-age"] .chart-grid { stroke: var(--collar); stroke-width: 1; stroke-dasharray: none; opacity: 1; }
+[data-vibe="iron-age"] .chart-bar,
+[data-vibe="iron-age"] .chart-bar-bg,
+[data-vibe="iron-age"] .spark-bar,
+[data-vibe="iron-age"] .chart clipPath rect { rx: 0; ry: 0; }
+[data-vibe="iron-age"] .chart-bar-bg { opacity: .6; }
+[data-vibe="iron-age"] .chart-target,
+[data-vibe="iron-age"] .spark-ref { stroke: var(--chalk); opacity: 1; }
+[data-vibe="iron-age"] .chart-axis,
+[data-vibe="iron-age"] .chart-barval,
+[data-vibe="iron-age"] .chart-peak-lbl {
+  font-size: 11px; letter-spacing: 0;
+  font-variation-settings: 'wdth' 100, 'wght' 600;
+}
+[data-vibe="iron-age"] .chart-barval { font-variation-settings: 'wdth' 100, 'wght' 700; }
+[data-vibe="iron-age"] .chart-peak-lbl { font-variation-settings: 'wdth' 100, 'wght' 800; }
+[data-vibe="iron-age"] .donut-sub,
+[data-vibe="iron-age"] .ring-sub { letter-spacing: 0; text-transform: none; }
+[data-vibe="iron-age"] .donut-sub { font-size: 11px; font-variation-settings: 'wdth' 100, 'wght' 600; }
+[data-vibe="iron-age"] .ring-fill,
+[data-vibe="iron-age"] .st-ring circle { stroke-linecap: butt; }
+[data-vibe="iron-age"] .st-ring-s { font-size: 11px; letter-spacing: 0; }
+[data-vibe="iron-age"] .chart-empty { border-color: var(--knurl); }
+[data-vibe="iron-age"] .wc-avg { stroke-linecap: square; stroke-linejoin: miter; }
+/* The day that is not over: hatched at 45° in its own colour. */
+[data-vibe="iron-age"] rect.chart-bar-dim,
+[data-vibe="iron-age"] g.chart-bar-dim { opacity: 1; }
+[data-vibe="iron-age"] rect.chart-bar-dim[fill="var(--p-red)"],
+[data-vibe="iron-age"] g.chart-bar-dim rect[fill="var(--p-red)"] { fill: url(#vibe-hatch-p-red); }
+[data-vibe="iron-age"] rect.chart-bar-dim[fill="var(--p-blue)"],
+[data-vibe="iron-age"] g.chart-bar-dim rect[fill="var(--p-blue)"] { fill: url(#vibe-hatch-p-blue); }
+[data-vibe="iron-age"] rect.chart-bar-dim[fill="var(--p-yellow)"],
+[data-vibe="iron-age"] g.chart-bar-dim rect[fill="var(--p-yellow)"] { fill: url(#vibe-hatch-p-yellow); }
+[data-vibe="iron-age"] rect.chart-bar-dim[fill="var(--p-green)"],
+[data-vibe="iron-age"] g.chart-bar-dim rect[fill="var(--p-green)"] { fill: url(#vibe-hatch-p-green); }
+[data-vibe="iron-age"] rect.chart-bar-dim[fill="var(--p-white)"],
+[data-vibe="iron-age"] g.chart-bar-dim rect[fill="var(--p-white)"] { fill: url(#vibe-hatch-p-white); }
+[data-vibe="iron-age"] rect.chart-bar-dim[fill="var(--p-chrome)"],
+[data-vibe="iron-age"] g.chart-bar-dim rect[fill="var(--p-chrome)"] { fill: url(#vibe-hatch-p-chrome); }
+[data-vibe="iron-age"] rect.chart-bar-dim[fill="var(--good)"],
+[data-vibe="iron-age"] g.chart-bar-dim rect[fill="var(--good)"] { fill: url(#vibe-hatch-good); }
+[data-vibe="iron-age"] rect.chart-bar-dim[fill="var(--bad)"],
+[data-vibe="iron-age"] g.chart-bar-dim rect[fill="var(--bad)"] { fill: url(#vibe-hatch-bad); }
+/* Macros: protein solid, carbs a 45° hatch in its own ochre — the stacked
+   bars' carbs part too, from the same patterns. */
+[data-vibe="iron-age"] g.chart-bar:not(.chart-bar-dim) rect[fill="var(--p-yellow)"] { fill: url(#vibe-hatch-p-yellow); }
+
+/* meters: square-ended on a square tan track */
+[data-vibe="iron-age"] .vol-track,
+[data-vibe="iron-age"] .vol-fill,
+[data-vibe="iron-age"] .traj-bar,
+[data-vibe="iron-age"] .traj-fill { border-radius: 0; }
+[data-vibe="iron-age"] .fuel-sum .cal-meter + .vol-row + .vol-row .vol-fill,
+[data-vibe="iron-age"] .macro-rows .vol-row:nth-child(2) .vol-fill,
+[data-vibe="iron-age"] .card:has(.macro-rows) .legend-inline .legend-item:nth-child(2) i {
+  -webkit-mask-image: repeating-linear-gradient(45deg, #000 0 1.25px, transparent 1.25px 2.75px);
+  mask-image: repeating-linear-gradient(45deg, #000 0 1.25px, transparent 1.25px 2.75px);
+}
+[data-vibe="iron-age"] .fuel-sum .vol-track { height: 8px; }
+
+/* The calorie meter. A square tan track; the three bands as full-strength
+   patterns, pitch 2.75: cut a 45° Prussian hatch, hold an ochre dot screen,
+   gain a 135° Indian-red hatch (a wash on cream loses its hue, and the copy
+   says "Blue — cut"). The eaten part solid; the white head, the ticks and
+   the dashed target white with a 1pt ink edge (shadow.calTick / calHead /
+   calTarget). */
+[data-vibe="iron-age"] .cal-track { overflow: visible; }
+[data-vibe="iron-age"] .cal-zone.cut,
+[data-vibe="iron-age"] .guide-sw.cut {
+  background: repeating-linear-gradient(45deg, var(--p-blue) 0 1px, transparent 1px 2.75px), var(--track);
+}
+[data-vibe="iron-age"] .cal-zone.hold,
+[data-vibe="iron-age"] .guide-sw.hold {
+  background: radial-gradient(circle, var(--p-yellow) 0 .85px, transparent 1.05px) 0 0 / 2.75px 2.75px, var(--track);
+}
+[data-vibe="iron-age"] .cal-zone.gain,
+[data-vibe="iron-age"] .guide-sw.gain {
+  background: repeating-linear-gradient(135deg, var(--p-red) 0 1px, transparent 1px 2.75px), var(--track);
+}
+[data-vibe="iron-age"] .cal-fill { opacity: 1; }
+[data-vibe="iron-age"] .cal-tick { opacity: 1; }
+[data-vibe="iron-age"] .cal-target { opacity: 1; }
+[data-vibe="iron-age"] .cal-band-lab {
+  font-size: 11px; line-height: 13px; letter-spacing: 0; text-transform: none;
+  font-variation-settings: 'wdth' 100, 'wght' 600;
+}
+[data-vibe="iron-age"] .guide-sw.macro {
+  background:
+    linear-gradient(var(--p-red), var(--p-red)) 0 0 / 34% 100% no-repeat,
+    repeating-linear-gradient(45deg, var(--p-yellow) 0 1.25px, transparent 1.25px 2.75px) 0 0 / 67% 100% no-repeat,
+    var(--p-blue);
+}
+[data-vibe="iron-age"] .guide-sw.big { background: var(--p-blue); }
+
+/* The confidence dot: shape as well as colour — filled (confident), half (a
+   fair guess), a ring (a rough guess) — beside its word. No pill round it. */
+[data-vibe="iron-age"] .conf {
+  border: 0; border-radius: 0;
+  padding-left: 0;
+  font-size: 12px; letter-spacing: 0; text-transform: none;
+  font-variation-settings: 'wdth' 100, 'wght' 600;
+}
+[data-vibe="iron-age"] .conf i { width: 10px; height: 10px; }
+[data-vibe="iron-age"] .conf i[style*="--warn"] {
+  -webkit-mask-image: linear-gradient(90deg, #000 50%, transparent 50%), radial-gradient(circle, transparent 3.2px, #000 3.4px);
+  mask-image: linear-gradient(90deg, #000 50%, transparent 50%), radial-gradient(circle, transparent 3.2px, #000 3.4px);
+}
+[data-vibe="iron-age"] .conf i[style*="--bad"] {
+  -webkit-mask-image: radial-gradient(circle, transparent 3.2px, #000 3.4px);
+  mask-image: radial-gradient(circle, transparent 3.2px, #000 3.4px);
+}
+/* The estimate's total under the double rule. */
+[data-vibe="iron-age"] div:has(> .conf) > .entry-readout {
+  padding-top: calc(var(--shape-rule-total-0) + var(--shape-rule-total-1) + var(--shape-rule-total-2) + 8px);
+  background:
+    -webkit-image-set(url(iron-age/textures/rule-total@2x.png) 2x, url(iron-age/textures/rule-total@3x.png) 3x) 0 -1px / 144px 6px repeat-x,
+    linear-gradient(var(--shape-rule-ink), var(--shape-rule-ink)) 0 0 / 100% var(--shape-rule-total-0) no-repeat,
+    linear-gradient(var(--shape-rule-ink), var(--shape-rule-ink)) 0 calc(var(--shape-rule-total-0) + var(--shape-rule-total-1)) / 100% var(--shape-rule-total-2) no-repeat;
+}
+
+/* ---------- dock · rail ----------
+   Opaque paper under a 2pt ink rule; the engraved cuts at 22 (stroke 1.5)
+   over 11/600 labels, as written. Active: a 3pt ink bar the cell's full
+   width along the rule, icon and label in ink, the label 700. The dock's
+   tabs, order, height and place never change. */
+[data-vibe="iron-age"] .dock {
+  background: var(--bar);
+  border-top: 2px solid var(--shape-rule-ink);
+}
+[data-vibe="iron-age"] .dock button {
+  font-size: 11px;
+  letter-spacing: .01em;
+  text-transform: none;
+  font-variation-settings: 'wdth' 100, 'wght' 600;
+}
+[data-vibe="iron-age"] .dock button svg { stroke-width: 1.5; }
+[data-vibe="iron-age"] .dock button.active { font-variation-settings: 'wdth' 100, 'wght' 700; }
+[data-vibe="iron-age"] .dock button.active::before {
+  left: 0; right: 0; top: 0;
+  width: auto; height: 3px;
+  transform: none;
+  border-radius: 0;
+  background: var(--chalk);
+  animation: none;
+}
+[data-vibe="iron-age"] #dock button.tour-lit::after { border-radius: 0; }
+
+/* ---------- fab · inverse ----------
+   A square ink block, the Greek cross and "Log food" as written, knocked
+   out; no shadow; pressed .955 as v1. */
+[data-vibe="iron-age"] .fuel-fab,
+[data-vibe="iron-age"] .fuel-fab:active {
+  background: var(--inverse);
+  color: var(--knockout);
+}
+[data-vibe="iron-age"] .fuel-fab {
+  border-radius: 0;
+  letter-spacing: .01em;
+  text-transform: none;
+  font-variation-settings: 'wdth' 100, 'wght' 700;
+}
+
+/* ---------- addTile · ruled ----------
+   No tiles: a two-column grid parted by hairlines, the engraved cuts at 22
+   with no wells. The Photo cut is printed in madder, the sheet's one red,
+   with no square behind it. The "ai" tag a stamped keyline in steel. */
+[data-vibe="iron-age"] .add-grid {
+  gap: 0;
+  border-top: var(--shape-rule-hair) solid var(--shape-rule-ink);
+}
+[data-vibe="iron-age"] .add-tile,
+[data-vibe="iron-age"] .add-tile.hero,
+[data-vibe="iron-age"] .add-tile.lit,
+[data-vibe="iron-age"] .add-tile:active,
+[data-vibe="iron-age"] .add-tile:disabled:active {
+  background: none;
+  border: 0;
+  border-bottom: var(--shape-rule-hair) solid var(--shape-rule-ink);
+  border-radius: 0;
+}
+[data-vibe="iron-age"] .add-tile:nth-child(odd) { border-right: var(--shape-rule-hair) solid var(--shape-rule-ink); }
+[data-vibe="iron-age"] .add-tile { padding: 16px 14px 16px 12px; }
+[data-vibe="iron-age"] .add-tile:nth-child(odd) { padding-left: 0; }
+[data-vibe="iron-age"] .add-tile .ic,
+[data-vibe="iron-age"] .add-tile.lit .ic {
+  width: auto; height: auto;
+  background: none;
+  color: var(--chalk);
+  border-radius: 0;
+}
+[data-vibe="iron-age"] .add-tile.hero .ic { background: none; color: var(--accent); }
+[data-vibe="iron-age"] .add-tile .ic svg { width: 22px; height: 22px; stroke-width: 1.5; }
+[data-vibe="iron-age"] .add-tile .t { font-size: 15px; font-variation-settings: 'wdth' 100, 'wght' 700; }
+[data-vibe="iron-age"] .add-tile .d { font-size: 13px; }
+[data-vibe="iron-age"] .add-tile .tag,
+[data-vibe="iron-age"] .add-tile.lit .tag {
+  background: none;
+  color: var(--steel);
+  border: var(--shape-keyline-width) solid var(--steel);
+  border-radius: 0;
+  font-size: 11px; letter-spacing: 0; text-transform: none;
+  font-variation-settings: 'wdth' 100, 'wght' 600;
+}
+[data-vibe="iron-age"] .add-rule { height: 0; background: none; border-top: var(--shape-rule-hair) solid var(--shape-rule-ink); }
+/* The estimator notices: a keyline callout, the printers' fist in warn
+   pointing at its sentence in ink. No yellow wash, no sparkle. */
+[data-vibe="iron-age"] .ai-warn {
+  background: none;
+  border: var(--shape-keyline-width) solid var(--shape-keyline-ink);
+  border-radius: 0;
+  color: var(--chalk);
+  font-size: 12px;
+}
+[data-vibe="iron-age"] .ai-warn svg { color: var(--warn); width: 18px; height: 18px; }
+[data-vibe="iron-age"] .ai-shot { border-color: var(--shape-keyline-ink); }
+
+/* ---------- sessionChrome · plate ----------
+   The top bar: bar paper under a 1pt ink rule (the status band above it
+   stays ink, the generated strip). The clock tabular steel; the live chip
+   and the calendar button 38, square keyline plates; Finish the ink block.
+   The rest pill and the peek bar are square plates with a keyline and no
+   shadow. Every target at least v1's. */
+[data-vibe="iron-age"] .wk-bar {
+  background: var(--bar);
+  border-bottom: 1px solid var(--shape-rule-ink);
+}
+[data-vibe="iron-age"] .wk-name { font-size: 15px; font-variation-settings: 'wdth' 100, 'wght' 700; }
+[data-vibe="iron-age"] .timer { font-variation-settings: 'wdth' 100, 'wght' 700; letter-spacing: 0; }
+[data-vibe="iron-age"] .wk-bar .timer { color: var(--steel); }
+[data-vibe="iron-age"] .wk-coach,
+[data-vibe="iron-age"] .wk-cal-btn {
+  background: var(--bar);
+  border: var(--shape-keyline-width) solid var(--shape-keyline-ink);
+  border-radius: 0;
+}
+[data-vibe="iron-age"] .wk-cal-btn { color: var(--chalk); }
+[data-vibe="iron-age"] .wk-cal-btn svg { stroke-width: 1.5; }
+[data-vibe="iron-age"] .wk-coach:active,
+[data-vibe="iron-age"] .wk-cal-btn:active { background: var(--raised); border-color: var(--shape-keyline-ink); }
+[data-vibe="iron-age"] .rest-pill,
+[data-vibe="iron-age"] .peek-bar {
+  background: var(--bar);
+  border: var(--shape-keyline-width) solid var(--shape-keyline-ink);
+  border-radius: 0;
+}
+[data-vibe="iron-age"] .rest-pill .t {
+  font-size: 22px;
+  font-variation-settings: 'wdth' 100, 'wght' 800;
+  font-feature-settings: 'tnum' 1;
+}
+[data-vibe="iron-age"] .rest-pill button { color: var(--chalk); font-variation-settings: 'wdth' 100, 'wght' 700; }
+[data-vibe="iron-age"] .rest-pill button:last-child {
+  color: var(--steel);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+[data-vibe="iron-age"] .peek-name { font-variation-settings: 'wdth' 100, 'wght' 700; }
+
+/* The Coach nudge under a finished exercise: a paper strip between two
+   hairlines (drawn as shadows, so the row it shares never moves), ink words,
+   the drawn saltire. */
+[data-vibe="iron-age"] .swipe-hint.coach-nudge {
+  background: var(--bar);
+  box-shadow: inset 0 var(--shape-rule-hair) 0 var(--shape-rule-ink), inset 0 calc(-1 * var(--shape-rule-hair)) 0 var(--shape-rule-ink);
+}
+[data-vibe="iron-age"] .coach-nudge-t { color: var(--chalk); }
+[data-vibe="iron-age"] .coach-nudge-x .glyph { width: 11px; height: 11px; }
+
+/* ---------- the Coach sheet ----------
+   Rack's lines on square raised blocks, his replies as ink blocks with the
+   words knocked out; Pro's panel a keyline block, no madder wash. */
+[data-vibe="iron-age"] .coach-bub,
+[data-vibe="iron-age"] .coach-bub.you { border-radius: 0; }
+[data-vibe="iron-age"] .coach-bub.you { background: var(--inverse); border: 0; }
+[data-vibe="iron-age"] .coach-bub.you .coach-bub-t { color: var(--knockout); }
+[data-vibe="iron-age"] .coach-bub.pro {
+  background: var(--raised);
+  border: var(--shape-keyline-width) solid var(--shape-keyline-ink);
+}
+[data-vibe="iron-age"] .coach-build-target { color: var(--chalk); }
+
+/* ---------- the other You cards ---------- */
+[data-vibe="iron-age"] .review-verdict {
+  font-family: var(--font-display);
+  font-size: 24px; letter-spacing: 0;
+  font-variation-settings: 'wght' 800;
+  font-synthesis: none;
+}
+/* "Next week": the period's boxed note, a 1pt ink keyline and no fill. */
+[data-vibe="iron-age"] .review-take {
+  background: none;
+  border: var(--shape-keyline-width) solid var(--shape-keyline-ink);
+  border-radius: 0;
+}
+[data-vibe="iron-age"] .review-take .chart-sub { color: var(--chalk); }
+[data-vibe="iron-age"] .thesis-eq { border-top: var(--shape-rule-hair) solid var(--shape-rule-ink); }
+[data-vibe="iron-age"] .thesis-eq .thesis-op,
+[data-vibe="iron-age"] .thesis-eq b { color: var(--ink-of-p-yellow); }
+[data-vibe="iron-age"] .install-n { border-radius: 0; }
+[data-vibe="iron-age"] .st-flame { border-radius: 0; }
+[data-vibe="iron-age"] .st-flame.on { background: var(--inverse); color: var(--knockout); box-shadow: none; }
+[data-vibe="iron-age"] .group-pill {
+  background: none;
+  border-color: var(--shape-keyline-ink);
+  border-radius: 0;
+  font-size: 12px; letter-spacing: 0; text-transform: none;
+  color: var(--chalk);
+  font-variation-settings: 'wdth' 100, 'wght' 600;
+}
+[data-vibe="iron-age"] .day-title {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-variation-settings: 'wght' 600;
+  font-synthesis: none;
+}
+
+/* ---------- water ---------- */
+[data-vibe="iron-age"] .water-vessel > path[stroke] { stroke: var(--chalk); }
+[data-vibe="iron-age"] .water-preset {
+  background: none;
+  border-color: var(--shape-keyline-ink);
+  border-radius: 0;
+}
+[data-vibe="iron-age"] .water-preset:active { background: var(--raised); border-color: var(--shape-keyline-ink); }
+[data-vibe="iron-age"] .wpe-del { border-color: var(--shape-keyline-ink); color: var(--chalk); }
+[data-vibe="iron-age"] .water-pip { border-color: var(--chalk); }
+
+/* ---------- toasts, sync pip, trial bar ---------- */
+[data-vibe="iron-age"] .trial-bar {
+  border-radius: 0;
+  background: rgba(var(--warn-rgb), .12);
+  border-color: var(--warn);
+  font-size: 11px; letter-spacing: 0; text-transform: none;
+  font-variation-settings: 'wdth' 100, 'wght' 700;
+}
+
+/* ---------- admin (the owner's panel): legible, not ornamented ---------- */
+[data-vibe="iron-age"] .adm-flag {
+  border-radius: 0;
+  border-color: currentColor;
+  font-size: 11px; letter-spacing: 0; text-transform: none;
+  font-variation-settings: 'wdth' 100, 'wght' 600;
+}
+[data-vibe="iron-age"] .adm-flag.on,
+[data-vibe="iron-age"] .adm-flag.off,
+[data-vibe="iron-age"] .adm-flag.lit,
+[data-vibe="iron-age"] .adm-flag.warn { border-color: currentColor; }
+[data-vibe="iron-age"] .adm-flag:not(.on):not(.off):not(.lit):not(.warn) { color: var(--steel); }
+
+/* ---------- sign-in and the gates (web only) ----------
+   The stock, the ink status band, the six-plate mark in plate inks each
+   square-cut with an ink keyline, the title as a masthead over the Oxford
+   rule, square fields, the ink primary, links as underlined steel words. */
+[data-vibe="iron-age"] .auth-mark i { border-radius: 0; box-shadow: 0 0 0 1px var(--chalk); }
+[data-vibe="iron-age"] .auth-title,
+[data-vibe="iron-age"] .gate-title {
+  font-size: 24px;
+  font-variation-settings: 'wght' 800;
+}
+[data-vibe="iron-age"] .auth-title { position: relative; padding-bottom: 14px; margin-bottom: 12px; }
+[data-vibe="iron-age"] .gate-pending {
+  background: none;
+  border-color: var(--shape-keyline-ink);
+  border-radius: 0;
+  color: var(--chalk);
+}
+[data-vibe="iron-age"] .gate-sep::before,
+[data-vibe="iron-age"] .gate-sep::after { height: 0; background: none; border-top: var(--shape-rule-hair) solid var(--shape-rule-ink); }
+[data-vibe="iron-age"] .gate-who { border-top: var(--shape-rule-hair) solid var(--shape-rule-ink); }
+
+/* ---------- onboarding (8 steps) and the tour ----------
+   The kicker the italic running head, the title Besley. Choice cards a
+   square ink keyline; chosen a 2pt keyline and a drawn tick — never colour
+   alone. Progress in ink. The tour: the flat ink veil (scrim.tour), the card
+   bar paper in a keyline with the Oxford rule on top, the lit tab ringed in
+   madder. */
+[data-vibe="iron-age"] .ob-card {
+  border-color: var(--shape-keyline-ink);
+  border-radius: 0;
+}
+[data-vibe="iron-age"] .ob-fill { background: var(--chalk); }
+[data-vibe="iron-age"] .ob-title {
+  font-size: 24px;
+  font-variation-settings: 'wght' 800;
+}
+[data-vibe="iron-age"] .ob-item-t {
+  font-size: 12px; letter-spacing: 0; text-transform: none;
+  color: var(--chalk);
+  font-variation-settings: 'wdth' 100, 'wght' 800;
+}
+[data-vibe="iron-age"] .ob-choice {
+  position: relative;
+  background: var(--bar);
+  border-color: var(--shape-keyline-ink);
+  border-radius: 0;
+  padding-right: 40px;
+}
+[data-vibe="iron-age"] .ob-choice.on {
+  background: var(--bar);
+  border-color: var(--shape-keyline-ink);
+  box-shadow: inset 0 0 0 1px var(--shape-keyline-ink);
+}
+[data-vibe="iron-age"] .ob-choice.on::after {
+  content: '';
+  position: absolute; right: 17px; top: 50%;
+  width: 6px; height: 12px;
+  margin-top: -8px;
+  border: solid var(--chalk);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+[data-vibe="iron-age"] .ob-choice-t { font-variation-settings: 'wdth' 100, 'wght' 700; }
+[data-vibe="iron-age"] .ob-choice-d { color: var(--dim); }
+[data-vibe="iron-age"] .ob-num {
+  background: var(--bar);
+  border-color: var(--knurl);
+  border-radius: 0;
+}
+[data-vibe="iron-age"] .ob-num-l { font-size: 11px; letter-spacing: 0; }
+[data-vibe="iron-age"] .ob-num-s { font-size: 11px; }
+[data-vibe="iron-age"] .ob-tip {
+  background: none;
+  border: var(--shape-keyline-width) solid var(--shape-keyline-ink);
+  border-radius: 0;
+}
+[data-vibe="iron-age"] .ob-adjust summary { text-decoration-color: var(--steel); }
+[data-vibe="iron-age"] .ob-dots i {
+  width: 9px; height: 9px;
+  border-radius: 0;
+  background: none;
+  box-shadow: inset 0 0 0 1px var(--chalk);
+}
+[data-vibe="iron-age"] .ob-dots i.on { background: var(--chalk); }
+[data-vibe="iron-age"] .ob-tour-card {
+  padding-top: 24px;
+  background:
+    -webkit-image-set(url(iron-age/textures/rule-head@2x.png) 2x, url(iron-age/textures/rule-head@3x.png) 3x) 0 -1px / 144px 8px repeat-x,
+    linear-gradient(var(--shape-rule-ink), var(--shape-rule-ink)) 0 0 / 100% var(--shape-rule-head-0) no-repeat,
+    linear-gradient(var(--shape-rule-ink), var(--shape-rule-ink)) 0 calc(var(--shape-rule-head-0) + var(--shape-rule-head-1)) / 100% var(--shape-rule-head-2) no-repeat,
+    var(--bar);
+}
+
+/* ---------- the tailpiece: one traced ornament at a screen's foot, in ink ---------- */
+[data-vibe="iron-age"] .tailpiece { color: var(--chalk); }
+
+/* ---------- the Vibes sheet: Iron Age's own tile ----------
+   The stock ground with its grain; the sample card in cardSkin (bar, collar,
+   square); `315` in Besley over the naval-gym thumbnail under the stock .54
+   scrim (4.54:1 against its worst pixel as Chrome draws it); the madder
+   bar. The scrim sits over the photo and under the figure and the bar. */
+[data-vibe="iron-age"].vibe-in {
+  background-image: url(iron-age/textures/grain-manual@3x.png);
+  background-image: -webkit-image-set(url(iron-age/textures/grain-manual@2x.png) 2x, url(iron-age/textures/grain-manual@3x.png) 3x);
+  background-size: 72px 72px;
+}
+[data-vibe="iron-age"].vibe-in .vibe-sample.photo::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: rgba(var(--rack-rgb), .54);
+}
+[data-vibe="iron-age"].vibe-in .vibe-num,
+[data-vibe="iron-age"].vibe-in .vibe-accent { z-index: 1; }
+[data-vibe="iron-age"].vibe-in .vibe-num {
+  font-variation-settings: 'wght' 800;
+  letter-spacing: 0;
+  font-synthesis: none;
+}
