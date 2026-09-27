@@ -1,6 +1,7 @@
 // The v47 button measurement: boots the real app in headless Chrome against a
-// fake Firebase and measures every rendered .btn in 58 scenes, at two phone
-// widths. report/btn-44.md is what it found.
+// fake Firebase and measures every rendered .btn in every scene of scenes.json
+// (58 at v47; V59 added a live session with a drop set and the summary), at two
+// phone widths. report/btn-44.md is what it found.
 //
 //   node report/btn-44/seed.mjs                      # an account to render
 //   node report/btn-44/measure.mjs <rack.css> <out.json> [widths=390,320]
@@ -15,50 +16,39 @@
 // SDK (unauthenticated: the published rules refuse every read and write it
 // could have made). CHROME overrides the browser path. Not a tools-check: it
 // needs Chrome and python3, and tools-check/touch-target.mjs is the verifier.
-import { spawn } from 'node:child_process';
-import { readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
-import { tmpdir } from 'node:os';
+//
+// Since V59 it shares harness-lib.mjs with prove.mjs (the v1 pixel and
+// computed-style proof), and takes, as flags or environment, the tree to serve
+// and the ports: --repo / REPO (default: this repo), --port / PORT (8765),
+// --cdp-port / CDP_PORT (9333), --seed / SEED (default: seed.json here) and
+// --run / RUN, which names its Chrome profile under ~/dev/vibes-night/tmp/.
+// It fails loudly if a port is taken, and waits for ~/dev/vibes-night/
+// harness.lock, so no two harness runs ever share a machine.
+import { readFileSync, writeFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import { HERE, NIGHT, parseArgs, onCleanup, rmScratch, acquireLock, startServer, startChrome, CDP } from './harness-lib.mjs';
 
-const HERE = new URL('.', import.meta.url).pathname;
-const REPO = join(HERE, '..', '..');
-const [cssPath, outPath, widthArg] = process.argv.slice(2);
+const { pos, flags } = parseArgs(process.argv.slice(2));
+const REPO = resolve(flags.repo || process.env.REPO || join(HERE, '..', '..'));
+const [cssPath, outPath, widthArg] = pos;
+if (!cssPath || !outPath) { console.error('usage: node report/btn-44/measure.mjs <rack.css> <out.json> [widths=390,320] [--repo dir] [--port n] [--cdp-port n] [--seed file] [--run name]'); process.exit(2); }
 const WIDTHS = (widthArg || '390,320').split(',').map(Number);
 const CSS = readFileSync(cssPath);
-const { UID, seed, live } = JSON.parse(readFileSync(join(HERE, 'seed.json'), 'utf8'));
+const { UID, seed, live, liveDrop } = JSON.parse(readFileSync(flags.seed || process.env.SEED || join(HERE, 'seed.json'), 'utf8'));
 const FAKES = Object.fromEntries(['firebase-app.js', 'firebase-auth.js', 'firebase-database.js']
   .map(f => [f, readFileSync(join(HERE, 'fakes', f))]));
-const PORT = 8765, DPORT = 9333;
+const PORT = +(flags.port || process.env.PORT || 8765), DPORT = +(flags['cdp-port'] || process.env.CDP_PORT || 9333);
+const RUN = flags.run || process.env.RUN || 'measure-' + process.pid;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-const server = spawn('python3', ['-m', 'http.server', String(PORT), '--bind', '127.0.0.1', '--directory', REPO], { stdio: 'ignore' });
-const prof = mkdtempSync(join(tmpdir(), 'rack-chrome-'));
-const chrome = spawn(process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', [
-  '--headless=new', '--remote-debugging-port=' + DPORT, '--user-data-dir=' + prof,
-  '--no-first-run', '--no-default-browser-check', '--disable-features=ServiceWorker', '--disable-gpu', '--hide-scrollbars', 'about:blank'], { stdio: 'ignore' });
-const cleanup = () => { try { chrome.kill(); } catch {} try { server.kill(); } catch {} try { rmSync(prof, { recursive: true, force: true }); } catch {} };
+await acquireLock();
+const server = await startServer(REPO, PORT);
+const prof = join(NIGHT, 'tmp', RUN, 'chrome');
+onCleanup(() => { try { rmScratch(join(NIGHT, 'tmp', RUN)); } catch {} });
+const { proc: chromeProc, target } = await startChrome({ cdpPort: DPORT, profile: prof });
+const cleanup = () => { try { chromeProc.kill(); } catch {} try { server.stop(); } catch {} };
 process.on('exit', cleanup);
 
-let target = null;
-for (let i = 0; i < 100 && !target; i++) {
-  await sleep(100);
-  try { const l = await (await fetch(`http://127.0.0.1:${DPORT}/json/list`)).json(); target = l.find(t => t.type === 'page'); } catch {}
-}
-if (!target) { console.error('no chrome'); process.exit(2); }
-
-class CDP {
-  constructor(url) {
-    this.ws = new WebSocket(url); this.id = 0; this.pending = new Map(); this.handlers = {};
-    this.ws.onmessage = e => {
-      const m = JSON.parse(e.data);
-      if (m.id) { const p = this.pending.get(m.id); this.pending.delete(m.id); m.error ? p.rej(new Error(JSON.stringify(m.error))) : p.res(m.result); }
-      else (this.handlers[m.method] || []).forEach(h => h(m.params));
-    };
-  }
-  open() { return new Promise(r => { this.ws.onopen = r; }); }
-  send(method, params = {}) { const id = ++this.id; this.ws.send(JSON.stringify({ id, method, params })); return new Promise((res, rej) => this.pending.set(id, { res, rej })); }
-  on(m, h) { (this.handlers[m] = this.handlers[m] || []).push(h); }
-}
 const c = new CDP(target.webSocketDebuggerUrl);
 await c.open();
 await c.send('Page.enable'); await c.send('Runtime.enable');
@@ -106,11 +96,12 @@ async function boot(width, cfg) {
   if (cfg.onboarding === false) delete s.users[UID].onboarding;
   if (cfg.approve && cfg.user) s.access.approved[cfg.user.uid] = { at: Date.now() - 60e3, via: 'invite', code: 'CDEFGHJKMN', name: cfg.user.displayName, email: cfg.user.email };
   if (cfg.tour) s.users[UID].onboarding = { done: true, tourDone: false, at: Date.now() - 864e5, version: 3 };
+  if (cfg.liveDrop && !liveDrop) throw new Error('seed.json has no liveDrop: run seed.mjs again');
   const src = `try { localStorage.clear(); } catch {}
     try { Object.defineProperty(navigator, 'serviceWorker', { value: { register: () => Promise.reject(new Error('no sw in harness')), controller: null, addEventListener() {}, ready: new Promise(() => {}) }, configurable: true }); } catch {}
     window.__FAKE_USER = ${JSON.stringify(user)};
     window.__SEED = ${JSON.stringify(s)};
-    ${cfg.live ? `localStorage.setItem(${JSON.stringify('rack:' + UID + ':activeSession')}, ${JSON.stringify(JSON.stringify(live))});` : ''}`;
+    ${cfg.live || cfg.liveDrop ? `localStorage.setItem(${JSON.stringify('rack:' + UID + ':activeSession')}, ${JSON.stringify(JSON.stringify(cfg.liveDrop ? liveDrop : live))});` : ''}`;
   bootScriptId = (await c.send('Page.addScriptToEvaluateOnNewDocument', { source: src })).identifier;
   const loaded = new Promise(r => { loadWaiters.push(r); });
   await c.send('Page.navigate', { url: `http://127.0.0.1:${PORT}/index.html?b=${Date.now()}` });

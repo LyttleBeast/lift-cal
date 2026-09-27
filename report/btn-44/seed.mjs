@@ -2,9 +2,16 @@
 // of push/pull/legs, a food log, weigh-ins, water, steps, two routines (one
 // with a lifting block), Coach settings, and an access tree with people in it
 // so the owner's admin panel has rows.
+//
+// SEED_OUT writes the file somewhere other than beside this script, and
+// SEED_NOW (anything Date.parse reads) pins "now". The v1 proof (prove.mjs)
+// generates its seed once, outside the repo, with the clock frozen at the NOW
+// it injects into the page; run it under TZ=America/New_York, since the day
+// keys below are local.
 import { writeFileSync } from 'node:fs';
 const UID = 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2';
-const now = Date.now();
+const now = process.env.SEED_NOW ? Date.parse(process.env.SEED_NOW) : Date.now();
+if (!Number.isFinite(now)) throw new Error('SEED_NOW does not parse');
 const DAY = 864e5;
 const pad = n => String(n).padStart(2, '0');
 const key = t => { const d = new Date(t); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); };
@@ -91,5 +98,13 @@ const live = { id: 'wlive', name: 'Push day', startedAt: now - 25 * 60e3, exerci
   { exId: 'barbell-bench-press', name: 'Barbell Bench Press', group: 'chest', equipment: 'barbell', sets: [{ w: '95', r: '8', type: 'W', done: true }, { w: '185', r: '5', type: 'N', done: true }, { w: '', r: '', tw: '185', tr: '5', type: 'N', done: false }] },
   { exId: 'overhead-press', name: 'Overhead Press', group: 'shoulders', equipment: 'barbell', block: 1, sets: [{ w: '95', r: '8', type: 'N', done: true }, { w: '', r: '', type: 'N', done: false }] },
   { exId: 'barbell-curl', name: 'Barbell Curl', group: 'arms', equipment: 'barbell', block: 1, sets: [{ w: '', r: '', type: 'N', done: false }] } ] };
-writeFileSync(new URL('./seed.json', import.meta.url), JSON.stringify({ UID, seed, live }));
+// The same session with a drop set on the curl (AGENTS.md, v55): the set he
+// changed to a drop set is a 'D', and each drop under it a 'D' with dp: 1. The
+// drop set and its first drop ticked, a second drop still open, so the screen
+// shows the rail, "+ Drop" and an unticked drop; Finish keeps the ticked ones.
+const liveDrop = { id: 'wlivedrop', name: 'Push day', startedAt: now - 25 * 60e3, exercises: [
+  { exId: 'barbell-bench-press', name: 'Barbell Bench Press', group: 'chest', equipment: 'barbell', sets: [{ w: '95', r: '8', type: 'W', done: true }, { w: '185', r: '5', type: 'N', done: true }, { w: '', r: '', tw: '185', tr: '5', type: 'N', done: false }] },
+  { exId: 'barbell-curl', name: 'Barbell Curl', group: 'arms', equipment: 'barbell', sets: [{ w: '65', r: '10', type: 'N', done: true }, { w: '65', r: '8', type: 'D', done: true }, { w: '45', r: '8', type: 'D', dp: 1, done: true }, { w: '', r: '', type: 'D', dp: 1, done: false }] } ] };
+const out = process.env.SEED_OUT || new URL('./seed.json', import.meta.url);
+writeFileSync(out, JSON.stringify({ UID, seed, live, liveDrop, now }));
 console.log('sessions', n, 'today', today);

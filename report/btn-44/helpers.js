@@ -1,9 +1,12 @@
 window.__h = {
   sleep: ms => new Promise(r => setTimeout(r, ms)),
+  // The wall clock, even when prove.mjs has frozen Date for the app: a frozen
+  // Date.now() would make until() wait forever.
+  now: () => (window.__realNow ? window.__realNow() : Date.now()),
   async settle(ms) { await __h.sleep(ms); },
   async until(fn, ms = 5000) {
-    const t = Date.now();
-    while (Date.now() - t < ms) { try { const v = fn(); if (v) return v; } catch {} await __h.sleep(50); }
+    const t = __h.now();
+    while (__h.now() - t < ms) { try { const v = fn(); if (v) return v; } catch {} await __h.sleep(50); }
     throw new Error('timeout waiting for ' + String(fn).slice(0, 120));
   },
   vis(n) { return !!(n && n.getClientRects().length && getComputedStyle(n).visibility !== 'hidden'); },

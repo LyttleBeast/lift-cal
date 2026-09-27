@@ -1,0 +1,13 @@
+{
+ "note": "prove.mjs shoot: the gallery list (V59 §15.2) and the scenes it adds to a group only for shooting. An optional scene that cannot run (the Vibes sheet before it exists) is skipped, not an error. None of these is part of the v1 proof, which runs scenes.json alone.",
+ "gallery": ["you", "train", "session-drop", "summary", "fuel", "fuel-add", "you-coach-sheet", "weight", "steps", "settings-hub", "vibes-sheet", "auth"],
+ "extra": {
+  "you": [
+   {
+    "name": "vibes-sheet",
+    "js": "await __h.closeAll(); await __h.clickSel('.you-gear'); await __h.click('vibes', __h.top()); await __h.until(() => __h.top() && /vibes/i.test(__h.top().textContent) && !/your details/i.test(__h.top().textContent));",
+    "optional": true
+   }
+  ]
+ }
+}

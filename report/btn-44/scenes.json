@@ -214,6 +214,25 @@
   ]
  },
  {
+  "group": "drop",
+  "cfg": {
+   "liveDrop": true
+  },
+  "scenes": [
+   {
+    "name": "session-drop",
+    "js": "await __h.dock('workout'); await __h.until(() => document.querySelector('#view-workout .set-row.drop') && document.querySelector('#view-workout .drop-add'));",
+    "check": "return __h.buttonsIn(document.querySelector('#view-workout')).slice(0,8);"
+   },
+   {
+    "name": "summary",
+    "js": "await __h.click('finish', document.querySelector('#view-workout'), 'button'); await __h.until(() => document.querySelector('#view-workout .summary-page')); await __h.sleep(600);",
+    "check": "return __h.buttonsIn(document.querySelector('#view-workout'));",
+    "fatal": false
+   }
+  ]
+ },
+ {
   "group": "fuel",
   "scenes": [
    {

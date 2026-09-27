@@ -1,0 +1,69 @@
+[
+ {
+  "group": "fixture",
+  "proveOnly": true,
+  "note":"Every style rule in effect, built as a small chain of elements (capture.js buildFixture), so a rule no scene reaches still has its computed style measured. After the P review found 52 of the 208 rules the engine touched never on the page.",
+  "scenes": [
+   {
+    "name": "fixture",
+    "js": "await __cap.buildFixture(); await __h.sleep(200);"
+   }
+  ]
+ },
+ {
+  "group": "cover-stats",
+  "note": "stats.js's exercise picker and an exercise's page: the group dots (stats.js paint() sites the P review found never ran).",
+  "scenes": [
+   {
+    "name": "stats-picker",
+    "js": "await __h.dock('workout'); await __h.click('statistics'); await __h.click('exercise breakdown', document, 'button'); await __h.until(() => __h.top() && __h.top().querySelector('.ex-item .dot'));"
+   },
+   {
+    "name": "stats-detail",
+    "js": "await __h.clickSel('.sheet .ex-item'); await __h.until(() => document.querySelector('.group-pill'));",
+    "fatal": false
+   }
+  ]
+ },
+ {
+  "group": "cover-import",
+  "note": "importer.js's preview, with a group it has no colour for (its fallback token, importer.js:105).",
+  "scenes": [
+   {
+    "name": "import-preview",
+    "js": "await __h.clickSel('.you-gear'); await __h.click('import workout history', __h.top()); const pick = await __h.until(() => __h.top() && __h.top().querySelector('input[type=file]')); const data = { type: 'rack-workout-import', workouts: { '2025-03': { '2025-03-04': { s1: { volume: 12400, groups: ['chest', 'back', 'cardio'], exercises: [{ sets: [{ type: 'N' }, { type: 'N' }, { type: 'W' }] }] } } }, '2025-04': { '2025-04-01': { s2: { volume: 8150, groups: ['legs', 'mobility'], exercises: [{ sets: [{ type: 'N' }, { type: 'W' }] }] } } } } }; const dt = new DataTransfer(); dt.items.add(new File([JSON.stringify(data)], 'rack-import.json', { type: 'application/json' })); pick.files = dt.files; pick.dispatchEvent(new Event('change', { bubbles: true })); await __h.until(() => document.querySelector('.sheet .import-bar')); await __h.sleep(300);"
+   }
+  ]
+ },
+ {
+  "group": "cover-paused",
+  "note": "access.js renderPaused: an approved account whose type is 'locked' (access.js's MARK, the P review found never ran).",
+  "cfg": {
+   "user": {
+    "uid": "paused1",
+    "email": "p@example.test",
+    "displayName": "Paused"
+   },
+   "approve": true,
+   "approveExtra": {
+    "type": "locked"
+   }
+  },
+  "scenes": [
+   {
+    "name": "paused",
+    "js": "await __h.until(() => document.querySelector('#gate .gate-box')); await __h.sleep(300);"
+   }
+  ]
+ },
+ {
+  "group": "cover-vibe",
+  "note": "vibe.js's switch, back to v1 on a page already in v1 (applyVibe, themeColor, dock). A tree without vibe.js does nothing. With v1 the only vibe the renderer (app.js setRenderer) never runs: it needs a second vibe to switch to.",
+  "scenes": [
+   {
+    "name": "vibe-reapply",
+    "js": "try { const m = await import('/vibe.js'); m.applyVibe('v1'); } catch (e) {} await __h.sleep(300);"
+   }
+  ]
+ }
+]
