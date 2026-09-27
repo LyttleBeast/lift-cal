@@ -1,5 +1,5 @@
 import { login, signup, logout, resetPassword, watchAuth, flushQueue, syncPip,
-         LS, uid, isOwner, watchShared, initUnits } from './store.js';
+         LS, uid, isOwner, watchShared, initUnits, reconcileVibe, initVibe } from './store.js';
 import { accessState, renderGate, renderPaused, isAccessPaused, initCapabilities,
          mountTrialBanner, claimInvite, ensureAiRecord, normalizeCode, APPROVED } from './access.js';
 import { onboardingState, runSetup, runTour } from './onboarding.js';
@@ -125,6 +125,10 @@ let youOk    = true;
 
 watchAuth(async user => {
   if (user) {
+    // The account's vibe, before any of the app shows (V59 §8.1). This
+    // device's hint painted the first frame; from here the account's own
+    // choice wins — its mirror now, the database's answer at boot.
+    if (!booted) reconcileVibe();
     authEl.classList.add('hidden');
     if (booted) return;
 
@@ -200,7 +204,12 @@ async function boot(user, accessRecord) {
   // this, and a tab that draws in pounds and then redraws in kilos is a bug
   // rather than a loading state. It is one small read and nothing below it can
   // start without it.
+  // The vibe beside it, for the same reason: the database's answer is on
+  // before the first tab draws. Its read runs alongside the units' rather than
+  // after it, so boot waits for one round trip, not two; it never throws.
+  const vibeRead = initVibe();
   await initUnits();
+  await vibeRead;
 
   // Setup runs before the tabs initialise, because what it writes — targets, a
   // first weigh-in, a water goal, a step goal — is what they read at boot.

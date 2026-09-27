@@ -108,6 +108,9 @@ node in the database. See *Access* below for what replaced them, and why.
 | `coach-data.js` | The impure half — the one file the native port rewrites. Reads once per app open and never on a paint, except the food days *Am I fueled?* reads on an ask (v52: Pro, Food on, fifteen at most). Writes `settings/coach`, bad-day marks included. Since v53 `coachFinishRead()` for the recap and `noteCoachFood()`, which `food.js` calls after each day-summary write |
 | `coach-ui.js` | Coach's card (since v49 one earned line from his own log — the sheet opens on the finding; since v53 the finish line after a workout, and a warm line when nothing is earned), the COACH ME sheet with "More", the builder's recovery caution and the bad-day mark's chips (v52), the Settings switches and Your goal (aim, experience, focus, Lift target), and the live session's chip, sheet (since v54 the next set and the effort chips) and one-line nudge |
 | `settings.js` | The settings hub behind the You gear, and the profile editor |
+| `vibes-sheet.js` | Settings → Look → Vibes (V59): one tile per vibe, each drawn from its own vibe's tokens, the worn one ringed and checked; a tap puts it on and writes `settings/vibe` through `store.js` `setVibe()` |
+| `vibe.js` | The vibe engine (V59): the `<html data-vibe>` switch and this device's first-frame hint, the colours the pinned modules bake mapped to tokens (`paint()`), the icons, the offline prefetch of a vibe's files |
+| `vibes/` | The vibes as data: `defs/` (the registry, `normVibe()`, `ROLES`, each vibe's tokens) and `icons/`, pure and copied into the native tree verbatim; a vibe's own stylesheet is `vibes/<id>.css` |
 | `admin.js` | Owner-only panel — feature usage, the Accounts page, People & access |
 | `accounts.js` | Account types and what each one may do. Pure, and the single entitlement choke point — every limit and feature check goes through `capabilitiesFor()` |
 | `usage.js` | Counters-only telemetry: the `usage/{uid}` ledger, and platform detection |
@@ -161,6 +164,7 @@ app.js → you.js       → coach-ui.js  → coach.js   → analytics.js ──�
                       → settings.js → food.js  water.js  steps.js  workout.js
                                     → picker.js  importer.js  ai.js
                                     → onboarding.js
+                                    → vibes-sheet.js → store.js  vibe.js → vibes/ (pure)
                       → admin.js    → access.js ──────────────→ store.js
                                     → analytics.js
                                     → ai.js
@@ -210,6 +214,10 @@ its event list — and it imports nothing but `store.js`. That is what makes it
 safe to import from anywhere: a module at the bottom of the graph can never
 close a loop, and `bump()` is one line at a call site that already has real work
 to do.
+
+`store.js` imports `vibe.js` (V59), to put the account's vibe on, and `vibe.js`
+imports only the pure `vibes/` modules — so the bottom of the graph is still the
+bottom, and nothing that imports `store.js` can close a loop through it.
 
 `coach.js` is at the bottom of the graph with `units.js` and `blocks.js`: it
 imports `exercises.js`, `units.js`, `coach-build.js`, `coach-live.js`, `coach-goal.js`, `coach-overlap.js`, `coach-ready.js`, `coach-fuel.js`, `coach-volume.js` and the SESSION MATH from
@@ -442,6 +450,7 @@ the app. The card at the bottom of the Weight tab is gone.
 | **Train** | Default rest · Exercise library · Import workout history |
 | **Coach** | One switch per category of thing Coach may bring up, whatever it has been told, **Your goal** (Pro), and a way into the COACH ME sheet |
 | **Steps** | Step goal |
+| **Look** | Vibes — which look Rack wears, saved to the account (`settings/vibe`). A tap puts it on at once; it changes how Rack looks, never what it says |
 | **App** | Add to Home Screen · Replay the walkthrough · Sign out · Sign out and erase this device's copy |
 
 Almost none of it is implemented there. The hub is a table of contents that

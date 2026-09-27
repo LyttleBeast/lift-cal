@@ -136,10 +136,15 @@ const dir = mkdtempSync(join(tmpdir(), 'rack-custom-movement-'));
 const at = f => JSON.stringify(pathToFileURL(join(dir, f)).href);
 writeFileSync(join(dir, 'fb-stub.mjs'), STUB);
 // The real store.js, every import but units.js stubbed — destructive-write.mjs's rewrite.
+// v59: and vibe.js with the pure contract it reads, real, where they live.
 writeFileSync(join(dir, 'store.mjs'), src('store.js')
   .replace("from './units.js'", 'from UNITS_REAL')
+  .replace("from './vibe.js'", 'from VIBE_REAL')
+  .replace("from './vibes/defs/index.js'", 'from VIBES_REAL')
   .replace(/(\bfrom\s+)(['"])[^'"]+\2/g, "$1'./fb-stub.mjs'")
-  .replace('from UNITS_REAL', 'from ' + real('units.js')));
+  .replace('from UNITS_REAL', 'from ' + real('units.js'))
+  .replace('from VIBE_REAL', 'from ' + real('vibe.js'))
+  .replace('from VIBES_REAL', 'from ' + real('vibes/defs/index.js')));
 writeFileSync(join(dir, 'usage-stub.mjs'), 'export function bump() {}\n');
 writeFileSync(join(dir, 'analytics.mjs'), src('analytics.js')
   .replace("from './store.js'", "from './store.mjs'")

@@ -833,6 +833,58 @@ One thing that is not pounds: `profile.heightIn` from a **centimetre** entry
 keeps hundredths of an inch rather than whole ones, because 175 cm and 176 cm
 both round to 69 in. A ft + in entry still writes whole inches.
 
+## `settings/vibe` → a plain string id *(V59)*
+
+Which look the account wears: `'v1'` today, and each vibe's id as it lands. A
+**bare string**, never an object, written with a plain `write()` —
+`settings/*` is not a container, so there is no removes budget and no
+destructive-write guard. It changes how Rack looks and nothing it says, stores
+or counts.
+
+**Read through `normVibe()`** (`vibes/defs/index.js`, the registry, which the
+native tree copies verbatim): an absent node, an unknown id, the wrong case, a
+number, an object and any other garbage all mean `v1`. **An absent node is
+v1**, so every existing account is v1 without a byte written, and nothing
+writes the node on a read.
+
+**The account's value wins.** `store.js` is the only code that touches the
+node:
+
+- The web keeps one device-level key, `localStorage 'rack:vibe'`, outside the
+  per-account namespace like `rack:migrated`, because it has to be read before
+  anybody is signed in. `index.html`'s head script puts it on `<html
+  data-vibe>` for the first frame, the sign-in screen included. It is a hint,
+  never the answer; `purgeDevice()` leaves it, and the native app has no such
+  key.
+- `watchAuth`'s callback calls `reconcileVibe()` before `#auth` hides and
+  before anything awaits: the account's mirror (`mirror:settings/vibe`), read
+  synchronously because `UID` is set by then. An account with no mirror is v1,
+  whatever the device key said. So the waiting and paused screens wear the
+  account's vibe on the web; native keeps its gates v1.
+- `boot()` calls `initVibe()` beside `initUnits()`, before setup and the tabs:
+  the database's answer — a pick made on another phone wins here — falling
+  back to the mirror offline.
+- The Vibes sheet (Settings → Look → Vibes, `vibes-sheet.js`) calls
+  `setVibe(id)`. The vibe goes on at once — the attribute, the device key, the
+  screen — **then** the string is written, so an offline pick still repaints
+  and queues like any setting. **A refusal ends on the account's value.**
+  `write()`'s own rollback restores what the mirror held before *that* write,
+  which with two picks in flight is the first pick, a value the database may
+  never have held. So the picks in flight form a run that keeps `held` — the
+  mirror when the first was tapped, then each pick the database takes, the one
+  sent last winning — and once the last pick settles, a refusal puts the look,
+  the device key and the mirror back to `held`.
+- Sign-out reloads the page, as it always has. The choice stays in the
+  database for the next sign-in.
+
+**Rules.** The published rules need **no change**: `settings` has a
+section-level `.write` and its only `$other` deny is inside `units`, so the
+node lands today. The native tree's PROPOSED rules validate its shape — a
+string, at most 32 characters, matching `/^[a-z0-9][a-z0-9-]*$/`, the
+registry's own id shape. Not an enum, on purpose: a new vibe must never need a
+rules republish, and an id the rules pass that the app does not know reads as
+v1. `tools-check/vibe-setting.mjs` holds the rest.
+
 ## `routines/{routineId}` → one pre-planned workout
 
 `tw` / `tr` are **target** weight and reps, both optional. They are deliberately

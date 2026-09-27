@@ -29,6 +29,7 @@ import { canUseAi } from './access.js';
 import { hasActiveSession } from './workout.js';
 import { openInstallGuide } from './onboarding.js';
 import { coachToggleRows, coachAnswerRows, openCoachSheet } from './coach-ui.js';
+import { openVibes, vibeName } from './vibes-sheet.js';
 import { hIn as inchesFrom, fmtH, unitH, limH, labelRate } from './units.js';
 
 /* ---------- pieces ---------- */
@@ -221,6 +222,14 @@ export function openSettings(onEdit) {
   /* ---- steps ---- */
   const steps = rowList(section(sh, 'Steps'));
   navRow(steps, 'Step goal', stepPill(), () => { close(); openStepSettings(onEdit); });
+
+  /* ---- look ----
+     Its own section, before App, one row (V59 §8.2). A vibe changes how Rack
+     looks and never what it says or does, so it sits apart from every setting
+     that changes a number. The native hub puts the same section after Coach,
+     where its App section follows. */
+  const look = rowList(section(sh, 'Look'));
+  navRow(look, 'Vibes', vibeName(), () => { close(); openVibes(onEdit); });
 
   /* ---- app ---- */
   const app = section(sh, 'App');

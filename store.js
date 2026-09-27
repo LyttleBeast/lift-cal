@@ -18,6 +18,8 @@
 
 import { firebaseConfig, OWNER_UID } from './firebase-config.js';
 import { normUnits } from './units.js';
+import { normVibe } from './vibes/defs/index.js';
+import { applyVibe, current as vibeOnPage } from './vibe.js';
 
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
 import {
@@ -842,6 +844,103 @@ export async function setUnits(next) {
   UNITS = normUnits(next);
   await write('settings/units', UNITS);
   return UNITS;
+}
+
+/* ---------- the vibe ----------
+   Which look this account wears (V59 §8.1): settings/vibe, a plain string id
+   ('v1', …). The look itself — the attribute on <html>, this device's hint
+   key, the theme-color, the dock, the repaint — is vibe.js's applyVibe(). This
+   is the account's copy of the choice, and the only code that reads or writes
+   the node.
+
+     - A bare string, written with write(). settings/* is not a container
+       (CONTAINERS above), so there is no removes budget and no guard. The
+       published rules need nothing: `settings` has its own .write, and the
+       only "$other": false inside it belongs to units.
+     - normVibe() on every read: absent, unknown, the wrong case, a number, an
+       object — all v1, the one vibe that always exists. So every account
+       that never chose is v1 without a byte written, and nothing here writes
+       on a read.
+     - The account's value wins. This device's key (rack:vibe, vibe.js) is only
+       a hint for the first frame, painted before anybody is signed in. The
+       moment somebody is, reconcileVibe() puts on the account's value as this
+       device last saw it; at boot, initVibe() puts on the database's.
+     - The default is v1.
+
+   VIBE is the vibe this account wears, as this device knows it. */
+let VIBE = normVibe(null);
+const VIBE_MIRROR = 'mirror:settings/vibe';
+
+/* Put a vibe on, unless it is the one the page already paints: then there is
+   nothing to correct, and nothing is touched. vibe.js bootVibe()'s rule, for
+   the same reason — a v1 page says v1 with no attribute or with one that
+   already says v1, which no rule anywhere matches, and either way it is v1. */
+function wearVibe(id, opts) {
+  return id === vibeOnPage() ? id : applyVibe(id, opts);
+}
+
+/* In watchAuth's callback, before #auth hides: the mirror read() and write()
+   keep, put on. LS answers for this account the moment UID is set, which
+   watchAuth does before it calls back, so this is synchronous and the app's
+   first frame is already his. No repaint — nothing of the app is drawn yet. */
+export function reconcileVibe() {
+  VIBE = wearVibe(normVibe(LS.get(VIBE_MIRROR, null)), { render: false });
+  return VIBE;
+}
+
+/* Beside initUnits at the top of boot: the database's answer — a vibe picked
+   on another phone wins here — which read() leaves in the mirror, and which
+   falls back to the mirror offline. No repaint: no tab has drawn yet. */
+export async function initVibe() {
+  let v = null;
+  try { v = await read('settings/vibe', null); } catch {}
+  VIBE = wearVibe(normVibe(v), { render: false });
+  return VIBE;
+}
+
+export function vibe() { return VIBE; }
+
+/* A pick from the Vibes sheet. It goes on at once — attribute, device key,
+   screen — and is written after, so a pick made offline still repaints and its
+   write queues behind it, as every setting's does. Resolves to the vibe worn
+   afterwards; rejects with write()'s error on a refusal, once the red bar has
+   said why. Picking the vibe already worn does nothing and writes nothing.
+
+   A REFUSAL ENDS ON THE ACCOUNT'S VALUE. write() rolls the mirror back to what
+   it held before THAT write, and with two picks on the wire that is the first
+   pick, which the database may never have held. So the picks in flight form a
+   run that keeps `held`: the mirror as it stood when the first of them was
+   tapped, then each pick the database takes, the one sent last winning, as the
+   database applies one client's writes in the order sent. Once every pick in
+   the run has settled, a refusal puts the look, the device key and the mirror
+   back to `held` — so a late refusal never undoes a newer pick that landed,
+   and two refused picks end where the account was. */
+let vibeRun = null;
+export async function setVibe(id) {
+  const next = normVibe(id);
+  if (next === VIBE) return VIBE;
+  if (!vibeRun) vibeRun = { picks: 0, sent: 0, heldAt: 0, held: LS.get(VIBE_MIRROR, undefined), refused: false };
+  const run = vibeRun;
+  run.picks++;
+  VIBE = applyVibe(next);
+  const order = ++run.sent;
+  let err = null;
+  try {
+    await write('settings/vibe', next);
+    if (order > run.heldAt) { run.held = next; run.heldAt = order; }
+  } catch (e) {
+    err = e;
+    run.refused = true;
+  }
+  if (--run.picks === 0) {
+    vibeRun = null;
+    if (run.refused) {
+      if (run.held === undefined) LS.del(VIBE_MIRROR); else LS.set(VIBE_MIRROR, run.held);
+      VIBE = wearVibe(normVibe(run.held));
+    }
+  }
+  if (err) throw err;
+  return VIBE;
 }
 
 /* ---------- date helpers ---------- */

@@ -130,11 +130,17 @@ writeFileSync(
   // Everything store.js imports is stubbed EXCEPT units.js, which is pure, has
   // no imports of its own and is what the units accessor is actually built on.
   // The marker is unquoted so the blanket rewrite below steps over it.
+  // v59: and the vibe — vibe.js and the pure contract it reads, real, where
+  // they live; nothing in them runs until a vibe is put on.
   readFileSync(STORE, 'utf8')
     .replace("from './units.js'", 'from UNITS_REAL')
+    .replace("from './vibe.js'", 'from VIBE_REAL')
+    .replace("from './vibes/defs/index.js'", 'from VIBES_REAL')
     .replace(/(\bfrom\s+)(['"])[^'"]+\2/g, "$1'./fb-stub.mjs'")
     .replace('from UNITS_REAL',
              'from ' + JSON.stringify(pathToFileURL(join(HERE, '..', 'units.js')).href))
+    .replace('from VIBE_REAL', 'from ' + JSON.stringify(pathToFileURL(join(HERE, '..', 'vibe.js')).href))
+    .replace('from VIBES_REAL', 'from ' + JSON.stringify(pathToFileURL(join(HERE, '..', 'vibes/defs/index.js')).href))
 );
 const store = await import(pathToFileURL(join(dir, 'store.mjs')).href);
 
