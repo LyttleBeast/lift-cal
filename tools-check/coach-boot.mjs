@@ -211,10 +211,11 @@ async function rig({ data = {}, slow = [], fail = [], pro = false } = {}) {
     ['./store.js', STORE], ['./ui.js', real('ui.js')],
     ['./analytics.js', ANALY], ['./units.js', real('units.js')]]));
   // v56: picker.js takes the movement vocabulary from coach-tags.js (pure, imports nothing).
+  // v59: and paint() from vibe.js, which imports only the pure vibes/ contract.
   const PICK   = put('picker.mjs', swap(src('picker.js'), [
     ['./exercises.js', real('exercises.js')], ['./store.js', STORE],
     ['./analytics.js', ANALY], ['./usage.js', USAGE], ['./ui.js', real('ui.js')],
-    ['./coach-tags.js', real('coach-tags.js')]]));
+    ['./coach-tags.js', real('coach-tags.js')], ['./vibe.js', real('vibe.js')]]));
   /* v52: a Pro rig for the loadFuel spy (section H) — access.js's
      capabilities() answering Pro, and nothing else about the graph moved. */
   const ACCESS = pro ? put('access-pro.mjs', 'export function capabilities() { return { features: { advanced: true } }; }\n')

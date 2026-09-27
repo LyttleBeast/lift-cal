@@ -217,7 +217,7 @@ function vessel(frac) {
   defs.appendChild(clip);
   svg.appendChild(defs);
 
-  svg.appendChild(svgEl('path', { d: shape, fill: 'var(--rack)' }));
+  svg.appendChild(svgEl('path', { d: shape, fill: 'var(--well)' }));
 
   // Waterline. 154 is the inside bottom, 22 the inside top of the neck.
   const bottom = 154, top = 22;
@@ -238,7 +238,7 @@ function vessel(frac) {
   }));
   // Cap.
   svg.appendChild(svgEl('rect', {
-    x: '38', y: '2', width: '28', height: '10', rx: '3', fill: 'var(--knurl)'
+    x: '38', y: '2', width: '28', height: '10', rx: '3', fill: 'var(--grip)'
   }));
   return svg;
 }

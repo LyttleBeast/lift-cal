@@ -95,6 +95,8 @@ const UI = await import(JSON.parse(real('ui.js')));
 const U = await import(JSON.parse(real('units.js')));
 const { EXERCISES } = await import(JSON.parse(real('exercises.js')));
 const B = await import(JSON.parse(real('blocks.js')));
+// v59: the recap paints a group's colour through vibe.js — the real one.
+const VB = await import(JSON.parse(real('vibe.js')));
 
 /* ---------- lifting the real functions out of workout.js ---------- */
 const WSRC = src('workout.js');
@@ -147,7 +149,7 @@ function harness(o = {}) {
     normalizeBlocks: B.normalizeBlocks, blockOrder: B.blockOrder,
     wu: () => 'lb',
     el: UI.el, noteEl: UI.noteEl, fmtDateFull: UI.fmtDateFull, fmtDuration: UI.fmtDuration,
-    groupColor: A.groupColor, prDetail: A.prDetail, sessionReps: A.sessionReps, sameKindComparison: A.sameKindComparison,
+    groupColor: A.groupColor, vibePaint: VB.paint, prDetail: A.prDetail, sessionReps: A.sessionReps, sameKindComparison: A.sameKindComparison,
     normFeel: A.normFeel, FEEL_STRENGTH: A.FEEL_STRENGTH,
     // v55, on purpose: collectFrom and the fold keep each drop set whole
     // (keepSets), and the recap draws one as a group (setsText) — the real ones.

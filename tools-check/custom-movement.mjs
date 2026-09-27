@@ -152,7 +152,9 @@ writeFileSync(join(dir, 'picker.mjs'), src('picker.js')
   .replace("from './analytics.js'", "from './analytics.mjs'")
   .replace("from './exercises.js'", 'from ' + real('exercises.js'))
   .replace("from './ui.js'", 'from ' + real('ui.js'))
-  .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js')));
+  .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
+  // v59: paint() from vibe.js, which imports only the pure vibes/ contract.
+  .replace("from './vibe.js'", 'from ' + real('vibe.js')));
 const store = await import(JSON.parse(at('store.mjs')));
 const P = await import(JSON.parse(at('picker.mjs')));
 const T = await import(JSON.parse(real('coach-tags.js')));

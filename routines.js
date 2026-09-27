@@ -33,6 +33,9 @@ import { retypeSet, removeSet, dropHeads, addDrop, repeatOf, setsText } from './
 import { bump } from './usage.js';
 import { el, sheet, toast, noteEl, confirmSheet, swipeToDelete, fmtDate, setNum, LIMITS } from './ui.js';
 import { wIn, fmtSetW, unitW, limW } from './units.js';
+// A group's hex (exercises.js) as the token that paints it (V59 §5.4). Named
+// vibePaint here because the routine editor's repaint is its own paint().
+import { paint as vibePaint } from './vibe.js';
 
 let routines = {};
 // Handed in by workout.js, the way openRoutines is handed startWorkout, so this
@@ -133,7 +136,7 @@ export function openRoutines(onStart) {
     const dots = el('div', 'rt-dots');
     groupsOf(r).forEach(g => {
       const d = el('i');
-      d.style.background = (GROUPS[g] || {}).color || 'var(--dim)';
+      d.style.background = vibePaint((GROUPS[g] || {}).color || 'var(--dim)');
       dots.appendChild(d);
     });
 
@@ -183,7 +186,7 @@ function openRoutine(id, onStart) {
   const pvRow = ex => {
     const line = el('div', 'rt-pv-row');
     const tag = el('i', 'ex-tag');
-    tag.style.background = (GROUPS[ex.group] || {}).color || 'var(--dim)';
+    tag.style.background = vibePaint((GROUPS[ex.group] || {}).color || 'var(--dim)');
     line.appendChild(tag);
     line.appendChild(el('span', 'rt-pv-name', ex.name));
     const sets = ex.sets || [];
@@ -382,7 +385,7 @@ function openEditor(draft, isNew, onStart) {
     const block = el('div', 'ex-block');
     const hd = el('div', 'ex-hd');
     const tag = el('i', 'ex-tag');
-    tag.style.background = (GROUPS[ex.group] || {}).color || 'var(--dim)';
+    tag.style.background = vibePaint((GROUPS[ex.group] || {}).color || 'var(--dim)');
     hd.appendChild(tag);
     hd.appendChild(el('div', 'ex-name', ex.name));
     const menu = el('button', 'ex-menu', '⋯');

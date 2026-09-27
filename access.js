@@ -47,6 +47,10 @@ const P_INVITES  = 'access/invites/';
 const P_REQUESTS = 'access/requests/';
 const P_AI       = 'aiAllow/';
 
+// The six-plate mark on both gate screens, index.html's sign-in mark drawn
+// again: the plate colours as tokens, so a vibe repaints it (V59 §5.4).
+const MARK = ['var(--p-red)', 'var(--p-blue)', 'var(--p-yellow)', 'var(--p-green)', 'var(--p-white)', 'var(--p-chrome)'];
+
 /* ================= invite codes ================= */
 
 // No 0/O/1/I/L. A code gets read off a screen and typed on a phone, and
@@ -312,7 +316,7 @@ export function renderPaused(user, record) {
   const box = el('div', 'auth-box gate-box');
 
   const mark = el('div', 'auth-mark');
-  ['#d6252b', '#2e7fd9', '#f0be1e', '#2aa85c', '#e8e5de', '#a8aeb8'].forEach((c, i) => {
+  MARK.forEach((c, i) => {
     const b = el('i');
     b.style.background = c;
     b.style.animationDelay = (i * 60) + 'ms';
@@ -386,7 +390,7 @@ export function renderGate(user, onGranted) {
   const box = el('div', 'auth-box gate-box');
 
   const mark = el('div', 'auth-mark');
-  ['#d6252b', '#2e7fd9', '#f0be1e', '#2aa85c', '#e8e5de', '#a8aeb8'].forEach((c, i) => {
+  MARK.forEach((c, i) => {
     const b = el('i');
     b.style.background = c;
     b.style.animationDelay = (i * 60) + 'ms';

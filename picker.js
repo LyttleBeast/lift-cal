@@ -30,6 +30,9 @@ import { el, sheet, toast, noteEl, confirmSheet } from './ui.js';
 // v56: the movement vocabulary a custom exercise's Movement row offers. Pure,
 // and it imports nothing, so this is still a one-way edge.
 import { PATTERN_ANGLES, ANGLE_LABELS, patternsOn, ownMovement, movementLabel } from './coach-tags.js';
+// A group's hex (exercises.js) as the token that paints it (V59 §5.4). Named
+// vibePaint here because paint() is this file's own repaint, three times over.
+import { paint as vibePaint } from './vibe.js';
 
 let customEx  = [];
 let overrides = {};
@@ -282,7 +285,7 @@ export function openPicker(onPick, opts = {}) {
     pool.slice(0, 260).forEach(x => {
       const on = selected.some(s => s.id === x.id);
       const b = el('button', 'ex-item' + (on ? ' sel' : ''));
-      const dot = el('i', 'dot'); dot.style.background = GROUPS[x.group].color;
+      const dot = el('i', 'dot'); dot.style.background = vibePaint(GROUPS[x.group].color);
       b.appendChild(dot);
       b.appendChild(el('span', 'nm', x.name));
       b.appendChild(el('span', 'eq', x.equipment));
@@ -394,7 +397,7 @@ export function openExerciseManager(onChange) {
     pool.slice(0, 300).forEach(x => {
       const b = el('button', 'ex-item' + (isHidden(x.id) ? ' ex-off' : ''));
       const dot = el('i', 'dot');
-      dot.style.background = (GROUPS[x.group] || {}).color || 'var(--dim)';
+      dot.style.background = vibePaint((GROUPS[x.group] || {}).color || 'var(--dim)');
       b.appendChild(dot);
 
       const nm = el('span', 'nm', x.name);

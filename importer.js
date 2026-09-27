@@ -102,7 +102,7 @@ function preview(data) {
   Object.entries(s.groups).sort((a, b) => b[1] - a[1]).forEach(([g, n]) => {
     const seg = el('div');
     seg.style.width = (n / tot * 100) + '%';
-    seg.style.background = COLORS[g] || 'var(--knurl)';
+    seg.style.background = COLORS[g] || 'var(--grip)';
     bar.appendChild(seg);
   });
   sh.appendChild(bar);

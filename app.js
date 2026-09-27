@@ -9,6 +9,7 @@ import { initWeight, render as renderWeight } from './weight.js';
 import { initSteps, render as renderSteps } from './steps.js';
 import { initYou, render as renderYou } from './you.js';
 import { initUsage, bump } from './usage.js';
+import { bootVibe, setRenderer, prefetchVibes } from './vibe.js';
 
 const $ = s => document.querySelector(s);
 
@@ -234,6 +235,10 @@ async function boot(user, accessRecord) {
   await youReady;
   restoreView();
 
+  // The vibes' photos and faces into the offline cache where they are missing.
+  // Unawaited, after everything above, and nothing at all with v1 alone.
+  try { prefetchVibes(); } catch {}
+
   if (wantTour) {
     try { await runTour(switchView); } catch {}
   }
@@ -271,6 +276,22 @@ export function switchView(name) {
 dock.addEventListener('click', e => {
   const btn = e.target.closest('button[data-view]');
   if (btn) switchView(btn.dataset.view);
+});
+
+/* ================= VIBE =================
+   index.html's head script has already put this device's vibe on <html>, so
+   the colours were right from the first frame; bootVibe() draws the rest (the
+   dock's icons) and does nothing at all for v1. A switch later repaints the
+   screen that is up, from scratch, the way a tab change does — but it is not a
+   visit, so nothing is counted and lastView is left alone. Before boot there
+   is nothing drawn to repaint. */
+bootVibe();
+const RENDER = { you: renderYou, workout: renderWorkout, food: renderFood, weight: renderWeight, steps: renderSteps };
+setRenderer(() => {
+  if (!booted) return;
+  const on = dock.querySelector('button.active');
+  const render = on && RENDER[on.dataset.view];
+  if (render) render();
 });
 
 /* You is the default now — it is what the app opens on unless the settings hub

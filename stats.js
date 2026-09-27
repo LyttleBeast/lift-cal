@@ -14,6 +14,9 @@ import {
   $, el, sheet, noteEl, fmtDate, fmtDateFull, parseKey, segmented
 } from './ui.js';
 import { wOut, volOut, fmtW, fmtSetLoad, fmtVol, unitW } from './units.js';
+// A group's hex (analytics.js groupColor) as the token that paints it (V59 §5.4).
+// Named vibePaint here because the exercise picker's repaint is its own paint().
+import { paint as vibePaint, paintSvg } from './vibe.js';
 
 let open      = false;
 let backFn    = null;
@@ -164,13 +167,15 @@ function renderOverview() {
     const gc = card('Muscle group split');
     const holder = el('div', 'donut-wrap');
     const totalSplitSets = split.reduce((a, s) => a + s.sets, 0);
-    holder.appendChild(donut(
-      split.map(s => ({ label: GROUPS[s.group].label, v: s.sets, color: groupColor(s.group) })),
+    // donut() writes each segment's colour as a stroke attribute; paintSvg()
+    // moves it into the segment's style.
+    holder.appendChild(paintSvg(donut(
+      split.map(s => ({ label: GROUPS[s.group].label, v: s.sets, color: vibePaint(groupColor(s.group)) })),
       { centerTop: String(totalSplitSets), centerSub: 'sets' }
-    ));
+    )));
     holder.appendChild(legend(split.map(s => ({
       label: GROUPS[s.group].label,
-      color: groupColor(s.group),
+      color: vibePaint(groupColor(s.group)),
       value: s.sets + '  ' + Math.round(s.sets / totalSplitSets * 100) + '%'
     }))));
     gc.appendChild(holder);
@@ -211,7 +216,7 @@ function renderOverview() {
     prs.forEach(p => {
       const row = el('button', 'pr-row');
       const tag = el('i', 'pr-tag');
-      tag.style.background = groupColor(p.group);
+      tag.style.background = vibePaint(groupColor(p.group));
       row.appendChild(tag);
       const body = el('div', 'pr-body');
       body.appendChild(el('div', 'pr-name', p.name));
@@ -245,7 +250,7 @@ function rankCard(title, rows, fmt, note) {
     const row = el('button', 'rank-row');
     row.appendChild(el('div', 'rank-no num', String(i + 1)));
     const tag = el('i', 'rank-tag');
-    tag.style.background = groupColor(e.group);
+    tag.style.background = vibePaint(groupColor(e.group));
     row.appendChild(tag);
     const body = el('div', 'rank-body');
     body.appendChild(el('div', 'rank-name', e.name));
@@ -348,7 +353,7 @@ function openExercisePicker() {
     pool.forEach(e => {
       const b = el('button', 'ex-item');
       const dot = el('i', 'dot');
-      dot.style.background = groupColor(e.group);
+      dot.style.background = vibePaint(groupColor(e.group));
       b.appendChild(dot);
       const nm = el('span', 'nm', e.name);
       b.appendChild(nm);
@@ -379,7 +384,7 @@ function renderDetail(exId) {
 
   const gtag = el('div', 'group-pill');
   const dot = el('i');
-  dot.style.background = groupColor(e.group);
+  dot.style.background = vibePaint(groupColor(e.group));
   gtag.append(dot, document.createTextNode(
     (GROUPS[e.group] ? GROUPS[e.group].label : e.group) + '  ·  ' + (e.equipment || '')));
   wrap.appendChild(gtag);

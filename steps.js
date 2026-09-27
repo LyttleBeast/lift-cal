@@ -19,7 +19,8 @@
 // still open to anyone who wants it — it is Firebase's, not ours — but the app
 // no longer hands out the instructions.
 //
-// Imports store.js, ui.js and analytics.js. Nothing imports back.
+// Imports store.js, ui.js, analytics.js, usage.js and vibe.js. Nothing
+// imports back.
 
 import { read, write, watch, todayKey } from './store.js';
 // Only long-standing exports are imported from analytics.js. A brand-new
@@ -31,6 +32,9 @@ import { barChart, emptyChart } from './analytics.js';
 import { bump } from './usage.js';
 import { $, el, svgEl, sheet, toast, noteEl, confirmSheet, swipeToDelete,
          compact, parseKey, fmtDate, fmtDateFull, LIMITS, within } from './ui.js';
+// The gear, from the vibe's icon set (V59 §5.7). vibe.js is new in rack-v59
+// together with this import, so no browser holds this file without it.
+import { iconHtml } from './vibe.js';
 
 const DAY = 864e5;
 const DEFAULTS = { goal: 10000 };
@@ -156,9 +160,7 @@ export function render() {
   const nav = el('div', 'cal-nav');
   const gear = el('button', 'gear-btn');
   gear.setAttribute('aria-label', 'Step settings');
-  gear.innerHTML =
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">' +
-    '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>';
+  gear.innerHTML = iconHtml('gear');
   gear.onclick = openStepSettings;
   nav.appendChild(gear);
   hd.appendChild(nav);
@@ -224,7 +226,7 @@ function ring(frac, n, g) {
 
   svg.appendChild(svgEl('circle', {
     cx: mid, cy: mid, r: R, fill: 'none',
-    stroke: 'var(--collar)', 'stroke-width': 11
+    stroke: 'var(--track)', 'stroke-width': 11
   }));
 
   const over = frac > 1;

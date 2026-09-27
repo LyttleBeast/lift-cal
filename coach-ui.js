@@ -17,8 +17,9 @@
 // state there is, which is also why closing and reopening it can never show
 // something the card contradicts.
 //
-// Imports coach.js, coach-data.js, ui.js and exercises.js (for a group's
-// colour, nothing more). Nothing imports back — workout.js imports THIS file,
+// Imports coach.js, coach-data.js, ui.js, exercises.js (for a group's
+// colour, nothing more) and vibe.js (its paint() and the two icons). Nothing
+// imports back — workout.js imports THIS file,
 // which is why starting a workout from the sheet is a function the Train card
 // hands in rather than an import here, and why "Add it" in a live session is
 // the picker's own callback handed in the same way.
@@ -32,37 +33,22 @@ import { coachInput, coachReady, coachLogKnown, rememberGreeting, rememberHype, 
          markSession, loadFuel, fuelNeedsRead } from './coach-data.js';
 import { wIn, fmtW, unitW, limW } from './units.js';
 import { normGoalLift, GOAL_LB_MAX } from './coach-goal.js';
+// The two marks, from the vibe's icon set (vibes/icons/v1.js has today's), and
+// a group's hex as the token that paints it (V59 §5.4, §5.7) — vibePaint, since
+// paint is a local repaint's name further down.
+import { paint as vibePaint, icon } from './vibe.js';
 
-/* The two marks. Inline rather than in a sprite because there are two of them
-   and the app has no icon system — the gear on You is written out the same way. */
+/* The two marks: the speech bubble, and the lock. Built as they always were —
+   the <svg> made here, its drawing written in as markup. */
 function bubbleIcon() {
-  const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  s.setAttribute('viewBox', '0 0 24 24');
-  s.setAttribute('fill', 'none');
-  s.setAttribute('stroke', 'currentColor');
-  s.setAttribute('stroke-width', '1.9');
-  s.setAttribute('stroke-linecap', 'round');
-  s.setAttribute('stroke-linejoin', 'round');
-  s.setAttribute('aria-hidden', 'true');
-  s.innerHTML = '<path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 9.9 9.9 0 0 1-2.6-.3L3 21l1.4-4.1A8.1 8.1 0 0 1 3 11.5 8.4 8.4 0 0 1 12 3a8.4 8.4 0 0 1 9 8.5z"/>';
-  return s;
+  return icon('bubble', { ariaHidden: true, innerHTML: true });
 }
 
 /* Open and grey on Pro, shut and yellow without it. The shackle is the only
    thing that moves, which is what makes the two states readable at a glance in
    a 14-pixel box. */
 function lockIcon(pro) {
-  const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  s.setAttribute('viewBox', '0 0 24 24');
-  s.setAttribute('fill', 'none');
-  s.setAttribute('stroke', 'currentColor');
-  s.setAttribute('stroke-width', '1.9');
-  s.setAttribute('stroke-linecap', 'round');
-  s.setAttribute('stroke-linejoin', 'round');
-  s.setAttribute('aria-hidden', 'true');
-  s.innerHTML = '<rect x="4" y="10.5" width="16" height="10" rx="2"/>' +
-    (pro ? '<path d="M8 10.5V7a4 4 0 0 1 7.5-1.9"/>' : '<path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/>');
-  return s;
+  return icon(pro ? 'unlock' : 'lock', { ariaHidden: true, innerHTML: true });
 }
 
 /* The greeting this app open settled on. Module state on purpose — see the
@@ -800,7 +786,7 @@ function proposalBlock(p, on) {
     inBlock = e.block || null;
     const row = el('div', 'day-ex');
     const tag = el('i', 'day-ex-tag');
-    tag.style.background = (GROUPS[e.group] || {}).color || 'var(--dim)';
+    tag.style.background = vibePaint((GROUPS[e.group] || {}).color || 'var(--dim)');
     const body = el('div', 'day-ex-body');
     body.appendChild(el('div', 'day-ex-name', e.name));
     body.appendChild(el('div', 'day-ex-sets num', e.line));

@@ -9,6 +9,24 @@
 <meta name="apple-mobile-web-app-title" content="Rack">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-180.png">
+<script>
+/* This device's vibe, on <html> before the first frame (vibe.js). A classic
+   inline script, and above the stylesheets on purpose: a script after a
+   pending stylesheet waits for it. The key sits outside the per-account
+   namespace, like rack:migrated, because nobody is signed in yet; v1 is its
+   absence, and so is anything that is not an id. */
+(function () {
+  var THEME = {};   // vibe id -> its theme-color; each vibe adds its entry
+  try {
+    var v = localStorage.getItem('rack:vibe');
+    if (v && v !== 'v1' && v.length <= 32 && /^[a-z0-9][a-z0-9-]*$/.test(v)) {
+      document.documentElement.dataset.vibe = v;
+      if (Object.prototype.hasOwnProperty.call(THEME, v))
+        document.querySelector('meta[name="theme-color"]').setAttribute('content', THEME[v]);
+    }
+  } catch (e) {}
+})();
+</script>
 <link rel="stylesheet" href="rack.css">
 <link rel="stylesheet" href="auth.css">
 <title>Rack</title>
@@ -24,12 +42,12 @@
 <div id="auth">
   <div class="auth-box" id="authBox" data-mode="in">
     <div class="auth-mark" aria-hidden="true">
-      <i style="background:#d6252b;animation-delay:0ms"></i>
-      <i style="background:#2e7fd9;animation-delay:60ms"></i>
-      <i style="background:#f0be1e;animation-delay:120ms"></i>
-      <i style="background:#2aa85c;animation-delay:180ms"></i>
-      <i style="background:#e8e5de;animation-delay:240ms"></i>
-      <i style="background:#a8aeb8;animation-delay:300ms"></i>
+      <i style="background:var(--p-red);animation-delay:0ms"></i>
+      <i style="background:var(--p-blue);animation-delay:60ms"></i>
+      <i style="background:var(--p-yellow);animation-delay:120ms"></i>
+      <i style="background:var(--p-green);animation-delay:180ms"></i>
+      <i style="background:var(--p-white);animation-delay:240ms"></i>
+      <i style="background:var(--p-chrome);animation-delay:300ms"></i>
     </div>
 
     <h1 class="auth-title" id="authTitle">Sign in</h1>

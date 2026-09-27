@@ -81,6 +81,10 @@ import { coachCard } from './coach-ui.js';
 import { initCoachData, coachLogReady, noteCoachSessions, noteCoachData } from './coach-data.js';
 import { wOut, fmtW, fmtSetLoad, labelW, unitW, fmtRate, labelRate, fmtVol,
          kcalPerUnit } from './units.js';
+// A group's hex (analytics.js groupColor) as the token that paints it, and the
+// gear from the vibe's icon set (V59 §5.4, §5.7). vibePaint, as in every file
+// that uses it: paint is the app's usual name for a local repaint.
+import { paint as vibePaint, iconHtml } from './vibe.js';
 
 const DAY = 864e5;
 // Exactly the two seven-day windows the week card compares, so the water reads
@@ -457,8 +461,9 @@ function arrowEl(diff, cls, text, unit) {
    "near the line" is visible before anything is read. The dots: the seven
    days of this week, filled where something landed — the consistency the
    average is built on, in the same tile as the average. `rgb` is the subject
-   colour as bare channels for the tile's corner tint; CSS variables cannot be
-   given an alpha, so the channels are passed rather than the variable. */
+   colour's channel token (var(--p-yellow-rgb) and the like) for the tile's
+   corner tint; a colour variable cannot be given an alpha, so the channels are
+   passed rather than the colour. */
 function kpi({ label, now, prev, fmt, dfmt, unit, judge, series, color, rgb, ref, kind, days, ready = loaded }) {
   const t = el('div', 'kpi');
   if (rgb) t.style.setProperty('--kpi-rgb', rgb);
@@ -691,12 +696,8 @@ function hero() {
   // the bottom of the Weight tab is behind this.
   const gear = el('button', 'you-gear');
   gear.setAttribute('aria-label', 'Settings');
-  gear.innerHTML =
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" ' +
-    'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-    '<path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4z"/>' +
-    '<path d="M19.5 14.6a1.5 1.5 0 0 0 .3 1.7l.1.1a1.9 1.9 0 1 1-2.7 2.7l-.1-.1a1.5 1.5 0 0 0-2.6 1.1v.2a1.9 1.9 0 1 1-3.8 0v-.1a1.5 1.5 0 0 0-2.6-1.1l-.1.1a1.9 1.9 0 1 1-2.7-2.7l.1-.1a1.5 1.5 0 0 0-1.1-2.6h-.2a1.9 1.9 0 1 1 0-3.8h.1a1.5 1.5 0 0 0 1.1-2.6l-.1-.1a1.9 1.9 0 1 1 2.7-2.7l.1.1a1.5 1.5 0 0 0 2.6-1.1v-.2a1.9 1.9 0 1 1 3.8 0v.1a1.5 1.5 0 0 0 2.6 1.1l.1-.1a1.9 1.9 0 1 1 2.7 2.7l-.1.1a1.5 1.5 0 0 0 1.1 2.6h.2a1.9 1.9 0 1 1 0 3.8h-.1a1.5 1.5 0 0 0-1.4.9z"/>' +
-    '</svg>';
+  // Its own drawing, not the Fuel and Steps gear: vibes/icons/v1.js gearYou.
+  gear.innerHTML = iconHtml('gearYou', { ariaHidden: true });
   // The sheet opens over this tab, so a goal or a name changed inside it is
   // contradicting a card that is still on screen behind it. Repaint the moment
   // it lands rather than waiting for a tab switch, and the repaint reads what
@@ -865,7 +866,7 @@ function weekCard(maint) {
   grid.appendChild(kpi({
     label: 'Calories', unit: 'kcal / day',
     now: meanBy(thisWk, kcal), prev: meanBy(lastWk, kcal),
-    fmt: fmtInt, judge: towardTarget, color: C_FUEL, rgb: '240,190,30',
+    fmt: fmtInt, judge: towardTarget, color: C_FUEL, rgb: 'var(--p-yellow-rgb)',
     series: both.map(kcal), ref: targets && targets.cal > 0 ? targets.cal : null,
     days: thisWk.map(k => !!(summaries[k] && summaries[k].cal > 0))
   }));
@@ -874,21 +875,21 @@ function weekCard(maint) {
     now: meanBy(thisWk, weighOn), prev: meanBy(lastWk, weighOn),
     // now, prev and the delta between them are all stored pounds, and `fmt`
     // is the only thing that ever sees them, so one converter covers all three.
-    fmt: v => fmtW(v, wu()), judge: towardGoal, color: C_WEIGHT, rgb: '240,190,30',
+    fmt: v => fmtW(v, wu()), judge: towardGoal, color: C_WEIGHT, rgb: 'var(--p-yellow-rgb)',
     series: both.map(weighOn),
     days: thisWk.map(k => weighOn(k) != null)
   }));
   grid.appendChild(kpi({
     label: 'Training', unit: sNow && sNow.length === 1 ? 'session' : 'sessions',
     now: sNow ? sNow.length : null, prev: sPrev ? sPrev.length : null,
-    fmt: String, judge: higherBetter, color: C_TRAIN, rgb: '46,127,217',
+    fmt: String, judge: higherBetter, color: C_TRAIN, rgb: 'var(--p-blue-rgb)',
     series: weeks ? weeks.map(w => w.v) : [], kind: 'bars', ready: sessions !== null,
     days: sessions ? thisWk.map(k => trainOn.has(k)) : null
   }));
   grid.appendChild(kpi({
     label: 'Steps', unit: '/ day',
     now: meanBy(thisWk, stepsOn), prev: meanBy(lastWk, stepsOn),
-    fmt: fmtInt, judge: higherBetter, color: C_STEPS, rgb: '232,229,222',
+    fmt: fmtInt, judge: higherBetter, color: C_STEPS, rgb: 'var(--p-white-rgb)',
     series: both.map(stepsOn), ref: stepGoal(),
     days: thisWk.map(k => stepsOn(k) != null)
   }));
@@ -1247,13 +1248,13 @@ function trainingCard() {
     split.forEach(x => {
       const seg = el('div', 'split-seg');
       seg.style.flex = String(x.sets);
-      seg.style.background = groupColor(x.group);
+      seg.style.background = vibePaint(groupColor(x.group));
       bar.appendChild(seg);
     });
     c.appendChild(bar);
     c.appendChild(legendGrid(split.map(x => ({
       label: groupLabel(x.group),
-      color: groupColor(x.group),
+      color: vibePaint(groupColor(x.group)),
       value: Math.round(x.sets / totalSets * 100) + '%'
     }))));
   } else {
@@ -1281,7 +1282,7 @@ function trainingCard() {
       const track = el('div', 'pb-track');
       const fill = el('div', 'pb-fill');
       fill.style.width = Math.round(e.bestE1rm / top * 100) + '%';
-      fill.style.background = groupColor(e.group);
+      fill.style.background = vibePaint(groupColor(e.group));
       track.appendChild(fill);
       body.appendChild(track);
       row.appendChild(body);

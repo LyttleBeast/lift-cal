@@ -29,6 +29,11 @@ import { initCoachData, coachLogReady, refreshCoachSessions, noteCoachData, coac
 import { feelHarder, canMark, isMuted, MARK_ASK, FEEL_S_WORDS } from './coach.js';
 import { bump } from './usage.js';
 import { wOut, wIn, fmtSetW, fmtSetLoad, fmtVol, volOut, unitW, limW } from './units.js';
+// A group's colour is hex in exercises.js and analytics.js, which the native
+// app copies verbatim; vibe.js's paint() makes it the token that paints it
+// (V59 §5.4). vibePaint in every file that uses it, because paint is the
+// app's usual name for a local repaint.
+import { paint as vibePaint, iconHtml } from './vibe.js';
 
 // Volume is a sum of stored pounds, so it converts like a weight. Round to a
 // whole number BEFORE the abbreviation, never after: "41.3k" is a string and
@@ -431,7 +436,7 @@ function renderCalendar() {
       const plates = el('div', 'cal-plates');
       groups.slice(0, 4).forEach((g, i) => {
         const p = el('i');
-        p.style.background = (GROUPS[g] || {}).color || 'var(--dim)';
+        p.style.background = vibePaint((GROUPS[g] || {}).color || 'var(--dim)');
         p.style.animationDelay = (i * 40) + 'ms';
         plates.appendChild(p);
       });
@@ -454,7 +459,7 @@ function renderCalendar() {
   GROUP_ORDER.forEach(g => {
     const it = el('div', 'cal-legend-item');
     const sw = el('i');
-    sw.style.background = GROUPS[g].color;
+    sw.style.background = vibePaint(GROUPS[g].color);
     it.append(sw, document.createTextNode(GROUPS[g].label));
     leg.appendChild(it);
   });
@@ -592,7 +597,7 @@ function renderWeekVolume() {
     const track = el('div', 'vol-track');
     const fill = el('div', 'vol-fill');
     fill.style.width = (n / max * 100) + '%';
-    fill.style.background = GROUPS[g].color;
+    fill.style.background = vibePaint(GROUPS[g].color);
     track.appendChild(fill);
     row.appendChild(track);
     row.appendChild(el('div', 'vol-val num', String(n)));
@@ -629,7 +634,7 @@ function openDay(mk, dd) {
     (w.exercises || []).forEach(ex => {
       const r = el('div', 'day-ex');
       const tag = el('i', 'day-ex-tag');
-      tag.style.background = groupColor(ex.group);
+      tag.style.background = vibePaint(groupColor(ex.group));
       const body = el('div', 'day-ex-body');
       body.appendChild(el('div', 'day-ex-name', ex.name));
       // v55: a drop set reads as one group, "185×8 → 135×6 → 95×5".
@@ -1010,9 +1015,7 @@ function renderSession() {
     const cal = el('button', 'wk-cal-btn');
     cal.setAttribute('aria-label', 'Look at the calendar');
     cal.title = 'Calendar';
-    cal.innerHTML =
-      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' +
-      '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>';
+    cal.innerHTML = iconHtml('calendar');
     cal.onclick = () => setPeek(true);
     bar.appendChild(cal);
   }
@@ -1198,7 +1201,7 @@ function renderBlock(row, editing) {
 
 function renderExercise(ex, exIdx) {
   const block = el('div', 'ex-block');
-  const color = (GROUPS[ex.group] || {}).color || 'var(--dim)';
+  const color = vibePaint((GROUPS[ex.group] || {}).color || 'var(--dim)');
 
   const hd = el('div', 'ex-hd');
   const tag = el('i', 'ex-tag'); tag.style.background = color;
@@ -1382,9 +1385,11 @@ function renderSet(ex, exIdx, s, i, drop) {
 }
 
 /* ---------- plate math ---------- */
+// The plate colours as tokens, so a vibe repaints them (V59 §5.4). The same
+// six colours as the muscle groups, but a separate table: never merge them.
 const PLATES = [
-  { w: 45, c: '#d6252b' }, { w: 35, c: '#2e7fd9' }, { w: 25, c: '#f0be1e' },
-  { w: 10, c: '#2aa85c' }, { w: 5, c: '#e8e5de' }, { w: 2.5, c: '#a8aeb8' }
+  { w: 45, c: 'var(--p-red)' }, { w: 35, c: 'var(--p-blue)' }, { w: 25, c: 'var(--p-yellow)' },
+  { w: 10, c: 'var(--p-green)' }, { w: 5, c: 'var(--p-white)' }, { w: 2.5, c: 'var(--p-chrome)' }
 ];
 
 /* Deliberately NOT converted. These are the plates on an American rack — 45,
@@ -2075,7 +2080,7 @@ function renderSummary() {
     prs.forEach(p => {
       const r = el('div', 'pr-hit');
       const tag = el('i', 'pr-tag');
-      tag.style.background = groupColor(p.group);
+      tag.style.background = vibePaint(groupColor(p.group));
       r.appendChild(tag);
       const body = el('div', 'pr-body');
       body.appendChild(el('div', 'pr-name', p.name));
@@ -2155,7 +2160,7 @@ function renderSummary() {
   record.exercises.forEach(ex => {
     const r = el('div', 'day-ex');
     const tag = el('i', 'day-ex-tag');
-    tag.style.background = groupColor(ex.group);
+    tag.style.background = vibePaint(groupColor(ex.group));
     const body = el('div', 'day-ex-body');
     body.appendChild(el('div', 'day-ex-name', ex.name));
     // v55: a drop set reads as one group, "185×8 → 135×6 → 95×5".

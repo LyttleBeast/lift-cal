@@ -304,6 +304,9 @@ writeFileSync(join(dir, 'coach-ui.mjs'), UI_SRC
   // v49: the Lift target row converts its box through units.js.
   .replace("from './units.js'", 'from ' + real('units.js'))
   .replace("from './exercises.js'", 'from ' + real('exercises.js'))
+  // v59: the two marks and a group's colour come from vibe.js, which imports
+  // only the pure vibes/ contract.
+  .replace("from './vibe.js'", 'from ' + real('vibe.js'))
   .replace("from './coach.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach.mjs')).href))
   .replace("from './coach-data.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'coach-data-stub.mjs')).href)));
 
@@ -1455,7 +1458,9 @@ export async function write() {}
     .replace("from './exercises.js'", 'from ' + real('exercises.js'))
     .replace("from './ui.js'", 'from ' + real('ui.js'))
     // v56: picker.js takes the movement vocabulary from coach-tags.js (pure, imports nothing).
-    .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js')));
+    .replace("from './coach-tags.js'", 'from ' + real('coach-tags.js'))
+    // v59: and paint() from vibe.js.
+    .replace("from './vibe.js'", 'from ' + real('vibe.js')));
   const P = await import(pathToFileURL(join(dir, 'picker.mjs')).href);
   const { EXERCISES } = await import(real('exercises.js').slice(1, -1));
   const byName = Object.fromEntries(EXERCISES.map(x => [x.name, x]));

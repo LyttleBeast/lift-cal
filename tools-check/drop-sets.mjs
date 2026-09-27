@@ -119,6 +119,8 @@ const A = NEW.A;
 const UI = await import(JSON.parse(real('ui.js')));
 const U = await import(JSON.parse(real('units.js')));
 const B = await import(JSON.parse(real('blocks.js')));
+// v59: renderExercise() paints a group's colour through vibe.js — the real one.
+const VB = await import(JSON.parse(real('vibe.js')));
 const { EXERCISES, GROUPS } = await import(JSON.parse(real('exercises.js')));
 
 /* ---------- lifting the real functions out of workout.js and routines.js ---------- */
@@ -165,7 +167,7 @@ function harness(o = {}) {
     keepSets: A.keepSets, setsText: A.setsText, dropHeads: A.dropHeads, retypeSet: A.retypeSet, removeSet: A.removeSet, addDrop: A.addDrop,
     // v56: "+ Set" asks which set it copies — the real one.
     repeatOf: A.repeatOf,
-    el: UI.el, LIMITS: UI.LIMITS, setNum: UI.setNum, fmtDate: UI.fmtDate, GROUPS,
+    el: UI.el, LIMITS: UI.LIMITS, setNum: UI.setNum, fmtDate: UI.fmtDate, GROUPS, vibePaint: VB.paint,
     fmtSetLoad: U.fmtSetLoad, fmtSetW: U.fmtSetW, unitW: U.unitW, limW: U.limW, wOut: U.wOut, wIn: U.wIn,
     nudgeLine: () => null, openLiveSheet: () => {}, dismissNudge: x => x, noteLiveTick: () => null, startRest: () => {},
     renderPlates: () => UI.el('div', 'plate-strip'),
@@ -708,7 +710,8 @@ export function wu() { return 'lb'; }
     .replace("from './store.js'", "from './store.mjs'").replace("from './picker.js'", "from './picker-stub.mjs'")
     .replace("from './usage.js'", "from './usage-stub.mjs'").replace("from './ui.js'", "from './ui-wrap.mjs'")
     .replace("from './analytics.js'", "from './analytics.mjs'")
-    .replace(/from '\.\/(exercises|blocks|units)\.js'/g, (w, n) => 'from ' + real(n + '.js')));
+    // v59: vibe.js too, real — it imports only the pure vibes/ contract.
+    .replace(/from '\.\/(exercises|blocks|units|vibe)\.js'/g, (w, n) => 'from ' + real(n + '.js')));
   const RT = await import(JSON.parse(rat('routines.mjs'))), RS = await import(JSON.parse(rat('store.mjs')));
   const routine = { id: 'r1', name: 'Push', note: '', created: 1, lastUsed: 0, uses: 0, exercises: [exOf(BENCH,
     [{ tw: '185', tr: '8', type: 'N' }, { tw: '185', tr: '8', type: 'D' }, { tw: '135', tr: '6', type: 'D', dp: 1 }, { tw: '95', tr: '5', type: 'D', dp: 1 }])] };

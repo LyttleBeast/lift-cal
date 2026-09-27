@@ -17,7 +17,7 @@ import { maintenance, effectiveMaint, calorieZones, zoneOf, refreshModel,
          autoTargets, trendWeight, MIN_CARB_G } from './tdee.js';
 import { initWater, loadWaterDay, renderWater, openWaterSettings } from './water.js';
 import { OWNER_UID } from './firebase-config.js';
-import { $, el, svgEl, sheet, toast, noteEl, confirmSheet, copyText, readClipboard,
+import { $, el, sheet, toast, noteEl, confirmSheet, copyText, readClipboard,
          segmented, r1, trimNum, LIMITS, clamp, within } from './ui.js';
 import { shrinkImage, estimatePhoto, estimateText, quota,
          proxyUrl, setProxyUrl, hasProxy } from './ai.js';
@@ -32,6 +32,8 @@ import { readAsk, withPicks, optionText, NONE_LABEL, NONE_NOTE } from './estimat
 import { goalDirection } from './insights.js';
 import { wIn, fmtW, labelW, unitW, rateIn, boxRate, perIn, boxPer,
          kcalPerUnit, limW, limRate, limPer, fmtRate, labelRate } from './units.js';
+// Icons from the vibe's set (V59 §5.7).
+import { icon as vibeIcon, iconHtml } from './vibe.js';
 
 const MEALS = [
   ['breakfast', 'Breakfast'],
@@ -526,11 +528,7 @@ export function render() {
   const nav = el('div', 'cal-nav');
   const gear = el('button', 'gear-btn');
   gear.setAttribute('aria-label', 'Fuel settings');
-  gear.innerHTML =
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">' +
-    '<circle cx="12" cy="12" r="3"/>' +
-    '<path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>' +
-    '</svg>';
+  gear.innerHTML = iconHtml('gear');
   gear.onclick = openFuelSettings;
   nav.appendChild(gear);
 
@@ -1155,25 +1153,11 @@ function multControl(e, onChange) {
    and saved meals sit below a rule — genuinely useful, but not what you want in
    front of you while a plate goes cold. */
 
-const ICON_PATHS = {
-  plus:    ['M12 5v14', 'M5 12h14'],
-  camera:  ['M4 9a2 2 0 0 1 2-2h1.5l1.2-2h6.6l1.2 2H18a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z',
-            'M12 16.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4z'],
-  pen:     ['M4 20h4L18.5 9.5a2.6 2.6 0 0 0-3.7-3.7L4 16.3z', 'M13.6 7.1l3.7 3.7'],
-  barcode: ['M3 6v12', 'M6.5 6v12', 'M10 6v8', 'M13.5 6v12', 'M17 6v8', 'M20.5 6v12'],
-  keypad:  ['M4 5h16v14H4z', 'M8 9h.01', 'M12 9h.01', 'M16 9h.01', 'M8 13h.01', 'M12 13h.01', 'M16 13h.01', 'M8.5 17h7'],
-  book:    ['M5 5a2 2 0 0 1 2-2h12v18H7a2 2 0 0 1-2-2z', 'M5 17h14'],
-  stack:   ['M12 3l8 4.3-8 4.3-8-4.3z', 'M4 11.8L12 16l8-4.2', 'M4 16.2L12 20.5l8-4.3'],
-  spark:   ['M12 3.5l1.7 4.6 4.6 1.7-4.6 1.7L12 16.1l-1.7-4.6L5.7 9.8l4.6-1.7z']
-};
-
+// The add flow's icons — plus, camera, pen, barcode, keypad, book, stack,
+// spark — are the vibe's (vibes/icons/v1.js holds today's paths). `width` is
+// the site's own stroke where it sets one; 1.8 otherwise, as it always was.
 function icon(name, width) {
-  const svg = svgEl('svg', {
-    viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor',
-    'stroke-width': width || '1.8', 'stroke-linecap': 'round', 'stroke-linejoin': 'round'
-  });
-  (ICON_PATHS[name] || []).forEach(d => svg.appendChild(svgEl('path', { d })));
-  return svg;
+  return vibeIcon(name, width ? { stroke: width } : undefined);
 }
 
 function mealChips(current, onPick) {

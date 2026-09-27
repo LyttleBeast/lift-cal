@@ -91,12 +91,18 @@ function stage(tag, files, text) {
   }
   writeFileSync(join(dir, 'fb-stub.js'), STUB_IMPL +
     [...names].filter(n => !IMPLEMENTED.includes(n)).map(n => `export function ${n}() {}`).join('\n') + '\n');
-  files.forEach(f => writeFileSync(join(dir, f), f === 'store.js'
-    ? storeSrc.replace(/from\s*'https:\/\/www\.gstatic\.com\/firebasejs\/[^']+'/g, "from './fb-stub.js'")
-    : text(f)));
+  files.forEach(f => {
+    if (f.includes('/')) mkdirSync(join(dir, f, '..'), { recursive: true });
+    writeFileSync(join(dir, f), f === 'store.js'
+      ? storeSrc.replace(/from\s*'https:\/\/www\.gstatic\.com\/firebasejs\/[^']+'/g, "from './fb-stub.js'")
+      : text(f));
+  });
   return dir;
 }
-const nowFiles = readdirSync(ROOT).filter(f => f.endsWith('.js'));
+// v59: vibe.js imports the pure contract under vibes/, which is staged at the
+// same paths — still every file as it is.
+const nowFiles = [...readdirSync(ROOT).filter(f => f.endsWith('.js')),
+  ...readdirSync(join(ROOT, 'vibes'), { recursive: true }).filter(f => f.endsWith('.js')).map(f => 'vibes/' + f)];
 const nowDir = stage('now', nowFiles, f => readFileSync(join(ROOT, f), 'utf8'));
 const oldFiles = execFileSync('git', ['ls-tree', '--name-only', V56], { cwd: ROOT, encoding: 'utf8' }).split('\n').filter(f => /^[\w-]+\.js$/.test(f));
 const oldDir = stage('v56', oldFiles, f => execFileSync('git', ['show', V56 + ':' + f], { cwd: ROOT, encoding: 'utf8', maxBuffer: 1 << 26 }));
