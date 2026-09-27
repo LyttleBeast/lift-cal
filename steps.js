@@ -34,7 +34,7 @@ import { $, el, svgEl, sheet, toast, noteEl, confirmSheet, swipeToDelete,
          compact, parseKey, fmtDate, fmtDateFull, LIMITS, within } from './ui.js';
 // The gear, from the vibe's icon set (V59 §5.7). vibe.js is new in rack-v59
 // together with this import, so no browser holds this file without it.
-import { iconHtml } from './vibe.js';
+import { iconHtml, tail } from './vibe.js';
 
 const DAY = 864e5;
 const DEFAULTS = { goal: 10000 };
@@ -174,7 +174,7 @@ export function render() {
   wrap.appendChild(renderWeekdays());
   wrap.appendChild(renderRecent());
 
-  root.appendChild(wrap);
+  root.appendChild(tail(wrap, 'steps'));   // the vibe's tailpiece, where it has one (none in v1)
 }
 
 /* ---------- today ---------- */

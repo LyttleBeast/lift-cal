@@ -81,6 +81,9 @@ const A  = await import(pathToFileURL(join(dir, 'analytics.mjs')).href);
 const B  = await import(JSON.parse(real('blocks.js')));
 const UI = await import(JSON.parse(real('ui.js')));
 const U  = await import(JSON.parse(real('units.js')));
+// engine v2: a set's badge is a glyph site (↳), drawn through the vibe — the
+// real vibe.js, which imports only the pure vibes/ contract.
+const VB = await import(JSON.parse(real('vibe.js')));
 
 const WSRC = src('workout.js');
 function lift(name) {
@@ -102,7 +105,8 @@ const stubs = {
   // badge and swipe go through the drop-set edits — the real ones.
   keepSets: A.keepSets, retypeSet: A.retypeSet, removeSet: A.removeSet,
   // v56, on purpose: "+ Set" asks analytics.js repeatOf which set it copies — the real one.
-  repeatOf: A.repeatOf
+  repeatOf: A.repeatOf,
+  glyphed: VB.glyphed
 };
 const NAMES = Object.keys(stubs);
 const W = new Function(...NAMES, `

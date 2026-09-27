@@ -40,6 +40,7 @@ import { TIERS, SETTABLE_TYPES, RULE_MAX, TRIAL_DAYS,
 import { $, el, sheet, toast, noteEl, confirmSheet, copyText, compact,
          fmtDate, parseKey, segmented } from './ui.js';
 import { lineChart, barChart, donut, legend, emptyChart } from './analytics.js';
+import { glyphed } from './vibe.js';
 
 const P_AI = 'aiAllow/';
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -716,7 +717,7 @@ function accountRow(r) {
   row.appendChild(left);
   row.appendChild(typePill(r));
   row.appendChild(el('div', 'set-row-v', r.total ? String(r.total) : '–'));
-  row.appendChild(el('div', 'set-row-x', '›'));
+  row.appendChild(glyphed(el('div', 'set-row-x', '›'), 'go'));
   row.onclick = () => openAccount(r.u);
   return row;
 }
@@ -1560,6 +1561,7 @@ function pageHead(eyebrow, title, onBack) {
   const left = el('div');
   const back = el('button', 'back-btn');
   back.innerHTML = '<span aria-hidden="true">&#8249;</span> Back';
+  glyphed(back.firstChild, 'back');
   back.onclick = onBack;
   left.appendChild(back);
   left.appendChild(el('div', 'eyebrow', eyebrow));

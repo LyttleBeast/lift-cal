@@ -74,6 +74,9 @@ globalThis.window = { addEventListener() {} };
 
 const UI = await import(real('ui.js'));
 const O  = await import(real('estimate-origin.js'));
+// engine v2: the meals list's › and ✕ and the review's ✕ are glyph sites,
+// drawn through the vibe — the real vibe.js (it imports only vibes/).
+const VB = await import(real('vibe.js'));
 
 /* ---------- lifting the real functions out of food.js ---------- */
 const FSRC = src('food.js');
@@ -93,6 +96,7 @@ function harness(o = {}) {
   const S = { writes: [], toasts: [], recalled: [], estimates: 0, db: {} };
   const stubs = {
     el: UI.el, sheet: UI.sheet, toast: m => S.toasts.push(String(m)), noteEl: UI.noteEl, confirmSheet: UI.confirmSheet,
+    glyphed: VB.glyphed,
     segmented: UI.segmented, r1: UI.r1, trimNum: UI.trimNum, clamp: UI.clamp, within: UI.within, LIMITS: UI.LIMITS,
     estimateOrigin: O.estimateOrigin, originHeading: O.originHeading, EDITED: O.EDITED, mealName: O.mealName,
     write: async (p, v) => { S.writes.push({ p, v: clone(v) }); S.db[p] = clone(v); },

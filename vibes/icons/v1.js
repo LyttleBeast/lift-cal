@@ -172,7 +172,11 @@ export default deepFreeze({
      Native NavBtn names its button from the glyph it shows
      (app/(app)/(tabs)/food.jsx:136-137: label === '‹' ? 'Previous day' …),
      so those two lines are listed with prev / next: routing prev / next /
-     gear through icon() there must keep that label. */
+     gear through icon() there must keep that label.
+     In another vibe's icon set, glyphs.<name> is an icon (the shape `icons`
+     holds), drawn at every site listed here for that name, or null: the
+     character stays text. A name a set leaves out stays text too. v1's
+     entries are the survey and carry no drawing, so every glyph is text. */
   glyphs: {
     prev:     { char: '‹', web: ['food.js:537', 'workout.js:398'],
                 native: ['app/(app)/(tabs)/food.jsx:136', 'app/(app)/(tabs)/food.jsx:1629', 'app/(app)/(tabs)/workout/index.jsx:179'] },
@@ -258,5 +262,30 @@ export default deepFreeze({
                     'app/(app)/(tabs)/steps.jsx:254', 'app/(app)/(tabs)/you/admin.jsx:254', 'src/pure/coach-view.js:95',
                     'src/ui/onboarding/Setup.jsx:478', 'src/ui/steps/sheets.jsx:322', 'src/ui/steps/sheets.jsx:323',
                     'src/ui/steps/sheets.jsx:332'] }
-  }
+  },
+
+  /* The water vessel: the bottle the day's water fills (web water.js
+     vessel(), native food.jsx Vessel, both drawn at 76 wide). It encodes a
+     number, so a vibe may redraw the bottle but not what fills it: the level
+     is linear in the day's fraction from insideBottom up to insideTop. `d` is
+     the outline, also the clip the water is drawn in; `stroke` its width;
+     `cap` the lid drawn over the neck, or null for none. The colours are the
+     sites': the well inside, pBlue water at .45 and .9, the outline in knurl
+     and the cap in grip. */
+  vessel: {
+    viewBox: '0 0 104 168',
+    stroke: 2.5,
+    d: 'M 40 10 L 64 10 L 64 28 C 64 37 84 44 84 62 L 84 146 Q 84 160 70 160 L 34 160 Q 20 160 20 146 L 20 62 C 20 44 40 37 40 28 Z',
+    insideBottom: 154,
+    insideTop: 22,
+    cap: { tag: 'rect', x: 38, y: 2, width: 28, height: 10, rx: 3 }
+  },
+
+  /* Tailpieces: one piece of decoration a vibe may draw at the foot of a
+     screen, under its last box and hidden from assistive tech — keyed by
+     screen (you, workout, food, weight, steps, recap), each a drawing
+     ({ viewBox, stroke, els }, els as an icon's) or null.
+     v1 has none, and a screen with none draws nothing and adds no element or
+     host. */
+  ornaments: {}
 });

@@ -87,29 +87,44 @@ export default deepFreeze({
       'rows or dense numbers.',
     'Fixed boxes stay fixed: the Coach card\'s 190 / 164 with its padding, border and type (unless the vibe measured ' +
       'its own, T.fit, §6.6), the dock\'s height, the sheets\' maximum heights, the set table\'s column widths.',
-    'Light vibes: on the web the top safe-area band stays dark (the installed PWA\'s status text is always white); a ' +
+    'Light vibes: on the web the top safe-area band stays dark, in colors.band (the installed PWA\'s status text is always white); a ' +
       'look drawn under the status bar — the workout bar is — keeps that band dark (§10).',
     'Native mechanics: a switch sits after the block\'s hooks; a colour spent in a reanimated worklet is hoisted as a ' +
       'plain string (SetRow, §6.3); every Text keeps its maxFontSizeMultiplier and explicit lineHeight, floored at the ' +
       'face\'s minLh; a host tree with no photo is v1\'s (§6.7).'
   ],
 
-  /* The params a look reads: a vibe definition's `shape` object (PROPOSED —
-     not yet in v1.js or index.js ROLES; see design/VOCAB.md). Numbers are pt on
-     native and px on the web, as radius is. Colour values name colour roles.
-     These defaults apply to any key a definition leaves out; v1 names no look,
-     so it reads none of them. */
+  /* The params a look reads: a vibe definition's `shape` object. Numbers are
+     pt on native and px on the web, as radius is. Colour values name colour
+     roles. These defaults apply to any key a definition leaves out; v1 names
+     no look, so it reads none of them. index.js ROLES carries each one: native
+     build() hands the object on as T.shape, and the web spends each param as a
+     --shape-* token (a list as one token per entry, at most three: line, gap,
+     line), generated from the definition by tools-check/vibes-css.mjs. */
   params: {
     rule: {
       ink: 'knurl',   // every drawn rule; 3:1 on its ground where it carries structure (R2.2)
       hair: 1,        // a hairline: row, cell and column dividers
       head: [2],      // the head rule, line and gap widths outermost first: [2] one 2pt rule, [3, 2, 1] an Oxford rule
-      place: 'above'  // the head rule above a head (the head hangs from it) or 'below' it (the head sits on it)
+      place: 'above', // the head rule above a head (the head hangs from it) or 'below' it (the head sits on it)
+      // The single rule an article sits on — a card's head, an exercise's
+      // name, a headline figure — where head is kept for chapters (section
+      // heads, a masthead, a sheet's top edge). Its default is head's, so a
+      // vibe that sets neither draws one 2pt rule at both.
+      sub: [2],
+      // The rule a form draws over a total (the recap's session totals, the
+      // estimator's total). No block carries those sites yet: a vibe's own
+      // stylesheet spends it until one does. Its default is head's.
+      total: [2]
     },
     leader: { ink: 'steel', dot: 1.5, pitch: 4, min: 16 },   // drawn dots on the text baseline, name … value
     band: { fill: 'raised', ink: 'chalk', height: 30 },       // a filled strip holding a head's own words
     gutter: 2,                                                // the gap between panels, board cells and strips
-    keyline: { ink: 'chalk', width: 1 }                       // a stamped outline: plates, stamps, record cells
+    keyline: { ink: 'chalk', width: 1 },                      // a stamped outline: plates, stamps, record cells
+    // The tab's lead card — its one kept box under card · ruled — also wears
+    // the keyline (shape.keyline's ink and width), for a page its ground alone
+    // would vanish on.
+    lead: { keyline: false }
   },
 
   blocks: {
@@ -129,7 +144,7 @@ export default deepFreeze({
         v1: { grade: 'v1', look: 'bar ground, a 1pt collar border, radius.r, padding 14, 12 below; its head row is the title left, meta and ⋯ right' },
         flat: { grade: 'shape', look: 'the bar ground with no border, radius.r corners: surfaces told apart by value, not outline (R3.2)',
                 for: ['chalk', 'navy', 'oxblood'] },
-        ruled: { grade: 'deep', look: 'no ground, no border, no radius: the card sits on the page under the head rule (shape.rule.head, placed by shape.rule.place) drawn full width, its content to the rule\'s width; cards part by space. The tab\'s lead card — its one hero box: Fuel\'s summary, Weight\'s log, Steps\' today — keeps a box (bar ground, radius.r, no border), so the page is never boxes-nowhere (R6.1, R6.10)',
+        ruled: { grade: 'deep', look: 'no ground, no border, no radius: the card sits on the page under its article rule (shape.rule.sub, placed by shape.rule.place) drawn full width, its content to the rule\'s width; cards part by space. The tab\'s lead card — its one hero box: Fuel\'s summary, Weight\'s log, Steps\' today — keeps a box (bar ground, radius.r, no border; the keyline, shape.keyline, when shape.lead.keyline), so the page is never boxes-nowhere (R6.1, R6.10)',
                  for: ['ledger', 'iron-age', 'clear-sky'] },
         plate: { grade: 'shape', look: 'the bar ground, square corners (radius.plate) and a 2pt keyline in knurl: a stamped nameplate', for: [] },
         panel: { grade: 'deep', look: 'bar ground, no border, square corners (radius.plate), cards parted by shape.gutter; the head row drawn as a band (shape.band) across the top edge holding the title left and meta and ⋯ right in the band\'s ink',
@@ -306,7 +321,7 @@ export default deepFreeze({
         v1: { grade: 'v1', look: 'a well tile (collar border, radius.sm) with its subject\'s corner tint (a radial wash on the web, a flat corner block on native); the 9pt caps label and the delta in a tinted pill; the 22pt value and unit; "last week …"; a 46pt sparkline; seven day dots, today ringed' },
         plain: { grade: 'shape', look: 'the tile without its corner tint. The delta pill\'s fill is tint.pill*, which a vibe may set to 0 without a look', for: ['chalk', 'navy', 'oxblood'] },
         band: { grade: 'deep', look: 'no corner tint; a 3pt band of the subject colour across the tile\'s top edge', for: [] },
-        word: { grade: 'deep', look: 'no tile: the sparkline drawn word-sized (17–22 tall, 60–90 wide, a 3–4pt end dot, no frame) in its own place; the delta as bare signed text with its arrow', for: ['clear-sky'] }
+        word: { grade: 'deep', look: 'no tile: the sparkline drawn word-sized (17–22 tall, 60–90 wide, a 3–4pt end dot, no frame) in its own place; the delta in its pill while the vibe\'s tint.pill* are above 0, and as bare signed text with its arrow when they are 0', for: ['clear-sky', 'iron-age'] }
       },
       keeps: ['the 2 × 2 grid and its order', 'every figure; the arrow on each delta and its "…" / "–" states',
               'seven day dots, today ringed (a shape cue)', '"last week …" in its place']
@@ -326,7 +341,7 @@ export default deepFreeze({
       v1: 'v1',
       looks: {
         v1: { grade: 'v1', look: 'the figure alone: loadNum is wdth 118 / 800, tabular, -.02em, line-height .95, at 26–40; You\'s headline is 34pt wdth 112 / 800 with its unit beside it. Face, width and weight are type roles, with no look' },
-        rule: { grade: 'deep', look: 'the challenge line: the figure over the head rule (shape.rule.head), its unit on the same baseline', for: ['iron-age'] },
+        rule: { grade: 'deep', look: 'the challenge line: the figure over the article rule (shape.rule.sub), its unit on the same baseline', for: ['iron-age'] },
         stamp: { grade: 'deep', look: 'the figure inside a keyline plate (shape.keyline, square corners): a stamped scale plate, a record cell', for: ['iron-age', 'meet-day'] },
         flap: { grade: 'deep', look: 'a split-flap cell behind the figure: two flat halves meeting at 50% with no blend (C22) and a 1pt seam; only at 32pt and up', for: ['meet-day'] }
       },
@@ -519,7 +534,7 @@ export default deepFreeze({
       v1: 'v1',
       looks: {
         v1: { grade: 'v1', look: 'the exercise card: bar ground, collar border, radius.r, clipped; a head of the 4 × 30 group tag, the name (15pt wdth 88 / 700) and ⋯; the grey "Last …" line; 9pt caps column heads; the rows; the action buttons. A lifting block wraps its cards in a knurl keyline over an accent .03 wash, under an accent caps title' },
-        ruled: { grade: 'deep', look: 'no box: the name over the head rule (shape.rule.head); the column heads over a 1pt rule; the rows parted by hairlines (setRow); a lifting block as a rule-framed group', for: ['iron-age', 'ledger'] },
+        ruled: { grade: 'deep', look: 'no box: the name over the article rule (shape.rule.sub); the column heads over a 1pt rule; the rows parted by hairlines (setRow); a lifting block as a rule-framed group', for: ['iron-age', 'ledger'] },
         panel: { grade: 'deep', look: 'bar ground, no border, square corners, cards parted by shape.gutter; the head drawn as a band (shape.band) holding the group tag, the name and ⋯', for: ['meet-day'] }
       },
       keeps: ['the columns, in order, at v1\'s widths (30 / 1fr / 1fr / 42 / 38; the routine editor\'s 30 / 1fr / 1fr / 38)',
@@ -537,16 +552,16 @@ export default deepFreeze({
       add: ['src/ui/train/SetRow.jsx SetRow (after its hooks)', 'src/ui/train/SetRow.jsx SetTypeBadge'],
       slots: [],
       reads: ['colors.collar', 'tint.setDone', 'tint.setFlash', 'colors.raised', 'colors.steel', 'tint.tagW', 'tint.tagF', 'tint.tagD',
-              'colors.pYellow', 'colors.pRed', 'colors.pBlue', 'colors.well', 'colors.focus', 'colors.dim', 'colors.knurl', 'colors.done',
+              'tagInk', 'colors.pYellow', 'colors.pRed', 'colors.pBlue', 'colors.well', 'colors.focus', 'colors.dim', 'colors.knurl', 'colors.done',
               'colors.onDone', 'colors.accent', 'tint.coachBase', 'tint.coachLow', 'tint.coachHigh', 'tint.dropRail', 'radius.idx', 'radius.sm'],
       type: ['setInput', 'literal badge and e1RM'],
       variants: ['v1', 'ruled', 'attempt'],
       v1: 'v1',
       looks: {
-        v1: { grade: 'v1', look: 'five columns under a collar rule: the type badge (raised, radius.idx; W / F / D in their plate colour over a .16 wash), two well inputs (radius.sm, a focus border), the e1RM (10pt dim), a 30 × 30 check (a 1.5pt knurl edge; done = the done ground with an onDone ✓). A done row washes done at .07; a tick flashes accent into done over 600ms; drops hang on a pBlue .45 rail' },
-        ruled: { grade: 'deep', look: 'rows parted by hairlines (shape.rule.hair); the inputs lose their ground and sit on a 1pt rule; the badge a bare figure (W / F / D keep their letter and colour); done = the filled check with its ✓, and the row wash',
+        v1: { grade: 'v1', look: 'five columns under a collar rule: the type badge (raised, radius.idx; W / F / D in their plate colour — tagInk — over a .16 wash, tint.tag*), two well inputs (radius.sm, a focus border), the e1RM (10pt dim), a 30 × 30 check (a 1.5pt knurl edge; done = the done ground with an onDone ✓). A done row washes done at .07; a tick flashes accent into done over 600ms; drops hang on a pBlue .45 rail' },
+        ruled: { grade: 'deep', look: 'rows parted by hairlines (shape.rule.hair); the inputs lose their ground and sit on a 1pt rule; the badge a bare figure (W / F / D keep their letter, inked in tagInk); done = the filled check with its ✓, and the row wash',
                  for: ['iron-age', 'ledger'] },
-        attempt: { grade: 'deep', look: 'the attempt card: the badge a 28 × 28 square box (raised; W / F / D as letter colour), the current set\'s box inverted; square inputs (radius.plate) with a 2pt focus outline; done = a 12pt lamp inside the unchanged 30 × 30 check, lit (done, filled) or unlit (track with a grip ring), in place of the row wash. "Current" is the session\'s first set not yet done — derived, never stored; the caller passes it',
+        attempt: { grade: 'deep', look: 'the attempt card: the badge a 28 × 28 square box (raised; W / F / D inked in tagInk), the current set\'s box inverted; square inputs (radius.plate) with a 2pt focus outline; done = a 12pt lamp inside the unchanged 30 × 30 check, lit (done, filled) or unlit (track with a grip ring), in place of the row wash. "Current" is the session\'s first set not yet done — derived, never stored; the caller passes it',
                    for: ['meet-day'] }
       },
       keeps: ['the five columns, in order, at v1\'s widths', 'the inputs: typed text kept until blur, \'\' apart from 0, grey targets as placeholders',
@@ -612,14 +627,15 @@ export default deepFreeze({
                  'src/ui/chart/HeatStrip.jsx', 'src/ui/chart/Legend.jsx'],
       add: ['src/ui/you/bits.jsx VolRow', 'app/(app)/(tabs)/food.jsx CalMeter', 'app/(app)/(tabs)/steps.jsx StepRing'],
       slots: [],
-      reads: ['colors.pYellow', 'colors.pBlue', 'colors.chalk', 'colors.collar', 'colors.knurl', 'colors.track', 'colors.steel', 'colors.dim', 'colors.faint', 'colors.grip', 'colors.calMark'],
+      reads: ['colors.pYellow', 'colors.pBlue', 'colors.chalk', 'colors.collar', 'colors.knurl', 'colors.track', 'colors.steel', 'colors.dim', 'colors.faint', 'colors.grip', 'colors.calMark',
+              'tint.zoneCut', 'tint.zoneHold', 'tint.zoneGain', 'tint.runway', 'tint.runwayEdge', 'shadow.calTick', 'shadow.calHead', 'shadow.calTarget'],
       type: ['literal'],
       variants: ['v1', 'ink', 'print', 'board'],
       v1: 'v1',
       looks: {
         v1: { grade: 'v1', look: 'lines over an area wash with a glowing end dot, rounded bars on track, ring and donut arcs, a heat strip of cells, sparklines, dashed targets; meters are rounded bars on track' },
         ink: { grade: 'deep', look: 'single-ink strokes: 1.5pt lines with no area and no glow, flat square-topped bars, rings with square caps, hairline grids', for: ['ledger', 'clear-sky'] },
-        print: { grade: 'deep', look: 'heavier 2pt lines, square-topped bars, the day that is not over hatched in place of dimmed (a shape cue), macro fills optionally hatched with matching legend swatches; no area wash',
+        print: { grade: 'deep', look: 'heavier 2pt lines, square-topped bars, the day that is not over hatched in place of dimmed (a shape cue), macro fills optionally hatched with matching legend swatches; no area wash. The calorie meter\'s bands (cut, hold, gain) hatched in their zone colours at full strength — a pattern each, CSS on the web and react-native-svg <Pattern> in CalMeter — where v1 washes them (tint.zone* stay the fallback); its head, ticks and target keep calMark, edged by shadow.calTick / calHead / calTarget',
                  for: ['iron-age'] },
         board: { grade: 'deep', look: 'square-topped columns 2 apart, the day that is not over hatched in the knurl pattern, 2pt lines over an LED dot-matrix fill under the line only, square-ended meters with a tick at the target',
                  for: ['meet-day'] }
@@ -686,7 +702,7 @@ export default deepFreeze({
       v1: 'v1',
       looks: {
         v1: { grade: 'v1', look: 'two columns of well tiles (collar border, radius.r): a 36pt icon well (raised; Photo\'s in accent with an onAccent icon; lit tiles\' in grip), the title, a dim line, and the AI tag pill; Photo and the lit tiles wear accent washes (gradients on the web, flat tileHero / tileLit on native)' },
-        flat: { grade: 'shape', look: 'no washes and no border: every tile on the well; the Photo tile marked by its accent icon well alone; the tag square (radius.chip)', for: ['chalk', 'navy', 'oxblood'] },
+        flat: { grade: 'shape', look: 'no washes and no border: every tile on the well; the Photo tile marked by its accent icon well alone; the lit tiles\' icon well and tag on raised, not grip; the tag square (radius.chip)', for: ['chalk', 'navy', 'oxblood'] },
         ruled: { grade: 'deep', look: 'no tiles: a two-column grid parted by hairlines (shape.rule.hair), the icon without its well, the tag a stamped keyline (shape.keyline)', for: ['iron-age', 'ledger'] }
       },
       keeps: ['the tiles, in order, in two columns', 'icons (the icon set\'s), titles, lines and tags word for word',

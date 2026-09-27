@@ -71,9 +71,11 @@ export default deepFreeze({
     setTable: 'v1', setRow: 'v1', plateStrip: 'v1', calCell: 'v1', fab: 'v1',
     addTile: 'v1', sessionChrome: 'v1'
   },
-  /* The params a look reads — rules, leaders, bands, gutters, keylines
-     (vocab.js `params`, which holds the default for every key a definition
-     leaves out). v1 names no look, so it reads none and holds none. */
+  /* The params a look reads — rules, leaders, bands, gutters, keylines, the
+     lead card's keyline (vocab.js `params`, which holds the default for every
+     key a definition leaves out). v1 names no look, so it reads none and holds
+     none; rack.css's :root carries the defaults as the --shape-* tokens, which
+     nothing in v1 spends. */
   shape: {},
 
   colors: {
@@ -193,7 +195,11 @@ export default deepFreeze({
     // Native paints the web's two accent-wash tiles (.add-tile.hero / .lit,
     // a gradient over the well) as one flat colour each — common.jsx:411.
     tileHero:      '#1e1f1e',
-    tileLit:       '#17181a'
+    tileLit:       '#17181a',
+    // The strip under the installed web app's status bar, whose text is
+    // always white. rack-v58 draws no strip, so v1's is null — none; a light
+    // vibe sets a dark one. Native ignores it (chrome.statusBar).
+    band:          null
   },
 
   /* native T.alpha: helper name -> the colour role it tints. The first five
@@ -211,8 +217,10 @@ export default deepFreeze({
      today's code holds ('rgba(255,255,255,0.04)' has no spaces and rgba()
      would add them). Every `exact` reaches a host prop verbatim but
      wkBarGlass's, which nothing reads at 1cb6498; it is kept so build(v1) can
-     hand back T as it is. The first 23 are theme.js:58-84; the last five are
-     raw rgba strings in you/verdicts.jsx that become tokens (§6.3). */
+     hand back T as it is. The first 23 are theme.js:58-84; the next five are
+     raw rgba strings in you/verdicts.jsx that become tokens (§6.3); the last
+     two are the web's calorie runway (.cal-runway: its hatching and its right
+     edge, rack.css:1894-1895 at rack-v58), which native does not draw. */
   tint: {
     setDone:   { color: 'done',    a: 0.07 },
     setFlash:  { color: 'accent',  a: 0.28 },
@@ -241,7 +249,9 @@ export default deepFreeze({
     trajWarn:     { color: 'warn',   a: 0.18, exact: 'rgba(240,190,30,0.18)' },
     trajBad:      { color: 'bad',    a: 0.18, exact: 'rgba(214,37,43,0.18)' },
     reviewBg:     { color: 'accent', a: 0.07, exact: 'rgba(240,190,30,0.07)' },
-    reviewBorder: { color: 'accent', a: 0.18, exact: 'rgba(240,190,30,0.18)' }
+    reviewBorder: { color: 'accent', a: 0.18, exact: 'rgba(240,190,30,0.18)' },
+    runway:       { color: 'rack',   a: 0.55 },
+    runwayEdge:   { color: 'rack',   a: 0.7 }
   },
 
   /* ---- type ----
@@ -271,7 +281,12 @@ export default deepFreeze({
     chip:     { size: 11, wdth: 92,  wght: 600, color: 'steel' },
     segBtn:   { size: 11, wdth: 92,  wght: 700, ls: 0.06, upper: 1, color: 'steel' },
     setInput: { size: 15, wdth: 100, wght: 700, tnum: 1, color: 'chalk' },
-    mono:     { size: 12, color: 'chalk' }   // its fontFamily is face.mono
+    mono:     { size: 12, color: 'chalk' },  // its fontFamily is face.mono
+    // The running meta (a card's "last 7 days", a date, "Member since …") as
+    // one preset, for a look that sets it in one voice. No v1 site spends it —
+    // v1 sets each at its own literal — so v1's is note's arguments, and a
+    // vibe without one takes its own note (index.js ROLES `or`).
+    meta:     { size: 12, wght: 400, lh: 1.5, color: 'dim' }
   },
   // .load-num, "wide + heavy, stamped like a plate": type({ size, ...these }).
   // A function of the size on purpose (theme.js:278-296) — no size here.
@@ -292,11 +307,21 @@ export default deepFreeze({
     step: 100,
     width: 100,
     minLh: 1.088,
+    // Width ranges drawn in a family of their own (native build(): the first
+    // band holding a preset's wdth names its family, keys, snap, weights and
+    // minLh). v1 has one family, so none.
+    bands: [],
     mono: { ios: 'Menlo', android: 'monospace' },
     web: {
       font: "'Archivo', system-ui, -apple-system, sans-serif",
       mono: 'ui-monospace, monospace',
-      importUrl: 'https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..900&display=swap'
+      importUrl: 'https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..900&display=swap',
+      // The stacks a vibe sets its heads, its italic and its numerals in
+      // (num is also what vibe.js prefetches for the Vibes card). v1 sets all
+      // three in the one stack above, and has no italic of its own.
+      display: "'Archivo', system-ui, -apple-system, sans-serif",
+      italic: "'Archivo', system-ui, -apple-system, sans-serif",
+      num: "'Archivo', system-ui, -apple-system, sans-serif"
     }
   },
 
@@ -350,7 +375,12 @@ export default deepFreeze({
     trajGood:   { web: [{ x: 0, y: 0, blur: 0, spread: 4, color: 'good', a: 0.18 }] },
     trajWarn:   { web: [{ x: 0, y: 0, blur: 0, spread: 4, color: 'warn', a: 0.18 }] },
     trajBad:    { web: [{ x: 0, y: 0, blur: 0, spread: 4, color: 'bad',  a: 0.18 }] },
-    tourLit:    { web: [{ x: 0, y: 0, blur: 0, spread: 2, color: 'accent' }] }
+    tourLit:    { web: [{ x: 0, y: 0, blur: 0, spread: 2, color: 'accent' }] },
+    // Rings round the calorie bar's head and dashed target, for a page they
+    // would vanish on (native: a border, index.js ROLES). rack-v58 draws
+    // neither: none.
+    calHead:    { web: [] },
+    calTarget:  { web: [] }
   },
 
   /* ---- scrims and glass ----
@@ -536,5 +566,12 @@ export default deepFreeze({
     flag: { on: 'good', off: 'bad', lit: 'pBlue', warn: 'warn' }
   },
   // The estimator's confidence dot (food.js CONF, native estimator.jsx CONF)
-  conf: { high: 'good', medium: 'warn', low: 'bad' }
+  conf: { high: 'good', medium: 'warn', low: 'bad' },
+  // The set badge's letter, a colour role each: rack.css .set-idx.t-W/F/D's
+  // color and native SetRow.jsx TINT's second entry. Its wash is tint.tagW/F/D.
+  tagInk: { W: 'pYellow', F: 'pRed', D: 'pBlue' },
+  // Small text in a data colour (under 18pt; under 14pt when bold) is inked
+  // in the role this names; graphics and large text keep the role itself.
+  // Every plate inks itself today, so v1's map is the identity.
+  inkOf: { pRed: 'pRed', pBlue: 'pBlue', pYellow: 'pYellow', pGreen: 'pGreen', pWhite: 'pWhite', pChrome: 'pChrome' }
 });

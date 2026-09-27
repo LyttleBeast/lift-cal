@@ -30,6 +30,7 @@ import { hasActiveSession } from './workout.js';
 import { openInstallGuide } from './onboarding.js';
 import { coachToggleRows, coachAnswerRows, openCoachSheet } from './coach-ui.js';
 import { openVibes, vibeName } from './vibes-sheet.js';
+import { glyphed } from './vibe.js';
 import { hIn as inchesFrom, fmtH, unitH, limH, labelRate } from './units.js';
 
 /* ---------- pieces ---------- */
@@ -53,7 +54,7 @@ function navRow(list, label, value, onTap) {
   const b = el('button', 'set-row-nav');
   b.appendChild(el('span', 'set-row-l', label));
   if (value) b.appendChild(el('span', 'set-row-v num', value));
-  b.appendChild(el('span', 'set-row-x', '›'));
+  b.appendChild(glyphed(el('span', 'set-row-x', '›'), 'go'));
   b.onclick = onTap;
   list.appendChild(b);
   return b;

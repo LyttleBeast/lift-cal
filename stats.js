@@ -16,7 +16,7 @@ import {
 import { wOut, volOut, fmtW, fmtSetLoad, fmtVol, unitW } from './units.js';
 // A group's hex (analytics.js groupColor) as the token that paints it (V59 §5.4).
 // Named vibePaint here because the exercise picker's repaint is its own paint().
-import { paint as vibePaint, paintSvg } from './vibe.js';
+import { paint as vibePaint, paintSvg, glyphed } from './vibe.js';
 
 let open      = false;
 let backFn    = null;
@@ -63,6 +63,7 @@ function pageHead(eyebrow, title, onBack) {
   const left = el('div');
   const back = el('button', 'back-btn');
   back.innerHTML = '<span aria-hidden="true">&#8249;</span> Back';
+  glyphed(back.firstChild, 'back');
   back.onclick = onBack;
   left.appendChild(back);
   left.appendChild(el('div', 'eyebrow', eyebrow));

@@ -21,7 +21,10 @@
 //
 //   A  v1 — rack.css's :root IS v1's definition. Every role that lands on a
 //      custom property is declared in rack.css's :root with the value v1.js
-//      gives it (hex compared case-insensitively, channel lists and the spaces
+//      gives it — read through index.js valueOf(), so a key v1 leaves out (the
+//      look params) is its role's default, and a role whose v1 value is null
+//      (the status strip, a photo band: nothing drawn) is not declared at all
+//      (hex compared case-insensitively, channel lists and the spaces
 //      inside a shadow or gradient ignored, a shadow's `inset` wherever it
 //      sits), every custom property in that :root is some role's, and each is
 //      declared once. rack.css line 1 is the @import of face.web.importUrl,
@@ -40,6 +43,14 @@
 //      two font stacks) spends its role's custom property, and each colour
 //      role's `except` site keeps spending the role it names (.wpe-row
 //      input:focus stays --p-blue), so a token nobody spends cannot pass.
+//   E  the engine v2 sites (the first four vibe specs' shared asks) spend
+//      their roles' tokens in rack.css: the set badge's W / F / D letters
+//      (tagInk), "+ Drop"'s 12px words (inkOf.pBlue, the one shared rule
+//      that sets small text in a data colour), the calorie runway's hatching
+//      and edge (tint.runway /
+//      runwayEdge), and the rings round the calorie head and dashed target
+//      and their guide swatches (shadow.calHead / calTarget). A vibe with a
+//      band (colors.band) gets the status strip generated after its tokens.
 //   C  canaries — the checks above fail on a definition with one colour
 //      changed, on a block with one byte changed and on an anchored site
 //      moved off its token, so a pass means something.
@@ -55,7 +66,7 @@ const WRITE = process.argv.includes('--write');
 const read = f => readFileSync(join(ROOT, f), 'utf8');
 
 const I = await import(pathToFileURL(join(ROOT, 'vibes/defs/index.js')).href);
-const { ROLES, IDS, at, sideOf, hexToRgb } = I;
+const { ROLES, IDS, at, sideOf, hexToRgb, valueOf } = I;
 const defOf = async id => (await import(pathToFileURL(join(ROOT, `vibes/defs/${id}.js`)).href)).default;
 
 let checks = 0; const fails = [];
@@ -81,11 +92,18 @@ function colourOf(def, role, a) {
   return `rgba(${rgb.join(',')},${num(a)})`;
 }
 
-/* One role's CSS text in a definition, or undefined when the definition does
-   not give it. Throws on a value of the wrong shape. */
+/* One role's CSS text in a definition: undefined when the definition does not
+   give it and the role says nothing a definition without it takes (a missing
+   role), null when its value is null (nothing is drawn: no token is written,
+   so the site keeps v1's drawing). The value is index.js valueOf()'s — the
+   definition's own, else the role's `or` or `dflt` — the one reading the
+   engines share. Throws on a value of the wrong shape. */
 function cssText(def, role) {
-  const v = at(def, role.path);
-  if (v === undefined || v === null) return undefined;
+  const v = valueOf(def, role.path);
+  if (v === undefined) return undefined;
+  if (v === null) return null;
+  // a value that names a colour role (tagInk, inkOf, a shape ink or fill)
+  if (role.ref === 'color') return colourOf(def, v);
   if (role.channel) {
     const rgb = hexToRgb(sideOf(def.colors[v], 'web'));
     if (!rgb) throw new Error(`${role.path}: '${v}' is not a 6-digit colour role`);
@@ -106,6 +124,16 @@ function cssText(def, role) {
         return `linear-gradient(${v.dir}, ${v.stops.map(s => `${colourOf(def, s.color, s.a)} ${num(Math.round(s.at * 1000) / 10)}%`).join(', ')})`;
       }
       throw new Error(`${role.path}: not a filter or a gradient`);
+    case 'tint':                                                  // a role at an alpha, as rgba()
+      if (!v || typeof v.color !== 'string' || typeof v.a !== 'number') throw new Error(`${role.path}: not { color, a }`);
+      return colourOf(def, v.color, v.a);
+    case 'shape':                                                 // a look param: px, or a switch as 1 / 0
+      if (typeof v === 'number') return len(v);
+      if (typeof v === 'boolean') return v ? '1' : '0';
+      throw new Error(`${role.path}: not a number or a switch`);
+    case 'image':                                                 // a photo band's height (images.<slot>.band), px
+      if (typeof v === 'number') return len(v);
+      throw new Error(`${role.path}: not a number`);
     default: {
       const s = sideOf(v, 'web');
       if (typeof s !== 'string') throw new Error(`${role.path}: not a string`);
@@ -120,19 +148,36 @@ function tokensOf(def, { fixed }) {
   for (const r of PROPS) {
     if (r.fixed && !fixed) continue;
     const t = cssText(def, r);
-    if (t === undefined) missing.push(r.path); else out.push([r.web, t]);
+    if (t === undefined) missing.push(r.path); else if (t !== null) out.push([r.web, t]);
   }
   return { out, missing };
 }
 
 const BEGIN = id => `/* vibes-css:begin — generated from vibes/defs/${id}.js by tools-check/vibes-css.mjs. Do not edit between the markers: change the definition, then run it with --write. */`;
 const END = '/* vibes-css:end */';
+
+/* The status strip (colors.band, engine v2). An installed web app draws its
+   status text white whatever the page is (index.html's black-translucent
+   meta, fixed at launch), so a light vibe keeps the top inset dark: a fixed
+   strip the height of --safe-top in --band, over everything (the workout bar
+   runs under the status bar, the tour overlay is 210, the toast 300), taking
+   no touches. In a Safari tab the inset is 0 and the strip is nothing.
+   It is generated here, not written in rack.css, because v1 draws no strip:
+   a rule in rack.css would give v1 an html::before of its own, where this
+   exists only under a vibe whose definition sets a band. One line, so no
+   reader of the block's declarations (vibe-setting.mjs's tile check) takes
+   it for a token. */
+const bandRule = id => `:root[data-vibe="${id}"]::before { content: ''; position: fixed; top: 0; left: 0; right: 0; ` +
+  'height: var(--safe-top); background: var(--band); pointer-events: none; z-index: 400; }';
+
 function block(id, def) {
   const { out, missing } = tokensOf(def, { fixed: false });
   const lines = out.map(([k, v]) => `  ${k}: ${v};`);
   const cs = sideOf(at(def, 'chrome.colorScheme'), 'web');
   if (typeof cs === 'string') lines.push(`  color-scheme: ${cs};`);
-  return { text: [BEGIN(id), `:root[data-vibe="${id}"] {`, ...lines, '}', END].join('\n'), missing };
+  const band = valueOf(def, 'colors.band');
+  const extra = typeof band === 'string' ? [bandRule(id)] : [];
+  return { text: [BEGIN(id), `:root[data-vibe="${id}"] {`, ...lines, '}', ...extra, END].join('\n'), missing };
 }
 
 /* ================= reading CSS ================= */
@@ -194,6 +239,8 @@ function compareV1(def, rootDecls) {
     let want;
     try { want = cssText(def, r); } catch (e) { errs.push(`${r.path}: ${e.message}`); continue; }
     if (want === undefined) { errs.push(`${r.path} has no value in v1.js`); continue; }
+    // null in v1: nothing is drawn, so rack.css declares no token for it
+    if (want === null) { if (declared.has(r.web)) errs.push(`${r.web} is declared in rack.css's :root, but v1's ${r.path} is null — nothing drawn`); else n++; continue; }
     if (!declared.has(r.web)) { errs.push(`${r.web} (${r.path}) is not declared in rack.css's :root`); continue; }
     n++;
     if (norm(r, declared.get(r.web)) !== norm(r, want)) errs.push(`${r.web}: rack.css says '${declared.get(r.web)}', v1.js (${r.path}) says '${want}'`);
@@ -328,6 +375,47 @@ section('D  every site the contract anchors in the stylesheets spends its role\'
   expect(!errs.length && seen.length > 20, `all ${seen.length} anchored declarations in rack.css and auth.css spend their role's custom property`);
 }
 
+/* ================= E: the engine v2 sites ================= */
+// The roles engine v2 added (the shared asks of the first four vibe specs)
+// that rack.css spends. Each rule below spends its role's token, and in v1
+// each token is the value the declaration had (or, where rack-v58 had no
+// declaration, the property's initial value: --shadow-cal-* are none), so v1
+// draws what it drew. They are listed here rather than as ROLES `at` anchors
+// because index.js is pinned byte for byte into the native tree: the anchors
+// can move into ROLES when both trees take a new index.js together.
+const ENGINE2 = [
+  ['tagInk.W', ['rack.css', '.set-idx.t-W', 'color']],
+  ['tagInk.F', ['rack.css', '.set-idx.t-F', 'color']],
+  ['tagInk.D', ['rack.css', '.set-idx.t-D', 'color']],
+  // the one shared rule that sets small text (12px) in a data colour; the
+  // JS sites that ink text in one (.stat-val, the load figures) are 20px and
+  // up — large, so they keep the role itself
+  ['inkOf.pBlue', ['rack.css', '.drop-add', 'color']],
+  ['tint.runway', ['rack.css', '.cal-runway', 'background']],
+  ['tint.runwayEdge', ['rack.css', '.cal-runway', 'border-right']],
+  ['shadow.calHead', ['rack.css', '.cal-head', 'box-shadow']],
+  ['shadow.calHead', ['rack.css', '.guide-sw.head::after', 'box-shadow']],
+  ['shadow.calTarget', ['rack.css', '.cal-target', 'box-shadow']],
+  ['shadow.calTarget', ['rack.css', '.guide-sw.target::after', 'box-shadow']]
+];
+function engineSites(sheets) {
+  const errs = [];
+  for (const [path, [file, sel, prop]] of ENGINE2) {
+    const token = webOf(path);
+    const decls = siteDecls(sheets[file], sel, prop);
+    if (!decls.length) errs.push(`${path}: ${file} has no top-level ${sel} { ${prop} } — engine v2 spends ${token} there`);
+    else if (!decls.every(v => v.includes(`var(${token})`))) errs.push(`${path}: ${file} ${sel} { ${prop}: ${decls.join(' / ')} } does not spend var(${token})`);
+  }
+  return { errs };
+}
+section('E  every engine v2 site in rack.css spends its role\'s token');
+{
+  const { errs } = engineSites(SHEETS);
+  for (const e of errs) bad(e);
+  expect(!errs.length && ENGINE2.every(([p]) => typeof webOf(p) === 'string'),
+    `all ${ENGINE2.length} engine v2 declarations spend their role's custom property: the W / F / D letters, "+ Drop"'s small blue words, the runway's hatching and edge, the rings round the calorie head and target and their guide swatches`);
+}
+
 /* ================= C: canaries ================= */
 section('C  canaries — the checks can fail');
 {
@@ -358,6 +446,33 @@ section('C  canaries — the checks can fail');
   expect(!back.errs.length, 'and that block, with v1\'s fixed layout tokens, is rack.css\'s :root again — the generator and the check agree');
   const tampered = g.text.replace('--accent: #f0be1e;', '--accent: #f0be1f;');
   expect(tampered !== g.text && !(tampered.startsWith(g.text)), 'a committed block with one byte changed would not pass B');
+  // engine v2: a null role writes no token, a set one does; a left-out one takes its role's default
+  expect(!gen.has('--band') && compareV1(V1, [...rootDecls, ['--band', '#111416']]).errs.some(e => /--band is declared/.test(e)),
+    'v1\'s null status strip writes no --band, and a :root that declares one fails A');
+  const lit = JSON.parse(JSON.stringify(V1));
+  lit.id = 'probe2'; lit.colors.band = '#111416'; lit.tagInk.W = 'warn'; lit.shape = { rule: { head: [3, 2, 1.2] }, lead: { keyline: true } };
+  delete lit.inkOf; delete lit.face.web.num;
+  const g2 = new Map(block('probe2', lit).text.split('\n').slice(2, -2).map(l => { const m = /^ {2}(--[\w-]+): (.*);$/.exec(l); return m ? [m[1], m[2]] : [l, l]; }));
+  expect(g2.get('--band') === '#111416' && g2.get('--tag-ink-w') === V1.colors.warn && g2.get('--shape-rule-head-0') === '3px' &&
+    g2.get('--shape-rule-head-1') === '2px' && g2.get('--shape-rule-head-2') === '1.2px' && g2.get('--shape-rule-sub-0') === '2px' &&
+    g2.get('--shape-lead-keyline') === '1' && g2.get('--ink-of-p-yellow') === V1.colors.pYellow && g2.get('--font-num') === V1.face.web.font,
+    'a vibe that sets the strip, a badge ink and two look params gets exactly those; one that leaves inkOf and face.web.num out gets each role\'s default');
+  // a photo slot in band mode: its band's height, in px (Iron Age's 80pt)
+  const banded = JSON.parse(JSON.stringify(lit));
+  banded.images = { youHero: { file: 'img/you.png', band: 80 }, thumb: { file: 'img/pick.png' } };
+  const g3 = block('probe2', banded).text;
+  expect(g3.includes('  --photo-band-you-hero: 80px;') && !/--photo-band-(summary|steps|weight|coach|start|fuel)/.test(g3) && !g2.has('--photo-band-you-hero'),
+    'a photo slot in band mode writes --photo-band-<slot> in px (80 → 80px); a slot with no band, or no photo, writes none');
+  // the strip itself: one rule, only where a band is set, scoped, after the tokens
+  const t2 = block('probe2', lit).text.split('\n');
+  expect(t2[t2.length - 2] === bandRule('probe2') && t2[t2.length - 3] === '}' && t2.filter(l => l.includes('::before')).length === 1 &&
+    /^:root\[data-vibe="probe2"\]::before \{ content: ''; position: fixed; top: 0;.*height: var\(--safe-top\); background: var\(--band\); pointer-events: none;/.test(bandRule('probe2')) &&
+    !g.text.includes('::before'),
+    'a vibe with a band gets the status strip — one scoped ::before, --safe-top tall, in --band, taking no touches — after its tokens; v1\'s values (no band) get none');
+  const e2 = engineSites({ 'rack.css': RACK.replace(/(\.set-idx\.t-W \{[^}]*color: )var\(--tag-ink-w\)/, '$1var(--p-yellow)'), 'auth.css': AUTH });
+  expect(e2.errs.length === 1 && /tagInk\.W: rack\.css \.set-idx\.t-W/.test(e2.errs[0]), 'a W badge letter back on --p-yellow fails E, on exactly that site' + (e2.errs.length === 1 ? '' : ' — got: ' + (e2.errs.join('; ') || 'nothing')));
+  const e3 = engineSites({ 'rack.css': RACK.replace(/(\.cal-target \{[^}]*)box-shadow: var\(--shadow-cal-target\);\s*/, '$1'), 'auth.css': AUTH });
+  expect(e3.errs.length === 1 && /shadow\.calTarget: rack\.css has no top-level \.cal-target \{ box-shadow \}/.test(e3.errs[0]), 'the target ring taken off .cal-target fails E' + (e3.errs.length === 1 ? '' : ' — got: ' + (e3.errs.join('; ') || 'nothing')));
 }
 
 console.log('\n' + (fails.length ? `${fails.length} of ${checks} checks failed.`

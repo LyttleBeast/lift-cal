@@ -206,13 +206,15 @@ stageFile('vibes/defs/tst.js', `import V1 from './v1.js';
 export default { ...V1, id: 'tst', name: 'Test', feel: 'A staged vibe.', experimental: true, themeColor: '#0a0b0c',
   images: { thumb: 'thumb.jpg' },
   colors: { ...V1.colors, rack: '#0a0b0c', bar: '#101214', accent: '#e05a00', chalk: '#fafafa', onDanger: '#ffffff' },
-  face: { ...V1.face, web: { ...V1.face.web, font: "'tst-Figures', Georgia, serif" } },
+  face: { ...V1.face, web: { ...V1.face.web, font: "'tst-Text', Georgia, serif", num: "'tst-Figures', Georgia, serif" } },
   radius: { ...V1.radius, r: 20 },
   chrome: { ...V1.chrome, colorScheme: 'dark' } };
 `);
+// tsu names no display, italic or numeral face: each is its text face (index.js valueOf()).
 stageFile('vibes/defs/tsu.js', `import V1 from './v1.js';
 export default { ...V1, id: 'tsu', name: 'Test two', feel: 'Another.', scheme: 'light', themeColor: '#f4f1ea',
-  colors: { ...V1.colors, rack: '#f4f1ea', bar: '#ffffff', chalk: '#1a1a1a', steel: '#55575c', onDanger: '#ffffff' } };
+  colors: { ...V1.colors, rack: '#f4f1ea', bar: '#ffffff', chalk: '#1a1a1a', steel: '#55575c', onDanger: '#ffffff' },
+  face: { ...V1.face, web: { font: "'tsu-Grot', system-ui, sans-serif", mono: V1.face.web.mono, importUrl: V1.face.web.importUrl } } };
 `);
 stageFile('vibe.js', VJ_SRC
   .replace(A_IMPORT, A_IMPORT + "import TST from './vibes/defs/tst.js';\nimport TSU from './vibes/defs/tsu.js';\n")
@@ -406,7 +408,7 @@ section('E  the Vibes sheet');
   // carry exactly the block that file writes for its vibe's :root.
   const CSSV = readFileSync(join(REPO, 'tools-check/vibes-css.mjs'), 'utf8');
   const g0 = CSSV.indexOf('/* ================= the generator ================= */'), g1 = CSSV.indexOf('/* ================= reading CSS ================= */');
-  const GEN = new Function('ROLES', 'at', 'sideOf', 'hexToRgb', CSSV.slice(g0, g1) + '\nreturn { block };')(IDX.ROLES, IDX.at, IDX.sideOf, IDX.hexToRgb);
+  const GEN = new Function('ROLES', 'at', 'sideOf', 'hexToRgb', 'valueOf', CSSV.slice(g0, g1) + '\nreturn { block };')(IDX.ROLES, IDX.at, IDX.sideOf, IDX.hexToRgb, IDX.valueOf);
   const blockPairs = (id, d) => GEN.block(id, d).text.split('\n').map(l => /^ {2}([\w-]+): (.*);$/.exec(l)).filter(Boolean).map(x => [x[1], x[2]]);
   expect(g0 > 0 && g1 > g0 && blockPairs('v1', DEF.v1).length > 80, `vibes-css.mjs's generator was read: v1's block would set ${blockPairs('v1', DEF.v1).length} properties`);
 
@@ -448,8 +450,12 @@ section('E  the Vibes sheet');
   expect(img && img.src === 'https://rack.test/app/vibes/tst/thumb.jpg' && img.alt === '' && !tiles[0].querySelector('.vibe-thumb') && !tiles[2].querySelector('.vibe-thumb'),
     'a vibe with a thumbnail shows it on its sample card (vibes/<id>/, local); one without shows none');
   const nums = tiles.map(t => t.querySelector('.vibe-num'));
-  expect(nums.every(n => !n.classList.contains('wait')) && asked.length === 3 && asked.every(([q, s]) => /^800 35px /.test(q) && s === '315') && asked[1][0] === "800 35px 'tst-Figures'",
-    'each number is drawn once its own face — the first family of its stack — has loaded for 315: ' + asked.map(a => a[0]).join(' · '));
+  expect(nums.every(n => !n.classList.contains('wait')) && asked.length === 3 && asked.every(([q, s]) => /^800 35px /.test(q) && s === '315') &&
+    asked[0][0] === "800 35px 'Archivo'" && asked[1][0] === "800 35px 'tst-Figures'" && asked[2][0] === "800 35px 'tsu-Grot'",
+    'each number is drawn once its own face — the first family of its numeral stack (face.web.num; its text face where it names none) — has loaded for 315: ' + asked.map(a => a[0]).join(' · '));
+  const numTok = tiles.map(t => t.querySelector('.vibe-in').style.getPropertyValue('--font-num'));
+  expect(numTok[1] === "'tst-Figures', Georgia, serif" && numTok[2] === "'tsu-Grot', system-ui, sans-serif",
+    'and each tile carries the --font-num its card figure is set in (rack.css .vibe-num): ' + numTok.join(' · '));
   const close = sh.querySelector('.vibes-close');
   expect(close && close.classList.contains('btn') && close.classList.contains('btn-ghost') && close.classList.contains('btn-block'), 'Close is the house ghost button');
   expect(VS.vibeName() === 'v1', 'the Settings row reads the worn vibe\'s registered name: v1');

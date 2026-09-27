@@ -15,6 +15,7 @@ import { goalDirection, rateVerdict } from './insights.js';
 import { bump } from './usage.js';
 import { $, el, toast, noteEl, confirmSheet, r1, parseKey, fmtDateFull, LIMITS, within } from './ui.js';
 import { wOut, wIn, fmtW, labelW, unitW, fmtRate, limW } from './units.js';
+import { glyphed, tail } from './vibe.js';
 
 let entries = {};      // id -> { lb, t }
 let range   = 30;      // chart window, days
@@ -221,7 +222,7 @@ export async function render() {
   wrap.appendChild(renderRecent(u));
   // The settings card that used to end this screen is now the You tab's gear.
 
-  root.appendChild(wrap);
+  root.appendChild(tail(wrap, 'weight'));   // the vibe's tailpiece, where it has one (none in v1)
 }
 
 /* ---------- chart ---------- */
@@ -522,7 +523,7 @@ function renderRecent(u) {
     body.appendChild(el('div', 'fe-sub', d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
       + ' · ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })));
     row.appendChild(body);
-    row.appendChild(el('div', 'fe-cal', '✕'));
+    row.appendChild(glyphed(el('div', 'fe-cal', '✕'), 'close'));
     row.onclick = () => {
       confirmSheet({
         title: 'Delete this weigh-in?',

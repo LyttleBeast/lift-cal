@@ -35,7 +35,7 @@ import { el, sheet, toast, noteEl, confirmSheet, swipeToDelete, fmtDate, setNum,
 import { wIn, fmtSetW, unitW, limW } from './units.js';
 // A group's hex (exercises.js) as the token that paints it (V59 §5.4). Named
 // vibePaint here because the routine editor's repaint is its own paint().
-import { paint as vibePaint } from './vibe.js';
+import { paint as vibePaint, glyphed } from './vibe.js';
 
 let routines = {};
 // Handed in by workout.js, the way openRoutines is handed startWorkout, so this
@@ -148,7 +148,7 @@ export function openRoutines(onStart) {
       (r.lastUsed ? '  ·  last ' + fmtDate(new Date(r.lastUsed).toISOString().slice(0, 10)) : '')));
 
     row.append(dots, mid);
-    row.appendChild(el('span', 'rt-go', '›'));
+    row.appendChild(glyphed(el('span', 'rt-go', '›'), 'go'));
     row.onclick = () => { close(); openRoutine(r.id, onStart); };
     box.appendChild(row);
   });
@@ -350,7 +350,7 @@ function openEditor(draft, isNew, onStart) {
     dup.onclick = () => commit(duplicateBlock(draft, n));
     acts.appendChild(dup);
 
-    const del = el('button', 'wk-block-x', '✕');
+    const del = el('button', 'wk-block-x', '✕'); glyphed(del, 'close');
     del.setAttribute('aria-label', 'Delete Block ' + n);
     del.onclick = () => {
       // A routine holds no logged sets, so the bar for stopping is lower than
@@ -388,7 +388,7 @@ function openEditor(draft, isNew, onStart) {
     tag.style.background = vibePaint((GROUPS[ex.group] || {}).color || 'var(--dim)');
     hd.appendChild(tag);
     hd.appendChild(el('div', 'ex-name', ex.name));
-    const menu = el('button', 'ex-menu', '⋯');
+    const menu = el('button', 'ex-menu', '⋯'); glyphed(menu, 'more');
     menu.setAttribute('aria-label', 'Remove ' + ex.name);
     menu.onclick = () => confirmSheet({
       title: 'Remove ' + ex.name + '?',
@@ -415,6 +415,7 @@ function openEditor(draft, isNew, onStart) {
       const row = el('div', 'set-row' + (drop ? ' drop' : ''));
       const idx = el('button', 'set-idx t-' + (s.type || 'N'),
         drop ? '↳' : (s.type || 'N') === 'N' ? String(si + 1) : s.type);
+      glyphed(idx, 'drop');
       idx.title = drop ? 'A drop in the drop set above. Tap to cycle: normal, warm-up, failure, drop set'
                        : 'Tap to cycle: normal, warm-up, failure, drop set';
       // v55: through retypeSet, as on the workout screen, so no drop set is

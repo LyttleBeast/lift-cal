@@ -45,7 +45,7 @@
 import { el, svgEl, sheet } from './ui.js';
 import { vibe, setVibe } from './store.js';
 import { def, imageUrl, onVibeChange } from './vibe.js';
-import { list, ROLES, DEFAULT, at, sideOf, hexToRgb } from './vibes/defs/index.js';
+import { list, ROLES, DEFAULT, at, sideOf, hexToRgb, valueOf } from './vibes/defs/index.js';
 
 /* The sample every tile shows (research track 10 §4.3.1): three glyphs, so it
    fits every face at the same cap height, and plainly not his data. Hidden
@@ -72,8 +72,11 @@ function colourOf(d, role, a) {
 }
 
 function cssText(d, role) {
-  const v = at(d, role.path);
+  // valueOf(): the definition's own value, else what the role says one
+  // without it takes; null is nothing drawn, so no property
+  const v = valueOf(d, role.path);
   if (v === undefined || v === null) return undefined;
+  if (role.ref === 'color') return colourOf(d, v);
   if (role.channel) {
     const rgb = hexToRgb(sideOf(d.colors[v], 'web'));
     if (!rgb) throw new Error(role.path + ' has no channels');
@@ -95,6 +98,16 @@ function cssText(d, role) {
           num(Math.round(s.at * 1000) / 10) + '%').join(', ') + ')';
       }
       throw new Error(role.path + ' is not a filter or a gradient');
+    case 'tint':
+      if (!v || typeof v.color !== 'string' || typeof v.a !== 'number') throw new Error(role.path + ' is not { color, a }');
+      return colourOf(d, v.color, v.a);
+    case 'shape':
+      if (typeof v === 'number') return len(v);
+      if (typeof v === 'boolean') return v ? '1' : '0';
+      throw new Error(role.path + ' is not a number or a switch');
+    case 'image':                                   // a photo band's height, px
+      if (typeof v === 'number') return len(v);
+      throw new Error(role.path + ' is not a number');
     default: {
       const s = sideOf(v, 'web');
       if (typeof s !== 'string') throw new Error(role.path + ' is not a string');
@@ -137,13 +150,14 @@ export function vibeName() {
   return m ? m.name : id;
 }
 
-/* Whether a vibe's numeral face is ready: the first family of its font stack,
-   loaded for the sample's glyphs. Until it is, the number is not drawn — a
-   number in another vibe's face would misrepresent this one — and a face that
-   never loads leaves it hidden for good. With no font loading API to ask, it is
-   drawn. */
+/* Whether a vibe's numeral face is ready: the first family of its numeral
+   stack (face.web.num, the --font-num the card's figure is set in; a
+   definition without one takes its face.web.font), loaded for the sample's
+   glyphs. Until it is, the number is not drawn — a number in another vibe's
+   face would misrepresent this one — and a face that never loads leaves it
+   hidden for good. With no font loading API to ask, it is drawn. */
 function faceReady(d) {
-  const stack = d && d.face && d.face.web && d.face.web.font;
+  const stack = d ? valueOf(d, 'face.web.num') : undefined;
   const family = typeof stack === 'string' ? stack.split(',')[0].trim() : '';
   let fonts = null;
   try { fonts = document.fonts; } catch {}

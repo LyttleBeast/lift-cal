@@ -40,10 +40,19 @@
 //      paintSvg(); vibe.js imports only vibes/ and never reloads.
 //   F  canaries.
 //   G  offline: after boot, the active vibe's photos and faces and every
-//      vibe's picker files (its thumbnail, its number's face) are fetched
-//      into the service worker's cache where it lacks them — only online,
-//      only under a worker, each once, retried after a failure — and with
-//      v1 alone nothing is touched at all.
+//      vibe's picker files (its thumbnail, its number's face — face.web.num)
+//      are fetched into the service worker's cache where it lacks them —
+//      only online, only under a worker, each once, retried after a failure —
+//      and with v1 alone nothing is touched at all.
+//   H  engine v2, the icon contract's other fields: every glyph site the
+//      contract lists at rack-v58 goes through glyphed(), which in v1 leaves
+//      the element exactly as built and under a set that draws the glyph
+//      puts the drawing in its place (named by its character); water.js
+//      draws rack-v58's bottle, attribute for attribute, from vessel(), and a
+//      set's own bottle when it has one; every tab and the recap end in
+//      tail(), which adds nothing in v1 and the set's ornament where it has
+//      one; and a chart look that hatches puts the hatch <pattern>s in the
+//      page, which v1 never does.
 
 import { readFileSync, readdirSync, mkdtempSync, mkdirSync, writeFileSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -73,9 +82,15 @@ const section = t => console.log('\n' + t);
 const J = JSON.stringify;
 
 /* ---------- a stand-in DOM: enough for vibe.js, ui.js svgEl and the icon sites ---------- */
+// A text node (engine v2: a glyph site's character, and the text a glyph
+// leads).
+class Text_ {
+  constructor(data) { this.nodeType = 3; this.data = String(data); this.parent = null; }
+  get textContent() { return this.data; }
+}
 class Node_ {
   constructor(tag) {
-    this.tag = tag; this.attrs = []; this.children = []; this.html = null; this.parent = null;
+    this.tag = tag; this.attrs = []; this.children = []; this.html = null; this.parent = null; this.nodeType = 1;
     const props = {};
     this.style = { props, setProperty: (k, v) => { props[k] = String(v); } };
   }
@@ -83,10 +98,17 @@ class Node_ {
   getAttribute(k) { const a = this.attrs.find(x => x[0] === k); return a ? a[1] : null; }
   removeAttribute(k) { this.attrs = this.attrs.filter(x => x[0] !== k); }
   appendChild(c) { c.parent = this; this.children.push(c); return c; }
+  insertBefore(n, ref) { const i = this.children.indexOf(ref); n.parent = this; if (i < 0) this.children.push(n); else this.children.splice(i, 0, n); return n; }
   replaceChild(n, o) { const i = this.children.indexOf(o); if (i >= 0) { this.children[i] = n; n.parent = this; o.parent = null; } DOC.log.push(['replaceChild', this.tag]); return o; }
+  remove() { if (this.parent) { this.parent.children = this.parent.children.filter(c => c !== this); this.parent = null; } }
+  get isConnected() { let n = this; while (n.parent) n = n.parent; return !!DOC && n === DOC.body; }
+  get firstChild() { return this.children[0] || null; }
+  get lastChild() { return this.children[this.children.length - 1] || null; }
+  get textContent() { return this.html != null ? this.html : this.children.map(c => c.textContent).join(''); }
+  set textContent(v) { this.html = null; this.children = []; const s = String(v); if (s !== '') this.appendChild(new Text_(s)); }
   querySelector(sel) { return this.querySelectorAll(sel)[0] || null; }
   querySelectorAll(sel) {
-    const out = [], walk = n => n.children.forEach(c => { if (match(c, sel)) out.push(c); walk(c); });
+    const out = [], walk = n => (n.children || []).forEach(c => { if (c.nodeType === 1 && match(c, sel)) out.push(c); if (c.nodeType === 1) walk(c); });
     walk(this); return out;
   }
   set innerHTML(s) { this.html = String(s); this.children = []; }
@@ -98,7 +120,7 @@ function match(n, sel) {
   const m = /^(\w+)\[([\w-]+)(?:="?([^"\]]*)"?)?\]$/.exec(sel);
   return !!m && n.tag === m[1] && (m[3] === undefined ? n.getAttribute(m[2]) !== null : n.getAttribute(m[2]) === m[3]);
 }
-const ser = n => '<' + n.tag + n.attrs.map(([k, v]) => ` ${k}="${v}"`).join('') +
+const ser = n => n.nodeType === 3 ? n.data : '<' + n.tag + n.attrs.map(([k, v]) => ` ${k}="${v}"`).join('') +
   (n.html == null && !n.children.length && n.tag !== 'svg' ? '/>' : '>' + (n.html != null ? n.html : n.children.map(ser).join('')) + '</' + n.tag + '>');
 let DOC;
 function freshDoc() {
@@ -476,7 +498,8 @@ section('G  offline: the vibes\' photos and faces into the worker\'s cache');
   writeFileSync(join(dir, 'vibes/defs/index.js'), read('vibes/defs/index.js').replace(anchorV, anchorV + "  { id: 'tst', name: 'tst', feel: '', experimental: false, scheme: 'dark' },\n"));
   writeFileSync(join(dir, 'vibe.js'), read('vibe.js').replace(aD, "const DEFS = { v1: V1, tst: { ...V1, id: 'tst', themeColor: '#0a0b0c', " +
     "images: { thumb: 'thumb.webp', hero: 'hero.jpg', odd: 42, card: { file: 'card.jpg' } }, " +
-    "face: { ...V1.face, web: { ...V1.face.web, font: \"'TST grot', system-ui, sans-serif\" } } } };"));   // case differs from the @font-face: CSS matches families regardless
+    // its numerals in its text face: face.web.num left out, so valueOf() gives face.web.font
+    "face: { ...V1.face, web: { font: \"'TST grot', system-ui, sans-serif\", mono: V1.face.web.mono, importUrl: V1.face.web.importUrl } } } };"));   // case differs from the @font-face: CSS matches families regardless
   const fresh = async tag => import(pathToFileURL(join(dir, 'vibe.js')).href + '?' + tag);
   const U = f => B + 'vibes/tst/' + f;
 
@@ -496,6 +519,15 @@ section('G  offline: the vibes\' photos and faces into the worker\'s cache');
   expect(J(W.fetched) === J([U('card.jpg'), U('slab.woff2')]) && W.matched.includes(U('hero.jpg')) && !W.fetched.includes(U('hero.jpg')),
     'choosing it fetches the rest of its files: every image slot and every @font-face — skipping what Cache Storage holds (hero.jpg), what this launch already asked for, a data: face and a src\'s fallback formats: ' + J(W.fetched));
   expect(!W.fetched.some(u => /nope|\.ttf|^data:/.test(u)), 'nothing from rack.css, no .ttf fallback, no data: URL');
+
+  // A vibe whose card figure is not in its text face names its numeral face.
+  writeFileSync(join(dir, 'vibe-num.js'), read('vibe.js').replace(aD, "const DEFS = { v1: V1, tst: { ...V1, id: 'tst', images: { thumb: 'thumb.webp' }, " +
+    "face: { ...V1.face, web: { ...V1.face.web, font: \"'TST grot', system-ui, sans-serif\", num: \"'tst Slab', Georgia, serif\" } } } };"));
+  world(); reset(); W.cached = new Set();
+  const TN = await import(pathToFileURL(join(dir, 'vibe-num.js')).href);
+  await TN.prefetchVibes();
+  expect(J(W.fetched) === J([U('thumb.webp'), U('slab.woff2')]),
+    'a vibe whose numerals are not its text face (Iron Age\'s Besley figures) fetches its face.web.num for the card, not its face.web.font: ' + J(W.fetched));
 
   // Offline, then online: nothing, then everything it could not do.
   world(); reset(); W.cached = new Set(); W.online = false;
@@ -531,6 +563,161 @@ section('G  offline: the vibes\' photos and faces into the worker\'s cache');
   const iRestore = bootBody.indexOf('restoreView();'), iPre = bootBody.indexOf('prefetchVibes()');
   expect(iRestore > 0 && iPre > iRestore && !/await\s+prefetchVibes/.test(app) && (app.match(/prefetchVibes\(\)/g) || []).length === 1,
     'app.js calls prefetchVibes() once, in boot() after restoreView(), unawaited');
+}
+
+/* ================= H ================= */
+section('H  engine v2: glyphs, the vessel, tailpieces and hatch patterns');
+{
+  const IC1 = (await import(url('vibes/icons/v1.js'))).default;
+  const NAMES_G = Object.keys(IC1.glyphs);
+  // A call's text from `glyphed(` to its matching ')', and its arguments after
+  // the first, split at the top level: the glyph names it can draw.
+  const callsIn = text => {
+    const out = [];
+    const code = text.replace(/\/\*[\s\S]*?\*\//g, s => s.replace(/[^\n]/g, ' ')).replace(/(^|[^:'"\\])\/\/.*$/gm, '$1');
+    for (let i = code.indexOf('glyphed('); i >= 0; i = code.indexOf('glyphed(', i + 1)) {
+      if (/[\w.]/.test(code[i - 1] || '')) continue;
+      let d = 0, j = i + 7, q = null;
+      const args = []; let cur = '';
+      for (; j < code.length; j++) {
+        const c = code[j];
+        if (q) { cur += c; if (c === '\\') { cur += code[++j]; continue; } if (c === q) q = null; continue; }
+        if (c === "'" || c === '"' || c === '`') { q = c; cur += c; continue; }
+        if (c === '(' || c === '[' || c === '{') { d++; if (d === 1 && c === '(') continue; }
+        if (c === ')' || c === ']' || c === '}') { d--; if (d === 0) { args.push(cur); break; } }
+        if (c === ',' && d === 1) { args.push(cur); cur = ''; continue; }
+        cur += c;
+      }
+      if (/^\s*import\b/.test(code.slice(code.lastIndexOf('\n', i) + 1, i))) continue;
+      const names = args.slice(1).flatMap(a => [...a.matchAll(/'(\w+)'/g)].map(m => m[1])).filter(n => NAMES_G.includes(n));
+      out.push({ at: code.slice(0, i).split('\n').length, names });
+    }
+    return out;
+  };
+  // The contract's web sites (file:line at rack-v58), per file and glyph.
+  const want = {};
+  for (const [name, g] of Object.entries(IC1.glyphs)) for (const s of g.web) { const f = s.split(':')[0]; (want[f] = want[f] || {})[name] = (want[f][name] || 0) + 1; }
+  const got = {}, stray = [];
+  for (const f of readdirSync(ROOT).filter(x => x.endsWith('.js') && !PINNED.includes(x) && x !== 'vibe.js')) {
+    for (const c of callsIn(read(f))) {
+      if (!c.names.length) stray.push(`${f}:${c.at} names no glyph the contract lists`);
+      for (const n of c.names) (got[f] = got[f] || {})[n] = (got[f][n] || 0) + 1;
+    }
+  }
+  const off = [];
+  for (const f of new Set([...Object.keys(want), ...Object.keys(got)])) for (const n of new Set([...Object.keys(want[f] || {}), ...Object.keys(got[f] || {})])) {
+    const w = (want[f] || {})[n] || 0, g = (got[f] || {})[n] || 0;
+    if (w !== g) off.push(`${f} ${n}: the contract lists ${w} site${w === 1 ? '' : 's'}, glyphed() is called for ${g}`);
+  }
+  const total = Object.values(want).reduce((k, o) => k + Object.values(o).reduce((a, b) => a + b, 0), 0);
+  {
+    const c = callsIn("const a = el('b', null, '‹'); glyphed(a, 'prev');\nrow.appendChild(glyphed(el('span', 'more', '›'), 'go'));\n" +
+      "glyphed(x, d > 0 ? 'up' : d < 0 ? 'down' : 'flat');\nglyphed(n, 'warn', { lead: true });\n// glyphed(c, 'close')\nglyphed(z, 'nope');");
+    expect(J(c.map(x => x.names)) === J([['prev'], ['go'], ['up', 'down', 'flat'], ['warn'], []]),
+      'the survey reads a call\'s glyph names from its arguments after the element (a class called "more" is not one), skips comments, and finds a call naming none: ' + J(c.map(x => x.names)));
+  }
+  expect(!off.length && !stray.length && total >= 40,
+    `every glyph site the contract lists at rack-v58 (${total} in ${Object.keys(want).length} files) goes through glyphed(), once, by its name, and no call names anything else` +
+    (off.length || stray.length ? ' — ' + [...off, ...stray].join('; ') : ''));
+
+  // v1: every glyph site is left as it was built.
+  freshDoc(); DOC.log.length = 0;
+  const same = [];
+  for (const [name, g] of Object.entries(IC1.glyphs)) {
+    for (const make of [() => UI.el('button', 'x', g.char), () => UI.noteEl(g.char + ' leads a sentence')]) {
+      const n = make(), before = ser(n);
+      const back = VB.glyphed(n, name, { lead: true }), back2 = VB.glyphed(n, name);
+      if (back !== n || back2 !== n || ser(n) !== before) same.push(`${name}: ${before} -> ${ser(n)}`);
+    }
+  }
+  expect(!same.length && !DOC.log.some(e => e[0] === 'setAttribute'), `with v1, glyphed() hands every one of the ${NAMES_G.length} glyphs' elements back exactly as built, and touches no attribute` + (same.length ? ' — ' + same.join('; ') : ''));
+  expect(VB.glyphed(null, 'prev') === null && VB.tailpiece('you') === null && VB.vessel() === IC1.vessel,
+    'glyphed(null) is null; with v1 there is no tailpiece, and the vessel is v1\'s');
+  {
+    const p = UI.el('div', 'screen-pad'); p.appendChild(UI.el('div', 'card'));
+    const before = ser(p);
+    expect(VB.tail(p, 'you') === p && ser(p) === before && VB.tail(null, 'you') === null, 'tail() adds nothing to a screen in v1');
+  }
+  // Each screen, and the recap, ends in tail() by its own name.
+  const TAILS = [['you.js', 'you'], ['workout.js', 'workout'], ['workout.js', 'recap'], ['food.js', 'food'], ['weight.js', 'weight'], ['steps.js', 'steps']];
+  const noTail = TAILS.filter(([f, s]) => !new RegExp("tail\\([^;]*, '" + s + "'\\)").test(read(f)));
+  expect(!noTail.length && IDX && true, 'every tab and the recap hand their screen to tail() under their own name: ' + TAILS.map(([f, s]) => f + ' ' + s).join(', ') + (noTail.length ? ' — missing: ' + noTail.map(x => x.join(' ')).join(', ') : ''));
+
+  // water.js: rack-v58's vessel(), and today's reading vibe.js vessel().
+  const liftW = (text, head) => { const i = text.indexOf(head); if (i < 0) return null; return text.slice(i, text.indexOf('\n}\n', i) + 2); };
+  const wb = base('water.js'), we = read('water.js');
+  const vb = Function('svgEl', 'let clipSeq = 0;\n' + liftW(wb, 'function vessel(frac) {') + liftW(wb, 'function wave(') + 'return vessel;')(UI.svgEl);
+  const ve = Function('svgEl', 'vesselShape', 'let clipSeq = 0;\n' + liftW(we, 'function vessel(frac) {') + liftW(we, 'function wave(') + 'return vessel;')(UI.svgEl, VB.vessel);
+  // Tokens resolved through rack.css :root: the engine had already moved the
+  // bottle's inside onto --well (rack-v58's --rack) and its cap onto --grip
+  // (--knurl), the same colours in v1.
+  const tok = s => s.replace(/var\((--[\w-]+)\)/g, (w, k) => (ROOTV[k] !== undefined ? lc(ROOTV[k]) : w));
+  const fr = [0, 0.0005, 0.002, 0.25, 0.5, 0.999, 1];
+  const vd = fr.filter(x => tok(ser(vb(x))) !== tok(ser(ve(x))));
+  expect(!vd.length && /vesselShape\(\)/.test(we) && !/'M 40 10 L 64 10/.test(we),
+    `water.js draws rack-v58's bottle from vessel(), attribute for attribute (its colours resolved through :root), empty to full (${fr.join(', ')}) — and no longer holds its own copy of the outline` +
+    (vd.length ? ' — differs at ' + vd.join(', ') + `\n      now ${ser(ve(vd[0]))}\n      was ${ser(vb(vd[0]))}` : ''));
+
+  // A staged set that draws: the real vibe.js and contract, one vibe with its
+  // own icon set (glyphs, a vessel, ornaments) and a chart look that hatches.
+  const dir = mkdtempSync(join(tmpdir(), 'rack-vibe-js-v2-'));
+  for (const f of ['vibes/defs/index.js', 'vibes/defs/v1.js', 'vibes/icons/v1.js']) { mkdirSync(join(dir, dirname(f)), { recursive: true }); writeFileSync(join(dir, f), read(f)); }
+  const anchorV = 'export const VIBES = deepFreeze([\n';
+  writeFileSync(join(dir, 'vibes/defs/index.js'), read('vibes/defs/index.js').replace(anchorV, anchorV + "  { id: 'tst', name: 'tst', feel: '', experimental: false, scheme: 'dark' },\n"));
+  const G = (d) => `{ viewBox: '0 0 24 24', stroke: 1.75, fill: 'none', linecap: 'square', linejoin: 'miter', els: [{ tag: 'path', d: '${d}' }] }`;
+  const SET = `{ id: 'tst', icons: {}, glyphs: { prev: ${G('M14 6l-6 6 6 6')}, drop: ${G('M6 4v10h12')}, warn: ${G('M12 3l9 18H3z')}, up: null }, ` +
+    "vessel: { viewBox: '0 0 104 168', stroke: 3, d: 'M30 6H74V160H30Z', insideBottom: 150, insideTop: 58, cap: null }, " +
+    "ornaments: { you: { viewBox: '0 0 48 24', stroke: 1.5, els: [{ tag: 'circle', cx: 8, cy: 12, r: 6 }] }, steps: null } }";
+  writeFileSync(join(dir, 'vibe.js'), read('vibe.js')
+    .replace('const DEFS = { v1: V1 };', "const DEFS = { v1: V1, tst: { ...V1, id: 'tst', icons: 'tst', themeColor: '#0a0b0c', variants: { ...V1.variants, chart: 'print' } } };")
+    .replace('const ICON_SETS = { v1: V1_ICONS };', 'const ICON_SETS = { v1: V1_ICONS, tst: ' + SET + ' };'));
+  const d = freshDoc();
+  d.body = new Node_('body');
+  const T = await import(pathToFileURL(join(dir, 'vibe.js')).href);
+  T.applyVibe('v1');
+  expect(!d.body.children.length, 'with v1 applied, the page gets no pattern defs');
+  T.applyVibe('tst');
+  const b1 = T.glyphed(UI.el('button', null, '‹'), 'prev');
+  const sv = b1.children[0];
+  expect(b1.children.length === 1 && sv.tag === 'svg' && sv.getAttribute('class') === 'glyph glyph-prev' && sv.getAttribute('role') === 'img' &&
+    sv.getAttribute('aria-label') === '‹' && sv.getAttribute('width') === '1em' && sv.getAttribute('height') === '1em' &&
+    sv.getAttribute('stroke') === 'currentColor' && sv.getAttribute('stroke-linecap') === 'square' && ser(sv).includes('<path d="M14 6l-6 6 6 6"/>'),
+    'under a set that draws it, a glyph site holds the drawing in place of its character — 1em square, in the text colour, named by the character: ' + ser(b1));
+  const one = T.glyphed(UI.el('button', 'set-idx', '1'), 'drop'), up = T.glyphed(UI.el('span', 'delta-a', '↑'), 'up'), nx = T.glyphed(UI.el('button', null, '›'), 'next');
+  expect(ser(one) === '<button>1</button>' && ser(up) === '<span>↑</span>' && ser(nx) === '<button>›</button>',
+    'and only there: a badge whose text is not ↳, a glyph the set leaves null (↑, a number\'s direction) and one it leaves out stay text');
+  const note = T.glyphed(UI.noteEl('⚠ That rate would put you at 1,200'), 'warn', { lead: true });
+  expect(note.children.length === 2 && note.children[0].tag === 'svg' && note.children[0].getAttribute('aria-label') === '⚠' && note.children[1].data === ' That rate would put you at 1,200',
+    'a leading glyph (the ⚠ that opens a sentence) is replaced on its own, and the sentence after it is left word for word');
+  const tp = T.tailpiece('you');
+  expect(tp && tp.tag === 'svg' && tp.getAttribute('aria-hidden') === 'true' && tp.getAttribute('class') === 'tailpiece tailpiece-you' &&
+    tp.getAttribute('width') === '48' && tp.getAttribute('height') === '24' && tp.getAttribute('viewBox') === '0 0 48 24' && tp.getAttribute('fill') === 'none' &&
+    tp.style.margin === '32px auto 0' && T.tailpiece('steps') === null && T.tailpiece('food') === null,
+    'a tailpiece is the set\'s ornament for that screen, at its own size, hidden from assistive tech, centred 32 under the last box; a screen the set leaves null or out gets none');
+  const pad = UI.el('div', 'screen-pad');
+  T.tail(pad, 'you'); T.tail(pad, 'steps');
+  expect(pad.children.length === 1 && pad.children[0].getAttribute('class') === 'tailpiece tailpiece-you', 'tail() appends it to the screen, once, and nothing for a screen without one');
+  const V = T.vessel();
+  const vt = Function('svgEl', 'vesselShape', 'let clipSeq = 0;\n' + liftW(we, 'function vessel(frac) {') + liftW(we, 'function wave(') + 'return vessel;')(UI.svgEl, T.vessel);
+  const full = vt(1), empty = vt(0);
+  const outline = full.children.filter(c => c.tag === 'path' && c.getAttribute('d') === 'M30 6H74V160H30Z');
+  const waveY = s => { const g = s.children.find(c => c.tag === 'g'); const p = g && g.children[1]; return p ? +/^M \S+ (\S+)/.exec(p.getAttribute('d'))[1] : null; };
+  expect(V.d === 'M30 6H74V160H30Z' && outline.length === 2 && outline[1].getAttribute('stroke-width') === '3' && !full.children.some(c => c.tag === 'rect') &&
+    waveY(full) === 58 && waveY(vt(0.5)) === 104 && !empty.children.find(c => c.tag === 'g').children.length,
+    'a set\'s own bottle is drawn from its outline and stroke, with no cap where it has none, and filled from its insideBottom to its insideTop — linear in the day (58 full, 104 at half)');
+  const defsSvg = d.body.children.find(c => c.getAttribute && c.getAttribute('id') === 'vibe-patterns');
+  const pats = defsSvg ? defsSvg.querySelectorAll('*').filter(n => n.tag === 'pattern') : [];
+  const blue = pats.find(p => p.getAttribute('id') === 'vibe-hatch-p-blue');
+  expect(!!defsSvg && defsSvg.getAttribute('aria-hidden') === 'true' && defsSvg.getAttribute('width') === '0' && pats.length >= 30 && !!blue &&
+    blue.getAttribute('patternUnits') === 'userSpaceOnUse' && blue.getAttribute('width') === '2.75' && blue.getAttribute('patternTransform') === 'rotate(45)' &&
+    blue.children[0].style.props.stroke === 'var(--p-blue)' && blue.children[0].getAttribute('stroke-width') === '1',
+    `a vibe whose chart look hatches (chart · print) gets one hidden <svg id="vibe-patterns">: a hatch per colour role (${pats.length}), each stroked in its own token — vibe-hatch-p-blue in var(--p-blue)`);
+  T.applyVibe('tst');
+  expect(d.body.children.filter(c => c.getAttribute && c.getAttribute('id') === 'vibe-patterns').length === 1, 'applied again, it is not added twice');
+  T.applyVibe('v1');
+  expect(!d.body.children.length, 'and switching back to v1 takes it out of the page');
+  expect(T.glyphed(UI.el('button', null, '‹'), 'prev').children[0].nodeType === 3 && T.tailpiece('you') === null && J(T.vessel()) === J(IC1.vessel),
+    'back in v1 the glyphs are text again, the tailpiece is gone and the bottle is v1\'s');
 }
 
 console.log('\n' + (fails.length ? `${fails.length} of ${checks} checks failed.` : `All checks passed. ${checks} checks.`));

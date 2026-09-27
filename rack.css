@@ -81,6 +81,52 @@
 
   --font: 'Archivo', system-ui, -apple-system, sans-serif;
   --font-mono: ui-monospace, monospace;
+  /* The stacks a vibe sets its heads, italic and numerals in; v1's are --font. */
+  --font-display: 'Archivo', system-ui, -apple-system, sans-serif;
+  --font-italic: 'Archivo', system-ui, -apple-system, sans-serif;
+  --font-num: 'Archivo', system-ui, -apple-system, sans-serif;
+
+  /* Engine v2 (vibes/defs/index.js ROLES). Each holds v1's value, so a rule
+     that spends one draws what it drew. --tag-ink-* is the set badge's
+     letter and --ink-of-* the ink of small text in a data colour, each the
+     colour of the role it names; --tint-runway(-edge) the calorie runway's
+     hatching and edge. There is no --band here: v1 draws no strip under the
+     status bar, and a vibe that wants one declares it. */
+  --tag-ink-w: #f0be1e;
+  --tag-ink-f: #d6252b;
+  --tag-ink-d: #2e7fd9;
+  --ink-of-p-red: #d6252b;
+  --ink-of-p-blue: #2e7fd9;
+  --ink-of-p-yellow: #f0be1e;
+  --ink-of-p-green: #2aa85c;
+  --ink-of-p-white: #e8e5de;
+  --ink-of-p-chrome: #a8aeb8;
+  --tint-runway: rgba(20,22,26,.55);
+  --tint-runway-edge: rgba(20,22,26,.7);
+  /* The look params (vocab.js `params`) at their defaults. v1 names no look,
+     so nothing in v1 reads them; a list is one token per entry. */
+  --shape-rule-ink: #333844;
+  --shape-rule-hair: 1px;
+  --shape-rule-head-0: 2px;
+  --shape-rule-head-1: 0;
+  --shape-rule-head-2: 0;
+  --shape-rule-sub-0: 2px;
+  --shape-rule-sub-1: 0;
+  --shape-rule-sub-2: 0;
+  --shape-rule-total-0: 2px;
+  --shape-rule-total-1: 0;
+  --shape-rule-total-2: 0;
+  --shape-leader-ink: #8d939f;
+  --shape-leader-dot: 1.5px;
+  --shape-leader-pitch: 4px;
+  --shape-leader-min: 16px;
+  --shape-band-fill: #262a33;
+  --shape-band-ink: #f2f0eb;
+  --shape-band-height: 30px;
+  --shape-gutter: 2px;
+  --shape-keyline-ink: #f2f0eb;
+  --shape-keyline-width: 1px;
+  --shape-lead-keyline: 0;
 
   /* Shadows and glass. Each token is the whole value, spelled as the rule
      that spends it spelled it, with its colour written out rather than a
@@ -106,6 +152,8 @@
   --shadow-traj-warn: 0 0 0 4px rgba(240,190,30,.18);
   --shadow-traj-bad: 0 0 0 4px rgba(214,37,43,.18);
   --shadow-tour-lit: 0 0 0 2px #f0be1e;
+  --shadow-cal-head: none;     /* rings a vibe may put round the calorie head */
+  --shadow-cal-target: none;   /* and the dashed target; rack-v58 draws none */
   --blur-sheet: blur(3px);
   --blur-dock: blur(18px) saturate(140%);
   --blur-wk-bar: blur(16px);
@@ -581,9 +629,12 @@ body.peeking .view.active { padding-bottom: 65px; }
   background: var(--raised); color: var(--steel);
   transition: background var(--fast), color var(--fast);
 }
-.set-idx.t-W { background: rgba(var(--p-yellow-rgb),.16); color: var(--p-yellow); }
-.set-idx.t-F { background: rgba(var(--p-red-rgb),.16);  color: var(--p-red); }
-.set-idx.t-D { background: rgba(var(--p-blue-rgb),.16); color: var(--p-blue); }
+/* The letter is --tag-ink-* (the contract's tagInk: in v1 the plate colour
+   itself), so a vibe can ink W in warn where its plate yellow is too light
+   for 12px text; the wash stays the plate's. */
+.set-idx.t-W { background: rgba(var(--p-yellow-rgb),.16); color: var(--tag-ink-w); }
+.set-idx.t-F { background: rgba(var(--p-red-rgb),.16);  color: var(--tag-ink-f); }
+.set-idx.t-D { background: rgba(var(--p-blue-rgb),.16); color: var(--tag-ink-d); }
 
 .set-row input {
   width: 100%; padding: 8px 4px; text-align: center;
@@ -648,7 +699,9 @@ body.peeking .view.active { padding-bottom: 65px; }
 }
 .set-row.drop .set-idx { margin-left: 10px; }
 .drop-add-row { padding: 4px 12px 6px 22px; }
-.drop-add { padding: 6px 14px; font-size: 12px; color: var(--p-blue); border-color: rgba(var(--p-blue-rgb),.35); }
+/* 12px words in the drop set's blue: the ink of small text in that colour
+   (--ink-of-p-blue, the contract's inkOf; v1's is the blue itself). */
+.drop-add { padding: 6px 14px; font-size: 12px; color: var(--ink-of-p-blue); border-color: rgba(var(--p-blue-rgb),.35); }
 
 /* lifting block — the container the exercise cards above sit inside. It has no
    set rows of its own on purpose: a block repeats whole exercises, it is not a
@@ -1178,6 +1231,9 @@ body.peeking .view.active { padding-bottom: 65px; }
   position: absolute; top: -2px; bottom: -2px; width: 3px;
   margin-left: -1.5px; border-radius: var(--r-plate);
   background: var(--cal-mark);
+  /* a ring a vibe may draw round the white head, for a page it would vanish
+     on (the contract's shadow.calHead); none in v1 */
+  box-shadow: var(--shadow-cal-head);
   transition: left 500ms var(--ease);
 }
 .cal-bands { position: relative; height: 13px; margin-top: 5px; }
@@ -1989,12 +2045,13 @@ body.peeking .view.active { padding-bottom: 65px; }
    band words so the two never collide. */
 .cal-runway {
   position: absolute; left: 0; top: 0; bottom: 0;
-  background: repeating-linear-gradient(135deg, transparent 0 3px, rgba(var(--rack-rgb),.55) 3px 5px);
-  border-right: 1px solid rgba(var(--rack-rgb),.7);
+  background: repeating-linear-gradient(135deg, transparent 0 3px, var(--tint-runway) 3px 5px);
+  border-right: 1px solid var(--tint-runway-edge);
 }
 .cal-target {
   position: absolute; top: -2px; bottom: -2px; width: 0;
   margin-left: -1px; border-left: 2px dashed var(--cal-mark);
+  box-shadow: var(--shadow-cal-target);
   opacity: .9;
 }
 .cal-bands { height: 25px; }
@@ -2060,9 +2117,9 @@ body.peeking .view.active { padding-bottom: 65px; }
 .guide-sw.head::after, .guide-sw.tick::after, .guide-sw.target::after {
   content: ''; position: absolute; top: -2px; bottom: -2px; left: 50%;
 }
-.guide-sw.head::after   { width: 3px; margin-left: -1.5px; border-radius: var(--r-plate); background: var(--cal-mark); }
+.guide-sw.head::after   { width: 3px; margin-left: -1.5px; border-radius: var(--r-plate); background: var(--cal-mark); box-shadow: var(--shadow-cal-head); }
 .guide-sw.tick::after   { width: 2px; margin-left: -1px; background: var(--cal-mark); opacity: .85; }
-.guide-sw.target::after { width: 0; margin-left: -1px; border-left: 2px dashed var(--cal-mark); }
+.guide-sw.target::after { width: 0; margin-left: -1px; border-left: 2px dashed var(--cal-mark); box-shadow: var(--shadow-cal-target); }
 .guide-sw.runway { background: repeating-linear-gradient(135deg, var(--grip) 0 3px, var(--track) 3px 5px); }
 .guide-sw.status { background: transparent; }
 .guide-sw.status::before {
@@ -2446,10 +2503,11 @@ body.peeking .view.active { padding-bottom: 65px; }
   border-radius: min(var(--r), 12px);
 }
 .vibe-thumb { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-/* Caps 24px tall in Archivo 800 (35px), sitting 34→58 from the card's top. */
+/* Caps 24px tall in Archivo 800 (35px), sitting 34→58 from the card's top.
+   Set in the vibe's numeral face (--font-num, v1's is --font's). */
 .vibe-num {
   position: absolute; left: 10px; top: 29px;
-  font-family: var(--font); font-size: 35px; font-weight: 800;
+  font-family: var(--font-num); font-size: 35px; font-weight: 800;
   font-variation-settings: 'wdth' 118, 'wght' 800;
   font-variant-numeric: tabular-nums; font-feature-settings: 'tnum' 1;
   letter-spacing: -.02em; line-height: .95; white-space: nowrap;

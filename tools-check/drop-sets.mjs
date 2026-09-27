@@ -168,6 +168,8 @@ function harness(o = {}) {
     // v56: "+ Set" asks which set it copies — the real one.
     repeatOf: A.repeatOf,
     el: UI.el, LIMITS: UI.LIMITS, setNum: UI.setNum, fmtDate: UI.fmtDate, GROUPS, vibePaint: VB.paint,
+    // engine v2: a glyph site drawn through the vibe (vibe.js glyphed) — the real one
+    glyphed: VB.glyphed,
     fmtSetLoad: U.fmtSetLoad, fmtSetW: U.fmtSetW, unitW: U.unitW, limW: U.limW, wOut: U.wOut, wIn: U.wIn,
     nudgeLine: () => null, openLiveSheet: () => {}, dismissNudge: x => x, noteLiveTick: () => null, startRest: () => {},
     renderPlates: () => UI.el('div', 'plate-strip'),

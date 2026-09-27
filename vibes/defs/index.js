@@ -182,7 +182,23 @@ export function sideOf(value, side) {
    'file:line' (manifest.json), native 'file:line' — or a list of them where
    one role has several sites. Both verifiers read every anchor.
 
-   A path covers everything under it: 'groups' covers groups.chest. */
+   ENGINE v2 (the asks the first four vibe specs share) added roles no vibe
+   written before them holds. Each carries what a definition that leaves it
+   out takes, so an older definition still means one thing, and valueOf()
+   (below) is the one reading of it that the engines and the generator share:
+   `dflt`  the value itself (null: nothing is drawn — the web emits no token
+           and the site keeps v1's drawing);
+   `or`    another path in the same definition, taken when this one is
+           missing (type.meta takes the vibe's own type.note).
+   `ref: 'color'` marks a value that NAMES a colour role (tagInk, inkOf, the
+   shape params' inks and fills): the web token is that role's colour in the
+   same definition, and native build() resolves it the same way.
+   A list param (shape.rule.head / sub / total: line, gap, line) lands as one
+   role per entry, '.0' '.1' '.2', each 0 when the list is shorter.
+
+   A path covers everything under it: 'groups' covers groups.chest. The
+   `shape` object and the photo slots are carried whole by one role each and
+   have roles under them for the parts the web spends as tokens. */
 const R = (path, kind, web, native, extra) =>
   Object.assign({ path, kind, web: web || null, native: native || null }, extra || null);
 
@@ -292,26 +308,83 @@ const ROOT = [['dockH', '--dock-h', 'layout'], ['safeTop', '--safe-top', 'layout
 // The six muscle groups, in GROUPS order, and the colour role each one is.
 const GROUP_ROLES = { chest: 'pRed', back: 'pBlue', legs: 'pYellow', shoulders: 'pGreen', arms: 'pWhite', core: 'pChrome' };
 
+/* ---------- engine v2 ----------
+   The look params (vocab.js `params`) the web spends as tokens: one custom
+   property each, --shape-<path>, generated from the definition's `shape` (a
+   key it leaves out takes vocab.js's default, which `dflt` repeats here —
+   this file imports nothing — and the verifiers hold the two equal). A colour
+   param names a colour role; a number is px; a list is its entries, 0 past
+   its end; lead.keyline is 1 or 0. rule.place picks which rule a look draws,
+   not a value a rule can spend, so it has no token: it reaches native through
+   T.shape with the rest. v1 names no look, so nothing spends any of these in
+   v1, and rack.css's :root holds the defaults. */
+const SHAPE_PARAMS = [
+  ['rule.ink', 'knurl'], ['rule.hair', 1], ['rule.head', [2]], ['rule.sub', [2]], ['rule.total', [2]],
+  ['leader.ink', 'steel'], ['leader.dot', 1.5], ['leader.pitch', 4], ['leader.min', 16],
+  ['band.fill', 'raised'], ['band.ink', 'chalk'], ['band.height', 30],
+  ['gutter', 2],
+  ['keyline.ink', 'chalk'], ['keyline.width', 1],
+  ['lead.keyline', false]
+];
+const SHAPE_WEB = p => '--shape-' + p.split('.').map(s => s.replace(/[A-Z]/g, c => '-' + c.toLowerCase())).join('-');
+const SHAPE = SHAPE_PARAMS.flatMap(([p, d]) => Array.isArray(d)
+  ? [0, 1, 2].map(i => R(`shape.${p}.${i}`, 'shape', SHAPE_WEB(`${p}.${i}`), null, { dflt: i < d.length ? d[i] : 0 }))
+  : [R('shape.' + p, 'shape', SHAPE_WEB(p), null, typeof d === 'string' ? { dflt: d, ref: 'color' } : { dflt: d })]);
+
+/* The seven hero boxes (native theme.js HERO_SLOTS, V59 §11), whose photo a
+   vibe may draw in BAND MODE: images.<slot>.band is a strip that many points
+   tall across the top of the box, the box's own padding grown by as much, so
+   no word, control or colour sits on the photo (Iron Age §10). null — every
+   slot in v1, which has no photo — is no band: the slot's photo, if any, sits
+   behind its scrim as before. */
+const HERO = ['youHero', 'coachCard', 'startWorkout', 'summaryHero', 'fuelSummary', 'stepsToday', 'weightLog'];
+
+/* Small text in a data colour. A site that sets SMALL text (under 18pt;
+   under 14pt when bold) in a group or subject colour inks it through this
+   map (inkOf); graphics and large text keep the role itself. Every plate
+   inks itself in v1, as every such site does today. A key a vibe leaves out
+   inks itself. */
+const PLATE_ROLES = ['pRed', 'pBlue', 'pYellow', 'pGreen', 'pWhite', 'pChrome'];
+
 export const ROLES = deepFreeze([
   // registry facts and the vibe's own switches
   R('id', 'meta'), R('name', 'meta'), R('feel', 'meta'), R('experimental', 'meta'), R('scheme', 'meta'),
   R('icons', 'meta', null, null, { note: 'the icon set id: vibes/icons/<set>.js' }),
-  R('images', 'image', null, null, { note: 'slot -> file under vibes/<id>/; v1 has none' }),
+  R('images', 'image', null, null, { note: 'slot -> file under vibes/<id>/, or { file, focal, scrim, band }; v1 has none' }),
+  ...HERO.map(s => R(`images.${s}.band`, 'image', '--photo-band-' + s.replace(/[A-Z]/g, c => '-' + c.toLowerCase()), null,
+    { dflt: null, note: 'band mode, pt/px; native reaches it through T.image(slot).band' })),
   R('themeColor', 'color', 'meta:theme-color', null, { at: { web: ['index.html', 'meta[name=theme-color]', 'content'] } }),
   ...VARIANTS.map(k => R('variants.' + k, 'variant', null, 'variant.' + k)),
   // The params a look reads (vocab.js `params`: its keys, their defaults).
-  // Lands on neither client yet: no look is drawn, and v1 holds none.
-  R('shape', 'shape', null, null, { note: 'vocab.js params; a key left out takes its default there; v1 is {}' }),
+  // Native build() hands the whole object on as T.shape, each key the
+  // definition leaves out at its default; the web spends the params as the
+  // --shape-* tokens below. v1 names no look and holds none.
+  R('shape', 'shape', null, 'shape', { note: 'vocab.js params; a key left out takes its default there; v1 is {}' }),
+  ...SHAPE,
 
   ...COLOR,
+  // The strip under the installed web app's status bar, whose text is always
+  // white (index.html's black-translucent meta, fixed at launch): a light
+  // vibe keeps it dark. null is no strip — v1, and any dark vibe. Native
+  // ignores it: its <StatusBar style> is chrome.statusBar.
+  R('colors.band', 'color', '--band', null, { dflt: null }),
   // AiWarn's border and wash (native only; the web's .ai-warn is warn at the
   // same alphas) are alpha.yellow doing warn's job.
   ...['yellow', 'red', 'blue', 'green', 'ground', 'accent', 'danger', 'warn'].map(k => R('alpha.' + k, 'alpha', null, 'alpha.' + k,
     k === 'yellow' ? { except: [{ at: 'src/ui/food/common.jsx:946', role: 'alpha.warn' },
                                 { at: 'src/ui/food/common.jsx:947', role: 'alpha.warn' }] } : null)),
   ...TINTS.map(k => R('tint.' + k, 'tint', null, 'tint.' + k)),
+  // The calorie bar's runway (.cal-runway, web only): its hatching and its
+  // right edge. Tints that land on a web token, rgba() of the role at the
+  // alpha, because a vibe changes both the colour and the alpha.
+  R('tint.runway', 'tint', '--tint-runway', null, { dflt: { color: 'rack', a: 0.55 } }),
+  R('tint.runwayEdge', 'tint', '--tint-runway-edge', null, { dflt: { color: 'rack', a: 0.7 } }),
 
   ...TYPES.map(k => R('type.' + k, 'type', null, 'text.' + k)),
+  // The running meta (a card's "last 7 days", a date, "Member since …") as
+  // one preset a look can set it in. No v1 site spends it: v1 sets each at
+  // its own literal. A definition without one takes its own note.
+  R('type.meta', 'type', null, 'text.meta', { or: 'type.note' }),
   R('loadNum', 'type', null, 'loadNum'),
   R('face.family', 'face', null, 'face', { input: 'family' }),
   R('face.keys', 'face', null, 'face', { input: 'keys', note: 'the useFonts keys in app/_layout.jsx; face() returns one of them' }),
@@ -319,14 +392,31 @@ export const ROLES = deepFreeze([
   R('face.step', 'face', null, 'face', { input: 'step' }),
   R('face.width', 'face', null, 'face', { input: 'width' }),
   R('face.minLh', 'face', null, 'type', { input: 'minLh', note: "MIN_LH, type()'s line-height floor" }),
+  // A width range drawn in a family of its own: [{ min?, max?, family, keys,
+  // snap, weights, minLh }], the first band holding a preset's wdth wins.
+  // v1 has none. Native only: the web names a family by selector.
+  R('face.bands', 'face', null, 'face', { input: 'bands', dflt: [] }),
   R('face.mono', 'font', null, 'text.mono.fontFamily', { note: 'Platform.select({ ios, android })' }),
   R('face.web.font', 'font', '--font', null, { at: { web: ['rack.css', 'html, body', 'font-family'] } }),
   R('face.web.mono', 'font', '--font-mono', null, { at: { web: ['rack.css', '.paste-box', 'font-family'] } }),
+  // The web stacks a vibe's stylesheet sets its heads, its italic and its
+  // numerals in (the parity check reads them here, not in the stylesheet);
+  // num is also the face vibe.js prefetches for the Vibes card's figure. v1
+  // sets all three in --font; a definition without one takes its own font.
+  R('face.web.display', 'font', '--font-display', null, { or: 'face.web.font' }),
+  R('face.web.italic', 'font', '--font-italic', null, { or: 'face.web.font' }),
+  R('face.web.num', 'font', '--font-num', null, { or: 'face.web.font' }),
   R('face.web.importUrl', 'font', '@import', null, { note: 'rack.css line 1; stays there, byte-identical' }),
 
   ...RADIUS.map(([k, web, nat]) => R('radius.' + k, 'radius', web, nat ? 'radius.' + k : null)),
 
   ...SHADOW,
+  // Rings round the calorie bar's head and dashed target (and their guide
+  // swatches), for a page they would vanish on. rack-v58 draws none, so v1's
+  // is []. Native CalMeter draws the first layer as a border of its spread in
+  // its colour: T.ring.<k> is { borderWidth, borderColor }, or null.
+  R('shadow.calHead', 'shadow', '--shadow-cal-head', 'ring.calHead', { dflt: { web: [] } }),
+  R('shadow.calTarget', 'shadow', '--shadow-cal-target', 'ring.calTarget', { dflt: { web: [] } }),
   R('scrim.sheet.tint', 'scrim', null, null, { ref: 'tint', at: { web: ['rack.css', '.sheet-backdrop', 'background'] } }),
   R('scrim.sheet.filter', 'scrim', '--blur-sheet', null, { at: { web: ['rack.css', '.sheet-backdrop', 'backdrop-filter'] } }),
   R('scrim.sheet.webkit', 'scrim', null, null, { fixed: true, note: 'no -webkit-backdrop-filter twin in rack.css' }),
@@ -372,8 +462,31 @@ export const ROLES = deepFreeze([
   R('subjects', 'table', 'var()', 'subject', { note: 'you.js C_* and SUBJECT_COLOR; native SUBJECT_COLOR + C_*; `fallback` is every lookup\'s ||' }),
   R('kpi', 'table', 'rgb()', 'kpi', { note: 'web --kpi-rgb (you.js, .kpi); native Kpi tint' }),
   R('admin', 'table', 'var()', 'admin', { note: 'AI_SPLIT, FAMILIES, the type pill, .adm-flag (pill.web holds class names)' }),
-  R('conf', 'table', 'var()', 'conf', { note: 'the estimator confidence dot' })
+  R('conf', 'table', 'var()', 'conf', { note: 'the estimator confidence dot' }),
+
+  // The set badge's letter, W / F / D (rack.css .set-idx.t-W/F/D, native
+  // SetRow.jsx TINT): each names a colour role, so a vibe can ink W in warn
+  // where its plate yellow is too light for 12pt text. Its wash is tint.tag*.
+  ...['W', 'F', 'D'].map((k, i) => R('tagInk.' + k, 'color', '--tag-ink-' + k.toLowerCase(), 'tagInk.' + k,
+    { ref: 'color', dflt: ['pYellow', 'pRed', 'pBlue'][i] })),
+  ...PLATE_ROLES.map(k => R('inkOf.' + k, 'color', '--ink-of-' + k.replace(/[A-Z]/g, c => '-' + c.toLowerCase()), 'inkOf.' + k,
+    { ref: 'color', dflt: k }))
 ]);
+
+/* A role's value in a definition, as every engine and the generator read it:
+   the definition's own, else what the role says a definition that leaves it
+   out takes — `or`, another path in the same definition, then `dflt`. So an
+   older definition, written before a role existed, still means one thing.
+   undefined when neither the definition nor a role says anything. */
+const BY_PATH = new Map(ROLES.map(r => [r.path, r]));
+export function valueOf(def, path) {
+  const v = at(def, path);
+  if (v !== undefined) return v;
+  const r = BY_PATH.get(String(path));
+  if (!r) return undefined;
+  if (r.or) { const o = at(def, r.or); if (o !== undefined) return o; }
+  return r.dflt;
+}
 
 /* ---------- legacy exact spellings ----------
    The only strings in any vibe that are not 6-digit hex where a colour goes.

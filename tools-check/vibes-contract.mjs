@@ -70,14 +70,18 @@ const ok = m => { checks++; if (process.env.VERBOSE) console.log('  ✓ ' + m); 
 const bad = m => { checks++; fails.push(m); console.log('  ✗ ' + m); };
 const expect = (cond, m) => (cond ? ok(m) : bad(m));
 const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const sorted = o => (o && typeof o === 'object' && !Array.isArray(o) ? Object.fromEntries(Object.keys(o).sort().map(k => [k, sorted(o[k])])) : o);
 const section = t => console.log('\n' + t);
 const kebab = s => s.replace(/[A-Z]/g, c => '-' + c.toLowerCase());
 
 const I = await import(pathToFileURL(join(DEFS, 'vibes/defs/index.js')).href);
 const V1 = (await import(pathToFileURL(join(DEFS, 'vibes/defs/v1.js')).href)).default;
 const IC = (await import(pathToFileURL(join(DEFS, 'vibes/icons/v1.js')).href)).default;
-const { ROLES, LEGACY_EXACT, HUE_NAMED, at, sideOf, hexToRgb } = I;
+const { ROLES, LEGACY_EXACT, HUE_NAMED, at, sideOf, hexToRgb, valueOf } = I;
 const roleOf = p => ROLES.find(r => r.path === p);
+// The registry facts (id, name, feel, experimental, scheme, icons): words, not
+// colours, though a vibe may be called 'navy'.
+const META = new Set(ROLES.filter(r => r.kind === 'meta').map(r => r.path));
 const webVarOf = name => (roleOf('colors.' + name) || {}).web;
 // The custom property rack-v58 spends for a colour role's job: a split role's
 // source (accent -> --p-yellow), else its own name.
@@ -132,7 +136,7 @@ const HUE_FAMILY = {
 for (const [id, def] of Object.entries(defs)) {
   const offHue = HUE_NAMED.filter(h => { const v = sideOf(at(def, h.role), 'web'); return !HUE_FAMILY[h.hue] || !HEX6.test(v) || !HUE_FAMILY[h.hue](hsl(v)); });
   expect(!offHue.length, `${id}: every role the copy names by hue is that hue (${HUE_NAMED.length})` + (offHue.length ? ' — not: ' + offHue.map(h => h.role + ' ' + h.hue).join(', ') : ''));
-  const colourLeaves = leaves(def).filter(([, v]) => looksColour(v));
+  const colourLeaves = leaves(def).filter(([p, v]) => !META.has(p.split('.')[0]) && looksColour(v));
   const odd = colourLeaves.filter(([p, v]) => !HEX6.test(v) && !(id === 'v1' && underLegacy(p)));
   expect(!odd.length, `${id}: every colour string is 6-digit hex${id === 'v1' ? ' or a listed legacy spelling' : ''}` +
     (odd.length ? ' — not: ' + odd.map(([p, v]) => p + '=' + v).join(', ') : ` (${colourLeaves.length} colour strings)`));
@@ -155,6 +159,10 @@ for (const [id, def] of Object.entries(defs)) {
     const moved = ROLES.filter(r => r.fixed && !eq(at(def, r.path), at(V1, r.path)));
     expect(!moved.length, `${id}: every fixed role is v1's` + (moved.length ? ' — not: ' + moved.map(r => r.path).join(', ') : ''));
   }
+  // a role that names a colour role (tagInk, inkOf, a look param's ink) names one this vibe defines
+  const refOff = ROLES.filter(r => r.ref === 'color').map(r => [r.path, valueOf(def, r.path)])
+    .filter(([, v]) => typeof v !== 'string' || !def.colors || typeof sideOf(def.colors[v], 'web') !== 'string' || !HEX6.test(sideOf(def.colors[v], 'web')));
+  expect(!refOff.length, `${id}: every role that names a colour names one it defines, 6-digit` + (refOff.length ? ' — not: ' + refOff.map(([p, v]) => p + '=' + v).join(', ') : ''));
   // one caller writing into a definition would change it for every caller after
   expect(isDeepFrozen(def), `${id}: the definition is frozen all the way down`);
 }
@@ -164,7 +172,13 @@ expect(isDeepFrozen(IC), 'the v1 icon set is frozen all the way down');
   // it would have to guess at, and nothing listed that nobody draws.
   const EL_KEYS = { path: ['tag', 'd'], circle: ['tag', 'cx', 'cy', 'r'], rect: ['tag', 'x', 'y', 'width', 'height', 'rx'] };
   const ICON_KEYS = ['viewBox', 'stroke', 'fill', 'linecap', 'linejoin', 'els'];
-  expect(eq(Object.keys(IC), ['id', 'icons', 'sites', 'glyphs', 'prose']), 'the icon set is { id, icons, sites, glyphs, prose }');
+  expect(eq(Object.keys(IC), ['id', 'icons', 'sites', 'glyphs', 'prose', 'vessel', 'ornaments']), 'the icon set is { id, icons, sites, glyphs, prose, vessel, ornaments }');
+  const Vs = IC.vessel;
+  expect(!!Vs && eq(Object.keys(Vs), ['viewBox', 'stroke', 'd', 'insideBottom', 'insideTop', 'cap']) && typeof Vs.d === 'string' && typeof Vs.stroke === 'number' &&
+    Vs.insideBottom > Vs.insideTop && (Vs.cap === null || (Vs.cap.tag === 'rect' && eq(Object.keys(Vs.cap), EL_KEYS.rect))),
+    'the vessel is { viewBox, stroke, d, insideBottom, insideTop, cap }, filling upward, its cap a rect or null');
+  expect(!!IC.ornaments && typeof IC.ornaments === 'object' && !Array.isArray(IC.ornaments) && Object.keys(IC.ornaments).length === 0,
+    'v1 draws no tailpiece: its ornaments are {}');
   const badIcons = Object.entries(IC.icons).filter(([, i]) => !eq(Object.keys(i), ICON_KEYS) || typeof i.stroke !== 'number' || !Array.isArray(i.els) ||
     !i.els.length || !i.els.every(e => EL_KEYS[e.tag] && eq(Object.keys(e), EL_KEYS[e.tag])));
   expect(!badIcons.length, `every icon is { ${ICON_KEYS.join(', ')} }, each element exactly its tag's attributes` +
@@ -229,6 +243,8 @@ V1.admin.families.forEach((v, i) => refs.push(['admin.families.' + i, v]));
 for (const [k, v] of Object.entries(V1.admin.pill.native)) refs.push(['admin.pill.native.' + k, v]);
 for (const [k, v] of Object.entries(V1.admin.flag)) refs.push(['admin.flag.' + k, v]);
 for (const [k, v] of Object.entries(V1.conf)) refs.push(['conf.' + k, v]);
+for (const r of ROLES.filter(x => x.ref === 'color')) refs.push([r.path + (at(V1, r.path) === undefined ? ' (its default)' : ''), valueOf(V1, r.path)]);
+for (const r of ROLES.filter(x => 'dflt' in x && x.kind === 'tint')) refs.push([r.path + ' (its default)', r.dflt.color]);
 for (const [k, s] of Object.entries(IC.sites)) if (s.native && s.native.color) {
   const c = s.native.color; (typeof c === 'string' ? [c] : Object.values(c)).forEach(v => refs.push(['icons.sites.' + k, v]));
 }
@@ -252,8 +268,28 @@ for (const [k, v] of Object.entries(V1.web.rgb)) expect(!!hexToRgb(sideOf(V1.col
 section('C  every role resolves, every v1 value is covered, every web name is its path\'s');
 const KINDS = new Set(['color', 'alpha', 'tint', 'radius', 'shadow', 'scrim', 'font', 'type', 'face', 'chrome',
   'table', 'image', 'variant', 'shape', 'meta', 'layout', 'motion']);
-const unresolved = ROLES.filter(r => at(V1, r.path) === undefined);
+// A role v1 leaves out resolves through valueOf(): the look params to their
+// vocabulary defaults, the photo bands to null. Every other role v1 holds.
+const unresolved = ROLES.filter(r => valueOf(V1, r.path) === undefined);
 expect(!unresolved.length, `all ${ROLES.length} ROLES resolve to a value in v1` + (unresolved.length ? ' — not: ' + unresolved.map(r => r.path).join(', ') : ''));
+const leftOut = ROLES.filter(r => at(V1, r.path) === undefined).map(r => r.path);
+expect(leftOut.every(p => /^shape\.|^images\.\w+\.band$/.test(p)),
+  `the only roles v1 leaves to their defaults are the look params and the photo bands (${leftOut.length})` +
+  (leftOut.every(p => /^shape\.|^images\.\w+\.band$/.test(p)) ? '' : ' — not: ' + leftOut.filter(p => !/^shape\.|^images\.\w+\.band$/.test(p)).join(', ')));
+// what a role says a definition without it takes is a value of its own kind
+{
+  const off = ROLES.filter(r => r.or && (at(V1, r.or) === undefined || !roleOf(r.or) || roleOf(r.or).kind !== r.kind || 'dflt' in r)).map(r => r.path);
+  const dfltOff = ROLES.filter(r => 'dflt' in r && r.dflt !== null && at(V1, r.path) !== undefined &&
+    typeof r.dflt !== typeof at(V1, r.path)).map(r => r.path);
+  expect(!off.length && !dfltOff.length, `every \`or\` names a role of its own kind v1 holds, and every default is of v1's value's type (${ROLES.filter(r => r.or || 'dflt' in r).length})` +
+    (off.length + dfltOff.length ? ' — not: ' + [...off, ...dfltOff].join(', ') : ''));
+  // a role added for later vibes, which v1 also holds, holds its default in v1: an older vibe and v1 draw it alike
+  const drift = ROLES.filter(r => 'dflt' in r && at(V1, r.path) !== undefined && !eq(sorted(at(V1, r.path)), sorted(r.dflt))).map(r => r.path);
+  expect(!drift.length, 'every default a role gives is v1\'s own value where v1 holds the role' + (drift.length ? ' — not: ' + drift.join(', ') : ''));
+  const orDrift = ROLES.filter(r => r.or && !eq(sorted(at(V1, r.path)), sorted(at(V1, r.or)))).map(r => r.path);
+  expect(!orDrift.length, 'and every `or` role is, in v1, the role it falls back to (type.meta is note, the three stacks are --font)' +
+    (orDrift.length ? ' — not: ' + orDrift.join(', ') : ''));
+}
 expect(ROLES.every(r => KINDS.has(r.kind)), 'every role has a known kind');
 const paths = ROLES.map(r => r.path);
 expect(new Set(paths).size === paths.length, 'no role path is listed twice');
@@ -272,12 +308,19 @@ for (const r of ROLES.filter(r => r.alias)) {
     `${r.path} carries the same value as its job's role ${r.alias}`);
 }
 expect(ROLES.filter(r => r.channel).every(r => r.web.endsWith('-rgb')), 'every channel token is named --*-rgb');
-for (const r of ROLES.filter(r => r.ref)) expect(r.native === null && r.ref === 'tint' && typeof at(V1, r.path) === 'string' && at(V1, r.path) in V1.tint,
+for (const r of ROLES.filter(r => r.ref === 'tint')) expect(r.native === null && typeof at(V1, r.path) === 'string' && at(V1, r.path) in V1.tint,
   `${r.path} names a tint, and lands only through it`);
+{
+  const refRoles = ROLES.filter(r => r.ref === 'color');
+  expect(refRoles.length > 0 && ROLES.every(r => !r.ref || r.ref === 'tint' || r.ref === 'color') &&
+    refRoles.every(r => typeof valueOf(V1, r.path) === 'string' && COLOR_KEYS.has(valueOf(V1, r.path)) && (!r.web || r.web.startsWith('--'))),
+    `every role that names a colour (${refRoles.length}) names a colour role in v1, and lands on the web as that colour`);
+}
 // The web names. V59 §5 E.1-2 names these tokens for the engine to add, and
 // the one-offs among them are not the kebab of their role:
 const ONE_OFF = { 'colors.onAccent': '--ink', 'colors.onPlate': '--ink-plate', 'colors.onDone': '--ink-go',
-  'colors.accentPressed': '--accent-press', 'chrome.camera': '--video-bg', 'face.web.font': '--font', 'face.web.mono': '--font-mono' };
+  'colors.accentPressed': '--accent-press', 'chrome.camera': '--video-bg', 'face.web.font': '--font', 'face.web.mono': '--font-mono',
+  'face.web.display': '--font-display', 'face.web.italic': '--font-italic', 'face.web.num': '--font-num' };
 const PROMPT_NAMES = ['--rack-rgb', '--accent-rgb', '--p-red-rgb', '--p-blue-rgb', '--p-green-rgb', '--p-white-rgb', '--shade-rgb',
   '--lift-rgb', '--ink', '--ink-plate', '--ink-go', '--accent-press', '--on-danger', '--video-bg', '--accent', '--focus', '--font', '--font-mono'];
 const MARKERS = new Set(['meta:theme-color', 'meta:apple-mobile-web-app-status-bar-style', '@import', 'color-scheme', 'paint()', 'var()', 'rgb()']);
@@ -290,6 +333,12 @@ function webNameFor(r) {
   if (head === 'radius') return a === 'r' ? '--r' : '--r-' + kebab(a);
   if (head === 'shadow') return '--shadow-' + kebab(a);
   if (head === 'scrim') return b === 'filter' ? '--blur-' + kebab(a) : a === 'tour' ? '--scrim-tour' : null;
+  // engine v2
+  if (head === 'tint') return '--tint-' + kebab(a);
+  if (head === 'shape') return '--shape-' + r.path.split('.').slice(1).map(kebab).join('-');
+  if (head === 'tagInk') return '--tag-ink-' + a.toLowerCase();
+  if (head === 'inkOf') return '--ink-of-' + kebab(a);
+  if (head === 'images' && b === 'band') return '--photo-band-' + kebab(a);
   return null;
 }
 {
@@ -555,8 +604,8 @@ const CENSUS = [
   ['rack.css', 1603, 'rgba(240, 190, 30, .07)', 'colors.warn'],
   ['rack.css', 1627, 'rgba(214, 37, 43, .12)', 'colors.danger'],    // .ex-del:active
   ['rack.css', 1712, 'rgba(240, 190, 30, .12)', 'colors.accent'],   // .ex-edit:active
-  ['rack.css', 1894, 'rgba(20,22,26,.55)', 'colors.rack'],          // .cal-runway hatching
-  ['rack.css', 1895, 'rgba(20,22,26,.7)', 'colors.rack'],
+  ['rack.css', 1894, 'rgba(20,22,26,.55)', 'tint.runway'],          // .cal-runway hatching
+  ['rack.css', 1895, 'rgba(20,22,26,.7)', 'tint.runwayEdge'],       // and its right edge
   ['rack.css', 1913, '141,147,159', 'kpi.default'],                 // .kpi --kpi-rgb
   ['rack.css', 1922, 'rgba(255,255,255,.05)', 'tint.pillBase'],
   ['rack.css', 1924, 'rgba(42,168,92,.16)', 'tint.pillUp'],
@@ -688,7 +737,7 @@ function shadowLayers(val) {
     return { x: nums[0] || 0, y: nums[1] || 0, blur: nums[2] || 0, spread: nums[3] || 0, inset: toks.includes('inset'), col };
   });
 }
-for (const r of ROLES.filter(r => r.kind === 'shadow')) {
+for (const r of ROLES.filter(r => r.kind === 'shadow' && r.at)) {
   const [file, sel, prop] = webAt(r)[0];
   const d = decl(file, sel, prop);
   if (!d) { bad(`${r.path}: ${file} ${sel} {${prop}} not found`); continue; }
@@ -703,7 +752,7 @@ for (const r of ROLES.filter(r => r.kind === 'shadow')) {
 }
 {
   // and the other way: every box-shadow in either stylesheet is one role's
-  const claimed = new Map(ROLES.filter(r => r.kind === 'shadow').map(r => [r.at.web.join('|'), r.path]));
+  const claimed = new Map(ROLES.filter(r => r.kind === 'shadow' && r.at).map(r => [r.at.web.join('|'), r.path]));
   const all = CSS.filter(d => /(^|-)box-shadow$/.test(d.prop));
   const unclaimed = all.filter(d => d.media || !claimed.has([d.file, d.sel, d.prop].join('|')));
   expect(!unclaimed.length && all.length === claimed.size, `every box-shadow in rack.css and auth.css is a shadow role's (${all.length} declarations, ${claimed.size} roles)` +
@@ -1146,6 +1195,35 @@ for (const f of TEXT_FILES) {
   }
 }
 
+// ---- 14b. engine v2: the roles added for later vibes are what rack-v58 draws ----
+{
+  // the calorie rings: rack-v58 draws none at the head, the target or their swatches
+  const added = ROLES.filter(r => r.kind === 'shadow' && !r.at);
+  const ringed = CSS.filter(d => /box-shadow/.test(d.prop) && /\.cal-head|\.cal-target|\.guide-sw\.(head|target)/.test(d.sel));
+  expect(eq(added.map(r => r.path), ['shadow.calHead', 'shadow.calTarget']) && added.every(r => eq(at(V1, r.path), { web: [] })) && !ringed.length,
+    'shadow.calHead / calTarget are none in v1, and rack-v58 rings neither the calorie head, the target nor their swatches');
+  // the set badge's letter: .set-idx.t-W / F / D's color
+  const badge = Object.entries(V1.tagInk).map(([t, role]) => [t, role, (decl('rack.css', '.set-idx.t-' + t, 'color') || {}).val]);
+  expect(eq(Object.keys(V1.tagInk), ['W', 'F', 'D']) && badge.every(([, role, val]) => val === `var(${baseVarOf(role)})`),
+    'tagInk is the set badge\'s letter at rack-v58: ' + badge.map(([t, , v]) => `.t-${t} ${v}`).join(', '));
+  // small text in a data colour inks itself today
+  expect(eq(Object.keys(V1.inkOf), ['pRed', 'pBlue', 'pYellow', 'pGreen', 'pWhite', 'pChrome']) && Object.entries(V1.inkOf).every(([k, v]) => k === v),
+    'inkOf is the identity on the six plates in v1: every data colour inks its own small text, as rack-v58 does');
+  expect(V1.colors.band === null && !CSS.some(d => /(^|[^-])--band\b/.test(d.prop)), 'colors.band is null: rack-v58 draws no strip under the status bar');
+  expect(eq(V1.face.bands, []), 'face.bands is []: v1 draws every width in its one family');
+  // the water vessel: water.js vessel() at rack-v58
+  const w = src('water.js');
+  const fn = (/function vessel\(frac\) \{([\s\S]*?)\n\}/.exec(w) || [])[1] || '';
+  const Vs = IC.vessel;
+  const shapeLit = /const shape = ((?:'[^']*'\s*\+?\s*)+);/.exec(fn);
+  const wh = /const W = (\d+), H = (\d+);/.exec(fn), ins = /const bottom = (\d+), top = (\d+);/.exec(fn);
+  const sw = /d: shape, fill: 'none', stroke: '[^']*', 'stroke-width': '([\d.]+)'/.exec(fn);
+  const cap = /svgEl\('rect', \{\s*x: '([\d.]+)', y: '([\d.]+)', width: '([\d.]+)', height: '([\d.]+)', rx: '([\d.]+)'/.exec(fn);
+  expect(!!shapeLit && evalLit(shapeLit[1]) === Vs.d && !!wh && Vs.viewBox === `0 0 ${wh[1]} ${wh[2]}` && !!ins && +ins[1] === Vs.insideBottom &&
+    +ins[2] === Vs.insideTop && !!sw && +sw[1] === Vs.stroke && !!cap && eq(cap.slice(1).map(Number), [Vs.cap.x, Vs.cap.y, Vs.cap.width, Vs.cap.height, Vs.cap.rx]),
+    'icons.vessel is water.js vessel(): the outline, its viewBox, the waterline\'s floor and top, the stroke and the cap');
+}
+
 // ---- 15. every anchor is read ----
 {
   const unread = ROLES.filter(r => r.at && r.at.web && !atRead.has(r.path)).map(r => r.path);
@@ -1246,24 +1324,47 @@ section('F  the component vocabulary (vocab.js): well-formed, and v1 names every
   expect(strs(VOC.rules, 1), `its rules (${VOC.rules.length}) are each a sentence`);
   // the params: every key a look reads, with its default; a colour names a colour role
   const P = VOC.params;
-  const PARAM_SHAPE = { rule: ['ink', 'hair', 'head', 'place'], leader: ['ink', 'dot', 'pitch', 'min'], band: ['fill', 'ink', 'height'],
-    gutter: null, keyline: ['ink', 'width'] };
+  const PARAM_SHAPE = { rule: ['ink', 'hair', 'head', 'place', 'sub', 'total'], leader: ['ink', 'dot', 'pitch', 'min'], band: ['fill', 'ink', 'height'],
+    gutter: null, keyline: ['ink', 'width'], lead: ['keyline'] };
   const COLOUR_PARAM = k => k === 'ink' || k === 'fill';
+  // a list is at most line, gap, line: the web spends it as three tokens
   const paramOk = (k, v, dflt) => {
     if (COLOUR_PARAM(k)) return typeof v === 'string' && COLOR_KEYS.has(v);
     if (k === 'place') return v === 'above' || v === 'below';
-    if (Array.isArray(dflt)) return Array.isArray(v) && v.length > 0 && v.every(n => typeof n === 'number' && n > 0);
+    if (typeof dflt === 'boolean') return typeof v === 'boolean';
+    if (Array.isArray(dflt)) return Array.isArray(v) && v.length > 0 && v.length <= 3 && v.every(n => typeof n === 'number' && n > 0);
     return typeof v === 'number' && v > 0;
   };
   const paramBad = [];
-  expect(eq(Object.keys(P), Object.keys(PARAM_SHAPE)), 'its params are rule, leader, band, gutter and keyline');
+  expect(eq(Object.keys(P), Object.keys(PARAM_SHAPE)), 'its params are rule, leader, band, gutter, keyline and lead');
   for (const [k, sub] of Object.entries(PARAM_SHAPE)) {
     if (sub === null) { if (!paramOk(k, P[k], P[k])) paramBad.push(k); continue; }
     if (!isObj(P[k]) || !eq(Object.keys(P[k]), sub)) { paramBad.push(k + ' (keys)'); continue; }
     for (const s of sub) if (!paramOk(s, P[k][s], P[k][s])) paramBad.push(k + '.' + s);
   }
-  expect(!paramBad.length, 'every param default is a positive number, a list of them, above/below, or a colour role v1 defines' +
+  expect(!paramBad.length, 'every param default is a positive number, a list of them, above/below, a switch, or a colour role v1 defines' +
     (paramBad.length ? ' — not: ' + paramBad.join(', ') : ''));
+  {
+    /* index.js carries each param but place as a web token (ROLES shape.*),
+       its default repeated there because index.js imports nothing: each must
+       be vocab.js's, a list's entries one role each and 0 past its end — so a
+       list default is one entry, or "0 past the end" would disagree with it. */
+    const want = [];
+    for (const [k, sub] of Object.entries(PARAM_SHAPE)) {
+      for (const s of sub === null ? [null] : sub) {
+        if (s === 'place') continue;
+        const p = s === null ? k : k + '.' + s, d = s === null ? P[k] : P[k][s];
+        if (Array.isArray(d)) [0, 1, 2].forEach(i => want.push(['shape.' + p + '.' + i, i < d.length ? d[i] : 0, false]));
+        else want.push(['shape.' + p, d, COLOUR_PARAM(s || k)]);
+      }
+    }
+    const got = ROLES.filter(r => r.path.startsWith('shape.'));
+    const off = want.filter(([p, d, colour]) => { const r = roleOf(p); return !r || r.kind !== 'shape' || !eq(r.dflt, d) || (r.ref === 'color') !== colour || !r.web || r.native !== null; });
+    const lists = Object.values(P).flatMap(v => (v && typeof v === 'object' && !Array.isArray(v) ? Object.values(v) : [v])).filter(Array.isArray);
+    expect(!off.length && got.length === want.length && lists.every(l => l.length === 1) && roleOf('shape').native === 'shape',
+      `every param but place is a --shape-* role with vocab.js's default (${want.length}), colours naming a role; native takes the whole object as T.shape` +
+      (off.length ? ' — not: ' + off.map(([p]) => p).join(', ') : got.length !== want.length ? ` — ROLES has ${got.length}` : ''));
+  }
   // the blocks
   const BLOCKS = Object.keys(VOC.blocks);
   const sameSet = (a, b) => a.length === b.length && [...a].sort().join('\n') === [...b].sort().join('\n');
@@ -1292,6 +1393,9 @@ section('F  the component vocabulary (vocab.js): well-formed, and v1 names every
   expect(!siteBad.length, 'every block names where it branches on native: a switch that exists, or one to open' + (siteBad.length ? ' — not: ' + siteBad.join(', ') : ''));
   const slots = Object.values(VOC.blocks).flatMap(B => B.slots);
   expect(slots.length === 7 && new Set(slots).size === 7, 'the seven hero slots (V59 §11) are each carried by exactly one block: ' + slots.join(', '));
+  const bandSlots = ROLES.filter(r => /^images\.\w+\.band$/.test(r.path)).map(r => r.path.split('.')[1]);
+  expect(sameSet(bandSlots, slots) && ROLES.filter(r => /^images\.\w+\.band$/.test(r.path)).every(r => r.dflt === null && r.native === null),
+    'each hero slot, and no other, may draw its photo in band mode (images.<slot>.band), none in v1');
   // v1, and every definition, against it
   expect(sameSet(Object.keys(V1.variants), BLOCKS) && BLOCKS.every(b => V1.variants[b] === VOC.blocks[b].v1 && V1.variants[b] === 'v1'),
     `v1 names every one of the ${BLOCKS.length} blocks, each its 'v1' look, and no block the vocabulary lacks`);
@@ -1299,7 +1403,8 @@ section('F  the component vocabulary (vocab.js): well-formed, and v1 names every
   for (const [id, def] of Object.entries(defs)) {
     const off = Object.entries(def.variants || {}).filter(([b, n]) => !VOC.blocks[b] || !VOC.blocks[b].variants.includes(n)).map(([b, n]) => b + '=' + n);
     expect(isObj(def.variants) && !off.length, `${id}: every look it names is one its block accepts` + (off.length ? ' — not: ' + off.join(', ') : ''));
-    const S = def.shape, sBad = [];
+    // no `shape` at all is every param at its default, as each key left out is
+    const S = def.shape === undefined ? {} : def.shape, sBad = [];
     if (!isObj(S)) sBad.push('(not an object)');
     else for (const [k, v] of Object.entries(S)) {
       if (!(k in P)) { sBad.push(k); continue; }

@@ -33,7 +33,7 @@ import { wOut, wIn, fmtSetW, fmtSetLoad, fmtVol, volOut, unitW, limW } from './u
 // app copies verbatim; vibe.js's paint() makes it the token that paints it
 // (V59 §5.4). vibePaint in every file that uses it, because paint is the
 // app's usual name for a local repaint.
-import { paint as vibePaint, iconHtml } from './vibe.js';
+import { paint as vibePaint, iconHtml, glyphed, tail } from './vibe.js';
 
 // Volume is a sum of stored pounds, so it converts like a weight. Round to a
 // whole number BEFORE the abbreviation, never after: "41.3k" is a string and
@@ -339,11 +339,13 @@ export function render() {
   const root = $('#view-workout');
   if (!root) return;
   paintPeekBar();
-  if (summary)              { root.innerHTML = ''; root.appendChild(renderSummary()); return; }
+  // tail(): the vibe's tailpiece at the foot of the recap and of Train's own
+  // screen, where it has one (vibe.js; none in v1, and nothing is added)
+  if (summary)              { root.innerHTML = ''; root.appendChild(tail(renderSummary(), 'recap')); return; }
   if (session && !peek)     { root.innerHTML = ''; root.appendChild(renderSession()); return; }
   if (isStatsOpen())        { renderStats(); return; }
   root.innerHTML = '';
-  root.appendChild(renderCalendar());
+  root.appendChild(tail(renderCalendar(), 'workout'));
 }
 
 /* ================= PEEK ================= */
@@ -400,8 +402,8 @@ function renderCalendar() {
   hd.appendChild(left);
 
   const nav = el('div', 'cal-nav');
-  const prev = el('button', null, '‹'); prev.setAttribute('aria-label', 'Previous month');
-  const next = el('button', null, '›'); next.setAttribute('aria-label', 'Next month');
+  const prev = el('button', null, '‹'); glyphed(prev, 'prev'); prev.setAttribute('aria-label', 'Previous month');
+  const next = el('button', null, '›'); glyphed(next, 'next'); next.setAttribute('aria-label', 'Next month');
   prev.onclick = async () => { viewMonth = new Date(viewMonth.getFullYear(), viewMonth.getMonth() - 1, 1); await loadMonth(monthKey(viewMonth)); render(); };
   next.onclick = async () => { viewMonth = new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 1); await loadMonth(monthKey(viewMonth)); render(); };
   nav.append(prev, next);
@@ -1143,7 +1145,7 @@ function renderBlock(row, editing) {
   // tapping it again unticks exactly the rows it ticked.
   const fillable = blockFillableSets(session.exercises, n);
   const ticked = blockTicked(session.exercises, n);
-  const chk = el('button', 'set-check wk-block-chk' + (ticked ? ' on' : ''), ticked ? '\u2713' : '');
+  const chk = el('button', 'set-check wk-block-chk' + (ticked ? ' on' : ''), ticked ? '\u2713' : ''); glyphed(chk, 'check');
   chk.disabled = !fillable.length;
   chk.setAttribute('aria-label', ticked
     ? 'Mark Block ' + n + ' incomplete'
@@ -1168,7 +1170,7 @@ function renderBlock(row, editing) {
   dup.onclick = () => commitBlocks(duplicateBlock(session, n, { copySet: dupSet(editing) }));
   acts.appendChild(dup);
 
-  const del = el('button', 'wk-block-x', '✕');
+  const del = el('button', 'wk-block-x', '✕'); glyphed(del, 'close');
   del.setAttribute('aria-label', 'Delete Block ' + n);
   del.onclick = () => {
     // Logged sets are worth stopping for — the same bar as discarding a
@@ -1207,7 +1209,7 @@ function renderExercise(ex, exIdx) {
   const tag = el('i', 'ex-tag'); tag.style.background = color;
   hd.appendChild(tag);
   hd.appendChild(el('div', 'ex-name', ex.name));
-  const menu = el('button', 'ex-menu', '⋯');
+  const menu = el('button', 'ex-menu', '⋯'); glyphed(menu, 'more');
   menu.setAttribute('aria-label', 'Remove ' + ex.name);
   menu.onclick = () => {
     confirmSheet({
@@ -1307,7 +1309,7 @@ function renderSet(ex, exIdx, s, i, drop) {
   // set type cycles N → W → F → D. v55: through retypeSet, so a set changed to
   // a drop set starts one of its own and one that stops being one takes no
   // drop set with it; a drop's badge is the arrow its row hangs from.
-  const idx = el('button', 'set-idx t-' + s.type, drop ? '↳' : s.type === 'N' ? String(i + 1) : s.type);
+  const idx = el('button', 'set-idx t-' + s.type, drop ? '↳' : s.type === 'N' ? String(i + 1) : s.type); glyphed(idx, 'drop');
   idx.title = drop ? 'A drop in the drop set above. Tap to cycle: normal, warm-up, failure, drop set'
                    : 'Tap to cycle: normal, warm-up, failure, drop set';
   idx.onclick = () => {
@@ -1347,7 +1349,7 @@ function renderSet(ex, exIdx, s, i, drop) {
   const e1 = e1rm(s.w, s.r);
   row.appendChild(el('div', 'set-e1rm num', s.type === 'W' || !e1 ? '' : String(Math.round(wOut(e1, u)))));
 
-  const chk = el('button', 'set-check' + (s.done ? ' on' : ''), s.done ? '✓' : '');
+  const chk = el('button', 'set-check' + (s.done ? ' on' : ''), s.done ? '✓' : ''); glyphed(chk, 'check');
   chk.setAttribute('aria-label', s.done ? 'Mark set incomplete' : 'Mark set complete');
   if (exIdx === coachExIdx(session) && i === 0 && showCoach(session, coachNone, coachTapped)) chk.classList.add('coach');
   chk.onclick = () => {

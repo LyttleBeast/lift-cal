@@ -8,7 +8,11 @@
 //                   paintSvg() does the same for an SVG a pinned module drew.
 //   icon(name, o)   an icon from the active vibe's set, as an <svg> element;
 //                   iconHtml() is the same drawing as markup, for the sites
-//                   that write innerHTML.
+//                   that write innerHTML. glyphed() draws a glyph site (‹ › ✕
+//                   ⋯ ✓ …) from the set where it has a drawing, and leaves the
+//                   character where it has none; vessel() is the water
+//                   bottle's outline; tailpiece() the one ornament a vibe may
+//                   hang at the foot of a screen.
 //   applyVibe(id)   the switch: the attribute on <html>, this device's key,
 //                   the theme-color meta, the dock, then the screen.
 //   current()       the active vibe's id.
@@ -21,8 +25,10 @@
 //
 // V1 IS TODAY. With v1 active nothing here changes a pixel: paint() hands back
 // a token whose value is the hex it replaced, icon() writes the markup each
-// site wrote before (same attributes, same order, same children), and nothing
-// at all runs at boot — index.html's own dock and theme-color stand.
+// site wrote before (same attributes, same order, same children), glyphed()
+// leaves every site's character as it is, vessel() is water.js's own bottle,
+// tailpiece() is null, and nothing at all runs at boot — index.html's own
+// dock and theme-color stand, and no pattern defs are added.
 //
 // WHERE THE CHOICE LIVES. <html data-vibe="<id>">, absent for v1, is the one
 // switch the stylesheets read: every vibe's rules are scoped under it
@@ -33,7 +39,7 @@
 // before anyone is signed in, and purgeDevice() and lsKey() never touch it.
 // v1 is its absence too. The account's own copy (settings/vibe) is store.js's.
 
-import { normVibe, ROLES, DEFAULT } from './vibes/defs/index.js';
+import { normVibe, ROLES, DEFAULT, valueOf } from './vibes/defs/index.js';
 import V1 from './vibes/defs/v1.js';
 import V1_ICONS from './vibes/icons/v1.js';
 
@@ -179,6 +185,84 @@ export function iconHtml(name, o = {}) {
   return '<svg ' + svgAttrs(ic, o).map(([k, v]) => k + '="' + esc(v) + '"').join(' ') + '>' + drawing(ic) + '</svg>';
 }
 
+/* ---------- glyphs, the vessel, tailpieces ----------
+   The icon contract's other three fields (vibes/icons/v1.js). v1's set holds
+   the survey of each and draws none of them differently: its glyphs are
+   text, its vessel is water.js's bottle, and it has no tailpiece. */
+
+const isDrawing = x => !!x && typeof x === 'object' && typeof x.viewBox === 'string' && Array.isArray(x.els);
+const setOf = id => (own(ICON_SETS, id) ? ICON_SETS[id] : V1_ICONS);
+
+/* A glyph site: an element whose whole text is one of the characters the
+   contract lists (glyphs.<name>.char — ‹ › ✕ × ⋯ − + ✓ ↳ ✎ ⚠ ↑ ↓ →). Where
+   the active set draws that glyph (glyphs.<name> an icon), the character is
+   replaced by the drawing; where it does not (null, left out, and every
+   glyph in v1), the element is handed back untouched, so a site written
+   glyphed(el('button', cls, '‹'), 'prev') builds exactly what it did.
+   The drawing keeps the character as its accessible name (role img, the
+   character its label) — a button named by its glyph is still named — and is
+   1em square, the size the character was; the vibe's stylesheet sizes it
+   further by .glyph / .glyph-<name>. opts.lead: the character leads the
+   element's first text ('⚠ That rate …'), and only it is replaced. Only for
+   a site the contract lists: a character in a sentence is copy (`prose`). */
+export function glyphed(node, name, opts = {}) {
+  const set = setOf(def().icons);
+  const ic = own(set.glyphs, name) ? set.glyphs[name] : null;
+  if (!node || !isDrawing(ic) || !own(V1_ICONS.glyphs, name)) return node;
+  const ch = V1_ICONS.glyphs[name].char;
+  const svg = iconEl(ic, {});
+  svg.setAttribute('class', 'glyph glyph-' + name);
+  svg.setAttribute('width', '1em');
+  svg.setAttribute('height', '1em');
+  svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label', ch);
+  if (opts.lead) {
+    const t = node.firstChild;
+    if (!t || t.nodeType !== 3 || !t.data.startsWith(ch)) return node;
+    t.data = t.data.slice(ch.length);
+    node.insertBefore(svg, t);
+    return node;
+  }
+  if (node.textContent !== ch) return node;
+  node.textContent = '';
+  node.appendChild(svg);
+  return node;
+}
+
+/* The water bottle (icons.vessel): the active set's, else v1's. water.js
+   draws it; the level stays linear in the day's fraction from insideBottom up
+   to insideTop, so a vibe redraws the bottle, never what fills it. */
+export function vessel() {
+  const v = setOf(def().icons).vessel;
+  return v && typeof v.d === 'string' && typeof v.viewBox === 'string' &&
+    Number.isFinite(v.insideBottom) && Number.isFinite(v.insideTop) ? v : V1_ICONS.vessel;
+}
+
+/* The tailpiece for a screen (you, workout, food, weight, steps, recap): the
+   active set's ornaments.<screen> as an <svg>, hidden from assistive tech,
+   drawn at its own size and centred 32 under the screen's last box — or
+   null, and the screen adds nothing (v1 has no ornaments). Its ink is the
+   text colour it sits in; a vibe's stylesheet may restyle .tailpiece. */
+export function tailpiece(screen) {
+  const set = setOf(def().icons);
+  const o = set.ornaments && own(set.ornaments, screen) ? set.ornaments[screen] : null;
+  if (!isDrawing(o)) return null;
+  const s = iconEl({ fill: 'none', ...o }, { ariaHidden: true });
+  const [, , w, h] = o.viewBox.split(/[\s,]+/).map(Number);
+  s.setAttribute('class', 'tailpiece tailpiece-' + screen);
+  if (w > 0 && h > 0) { s.setAttribute('width', String(w)); s.setAttribute('height', String(h)); }
+  s.style.display = 'block';
+  s.style.margin = '32px auto 0';
+  return s;
+}
+
+/* A screen's foot: its tailpiece appended to it, when the vibe has one. */
+export function tail(parent, screen) {
+  const t = parent ? tailpiece(screen) : null;
+  if (t) parent.appendChild(t);
+  return parent;
+}
+
 /* ---------- the dock ----------
    The dock is index.html's markup, drawn before any script runs. A vibe whose
    icons are not v1's swaps the five <svg>s here; the originals are kept, node
@@ -201,6 +285,52 @@ function dock(id) {
     const next = set === DEFAULT ? orig : iconEl(iconIn(set, b.dataset.view), { cssStroke: true });
     if (next !== was) b.replaceChild(next, was);
   }
+}
+
+/* ---------- chart patterns ----------
+   analytics.js is pinned, so a chart look adds no geometry to what it draws:
+   it restyles the elements (VOCAB §8.6). A hatched fill — chart · print's
+   unfinished day and macro fills, chart · board's knurl days — is a fill:
+   url(#…), and the <pattern> it names has to be in the page. So under a
+   vibe whose chart look hatches, one hidden <svg id="vibe-patterns"> holds a
+   hatch per colour role, id vibe-hatch-<token> (vibe-hatch-p-blue,
+   vibe-hatch-knurl, …): lines 1 wide every 2.75 (Iron Age §11, T7 §7.3) at
+   45°, stroked in the role's own token, so they follow the vibe. HTML the
+   stylesheet can reach (the calorie bands, legend swatches) hatches in CSS
+   and needs none of this. Any other vibe, v1 above all, adds nothing and
+   touches nothing; switching away takes the defs out. */
+const HATCH_LOOKS = ['print', 'board'];
+const HATCH = { pitch: 2.75, line: 1, angle: 45 };
+let hatchDefs = null;   // the <svg> this file put in the page, while one is there
+
+function patterns(id) {
+  if (!HATCH_LOOKS.includes(valueOf(def(id), 'variants.chart'))) {
+    if (hatchDefs) { try { hatchDefs.remove(); } catch {} hatchDefs = null; }
+    return;
+  }
+  if (hatchDefs && hatchDefs.isConnected) return;
+  let body = null;
+  try { body = document.body; } catch {}
+  if (!body) return;
+  const s = document.createElementNS(SVG_NS, 'svg');
+  for (const [k, v] of [['id', 'vibe-patterns'], ['aria-hidden', 'true'], ['width', '0'], ['height', '0'], ['focusable', 'false']]) s.setAttribute(k, v);
+  s.style.position = 'absolute';
+  s.style.pointerEvents = 'none';
+  const defs = document.createElementNS(SVG_NS, 'defs');
+  for (const token of new Set(Object.values(TOKEN))) {
+    const p = document.createElementNS(SVG_NS, 'pattern');
+    for (const [k, v] of [['id', 'vibe-hatch-' + token.slice(2)], ['patternUnits', 'userSpaceOnUse'], ['width', String(HATCH.pitch)],
+      ['height', String(HATCH.pitch)], ['patternTransform', 'rotate(' + HATCH.angle + ')']]) p.setAttribute(k, v);
+    const l = document.createElementNS(SVG_NS, 'path');
+    l.setAttribute('d', 'M' + HATCH.line / 2 + ' 0V' + HATCH.pitch);
+    l.setAttribute('stroke-width', String(HATCH.line));
+    l.style.setProperty('stroke', 'var(' + token + ')');
+    p.appendChild(l);
+    defs.appendChild(p);
+  }
+  s.appendChild(defs);
+  body.appendChild(s);
+  hatchDefs = s;
 }
 
 /* ---------- theme-color ---------- */
@@ -227,7 +357,8 @@ function themeColor(id) {
      - every vibe's picker files, the two things a Vibes card draws that a
        launch in another vibe never fetches: its thumbnail (the definition's
        `images.thumb`) and the face its number is set in (the first family of
-       its `face.web.font`).
+       its `face.web.num`, which a definition without one takes from its
+       `face.web.font` — index.js valueOf()).
    A file is asked for only when Cache Storage does not already hold it, so
    the first online launch after a bump fetches them and the launches after it
    fetch nothing; only while online; and only when a service worker controls
@@ -243,7 +374,17 @@ const unquote = s => String(s == null ? '' : s).trim().replace(/^(['"])([\s\S]*)
 
 /* A vibe's image, by slot, as an absolute URL: vibes/<id>/<file>. A slot is
    a file name, or { file } where a later phase gives a slot more than that.
-   Null for v1 (no images), an unknown vibe, or a slot it does not have. */
+   Null for v1 (no images), an unknown vibe, or a slot it does not have.
+   On a screen, a hero photo is its vibe's stylesheet's to draw (nothing here
+   branches on a look, VOCAB §1): the box its slot names, and in band mode
+   (images.<slot>.band) the strip --photo-band-<slot> tall across the box's
+   top with the box's own padding grown by as much, so no word sits on the
+   photo — the token is generated from the definition (vibes-css.mjs). The
+   boxes, as v1's DOM has them: youHero .you-hero, summaryHero .summary-hero,
+   fuelSummary .card.fuel-sum, coachCard .coach-card (fixed 190 / 164: a band
+   would push its words out), and — with no class of their own, which v1's
+   DOM keeps — stepsToday #view-steps .cal-hd + .card and weightLog
+   #view-weight .cal-hd + .card; startWorkout is a button, not a box. */
 export function imageUrl(id, slot) {
   if (!own(DEFS, id) || !own(DEFS[id].images, slot)) return null;
   const v = DEFS[id].images[slot];
@@ -280,7 +421,9 @@ function filesOf(id, picker) {
     const imgs = DEFS[id].images;
     return [...Object.keys(imgs && typeof imgs === 'object' ? imgs : {}).map(k => imageUrl(id, k)), ...fontFiles(id)];
   }
-  const font = DEFS[id].face && DEFS[id].face.web && DEFS[id].face.web.font;
+  // The Vibes card's figure is set in the numeral face (vibes-sheet.js): a
+  // vibe whose numbers are not its text face (Iron Age's Besley) names it.
+  const font = valueOf(DEFS[id], 'face.web.num');
   const face = typeof font === 'string' ? unquote(font.split(',')[0]) : '';
   return [imageUrl(id, THUMB), ...(face ? fontFiles(id, face) : [])];
 }
@@ -352,6 +495,7 @@ export function applyVibe(id, opts = {}) {
   } catch {}
   themeColor(v);
   dock(v);
+  patterns(v);
   if (v !== was) {
     if (opts.render !== false && renderer) { try { renderer(v); } catch {} }
     for (const fn of listeners) { try { fn(v, was); } catch {} }

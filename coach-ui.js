@@ -36,7 +36,7 @@ import { normGoalLift, GOAL_LB_MAX } from './coach-goal.js';
 // The two marks, from the vibe's icon set (vibes/icons/v1.js has today's), and
 // a group's hex as the token that paints it (V59 §5.4, §5.7) — vibePaint, since
 // paint is a local repaint's name further down.
-import { paint as vibePaint, icon } from './vibe.js';
+import { paint as vibePaint, icon, glyphed } from './vibe.js';
 
 /* The two marks: the speech bubble, and the lock. Built as they always were —
    the <svg> made here, its drawing written in as markup. */
@@ -227,7 +227,7 @@ function goRow(lead) {
   const r = el('div', 'coach-go');
   r.appendChild(el('span', 'coach-go-t', 'COACH ME'));
   if (lead) r.appendChild(el('span', 'coach-go-q', lead));
-  r.appendChild(el('span', 'coach-go-x', '›'));
+  r.appendChild(glyphed(el('span', 'coach-go-x', '›'), 'go'));
   return r;
 }
 
@@ -1376,7 +1376,7 @@ export function nudgeLine(session, exIdx, on = {}) {
   const t = el('button', 'coach-nudge-t', 'Coach · ' + st.nudge.short);
   t.setAttribute('aria-label', 'Coach: ' + st.nudge.short + ' Tap for why.');
   t.onclick = () => { if (typeof on.open === 'function') on.open(); };
-  const x = el('button', 'coach-nudge-x', '×');
+  const x = el('button', 'coach-nudge-x', '×'); glyphed(x, 'dismiss');
   x.setAttribute('aria-label', 'Dismiss');
   x.onclick = () => { if (typeof on.dismiss === 'function') on.dismiss(); };
   line.append(t, x);

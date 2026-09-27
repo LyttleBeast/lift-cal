@@ -12,13 +12,15 @@
 // that rollup goes stale. A day of water is a handful of entries — sum it on
 // read. Don't build a second thing that can disagree with itself.
 //
-// Imports store.js, ui.js and usage.js only, so it can never create a cycle.
+// Imports store.js, ui.js, usage.js, units.js and vibe.js (which imports only
+// the pure vibes/ contract) only, so it can never create a cycle.
 
 import { read, write, watch, todayKey, wu } from './store.js';
 import { bump } from './usage.js';
 import { el, svgEl, sheet, toast, noteEl, confirmSheet, segmented,
          swipeToDelete, r1, trimNum, parseKey, LIMITS, within } from './ui.js';
 import { labelW } from './units.js';
+import { glyphed, vessel as vesselShape } from './vibe.js';
 
 /* ---------- units ---------- */
 export const UNITS = {
@@ -179,7 +181,7 @@ export function renderWater(editable = true) {
     const ctl = el('div', 'water-ctl');
     const dp = defaultPreset();
 
-    const minus = el('button', 'btn btn-ghost water-mini', '−');
+    const minus = el('button', 'btn btn-ghost water-mini', '−'); glyphed(minus, 'minus');
     minus.setAttribute('aria-label', 'Undo last');
     minus.onclick = undoLast;
 
@@ -187,7 +189,7 @@ export function renderWater(editable = true) {
       '+  ' + dp.label + '  ·  ' + fmtWater(dp.ml));
     plus.onclick = async () => { await addWater(dp.ml); toast('+ ' + fmtWater(dp.ml)); };
 
-    const more = el('button', 'btn btn-ghost water-mini', '⋯');
+    const more = el('button', 'btn btn-ghost water-mini', '⋯'); glyphed(more, 'more');
     more.setAttribute('aria-label', 'More ways to log water');
     more.onclick = openWaterSheet;
 
@@ -202,15 +204,20 @@ export function renderWater(editable = true) {
    calorie meter is already a bar and this needs to read as a different thing
    at a glance. */
 function vessel(frac) {
-  const W = 104, H = 168;
+  // The bottle is the vibe's (vibe.js vessel(), the icon set's `vessel`): its
+  // outline, which is also the clip, the waterline's floor and top, the
+  // outline's stroke and the cap. v1's is the bottle this function always
+  // drew — a 104 × 168 box; outline: neck, shoulder, body; inside 154 to 22;
+  // a 2.5 stroke; a rounded cap over the neck — and it draws it attribute
+  // for attribute as before. What fills it is not the vibe's: the level stays
+  // linear in the day's fraction.
+  const V = vesselShape();
+  const [, , W, H] = V.viewBox.split(/[\s,]+/).map(Number);
   const id = 'wclip' + (++clipSeq);
 
-  // Bottle outline: neck, shoulder, body.
-  const shape = 'M 40 10 L 64 10 L 64 28 C 64 37 84 44 84 62 L 84 146 ' +
-                'Q 84 160 70 160 L 34 160 Q 20 160 20 146 L 20 62 ' +
-                'C 20 44 40 37 40 28 Z';
+  const shape = V.d;
 
-  const svg = svgEl('svg', { viewBox: `0 0 ${W} ${H}`, class: 'water-vessel' });
+  const svg = svgEl('svg', { viewBox: V.viewBox, class: 'water-vessel' });
   const defs = svgEl('defs');
   const clip = svgEl('clipPath', { id });
   clip.appendChild(svgEl('path', { d: shape }));
@@ -219,8 +226,8 @@ function vessel(frac) {
 
   svg.appendChild(svgEl('path', { d: shape, fill: 'var(--well)' }));
 
-  // Waterline. 154 is the inside bottom, 22 the inside top of the neck.
-  const bottom = 154, top = 22;
+  // Waterline, from the inside bottom (v1: 154) to the inside top (v1: 22, the neck).
+  const bottom = V.insideBottom, top = V.insideTop;
   const y = bottom - frac * (bottom - top);
   const g = svgEl('g', { 'clip-path': `url(#${id})` });
   if (frac > 0.001) {
@@ -234,12 +241,15 @@ function vessel(frac) {
   svg.appendChild(g);
 
   svg.appendChild(svgEl('path', {
-    d: shape, fill: 'none', stroke: 'var(--knurl)', 'stroke-width': '2.5'
+    d: shape, fill: 'none', stroke: 'var(--knurl)', 'stroke-width': String(V.stroke)
   }));
-  // Cap.
-  svg.appendChild(svgEl('rect', {
-    x: '38', y: '2', width: '28', height: '10', rx: '3', fill: 'var(--grip)'
-  }));
+  // Cap, where the bottle has one (v1: a rect over the neck).
+  if (V.cap && V.cap.tag) {
+    const a = {};
+    for (const [k, v] of Object.entries(V.cap)) if (k !== 'tag') a[k] = String(v);
+    a.fill = 'var(--grip)';
+    svg.appendChild(svgEl(V.cap.tag, a));
+  }
   return svg;
 }
 
@@ -388,7 +398,7 @@ export function openWaterSettings(latestLb, onSaved) {
         const am = el('input', 'wpe-amt');
         am.type = 'number'; am.inputMode = 'decimal'; am.step = 'any';
         am.value = String(toDisplay(p.ml, unit));
-        const rm = el('button', 'wpe-del', '×');
+        const rm = el('button', 'wpe-del', '×'); glyphed(rm, 'dismiss');
         rm.setAttribute('aria-label', 'Remove');
         rm.onclick = () => {
           const next = rows.map(x => ({ label: x.nm.value.trim() || 'Drink', ml: Math.min(LIMITS.waterMl[1], fromDisplay(parseFloat(x.am.value) || 0, unit)) }));

@@ -82,6 +82,9 @@ globalThis.window = { addEventListener() {} };
 const UI = await import(real('ui.js'));
 const O  = await import(real('estimate-origin.js'));
 const A  = await import(real('estimate-ask.js'));
+// engine v2: the review's ✕ is a glyph site, drawn through the vibe — the real
+// vibe.js, which imports only the pure vibes/ contract.
+const VB = await import(real('vibe.js'));
 
 // rack-v57's estimate-origin.js, the control: it imports nothing, so it loads from a file of its own.
 const dir = mkdtempSync(join(tmpdir(), 'rack-usda-desc-'));
@@ -104,6 +107,7 @@ function harness() {
   const S = { writes: [], toasts: [], recalled: [], remembered: [] };
   const stubs = {
     el: UI.el, sheet: UI.sheet, toast: m => S.toasts.push(String(m)), noteEl: UI.noteEl, segmented: UI.segmented,
+    glyphed: VB.glyphed,
     r1: UI.r1, trimNum: UI.trimNum, clamp: UI.clamp, within: UI.within, LIMITS: UI.LIMITS,
     estimateOrigin: O.estimateOrigin, originHeading: O.originHeading, EDITED: O.EDITED, mealName: O.mealName,
     write: async (p, v) => { S.writes.push({ p, v: clone(v) }); },

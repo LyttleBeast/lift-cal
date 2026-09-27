@@ -32,7 +32,7 @@ import { el, sheet, toast, noteEl, confirmSheet } from './ui.js';
 import { PATTERN_ANGLES, ANGLE_LABELS, patternsOn, ownMovement, movementLabel } from './coach-tags.js';
 // A group's hex (exercises.js) as the token that paints it (V59 §5.4). Named
 // vibePaint here because paint() is this file's own repaint, three times over.
-import { paint as vibePaint } from './vibe.js';
+import { paint as vibePaint, glyphed } from './vibe.js';
 
 let customEx  = [];
 let overrides = {};
@@ -408,7 +408,7 @@ export function openExerciseManager(onChange) {
       if (overrides[x.id])   tags.push('edited');
       if (isHidden(x.id))    tags.push('hidden');
       b.appendChild(el('span', 'eq', tags.length ? tags.join(' · ') : x.equipment));
-      b.appendChild(el('span', 'eq ex-go', '›'));
+      b.appendChild(glyphed(el('span', 'eq ex-go', '›'), 'go'));
 
       b.onclick = () => { close(); openExerciseEdit(x.id, reopen); };
       list.appendChild(b);

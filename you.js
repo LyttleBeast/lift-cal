@@ -84,7 +84,7 @@ import { wOut, fmtW, fmtSetLoad, labelW, unitW, fmtRate, labelRate, fmtVol,
 // A group's hex (analytics.js groupColor) as the token that paints it, and the
 // gear from the vibe's icon set (V59 §5.4, §5.7). vibePaint, as in every file
 // that uses it: paint is the app's usual name for a local repaint.
-import { paint as vibePaint, iconHtml } from './vibe.js';
+import { paint as vibePaint, iconHtml, glyphed, tail } from './vibe.js';
 
 const DAY = 864e5;
 // Exactly the two seven-day windows the week card compares, so the water reads
@@ -378,7 +378,7 @@ function card(title, sub, why) {
     const right = el('div', 'card-right');
     if (sub) right.appendChild(el('div', 'card-sub num', sub));
     if (why) {
-      const b = el('button', 'ex-menu card-why', '⋯');
+      const b = el('button', 'ex-menu card-why', '⋯'); glyphed(b, 'more');
       b.setAttribute('aria-label', 'Where this comes from');
       b.onclick = () => whySheet(why);
       right.appendChild(b);
@@ -443,7 +443,7 @@ function deltaEl(text, cls, unit) {
    painted green, and that is the whole point of drawing it this way. */
 function arrowEl(diff, cls, text, unit) {
   const d = el('span', 'delta ' + (cls || 'flat'));
-  d.appendChild(el('span', 'delta-a', diff > 0 ? '↑' : diff < 0 ? '↓' : '→'));
+  d.appendChild(glyphed(el('span', 'delta-a', diff > 0 ? '↑' : diff < 0 ? '↓' : '→'), diff > 0 ? 'up' : diff < 0 ? 'down' : 'flat'));
   d.appendChild(el('span', 'delta-v', text));
   if (unit) d.appendChild(el('span', 'delta-l', unit));
   return d;
@@ -550,7 +550,7 @@ export function render() {
   // return to, and forcing 0 there would fight a restored scroll position.
   const y = root.firstChild ? window.scrollY : null;
   root.innerHTML = '';
-  root.appendChild(wrap);
+  root.appendChild(tail(wrap, 'you'));   // the vibe's tailpiece, where it has one (none in v1)
   if (y) window.scrollTo(0, y);
   refreshSessions();
 }
@@ -1555,6 +1555,7 @@ function trajectoryCard(found, est, maint) {
     else if (t.weeks != null) cells.push(['2 yr +', 'At this pace']);
     else cells.push(['–', 'At this pace']);
     const sr = statRow(cells);
+    if (t.weeks === 0) glyphed(sr.lastChild.firstChild, 'check');   // the ✓ At goal figure
     sr.style.marginTop = '12px';
     c.appendChild(sr);
 
@@ -1679,7 +1680,7 @@ function reviewCard(found) {
 function installCard() {
   const c = el('div', 'card install-card');
 
-  const x = el('button', 'install-x', '×');
+  const x = el('button', 'install-x', '×'); glyphed(x, 'dismiss');
   x.setAttribute('aria-label', 'Dismiss');
   x.onclick = () => { LS.set('installDismissed', true); render(); };
   c.appendChild(x);
@@ -1703,7 +1704,7 @@ function adminRow() {
   const row = el('button', 'set-row-nav');
   row.appendChild(el('div', 'set-row-l', 'Admin'));
   row.appendChild(el('div', 'set-row-v', 'Owner'));
-  row.appendChild(el('div', 'set-row-x', '›'));
+  row.appendChild(glyphed(el('div', 'set-row-x', '›'), 'go'));
   // isOwner() is the client-side check and nothing more — the rules are what
   // actually decide, and they check the same uid on the server. Closing puts
   // the parked DOM back on its own; the callback repaints it with whatever

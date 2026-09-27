@@ -33,7 +33,7 @@ import { goalDirection } from './insights.js';
 import { wIn, fmtW, labelW, unitW, rateIn, boxRate, perIn, boxPer,
          kcalPerUnit, limW, limRate, limPer, fmtRate, labelRate } from './units.js';
 // Icons from the vibe's set (V59 §5.7).
-import { icon as vibeIcon, iconHtml } from './vibe.js';
+import { icon as vibeIcon, iconHtml, glyphed, tail } from './vibe.js';
 
 const MEALS = [
   ['breakfast', 'Breakfast'],
@@ -532,8 +532,8 @@ export function render() {
   gear.onclick = openFuelSettings;
   nav.appendChild(gear);
 
-  const prev = el('button', null, '‹'); prev.setAttribute('aria-label', 'Previous day');
-  const next = el('button', null, '›'); next.setAttribute('aria-label', 'Next day');
+  const prev = el('button', null, '‹'); glyphed(prev, 'prev'); prev.setAttribute('aria-label', 'Previous day');
+  const next = el('button', null, '›'); glyphed(next, 'next'); next.setAttribute('aria-label', 'Next day');
   prev.onclick = async () => { viewDate = new Date(viewDate.getTime() - 864e5); await loadDay(); render(); };
   next.onclick = async () => { viewDate = new Date(viewDate.getTime() + 864e5); await loadDay(); render(); };
   next.disabled = isToday();
@@ -547,7 +547,7 @@ export function render() {
 
   wrap.appendChild(renderWater(!isFuture()));
   wrap.appendChild(renderMicros());
-  root.appendChild(wrap);
+  root.appendChild(tail(wrap, 'food'));   // the vibe's tailpiece, where it has one (none in v1)
   root.appendChild(renderFab());
 }
 
@@ -575,7 +575,7 @@ function renderSummary() {
 
   // The bar is the most information on the tab in the least space, and none
   // of it is labelled with more than one word. The dots open the key.
-  const more = el('button', 'ex-menu fuel-more', '⋯');
+  const more = el('button', 'ex-menu fuel-more', '⋯'); glyphed(more, 'more');
   more.setAttribute('aria-label', 'What the bar means');
   more.onclick = () => openBarGuide(t);
   card.appendChild(more);
@@ -895,7 +895,7 @@ function renderMeal(mealId, label) {
   const right = el('div', 'meal-right');
   if (entries.length) {
     right.appendChild(el('div', 'num meal-kcal', kcal + ' kcal'));
-    const save = el('button', 'ex-menu', '⋯');
+    const save = el('button', 'ex-menu', '⋯'); glyphed(save, 'more');
     save.title = 'Turn this into a meal';
     save.onclick = () => openMealBuilder({
       id: 'm' + Date.now().toString(36),
@@ -1122,10 +1122,10 @@ function multControl(e, onChange) {
   let m = e.mult || 1;
 
   const row = el('div', 'qty-row');
-  const minus = el('button', 'btn btn-ghost', '\u2212');
+  const minus = el('button', 'btn btn-ghost', '\u2212'); glyphed(minus, 'minus');
   const inp = el('input');
   inp.type = 'number'; inp.inputMode = 'decimal'; inp.step = '0.25'; inp.min = '0';
-  const plus = el('button', 'btn btn-ghost', '+');
+  const plus = el('button', 'btn btn-ghost', '+'); glyphed(plus, 'plus');
   row.append(minus, inp, plus);
 
   const preview = el('div', 'num portion-preview');
@@ -1293,7 +1293,7 @@ function openLibrary(mealId, onPick) {
 
       // Editing lives on the row rather than one level down, because the
       // reason you came here is usually that the numbers are wrong.
-      const ed = el('span', 'eq ex-del ex-edit', '\u270e');
+      const ed = el('span', 'eq ex-del ex-edit', '\u270e'); glyphed(ed, 'edit');
       ed.setAttribute('aria-label', 'Edit ' + it.name);
       ed.onclick = ev => {
         ev.stopPropagation();
@@ -1302,7 +1302,7 @@ function openLibrary(mealId, onPick) {
       };
       b.appendChild(ed);
 
-      const x = el('span', 'eq ex-del', '\u2715');
+      const x = el('span', 'eq ex-del', '\u2715'); glyphed(x, 'close');
       x.setAttribute('aria-label', 'Delete ' + it.name);
       x.onclick = ev => {
         ev.stopPropagation();
@@ -1533,7 +1533,7 @@ function openMealsSheet(mealId) {
       mid.appendChild(el('div', 'rt-meta num',
         n + (n === 1 ? ' ingredient' : ' ingredients') + '  \u00b7  ' + t.cal + ' kcal  \u00b7  P ' + trimNum(t.p)));
       row.appendChild(mid);
-      row.appendChild(el('span', 'rt-go', '\u203a'));
+      row.appendChild(glyphed(el('span', 'rt-go', '\u203a'), 'go'));
       row.onclick = () => {
         close();
         openMealBuilder({
@@ -1543,7 +1543,7 @@ function openMealsSheet(mealId) {
         }, mealId);
       };
 
-      const x = el('span', 'ex-del', '\u2715');
+      const x = el('span', 'ex-del', '\u2715'); glyphed(x, 'close');
       x.setAttribute('aria-label', 'Delete ' + m.name);
       x.onclick = ev => {
         ev.stopPropagation();
@@ -1634,7 +1634,7 @@ function openMealBuilder(draft, mealId, opts = {}) {
       row.appendChild(b);
       row.appendChild(el('div', 'fe-cal num', String(ing.cal || 0)));
 
-      const x = el('button', 'ex-del pe-x', '\u2715');
+      const x = el('button', 'ex-del pe-x', '\u2715'); glyphed(x, 'close');
       x.setAttribute('aria-label', 'Remove ' + ing.name);
       x.onclick = () => { draft.items.splice(idx, 1); rebuild(); };
       row.appendChild(x);
@@ -2269,7 +2269,7 @@ function openAiReview(res, ctx) {
         row.appendChild(keep);
       }
 
-      const x = el('button', 'ex-del pe-x', '✕');
+      const x = el('button', 'ex-del pe-x', '✕'); glyphed(x, 'close');
       x.setAttribute('aria-label', 'Remove ' + e.name);
       x.onclick = () => {
         // In lockstep, or row 3's provenance slides onto row 2's numbers.
@@ -2395,7 +2395,7 @@ function openRecallHit(hit, ctx) {
       row.appendChild(b);
       row.appendChild(el('div', 'fe-cal num', String(e.cal)));
 
-      const x = el('button', 'ex-del pe-x', '✕');
+      const x = el('button', 'ex-del pe-x', '✕'); glyphed(x, 'close');
       x.setAttribute('aria-label', 'Remove ' + e.name);
       x.onclick = () => {
         entries.splice(i, 1);
@@ -2598,9 +2598,9 @@ function portionControl(item, startAmt, startUnit, onChange) {
   const preview = el('div', 'num portion-preview');
 
   const stepRow = el('div', 'qty-row');
-  const minus = el('button', 'btn btn-ghost', '−');
+  const minus = el('button', 'btn btn-ghost', '−'); glyphed(minus, 'minus');
   const amtIn = el('input'); amtIn.type = 'number'; amtIn.inputMode = 'decimal';
-  const plus  = el('button', 'btn btn-ghost', '+');
+  const plus  = el('button', 'btn btn-ghost', '+'); glyphed(plus, 'plus');
   stepRow.append(minus, amtIn, plus);
 
   const unitRow = el('div', 'filter-row');
@@ -3108,7 +3108,7 @@ export function openRecallList() {
           retry: t2 => openDescribeFlow(defaultMeal(), t2) });
       };
 
-      const x = el('span', 'eq ex-del', '✕');
+      const x = el('span', 'eq ex-del', '✕'); glyphed(x, 'close');
       x.setAttribute('aria-label', 'Forget ' + r.q);
       x.onclick = ev => {
         ev.stopPropagation();
@@ -3273,10 +3273,10 @@ export function openTargets(onSaved) {
       ' at a trend weight of ' + labelW(n.lb, u) + '.'));
 
     if (n.floored) {
-      preview.appendChild(noteEl(
+      preview.appendChild(glyphed(noteEl(
         '\u26a0 That rate would put you at ' + n.wanted.toLocaleString() +
         ', below the ' + n.floor.toLocaleString() + ' floor, so it holds at the floor instead. ' +
-        'Ease the rate off, or drop the fat grams if you want to go lower honestly.'));
+        'Ease the rate off, or drop the fat grams if you want to go lower honestly.'), 'warn', { lead: true }));
     }
     preview.appendChild(noteEl(
       'Re-checked when you weigh in, moves at most once a week and never more than ' +

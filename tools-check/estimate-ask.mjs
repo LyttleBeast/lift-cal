@@ -76,6 +76,9 @@ globalThis.window = { addEventListener() {} };
 const UI = await import(real('ui.js'));
 const O  = await import(real('estimate-origin.js'));
 const K  = await import(real('estimate-ask.js'));
+// engine v2: the review's ✕ is a glyph site, drawn through the vibe — the real
+// vibe.js, which imports only the pure vibes/ contract.
+const VB = await import(real('vibe.js'));
 
 /* ---------- harness ---------- */
 let pass = 0, fail = 0;
@@ -235,6 +238,7 @@ function harness(replies) {
   const queue = replies.slice();
   const stubs = {
     el: UI.el, sheet: UI.sheet, toast: m => S.toasts.push(String(m)), noteEl: UI.noteEl, confirmSheet: UI.confirmSheet,
+    glyphed: VB.glyphed,
     segmented: UI.segmented, r1: UI.r1, trimNum: UI.trimNum, clamp: UI.clamp, within: UI.within, LIMITS: UI.LIMITS,
     estimateOrigin: O.estimateOrigin, originHeading: O.originHeading, EDITED: O.EDITED, mealName: O.mealName,
     readAsk: K.readAsk, withPicks: K.withPicks, optionText: K.optionText, NONE_LABEL: K.NONE_LABEL, NONE_NOTE: K.NONE_NOTE,
