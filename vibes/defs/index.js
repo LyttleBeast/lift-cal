@@ -67,7 +67,8 @@ const deepFreeze = o => {
    until Phase V adds the rest. `scheme` is the ground a vibe paints on
    ('dark' | 'light') — V59 §10 allows light vibes. */
 export const VIBES = deepFreeze([
-  { id: 'v1', name: 'v1', feel: 'The original Rack look.', experimental: false, scheme: 'dark' }
+  { id: 'v1', name: 'v1', feel: 'The original Rack look.', experimental: false, scheme: 'dark' },
+  { id: 'iron-age', name: 'Iron Age', feel: 'Ink on cream, circa 1900.', experimental: false, scheme: 'light' }
 ]);
 
 export const IDS = Object.freeze(VIBES.map(v => v.id));

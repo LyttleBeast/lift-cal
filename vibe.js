@@ -42,11 +42,13 @@
 import { normVibe, ROLES, DEFAULT, valueOf } from './vibes/defs/index.js';
 import V1 from './vibes/defs/v1.js';
 import V1_ICONS from './vibes/icons/v1.js';
+import IRON_AGE from './vibes/defs/iron-age.js';
+import IRON_AGE_ICONS from './vibes/icons/iron-age.js';
 
 /* Every vibe's definition and every icon set, by id. A new vibe adds its
    imports and its entries here, beside v1's. */
-const DEFS = { v1: V1 };
-const ICON_SETS = { v1: V1_ICONS };
+const DEFS = { v1: V1, 'iron-age': IRON_AGE };
+const ICON_SETS = { v1: V1_ICONS, 'iron-age': IRON_AGE_ICONS };
 
 const KEY = 'rack:vibe';
 
