@@ -136,8 +136,8 @@ export function sideOf(value, side) {
    null means the role does not land on that client.
 
    kinds: color | alpha | tint | radius | shadow | scrim | font | type | face |
-   chrome | table | image | variant — plus meta (registry facts), and layout /
-   motion for the web :root tokens §5.1 keeps literal.
+   chrome | table | image | variant | shape — plus meta (registry facts), and
+   layout / motion for the web :root tokens §5.1 keeps literal.
 
    `fixed: true` marks a value no vibe can change at runtime — the :root
    layout and motion tokens, what app.json, manifest.json and the status-bar
@@ -244,8 +244,12 @@ const TINTS = ['setDone', 'setFlash', 'tagW', 'tagF', 'tagD', 'dropRail', 'dropA
 const TYPES = ['body', 'h1', 'h2', 'h3', 'eyebrow', 'btn', 'btnLg', 'dockLbl', 'fieldLbl', 'note',
   'statVal', 'statLbl', 'timer', 'kpiVal', 'headline', 'youGreet', 'chip', 'segBtn', 'setInput', 'mono'];
 
+// The first seventeen are V59 §6.9's; the last twelve are the blocks Phase D's
+// vocabulary added (vocab.js). The list only ever grows.
 const VARIANTS = ['card', 'youCard', 'sectionHeader', 'eyebrow', 'statRow', 'btn', 'chip', 'segmented',
-  'settingsRow', 'sheetHost', 'sheetTitle', 'dock', 'screenHeader', 'kpi', 'youHero', 'coachCard', 'chart'];
+  'settingsRow', 'sheetHost', 'sheetTitle', 'dock', 'screenHeader', 'kpi', 'youHero', 'coachCard', 'chart',
+  'headline', 'field', 'note', 'toast', 'listRow', 'setTable', 'setRow', 'plateStrip', 'calCell', 'fab',
+  'addTile', 'sessionChrome'];
 
 const RADIUS = [['r', '--r', 1], ['sm', '--r-sm', 1], ['sheet', '--r-sheet', 1], ['tile', '--r-tile', 1],
   ['pill', '--r-pill', 1], ['plate', '--r-plate', 1], ['chip', '--r-chip', 1], ['mark', '--r-mark', 1],
@@ -295,6 +299,9 @@ export const ROLES = deepFreeze([
   R('images', 'image', null, null, { note: 'slot -> file under vibes/<id>/; v1 has none' }),
   R('themeColor', 'color', 'meta:theme-color', null, { at: { web: ['index.html', 'meta[name=theme-color]', 'content'] } }),
   ...VARIANTS.map(k => R('variants.' + k, 'variant', null, 'variant.' + k)),
+  // The params a look reads (vocab.js `params`: its keys, their defaults).
+  // Lands on neither client yet: no look is drawn, and v1 holds none.
+  R('shape', 'shape', null, null, { note: 'vocab.js params; a key left out takes its default there; v1 is {}' }),
 
   ...COLOR,
   // AiWarn's border and wash (native only; the web's .ai-warn is warn at the

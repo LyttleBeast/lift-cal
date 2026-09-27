@@ -19,7 +19,9 @@
 // meaning after the engine rewrites rack.css, index.html and the call sites
 // to spend the tokens instead.
 //
-//   A  the three modules import nothing (they are copied into native verbatim)
+//   A  the four modules — the three above and vibes/defs/vocab.js, the
+//      component vocabulary — import nothing (they are copied into native
+//      verbatim)
 //   B  every colour is 6-digit hex, except v1's listed legacy spellings; every
 //      reference names a role; v1's switches are all v1; fixed roles are v1's
 //      in every vibe; every definition is frozen; the icon set's shape
@@ -34,6 +36,11 @@
 //      role's `at` read
 //   E  the registry: normVibe (on a probe registry too), validId, list,
 //      hexToRgb, at, and that none of it can be changed by a caller
+//   F  the component vocabulary: well-formed and frozen, its blocks the
+//      contract's variant blocks, every role a block reads a v1 role, every
+//      param default of its kind; v1 names 'v1' in every block and holds no
+//      shape param; every definition names only looks its blocks accept and
+//      sets only params the vocabulary has
 //
 // A mutation run (a copy of vibes/ with one value made wrong, read through
 // VIBES_CONTRACT_DEFS) is how a check here is proven to bite.
@@ -56,7 +63,7 @@ const show = f => {
 };
 const lines = f => show(f).split('\n');
 const lineAt = site => { const i = site.lastIndexOf(':'); return lines(site.slice(0, i))[+site.slice(i + 1) - 1]; };
-const FILES = ['vibes/defs/v1.js', 'vibes/defs/index.js', 'vibes/icons/v1.js'];
+const FILES = ['vibes/defs/v1.js', 'vibes/defs/index.js', 'vibes/icons/v1.js', 'vibes/defs/vocab.js'];
 
 let checks = 0; const fails = [];
 const ok = m => { checks++; if (process.env.VERBOSE) console.log('  ✓ ' + m); };
@@ -77,7 +84,7 @@ const webVarOf = name => (roleOf('colors.' + name) || {}).web;
 const baseVarOf = name => { const r = roleOf('colors.' + name) || {}; return (r.from && r.from.web) || r.web; };
 
 /* ================= A ================= */
-section('A  the three modules import nothing');
+section('A  the four modules import nothing');
 /* Read on the code alone — comments, strings, templates and regex bodies
    blanked by the lexer in D.12 — so an import anywhere is seen: at a line's
    start or after a statement or a comment on the same line, `import{…}from`
@@ -244,7 +251,7 @@ for (const [k, v] of Object.entries(V1.web.rgb)) expect(!!hexToRgb(sideOf(V1.col
 /* ================= C ================= */
 section('C  every role resolves, every v1 value is covered, every web name is its path\'s');
 const KINDS = new Set(['color', 'alpha', 'tint', 'radius', 'shadow', 'scrim', 'font', 'type', 'face', 'chrome',
-  'table', 'image', 'variant', 'meta', 'layout', 'motion']);
+  'table', 'image', 'variant', 'shape', 'meta', 'layout', 'motion']);
 const unresolved = ROLES.filter(r => at(V1, r.path) === undefined);
 expect(!unresolved.length, `all ${ROLES.length} ROLES resolve to a value in v1` + (unresolved.length ? ' — not: ' + unresolved.map(r => r.path).join(', ') : ''));
 expect(ROLES.every(r => KINDS.has(r.kind)), 'every role has a known kind');
@@ -1213,6 +1220,97 @@ expect(sideOf(V1.colors.onDanger, 'web') === '#fff' && sideOf(V1.colors.onDanger
   for (const t of tries) { try { t(); } catch { /* strict mode throws on a frozen write; either way it must not land */ } }
   expect(I.normVibe('nope') === 'v1' && I.validId('defs') === false && I.list()[0].name === 'v1' && I.ROLES[0].web === null &&
     I.LEGACY_EXACT.length === 22, 'a caller that pushes an id, empties RESERVED, renames v1 or edits ROLES changes nothing');
+}
+
+/* ================= F ================= */
+section('F  the component vocabulary (vocab.js): well-formed, and v1 names every block\'s v1');
+{
+  /* vocab.js is data, like v1.js: the blocks a vibe may re-draw, the looks
+     each accepts by name, and the params a look reads. Nothing in it can move
+     a v1 pixel, because v1 names 'v1' in every block and holds no param —
+     which is what the last checks here hold. The same checks run in
+     rack-mobile's tools/verify-vibes-contract.mjs on the same bytes. */
+  const VOC = (await import(pathToFileURL(join(DEFS, 'vibes/defs/vocab.js')).href)).default;
+  const str = s => typeof s === 'string' && s.trim().length > 0;
+  const strs = (a, min = 0) => Array.isArray(a) && a.length >= min && a.every(str);
+  const isObj = o => !!o && typeof o === 'object' && !Array.isArray(o);
+  const WORD = /^[a-z][A-Za-z0-9]*$/;
+  expect(eq(Object.keys(VOC), ['version', 'grades', 'allowed', 'rules', 'params', 'blocks']) && VOC.version === 1,
+    'vocab.js is { version: 1, grades, allowed, rules, params, blocks }');
+  expect(isDeepFrozen(VOC), 'vocab.js is frozen all the way down');
+  const GRADES = Object.keys(VOC.grades);
+  expect(eq(GRADES, ['v1', 'shape', 'deep']) && Object.values(VOC.grades).every(str), 'its grades are v1, shape and deep, each described');
+  expect(isObj(VOC.allowed) && Object.keys(VOC.allowed).length > 0 &&
+    Object.values(VOC.allowed).every(a => strs(a, 1) && a[0] === 'v1' && a.every(g => GRADES.includes(g)) && new Set(a).size === a.length),
+    'every class of vibe may name v1, and only grades that exist (' + Object.keys(VOC.allowed).join(', ') + ')');
+  expect(strs(VOC.rules, 1), `its rules (${VOC.rules.length}) are each a sentence`);
+  // the params: every key a look reads, with its default; a colour names a colour role
+  const P = VOC.params;
+  const PARAM_SHAPE = { rule: ['ink', 'hair', 'head', 'place'], leader: ['ink', 'dot', 'pitch', 'min'], band: ['fill', 'ink', 'height'],
+    gutter: null, keyline: ['ink', 'width'] };
+  const COLOUR_PARAM = k => k === 'ink' || k === 'fill';
+  const paramOk = (k, v, dflt) => {
+    if (COLOUR_PARAM(k)) return typeof v === 'string' && COLOR_KEYS.has(v);
+    if (k === 'place') return v === 'above' || v === 'below';
+    if (Array.isArray(dflt)) return Array.isArray(v) && v.length > 0 && v.every(n => typeof n === 'number' && n > 0);
+    return typeof v === 'number' && v > 0;
+  };
+  const paramBad = [];
+  expect(eq(Object.keys(P), Object.keys(PARAM_SHAPE)), 'its params are rule, leader, band, gutter and keyline');
+  for (const [k, sub] of Object.entries(PARAM_SHAPE)) {
+    if (sub === null) { if (!paramOk(k, P[k], P[k])) paramBad.push(k); continue; }
+    if (!isObj(P[k]) || !eq(Object.keys(P[k]), sub)) { paramBad.push(k + ' (keys)'); continue; }
+    for (const s of sub) if (!paramOk(s, P[k][s], P[k][s])) paramBad.push(k + '.' + s);
+  }
+  expect(!paramBad.length, 'every param default is a positive number, a list of them, above/below, or a colour role v1 defines' +
+    (paramBad.length ? ' — not: ' + paramBad.join(', ') : ''));
+  // the blocks
+  const BLOCKS = Object.keys(VOC.blocks);
+  const sameSet = (a, b) => a.length === b.length && [...a].sort().join('\n') === [...b].sort().join('\n');
+  expect(sameSet(BLOCKS, VARIANT_KEYS), `its ${BLOCKS.length} blocks are index.js ROLES' ${VARIANT_KEYS.length} variant blocks, and no other`);
+  const BLOCK_KEYS = ['label', 'web', 'native', 'switches', 'add', 'slots', 'reads', 'type', 'variants', 'v1', 'looks', 'keeps'];
+  const shapeBad = [], lookBad = [], readBad = [], siteBad = [];
+  for (const [b, B] of Object.entries(VOC.blocks)) {
+    if (!eq(Object.keys(B), BLOCK_KEYS) || !str(B.label) || !strs(B.web, 1) || !strs(B.native, 1) || !strs(B.keeps, 1) ||
+        !strs(B.switches) || !strs(B.add) || !strs(B.slots) || !strs(B.reads, 1) || !strs(B.type)) { shapeBad.push(b); continue; }
+    const v = B.variants;
+    if (!strs(v, 2) || v[0] !== 'v1' || B.v1 !== 'v1' || new Set(v).size !== v.length || !v.every(n => WORD.test(n)) || !eq(Object.keys(B.looks), v)) lookBad.push(b + ' (names)');
+    else for (const n of v) {
+      const L = B.looks[n];
+      const okL = n === 'v1' ? eq(Object.keys(L), ['grade', 'look']) && L.grade === 'v1' && str(L.look)
+        : eq(Object.keys(L), ['grade', 'look', 'for']) && L.grade !== 'v1' && GRADES.includes(L.grade) && str(L.look) && strs(L.for);
+      if (!okL) lookBad.push(b + '.' + n);
+    }
+    for (const r of B.reads) if (at(V1, r) === undefined) readBad.push(b + ' ' + r);
+    if (!(B.switches.length + B.add.length)) siteBad.push(b);
+  }
+  expect(!shapeBad.length, 'every block is { ' + BLOCK_KEYS.join(', ') + ' }, each list of words, the web, native, reads and keeps lists never empty' +
+    (shapeBad.length ? ' — not: ' + shapeBad.join(', ') : ''));
+  expect(!lookBad.length, 'every block accepts \'v1\' first and at least one other look, each a plain word, each described with its grade — ' +
+    'v1 graded v1, every other look shape or deep, with the directions that ask for it' + (lookBad.length ? ' — not: ' + lookBad.join(', ') : ''));
+  expect(!readBad.length, 'every role a block says it reads resolves in v1' + (readBad.length ? ' — not: ' + readBad.join(', ') : ''));
+  expect(!siteBad.length, 'every block names where it branches on native: a switch that exists, or one to open' + (siteBad.length ? ' — not: ' + siteBad.join(', ') : ''));
+  const slots = Object.values(VOC.blocks).flatMap(B => B.slots);
+  expect(slots.length === 7 && new Set(slots).size === 7, 'the seven hero slots (V59 §11) are each carried by exactly one block: ' + slots.join(', '));
+  // v1, and every definition, against it
+  expect(sameSet(Object.keys(V1.variants), BLOCKS) && BLOCKS.every(b => V1.variants[b] === VOC.blocks[b].v1 && V1.variants[b] === 'v1'),
+    `v1 names every one of the ${BLOCKS.length} blocks, each its 'v1' look, and no block the vocabulary lacks`);
+  expect(isObj(V1.shape) && Object.keys(V1.shape).length === 0, 'v1 holds no shape param: it names no look, so it reads none');
+  for (const [id, def] of Object.entries(defs)) {
+    const off = Object.entries(def.variants || {}).filter(([b, n]) => !VOC.blocks[b] || !VOC.blocks[b].variants.includes(n)).map(([b, n]) => b + '=' + n);
+    expect(isObj(def.variants) && !off.length, `${id}: every look it names is one its block accepts` + (off.length ? ' — not: ' + off.join(', ') : ''));
+    const S = def.shape, sBad = [];
+    if (!isObj(S)) sBad.push('(not an object)');
+    else for (const [k, v] of Object.entries(S)) {
+      if (!(k in P)) { sBad.push(k); continue; }
+      if (isObj(P[k])) {
+        if (!isObj(v)) { sBad.push(k); continue; }
+        for (const [s, sv] of Object.entries(v)) if (!(s in P[k]) || !paramOk(s, sv, P[k][s])) sBad.push(k + '.' + s);
+      } else if (!paramOk(k, v, P[k])) sBad.push(k);
+    }
+    expect(!sBad.length, `${id}: its shape sets only params the vocabulary has, each of its default's kind, a colour as a role it defines` +
+      (sBad.length ? ' — not: ' + sBad.join(', ') : ''));
+  }
 }
 
 console.log('\n' + (fails.length ? `${fails.length} of ${checks} checks failed.`

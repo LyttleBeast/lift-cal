@@ -59,13 +59,22 @@ export default deepFreeze({
 
   /* The shared building blocks that may branch per vibe (V59 §6.9). Every one
      is 'v1' here: the v1 branch is today's JSX and CSS, moved over unchanged.
-     Phase D extends this list (§9.1); it never renames an entry. */
+     Phase D extends this list (§9.1); it never renames an entry. The looks
+     each block accepts, and what a look may change, are vocab.js's; the last
+     twelve are the blocks it added. */
   variants: {
     card: 'v1', youCard: 'v1', sectionHeader: 'v1', eyebrow: 'v1',
     statRow: 'v1', btn: 'v1', chip: 'v1', segmented: 'v1', settingsRow: 'v1',
     sheetHost: 'v1', sheetTitle: 'v1', dock: 'v1', screenHeader: 'v1',
-    kpi: 'v1', youHero: 'v1', coachCard: 'v1', chart: 'v1'
+    kpi: 'v1', youHero: 'v1', coachCard: 'v1', chart: 'v1',
+    headline: 'v1', field: 'v1', note: 'v1', toast: 'v1', listRow: 'v1',
+    setTable: 'v1', setRow: 'v1', plateStrip: 'v1', calCell: 'v1', fab: 'v1',
+    addTile: 'v1', sessionChrome: 'v1'
   },
+  /* The params a look reads — rules, leaders, bands, gutters, keylines
+     (vocab.js `params`, which holds the default for every key a definition
+     leaves out). v1 names no look, so it reads none and holds none. */
+  shape: {},
 
   colors: {
     /* ---- native T.colors, key for key (theme.js:14-43) ---- */
