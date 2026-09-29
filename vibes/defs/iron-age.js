@@ -1,7 +1,7 @@
 // Iron Age — ink on cream, circa 1900, as data.
 //
 // A physical-culture manual printed about 1904: warm ink on a matte book
-// stock, each tab's title hanging from a rule under its running head, its
+// stock, each tab's title hanging from a rule that carries its running head, its
 // figures set as a manual's folio lines, and the finished session carrying a
 // real halftone plate of a man at exercise from a manual of the period.
 // Nothing is boxed except what a page would box, and the one colour that is
@@ -117,8 +117,11 @@ export default deepFreeze({
      After the second panel: the three-stat rows are one box-score line
      between two hairlines (statRow · folio), so the drawn leader is
      Settings' alone; every head HANGS from its rule (rule.place 'above'), so
-     a tab's running head reads over a single rule, not as a label stacked on
-     its title, and no head is underlined; the Oxford rule is gone. */
+     no head is underlined; the Oxford rule is gone; a tab's running head is set at the right end of the rule its title hangs
+     from (screenHeader · masthead with rule.place 'above'), not stacked over
+     the title; the add menu's cells are index entries (addTile · ruled); and
+     on Steps a day short of the goal is drawn in the Steps subject's plate,
+     so green there is the goal met, as the chart's footnote says. */
   variants: {
     card: 'ruled', youCard: 'ruled', eyebrow: 'v1', sectionHeader: 'plain', screenHeader: 'masthead',
     sheetHost: 'full', sheetTitle: 'v1', statRow: 'folio', kpi: 'word', headline: 'rule',

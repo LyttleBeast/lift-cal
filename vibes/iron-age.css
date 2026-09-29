@@ -234,8 +234,8 @@
 /* The running head (type.statLbl): the masthead's kicker, the recap's, a
    sheet's and onboarding's — Archivo 12/600 in steel, roman, as written. A
    page's running head is small type, not a second display face: no screen
-   stacks an italic kicker over its title (the first AI-made panel); it
-   stands over the head rule the title hangs from (below). */
+   stacks an italic kicker over its title (the first AI-made panel); the
+   masthead's sits at the end of the head rule the title hangs from (below). */
 [data-vibe="iron-age"] .cal-hd .eyebrow,
 [data-vibe="iron-age"] .summary-hero .eyebrow,
 [data-vibe="iron-age"] .sheet .eyebrow:has(+ h2),
@@ -380,11 +380,14 @@
    [1, 2, 1]): over the recap's totals and the estimate's, and round a
    lifting block. Hair (shape.rule.hair .5): rows, cells, columns. */
 
-/* screenHeader · masthead: the running head (small roman, statLbl), the
-   head rule across the title's column, the h1 in Besley ExtraBold hanging
-   from it — a manual's running head over its rule, not a label stacked on
-   a title. The column grows to the nav buttons, which keep their place and
-   their 34. The rule is vector with the ink-bleed strip over it (spec §11). */
+/* screenHeader · masthead: the head rule across the title's column with the
+   running head (small roman, statLbl) set at its right end, on its line —
+   a recto page's running head in its rule — and the h1 in Besley ExtraBold
+   hanging from it. Stood over the rule at the left, a small label stacked
+   over every tab's title still read as the eyebrow-over-H1 template (the
+   second AI-made panel). The column grows to the nav
+   buttons, which keep their place and their 34. The rule is vector with the
+   ink-bleed strip over it (spec §11). */
 [data-vibe="iron-age"] .cal-hd {
   align-items: flex-end;
   margin-bottom: 16px;
@@ -392,14 +395,13 @@
 [data-vibe="iron-age"] .cal-hd > div:first-child { flex: 1 1 auto; min-width: 0; }
 [data-vibe="iron-age"] .cal-hd .eyebrow,
 [data-vibe="iron-age"] .summary-hero .eyebrow {
-  position: relative;
-  padding-bottom: calc(6px + var(--shape-rule-head-0));
-  margin-bottom: 6px;
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 8px;
 }
-[data-vibe="iron-age"] .cal-hd .eyebrow::after,
-[data-vibe="iron-age"] .summary-hero .eyebrow::after {
+[data-vibe="iron-age"] .cal-hd .eyebrow::before,
+[data-vibe="iron-age"] .summary-hero .eyebrow::before {
   content: '';
-  position: absolute; left: 0; right: 0; bottom: 0;
+  flex: 1 1 auto; min-width: 24px;
   height: var(--shape-rule-head-0);
   background:
     -webkit-image-set(url(iron-age/textures/rule-sub@2x.png) 2x, url(iron-age/textures/rule-sub@3x.png) 3x) 0 -1px / 144px 3px repeat-x,
@@ -1179,6 +1181,16 @@
    fraction as v1's. */
 [data-vibe="iron-age"] .st-ring circle:first-child { stroke: var(--knurl); stroke-dasharray: 1.2 4.455; }
 [data-vibe="iron-age"] .st-ring circle + circle { stroke-width: 6; }
+/* Green on Steps is the goal met, as the chart's own footnote says ("green =
+   goal met"). Iron Age's steps plate (pGreen) and its good are one viridian,
+   so a day short of the goal drew green too and the footnote was not true to
+   the eye. On this tab a day short of the goal is drawn in the Steps
+   subject's plate, ink (subjects.steps, pWhite) — the ring's arc, the bars,
+   the heat strip — and the goal met stays good. steps.js sets both colours
+   inline; SVG presentation attributes lose to any author rule. */
+[data-vibe="iron-age"] #view-steps .st-ring circle[stroke="var(--p-green)"] { stroke: var(--p-white); }
+[data-vibe="iron-age"] #view-steps rect.chart-bar[fill="var(--p-green)"],
+[data-vibe="iron-age"] #view-steps .heat rect[fill="var(--p-green)"] { fill: var(--p-white); }
 /* One hero figure on the card: the ring's count. The steps to go are the
    side's running line — Archivo 17/700, tabular, its colour steps.js's
    inline one — not a second hero beside the ring (the second AI-made
@@ -1222,8 +1234,8 @@
    inked in warn, the ochre's own dark (inkOf), and every trained cell's
    opacity a is remapped to .70 + .30·(a − .28)/.72 — linear, monotonic, 1 at
    1 — so the faintest is 3.11:1 on the page (3.02 on the grain's darkest
-   pixel, 2.10 against an untrained cell) and the heaviest 5.74. Steps' green
-   keeps its colour and takes the same remap (3.15 at its faintest). Native
+   pixel, 2.10 against an untrained cell) and the heaviest 5.74. Steps' strip
+   is inked in its subject's plate (above) and takes the same remap. Native
    draws the same numbers (src/ui/chart/HeatStrip.jsx, chart · print); the
    arithmetic is tools vibe-contrast ia-rs9-heat. SVG presentation
    attributes lose to any author rule. */
@@ -1426,9 +1438,13 @@
 }
 
 /* ---------- addTile · ruled ----------
-   No tiles: a two-column grid parted by hairlines, the engraved cuts at 22
-   with no wells. The Photo cut is printed in madder, the sheet's one red,
-   with no square behind it. The "ai" tag a stamped keyline in steel. */
+   No tiles: a two-column grid parted by hairlines, each cell an index entry
+   — the engraved cut at 22 with no well, inline before the title, the "ai"
+   note run in after the title, the line under both. (A cut stacked over its
+   title with a tag in the corner read as the feature-card grid, the second
+   AI-made panel.) The Photo cut is printed in madder, the sheet's one red,
+   with no square behind it. The cells, their order and their two columns
+   are v1's. */
 [data-vibe="iron-age"] .add-grid {
   gap: 0;
   border-top: var(--shape-rule-hair) solid var(--shape-rule-ink);
@@ -1444,8 +1460,18 @@
   border-radius: 0;
 }
 [data-vibe="iron-age"] .add-tile:nth-child(odd) { border-right: var(--shape-rule-hair) solid var(--shape-rule-ink); }
-[data-vibe="iron-age"] .add-tile { padding: 16px 14px 16px 12px; }
+[data-vibe="iron-age"] .add-tile {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  align-items: center; align-content: start;
+  column-gap: 8px; row-gap: 6px;
+  padding: 14px 14px 14px 12px;
+}
 [data-vibe="iron-age"] .add-tile:nth-child(odd) { padding-left: 0; }
+[data-vibe="iron-age"] .add-tile > .ic { grid-column: 1; grid-row: 1; }
+[data-vibe="iron-age"] .add-tile > .t { grid-column: 2; grid-row: 1; min-width: 0; }
+[data-vibe="iron-age"] .add-tile > .tag { grid-column: 3; grid-row: 1; justify-self: start; }
+[data-vibe="iron-age"] .add-tile > .d { grid-column: 1 / -1; grid-row: 2; }
 [data-vibe="iron-age"] .add-tile .ic,
 [data-vibe="iron-age"] .add-tile.lit .ic {
   width: auto; height: auto;
@@ -1458,9 +1484,12 @@
 [data-vibe="iron-age"] .add-tile .t { font-size: 15px; font-variation-settings: 'wdth' 100, 'wght' 700; }
 [data-vibe="iron-age"] .add-tile .d { font-size: 13px; }
 /* The "ai" tag: the word as written, in the running meta (type.meta,
-   Archivo 13 roman, steel) — a marginal note, no box. */
+   Archivo 13 roman, steel) — a note run in after the title, no box, not
+   pinned to the corner. */
 [data-vibe="iron-age"] .add-tile .tag,
 [data-vibe="iron-age"] .add-tile.lit .tag {
+  position: static;
+  padding: 0;
   background: none;
   color: var(--steel);
   border: 0;

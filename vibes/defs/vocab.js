@@ -232,7 +232,7 @@ export default deepFreeze({
       v1: 'v1',
       looks: {
         v1: { grade: 'v1', look: 'the eyebrow over a 26pt h1 (wdth 78 / 800); the nav buttons right of it' },
-        masthead: { grade: 'deep', look: 'a larger title and a full-width head rule (shape.rule.head) placed by shape.rule.place — under the title, or between the eyebrow and the title, which hangs from it — the eyebrow above both; the nav buttons keep their place', for: ['iron-age', 'ledger'] },
+        masthead: { grade: 'deep', look: 'a larger title and a full-width head rule (shape.rule.head) placed by shape.rule.place — under the title, the eyebrow above both; or (\'above\') over the title, which hangs from it, with the eyebrow set at the rule\'s right end on its line, a running head in its rule; the nav buttons keep their place', for: ['iron-age', 'ledger'] },
         inline: { grade: 'deep', look: 'the eyebrow and the title on one baseline, the eyebrow first', for: [] }
       },
       keeps: ['the nav buttons, their order, actions and size (the month and day buttons are 34 in v1 — never smaller); Back',
@@ -703,7 +703,7 @@ export default deepFreeze({
       looks: {
         v1: { grade: 'v1', look: 'two columns of well tiles (collar border, radius.r): a 36pt icon well (raised; Photo\'s in accent with an onAccent icon; lit tiles\' in grip), the title, a dim line, and the AI tag pill; Photo and the lit tiles wear accent washes (gradients on the web, flat tileHero / tileLit on native)' },
         flat: { grade: 'shape', look: 'no washes and no border: every tile on the well; the Photo tile marked by its accent icon well alone; the lit tiles\' icon well and tag on raised, not grip; the tag square (radius.chip)', for: ['chalk', 'navy', 'oxblood'] },
-        ruled: { grade: 'deep', look: 'no tiles: a two-column grid parted by hairlines (shape.rule.hair), the icon without its well, the tag a stamped keyline (shape.keyline)', for: ['iron-age', 'ledger'] }
+        ruled: { grade: 'deep', look: 'no tiles: a two-column grid parted by hairlines (shape.rule.hair), each cell an index entry: the icon without its well inline before the title, the tag a note run in after the title, the line under both', for: ['iron-age', 'ledger'] }
       },
       keeps: ['the tiles, in order, in two columns', 'icons (the icon set\'s), titles, lines and tags word for word',
               'a tile that is off stays visible, dimmed, readable and untappable', 'the Photo tile stays the first the eye finds']
