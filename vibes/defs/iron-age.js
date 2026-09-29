@@ -566,10 +566,12 @@ export default deepFreeze({
   admin: {
     aiSplit: { aiPhoto: 'pYellow', aiPhotoText: 'pRed', aiText: 'pBlue', aiRecall: 'pGreen' },
     families: ['pBlue', 'pYellow', 'pGreen', 'pChrome'],
-    // The trees still disagree (index.js); a vibe changes neither side.
+    // The trees still disagree (index.js); a vibe changes neither side. But
+    // native's pill sets its word at 9pt in its colour, and ochre is 3.92:1
+    // there, so pro and custom take ochre's ink (inkOf): warn, 5.74.
     pill: {
       web:    { owner: 'on', pro: 'lit', custom: 'lit', trial: 'warn', locked: 'off', basic: '' },
-      native: { owner: 'good', pro: 'pYellow', custom: 'pYellow', trial: 'warn', locked: 'bad', basic: 'dim' }
+      native: { owner: 'good', pro: 'warn', custom: 'warn', trial: 'warn', locked: 'bad', basic: 'dim' }
     },
     flag: { on: 'good', off: 'bad', lit: 'pBlue', warn: 'warn' }
   },

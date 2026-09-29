@@ -768,6 +768,10 @@
 [data-vibe="iron-age"] .picker-search input:focus,
 [data-vibe="iron-age"] .paste-box:focus { border-color: var(--focus); }
 [data-vibe="iron-age"] .qty-row input { font-variation-settings: 'wdth' 100, 'wght' 800; }
+/* A placeholder is text: in dim, not the browser's #757575 (3.62:1 on bar).
+   Dim is 5.94 on bar and 5.63 on the page, as native's placeholders are. */
+[data-vibe="iron-age"] input::placeholder,
+[data-vibe="iron-age"] textarea::placeholder { color: var(--dim); opacity: 1; }
 
 /* ---------- note · rule: a footnote under a short hairline ---------- */
 [data-vibe="iron-age"] .note::before {
@@ -944,6 +948,9 @@
 [data-vibe="iron-age"] .drop-add { border-color: transparent; }
 [data-vibe="iron-age"] .ex-actions { padding: 10px 0 0; }
 [data-vibe="iron-age"] .swipe-hint { padding-left: 14px; }
+/* …and at full strength: dim at v1's .65 is 2.77:1 on the page; solid it is
+   5.63 (5.94 on bar). The Coach nudge that shares the class is already 1. */
+[data-vibe="iron-age"] .swipe-hint { opacity: 1; }
 
 /* A lifting block: framed by the double rule above and below its
    exercises, under its title in Besley SemiBold 15, ink. */
@@ -1048,6 +1055,11 @@
 }
 [data-vibe="iron-age"] .chart-barval { font-variation-settings: 'wdth' 100, 'wght' 700; }
 [data-vibe="iron-age"] .chart-peak-lbl { font-variation-settings: 'wdth' 100, 'wght' 800; }
+/* The peak's figure is small text in the line's colour (analytics.js, pinned,
+   fills it with the chart's own var): a graphic-only plate is inked through
+   inkOf, ochre as warn (5.74:1 where ochre is 3.92) and pewter as steel. */
+[data-vibe="iron-age"] .chart-peak-lbl[fill="var(--p-yellow)"] { fill: var(--warn); }
+[data-vibe="iron-age"] .chart-peak-lbl[fill="var(--p-chrome)"] { fill: var(--steel); }
 [data-vibe="iron-age"] .donut-sub,
 [data-vibe="iron-age"] .ring-sub { letter-spacing: 0; text-transform: none; }
 [data-vibe="iron-age"] .donut-sub { font-size: 11px; font-variation-settings: 'wdth' 100, 'wght' 600; }
@@ -1078,6 +1090,92 @@
 /* Macros: protein solid, carbs a 45° hatch in its own ochre — the stacked
    bars' carbs part too, from the same patterns. */
 [data-vibe="iron-age"] g.chart-bar:not(.chart-bar-dim) rect[fill="var(--p-yellow)"] { fill: url(#vibe-hatch-p-yellow); }
+
+/* The heat strip (analytics.js heatStrip, steps.js heatMap; both pinned or
+   duplicated, both paint a trained day at fill-opacity .28 + .72·v/max). On
+   cream an ochre cell at .28 is 1.40:1 and collar's near-twin, and even solid
+   ochre is 3.92, which leaves no room for a scale. So a training day is
+   inked in warn, the ochre's own dark (inkOf), and every trained cell's
+   opacity a is remapped to .70 + .30·(a − .28)/.72 — linear, monotonic, 1 at
+   1 — so the faintest is 3.11:1 on the page (3.02 on the grain's darkest
+   pixel, 2.10 against an untrained cell) and the heaviest 5.74. Steps' green
+   keeps its colour and takes the same remap (3.15 at its faintest). Native
+   draws the same numbers (src/ui/chart/HeatStrip.jsx, chart · print); the
+   arithmetic is tools vibe-contrast ia-rs9-heat. SVG presentation
+   attributes lose to any author rule. */
+[data-vibe="iron-age"] .heat rect[fill="var(--p-yellow)"] { fill: var(--warn); }
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.28"],
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.29"] { fill-opacity: .70; }
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.30"],
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.31"] { fill-opacity: .71; }
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.32"],
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.33"] { fill-opacity: .72; }
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.34"],
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.35"],
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.36"] { fill-opacity: .73; }
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.37"],
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.38"] { fill-opacity: .74; }
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.39"],
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.40"],
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.41"] { fill-opacity: .75; }
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.42"],
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.43"] { fill-opacity: .76; }
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.44"],
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.45"],
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.46"] { fill-opacity: .77; }
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.47"],
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.48"] { fill-opacity: .78; }
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.49"],
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.50"] { fill-opacity: .79; }
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.51"],
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.52"],
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.53"] { fill-opacity: .80; }
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.54"],
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.55"] { fill-opacity: .81; }
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.56"],
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.57"] { fill-opacity: .82; }
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.58"],
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.59"],
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.60"] { fill-opacity: .83; }
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.61"],
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.62"] { fill-opacity: .84; }
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.63"],
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.64"],
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.65"] { fill-opacity: .85; }
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.66"],
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.67"] { fill-opacity: .86; }
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.68"],
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.69"] { fill-opacity: .87; }
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.70"],
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.71"],
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.72"] { fill-opacity: .88; }
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.73"],
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.74"] { fill-opacity: .89; }
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.75"],
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.76"],
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.77"] { fill-opacity: .90; }
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.78"],
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.79"] { fill-opacity: .91; }
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.80"],
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.81"] { fill-opacity: .92; }
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.82"],
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.83"],
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.84"] { fill-opacity: .93; }
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.85"],
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.86"] { fill-opacity: .94; }
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.87"],
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.88"],
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.89"] { fill-opacity: .95; }
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.90"],
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.91"] { fill-opacity: .96; }
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.92"],
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.93"] { fill-opacity: .97; }
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.94"],
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.95"],
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.96"] { fill-opacity: .98; }
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.97"],
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.98"] { fill-opacity: .99; }
+[data-vibe="iron-age"] .heat rect[fill-opacity="0.99"] { fill-opacity: 1; }
 
 /* meters: square-ended on a square tan track */
 [data-vibe="iron-age"] .vol-track,
