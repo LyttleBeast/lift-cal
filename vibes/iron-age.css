@@ -631,7 +631,11 @@
   border: 0;
   border-radius: 0;
 }
-[data-vibe="iron-age"] .mini-stat { padding-top: 7px; padding-bottom: 8px; }
+/* The mini stats sit in narrow columns (a You pair holds four): 6 in from
+   each hairline, and a value never ends in an ellipsis — a figure cut short
+   is a changed number. */
+[data-vibe="iron-age"] .mini-stat { padding: 7px 6px 8px; }
+[data-vibe="iron-age"] .mini-stat-v { overflow: visible; text-overflow: clip; }
 [data-vibe="iron-age"] .stat + .stat,
 [data-vibe="iron-age"] .mini-stat + .mini-stat { border-left: var(--shape-rule-hair) solid var(--shape-rule-ink); }
 [data-vibe="iron-age"] .stat:first-child,
