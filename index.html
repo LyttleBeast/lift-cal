@@ -16,7 +16,7 @@
    namespace, like rack:migrated, because nobody is signed in yet; v1 is its
    absence, and so is anything that is not an id. */
 (function () {
-  var THEME = {};   // vibe id -> its theme-color; each vibe adds its entry
+  var THEME = { chalk: '#14161a' };   // vibe id -> its theme-color; each vibe adds its entry
   try {
     var v = localStorage.getItem('rack:vibe');
     if (v && v !== 'v1' && v.length <= 32 && /^[a-z0-9][a-z0-9-]*$/.test(v)) {
@@ -29,6 +29,7 @@
 </script>
 <link rel="stylesheet" href="rack.css">
 <link rel="stylesheet" href="auth.css">
+<link rel="stylesheet" href="vibes/chalk.css">
 <title>Rack</title>
 </head>
 <body>

@@ -44,7 +44,7 @@
 //   G  canaries: eight planted mistakes, each in a scratch copy, each read by
 //      this file run on that copy — every one must turn it red, on its check.
 
-import { readFileSync, writeFileSync, mkdtempSync, mkdirSync, cpSync, existsSync } from 'node:fs';
+import { readFileSync, readdirSync, writeFileSync, mkdtempSync, mkdirSync, cpSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -177,6 +177,10 @@ const STAGE = mkdtempSync(join(tmpdir(), 'rack-vibe-setting-'));
 const stageFile = (f, text) => { mkdirSync(dirname(join(STAGE, f)), { recursive: true }); writeFileSync(join(STAGE, f), text); };
 writeFileSync(join(STAGE, 'package.json'), '{ "type": "module" }\n');
 for (const f of ['units.js', 'ui.js', 'vibes-sheet.js', 'vibes/defs/v1.js', 'vibes/icons/v1.js']) stageFile(f, read(f));
+// every registered vibe's own definition and icon set, which vibe.js imports
+for (const d of ['vibes/defs', 'vibes/icons']) {
+  for (const f of readdirSync(join(ROOT, d))) if (f.endsWith('.js') && f !== 'index.js' && f !== 'v1.js') stageFile(d + '/' + f, read(d + '/' + f));
+}
 const STORE_SRC = read('store.js');
 {
   const names = new Set();
@@ -194,9 +198,18 @@ const STORE_SRC = read('store.js');
   stageFile('fb-stub.js', [...names].map(n => impl[n] || `export function ${n}() {}`).join('\n') + '\n');
   stageFile('store.js', STORE_SRC.replace(/from\s*'(https:[^']+|\.\/firebase-config\.js)'/g, "from './fb-stub.js'"));
 }
-const IDX_SRC = read('vibes/defs/index.js'), VJ_SRC = read('vibe.js');
+/* The sheet is tested on a registry of v1 and the three test vibes alone, so
+   what it lists is known here whatever real vibes the build registers: the
+   staged index.js keeps VIBES' v1 entry and drops the real ones after it, and
+   the staged vibe.js registers v1's definition alone before the test vibes'
+   go in. (The real vibes' own files are staged all the same, since vibe.js
+   imports them.) */
 const A_VIBES = 'export const VIBES = deepFreeze([\n', A_V1 = "  { id: 'v1', name: 'v1', feel: 'The original Rack look.', experimental: false, scheme: 'dark' }";
 const A_DEFS = 'const DEFS = { v1: V1 };', A_IMPORT = "import V1 from './vibes/defs/v1.js';\n";
+const IDX_REAL = read('vibes/defs/index.js'), VJ_REAL = read('vibe.js');
+const V1_ENTRY = IDX_REAL.indexOf(A_V1), VIBES_END = IDX_REAL.indexOf('\n]);', V1_ENTRY);
+const IDX_SRC = V1_ENTRY > 0 && VIBES_END > 0 ? IDX_REAL.slice(0, V1_ENTRY + A_V1.length) + IDX_REAL.slice(VIBES_END) : IDX_REAL;
+const VJ_SRC = VJ_REAL.replace(/const DEFS = \{ v1: V1(, [a-z0-9]+: [A-Z0-9_]+)* \};/, A_DEFS);
 const anchors = IDX_SRC.includes(A_VIBES) && IDX_SRC.includes(A_V1) && VJ_SRC.includes(A_DEFS) && VJ_SRC.includes(A_IMPORT);
 stageFile('vibes/defs/index.js', IDX_SRC
   .replace(A_VIBES, A_VIBES + "  { id: 'tst', name: 'Test', feel: 'A staged vibe.', experimental: true, scheme: 'dark' },\n")
@@ -514,8 +527,9 @@ section('F  no inline heights; the sheet\'s rules name only its own classes');
 /* ================= G ================= */
 if (!PLANTED) {
   section('G  canaries — each planted mistake, in a scratch copy, turns this file red on its check');
+  // the pure contract whole: every registered vibe's definition and icon set too, which vibe.js imports
   const FILES = ['store.js', 'app.js', 'vibe.js', 'ui.js', 'units.js', 'vibes-sheet.js', 'settings.js', 'rack.css',
-    'vibes/defs/index.js', 'vibes/defs/v1.js', 'vibes/icons/v1.js'];
+    ...['vibes/defs', 'vibes/icons'].flatMap(d => readdirSync(join(REPO, d)).filter(f => f.endsWith('.js')).map(f => d + '/' + f))];
   const plants = [
     ['setVibe writes an object', 'store.js', "await write('settings/vibe', next);", "await write('settings/vibe', { id: next });", /bare string/],
     ['initVibe keeps what it read', 'store.js', 'VIBE = wearVibe(normVibe(v), { render: false });', "applyVibe(v, { render: false }); VIBE = v === null ? 'v1' : v;", /initVibe\(\): the database/],

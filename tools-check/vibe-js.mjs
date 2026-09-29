@@ -64,6 +64,12 @@ import vm from 'node:vm';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const BASE = '928a65e';   // rack-v58
 const read = f => readFileSync(join(ROOT, f), 'utf8');
+// Every file of the pure contract (vibes/defs/*.js, vibes/icons/*.js): what a
+// staged copy of vibe.js imports — v1's, and every registered vibe's.
+const CONTRACT = ['vibes/defs', 'vibes/icons'].flatMap(d => readdirSync(join(ROOT, d)).filter(f => f.endsWith('.js')).map(f => d + '/' + f));
+// Where a staged test vibe is registered in vibe.js: right after v1, ahead of
+// whatever real vibes follow it, so the rest of each literal stands.
+const A_DEFS = 'const DEFS = { v1: V1', A_SETS = 'const ICON_SETS = { v1: V1_ICONS';
 const shown = new Map();
 const base = f => {
   if (!shown.has(f)) shown.set(f, execFileSync('git', ['-C', ROOT, 'show', `${BASE}:${f}`], { encoding: 'utf8', maxBuffer: 1 << 26 }));
@@ -372,15 +378,15 @@ section('D  the switch');
   // vibe registered with its own icon set — the only edits are the registry
   // entries a real vibe would add.
   const dir = mkdtempSync(join(tmpdir(), 'rack-vibe-js-'));
-  for (const f of ['vibes/defs/index.js', 'vibes/defs/v1.js', 'vibes/icons/v1.js']) { mkdirSync(join(dir, dirname(f)), { recursive: true }); writeFileSync(join(dir, f), read(f)); }
+  for (const f of CONTRACT) { mkdirSync(join(dir, dirname(f)), { recursive: true }); writeFileSync(join(dir, f), read(f)); }
   const idx = read('vibes/defs/index.js');
   const anchorV = 'export const VIBES = deepFreeze([\n';
   writeFileSync(join(dir, 'vibes/defs/index.js'), idx.replace(anchorV, anchorV + "  { id: 'tst', name: 'tst', feel: '', experimental: false, scheme: 'dark' },\n"));
   const vj = read('vibe.js');
-  const aD = 'const DEFS = { v1: V1 };', aI = 'const ICON_SETS = { v1: V1_ICONS };';
+  const aD = A_DEFS, aI = A_SETS;
   writeFileSync(join(dir, 'vibe.js'), vj
-    .replace(aD, "const DEFS = { v1: V1, tst: { ...V1, id: 'tst', icons: 'tst', themeColor: '#0a0b0c' } };")
-    .replace(aI, "const ICON_SETS = { v1: V1_ICONS, tst: { id: 'tst', icons: { you: { viewBox: '0 0 24 24', stroke: 2, fill: 'none', linecap: 'square', linejoin: 'miter', els: [{ tag: 'circle', cx: 12, cy: 12, r: 9 }] } } } };"));
+    .replace(aD, "const DEFS = { v1: V1, tst: { ...V1, id: 'tst', icons: 'tst', themeColor: '#0a0b0c' }")
+    .replace(aI, "const ICON_SETS = { v1: V1_ICONS, tst: { id: 'tst', icons: { you: { viewBox: '0 0 24 24', stroke: 2, fill: 'none', linecap: 'square', linejoin: 'miter', els: [{ tag: 'circle', cx: 12, cy: 12, r: 9 }] } } }"));
   expect(idx.includes(anchorV) && vj.includes(aD) && vj.includes(aI), 'the staging anchors are where a new vibe is registered (VIBES, DEFS, ICON_SETS)');
   d = freshDoc(); lsLog.length = 0; store.clear();
   const T = await import(pathToFileURL(join(dir, 'vibe.js')).href);
@@ -482,24 +488,30 @@ section('G  offline: the vibes\' photos and faces into the worker\'s cache');
   ];
   const world = () => { const d = freshDoc(); d.baseURI = B; Object.defineProperty(d, 'styleSheets', { configurable: true, get: () => { W.sheetsRead++; return SHEETS; } }); return d; };
 
-  // v1 alone — this build: nothing at all.
+  // v1 alone: nothing at all. With other vibes registered, a launch in v1
+  // still reads the stylesheets for their picker faces — but in this world no
+  // vibes/<id>.css of theirs is linked, so they have nothing to fetch, and
+  // nothing else is touched.
   world(); reset();
   await VB.prefetchVibes();
   VB.applyVibe('v1');
   await VB.prefetchVibes();
-  expect(!W.timers && !W.fetched.length && !W.matched.length && !W.sheetsRead,
-    'with v1 the only vibe, prefetchVibes() and applyVibe() touch no timer, no stylesheet, no Cache Storage and no network' + (W.timers || W.fetched.length || W.matched.length || W.sheetsRead ? ' — ' + J(W) : ''));
+  const aloneV1 = IDX.IDS.length === 1;
+  expect(!W.timers && !W.fetched.length && !W.matched.length && (!aloneV1 || !W.sheetsRead),
+    (aloneV1 ? 'with v1 the only vibe, prefetchVibes() and applyVibe() touch no timer, no stylesheet, no Cache Storage and no network'
+      : 'in v1, with no registered vibe\'s stylesheet in the page, prefetchVibes() and applyVibe() touch no timer, no Cache Storage and no network') +
+    (W.timers || W.fetched.length || W.matched.length || (aloneV1 && W.sheetsRead) ? ' — ' + J(W) : ''));
 
   // A staged vibe with photos and faces: the real vibe.js and contract, only
   // the registry entries a real vibe adds.
   const dir = mkdtempSync(join(tmpdir(), 'rack-vibe-js-offline-'));
-  for (const f of ['vibes/defs/index.js', 'vibes/defs/v1.js', 'vibes/icons/v1.js']) { mkdirSync(join(dir, dirname(f)), { recursive: true }); writeFileSync(join(dir, f), read(f)); }
-  const anchorV = 'export const VIBES = deepFreeze([\n', aD = 'const DEFS = { v1: V1 };';
+  for (const f of CONTRACT) { mkdirSync(join(dir, dirname(f)), { recursive: true }); writeFileSync(join(dir, f), read(f)); }
+  const anchorV = 'export const VIBES = deepFreeze([\n', aD = A_DEFS;
   writeFileSync(join(dir, 'vibes/defs/index.js'), read('vibes/defs/index.js').replace(anchorV, anchorV + "  { id: 'tst', name: 'tst', feel: '', experimental: false, scheme: 'dark' },\n"));
   writeFileSync(join(dir, 'vibe.js'), read('vibe.js').replace(aD, "const DEFS = { v1: V1, tst: { ...V1, id: 'tst', themeColor: '#0a0b0c', " +
     "images: { thumb: 'thumb.webp', hero: 'hero.jpg', odd: 42, card: { file: 'card.jpg' } }, " +
     // its numerals in its text face: face.web.num left out, so valueOf() gives face.web.font
-    "face: { ...V1.face, web: { font: \"'TST grot', system-ui, sans-serif\", mono: V1.face.web.mono, importUrl: V1.face.web.importUrl } } } };"));   // case differs from the @font-face: CSS matches families regardless
+    "face: { ...V1.face, web: { font: \"'TST grot', system-ui, sans-serif\", mono: V1.face.web.mono, importUrl: V1.face.web.importUrl } } }"));   // case differs from the @font-face: CSS matches families regardless
   const fresh = async tag => import(pathToFileURL(join(dir, 'vibe.js')).href + '?' + tag);
   const U = f => B + 'vibes/tst/' + f;
 
@@ -522,7 +534,7 @@ section('G  offline: the vibes\' photos and faces into the worker\'s cache');
 
   // A vibe whose card figure is not in its text face names its numeral face.
   writeFileSync(join(dir, 'vibe-num.js'), read('vibe.js').replace(aD, "const DEFS = { v1: V1, tst: { ...V1, id: 'tst', images: { thumb: 'thumb.webp' }, " +
-    "face: { ...V1.face, web: { ...V1.face.web, font: \"'TST grot', system-ui, sans-serif\", num: \"'tst Slab', Georgia, serif\" } } } };"));
+    "face: { ...V1.face, web: { ...V1.face.web, font: \"'TST grot', system-ui, sans-serif\", num: \"'tst Slab', Georgia, serif\" } } }"));
   world(); reset(); W.cached = new Set();
   const TN = await import(pathToFileURL(join(dir, 'vibe-num.js')).href);
   await TN.prefetchVibes();
@@ -661,16 +673,16 @@ section('H  engine v2: glyphs, the vessel, tailpieces and hatch patterns');
   // A staged set that draws: the real vibe.js and contract, one vibe with its
   // own icon set (glyphs, a vessel, ornaments) and a chart look that hatches.
   const dir = mkdtempSync(join(tmpdir(), 'rack-vibe-js-v2-'));
-  for (const f of ['vibes/defs/index.js', 'vibes/defs/v1.js', 'vibes/icons/v1.js']) { mkdirSync(join(dir, dirname(f)), { recursive: true }); writeFileSync(join(dir, f), read(f)); }
+  for (const f of CONTRACT) { mkdirSync(join(dir, dirname(f)), { recursive: true }); writeFileSync(join(dir, f), read(f)); }
   const anchorV = 'export const VIBES = deepFreeze([\n';
   writeFileSync(join(dir, 'vibes/defs/index.js'), read('vibes/defs/index.js').replace(anchorV, anchorV + "  { id: 'tst', name: 'tst', feel: '', experimental: false, scheme: 'dark' },\n"));
-  const G = (d) => `{ viewBox: '0 0 24 24', stroke: 1.75, fill: 'none', linecap: 'square', linejoin: 'miter', els: [{ tag: 'path', d: '${d}' }] }`;
+  const G =(d) => `{ viewBox: '0 0 24 24', stroke: 1.75, fill: 'none', linecap: 'square', linejoin: 'miter', els: [{ tag: 'path', d: '${d}' }] }`;
   const SET = `{ id: 'tst', icons: {}, glyphs: { prev: ${G('M14 6l-6 6 6 6')}, drop: ${G('M6 4v10h12')}, warn: ${G('M12 3l9 18H3z')}, up: null }, ` +
     "vessel: { viewBox: '0 0 104 168', stroke: 3, d: 'M30 6H74V160H30Z', insideBottom: 150, insideTop: 58, cap: null }, " +
     "ornaments: { you: { viewBox: '0 0 48 24', stroke: 1.5, els: [{ tag: 'circle', cx: 8, cy: 12, r: 6 }] }, steps: null } }";
   writeFileSync(join(dir, 'vibe.js'), read('vibe.js')
-    .replace('const DEFS = { v1: V1 };', "const DEFS = { v1: V1, tst: { ...V1, id: 'tst', icons: 'tst', themeColor: '#0a0b0c', variants: { ...V1.variants, chart: 'print' } } };")
-    .replace('const ICON_SETS = { v1: V1_ICONS };', 'const ICON_SETS = { v1: V1_ICONS, tst: ' + SET + ' };'));
+    .replace(A_DEFS, "const DEFS = { v1: V1, tst: { ...V1, id: 'tst', icons: 'tst', themeColor: '#0a0b0c', variants: { ...V1.variants, chart: 'print' } }")
+    .replace(A_SETS, 'const ICON_SETS = { v1: V1_ICONS, tst: ' + SET));
   const d = freshDoc();
   d.body = new Node_('body');
   const T = await import(pathToFileURL(join(dir, 'vibe.js')).href);
