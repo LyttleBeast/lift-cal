@@ -1,8 +1,8 @@
 // Iron Age — ink on cream, circa 1900, as data.
 //
 // A physical-culture manual printed about 1904: warm ink on a matte book
-// stock, each tab's title hanging from a rule that carries its running head, its
-// figures set as a manual's folio lines, and the finished session carrying a
+// stock, each tab's title under the page's running head, its figures run in
+// as a manual sets them in its text, and the finished session carrying a
 // real halftone plate of a man at exercise from a manual of the period.
 // Nothing is boxed except what a page would box, and the one colour that is
 // not data is the rubric red that marks Coach's voice. The spec, with every
@@ -121,11 +121,20 @@ export default deepFreeze({
      from (screenHeader · masthead with rule.place 'above'), not stacked over
      the title; the add menu's cells are index entries (addTile · ruled); and
      on Steps a day short of the goal is drawn in the Steps subject's plate,
-     so green there is the goal met, as the chart's footnote says. */
+     so green there is the goal met, as the chart's footnote says.
+     After the third panel: the figures are set run in, as a manual sets them
+     in its text ("10 Sessions  48.4k Volume lb  600 Minutes": statRow ·
+     runin), so no tab carries a row of three equal columns; a tab's running
+     head is the page's — small, over a hairline, the title standing clear
+     under it — not a label on the end of a rule; the rules rank (the Oxford
+     rule over a top-level section and along a sheet's top edge, a light
+     rule over an article, space within it); every choice is one letterpress
+     device (chip · stamp and segmented · boxes: an ink keyline, the chosen
+     one solid ink); and the cuts are solid, as a catalogue's are. */
   variants: {
-    card: 'ruled', youCard: 'ruled', eyebrow: 'v1', sectionHeader: 'plain', screenHeader: 'masthead',
-    sheetHost: 'full', sheetTitle: 'v1', statRow: 'folio', kpi: 'word', headline: 'rule',
-    chip: 'tag', segmented: 'tabs', btn: 'inverse', field: 'square', note: 'v1', toast: 'square',
+    card: 'ruled', youCard: 'ruled', eyebrow: 'v1', sectionHeader: 'rule', screenHeader: 'masthead',
+    sheetHost: 'full', sheetTitle: 'v1', statRow: 'runin', kpi: 'word', headline: 'rule',
+    chip: 'stamp', segmented: 'boxes', btn: 'inverse', field: 'square', note: 'v1', toast: 'square',
     settingsRow: 'ledger', listRow: 'plain', setTable: 'ruled', setRow: 'ruled', plateStrip: 'stamp',
     calCell: 'ruled', chart: 'print', dock: 'rail', fab: 'inverse', addTile: 'ruled',
     sessionChrome: 'plate', youHero: 'banner', coachCard: 'ruled'
@@ -140,18 +149,22 @@ export default deepFreeze({
       ink: 'chalk',
       // A measured print hairline (Physical Culture 1908's folio rule).
       hair: 0.5,
-      // One 2pt line: the rule a tab's title hangs from, under its running
-      // head, and a sheet's top edge; section heads draw none (sectionHeader
-      // · plain). The thick-and-thin Oxford rule under every tab's title read
-      // as a broadsheet stamped on each screen (the second AI-made panel).
-      head: [2],
-      // Every head HANGS from its rule, as a manual's running head and its
-      // section heads do: the rule, then the words. Nothing is underlined.
+      // The Oxford rule, thick and thin: over a top-level section (You's and
+      // Settings' section heads, sectionHeader · rule) and along a sheet's
+      // top edge — a chapter's rule, never a tab title's. Under every tab's
+      // title it read as a broadsheet stamped on each screen (the second
+      // AI-made panel); with one weight of rule over every head the page had
+      // no rank at all (the third).
+      head: [2, 1.5, 0.75],
+      // Every head HANGS from its rule, as a manual's section heads do: the
+      // rule, then the words. Nothing is underlined. A tab's running head is
+      // the page's (screenHeader · masthead): small, over a hairline.
       place: 'above',
-      // The single rule an article hangs from — a card's head. The challenge
-      // figure and an exercise's name keep theirs under them: a figure over
-      // its rule, a table under its title.
-      sub: [1.2],
+      // The light rule an article hangs from — a card's head: the rank under
+      // the section's Oxford rule; inside an article, space alone. The
+      // challenge figure and an exercise's name keep theirs under them: a
+      // figure over its rule, a table under its title.
+      sub: [0.75],
       // The double rule a form draws over a total — the recap's
       // session totals and the estimator's total, nowhere else.
       total: [1, 2, 1]
@@ -370,7 +383,8 @@ export default deepFreeze({
     // its two month buttons.
     h1:       { size: 24, wdth: 101, wght: 800, ls: 0, lh: 1.1, color: 'chalk' },
     h2:       { size: 18, wdth: 101, wght: 800, ls: 0, lh: 1.15, color: 'chalk' },
-    // The section head (sectionHeader · plain), sentence case, on space.
+    // The section head (sectionHeader · rule), sentence case, hung from the
+    // Oxford rule.
     h3:       { size: 18, wdth: 101, wght: 800, ls: 0, lh: 1.2, color: 'chalk' },
     // The article head (card heads, sheet eyebrows): Besley SemiBold 15,
     // sentence case, ink. v1's is 10pt tracked caps in a grey that reads
@@ -383,7 +397,8 @@ export default deepFreeze({
     dockLbl:  { size: 11, wdth: 100, wght: 600, ls: 0.01, upper: 0, color: 'dim' },
     fieldLbl: { size: 12, wdth: 100, wght: 600, ls: 0, upper: 0, color: 'steel' },
     note:     { size: 13, wght: 400, lh: 1.5, color: 'dim' },
-    // A box-score figure (statRow · folio): text weight, not a hero's.
+    // A figure run in with its label (statRow · runin): text weight, not a
+    // hero's.
     statVal:  { size: 18, wdth: 100, wght: 700, lh: 1, tnum: 1 },
     // 600, not 500: native registers Archivo at 400 / 600 / 700 / 800 only.
     // Also the masthead's running head ("Training log", "Fuel") and a

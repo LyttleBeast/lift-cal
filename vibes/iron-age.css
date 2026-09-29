@@ -4,9 +4,9 @@
   --shape-rule-ink: #1c1712;
   --shape-rule-hair: .5px;
   --shape-rule-head-0: 2px;
-  --shape-rule-head-1: 0;
-  --shape-rule-head-2: 0;
-  --shape-rule-sub-0: 1.2px;
+  --shape-rule-head-1: 1.5px;
+  --shape-rule-head-2: .75px;
+  --shape-rule-sub-0: .75px;
   --shape-rule-sub-1: 0;
   --shape-rule-sub-2: 0;
   --shape-rule-total-0: 1px;
@@ -367,6 +367,15 @@
   font-size: 11px; letter-spacing: 0; text-transform: none;
   font-variation-settings: 'wdth' 100, 'wght' 600;
 }
+/* The pip's mark is a printer's square in ink, not a green lamp: the word
+   beside it says the state, and the mark tells it by shape as well — solid
+   when synced, an open square in warn when not. A coloured dot with no key
+   read as decoration (the third AI-made panel). */
+[data-vibe="iron-age"] .sync-pip i { border-radius: 0; background: var(--chalk); }
+[data-vibe="iron-age"] .sync-pip.off i { background: none; box-shadow: inset 0 0 0 1.5px var(--warn); }
+/* The calorie line's mark: square, the key to the meter's eaten bar it
+   takes its colour from (food.js sets both), not a status dot. */
+[data-vibe="iron-age"] .cal-status i { border-radius: 0; }
 [data-vibe="iron-age"] .note {
   font-size: 13px; line-height: 1.5; color: var(--dim);
 }
@@ -380,14 +389,13 @@
    [1, 2, 1]): over the recap's totals and the estimate's, and round a
    lifting block. Hair (shape.rule.hair .5): rows, cells, columns. */
 
-/* screenHeader · masthead: the head rule across the title's column with the
-   running head (small roman, statLbl) set at its right end, on its line —
-   a recto page's running head in its rule — and the h1 in Besley ExtraBold
-   hanging from it. Stood over the rule at the left, a small label stacked
-   over every tab's title still read as the eyebrow-over-H1 template (the
-   second AI-made panel). The column grows to the nav
-   buttons, which keep their place and their 34. The rule is vector with the
-   ink-bleed strip over it (spec §11). */
+/* screenHeader · masthead ('above'): the page's running head — the words
+   small and roman (statLbl) over a hairline across the title's column, as a
+   book sets the head of its page — and the h1 in Besley ExtraBold standing
+   clear under it on space, with no rule of its own. A label at the end of a
+   heavy rule, over every title, read as the eyebrow-over-H1 template (the
+   second and third AI-made panels). The column grows to the nav buttons,
+   which keep their place and their 34. */
 [data-vibe="iron-age"] .cal-hd {
   align-items: flex-end;
   margin-bottom: 16px;
@@ -395,17 +403,10 @@
 [data-vibe="iron-age"] .cal-hd > div:first-child { flex: 1 1 auto; min-width: 0; }
 [data-vibe="iron-age"] .cal-hd .eyebrow,
 [data-vibe="iron-age"] .summary-hero .eyebrow {
-  display: flex; align-items: center; gap: 8px;
-  margin-bottom: 8px;
-}
-[data-vibe="iron-age"] .cal-hd .eyebrow::before,
-[data-vibe="iron-age"] .summary-hero .eyebrow::before {
-  content: '';
-  flex: 1 1 auto; min-width: 24px;
-  height: var(--shape-rule-head-0);
-  background:
-    -webkit-image-set(url(iron-age/textures/rule-sub@2x.png) 2x, url(iron-age/textures/rule-sub@3x.png) 3x) 0 -1px / 144px 3px repeat-x,
-    linear-gradient(var(--shape-rule-ink), var(--shape-rule-ink)) 0 0 / 100% var(--shape-rule-head-0) no-repeat;
+  display: block;
+  padding-bottom: 5px;
+  margin-bottom: 14px;
+  border-bottom: var(--shape-rule-hair) solid var(--shape-rule-ink);
 }
 /* The month, day and gear buttons are bare cuts, as a page's ‹ › are: no
    plate round them (one keyline box round every control read as a template,
@@ -418,15 +419,20 @@
 }
 [data-vibe="iron-age"] .cal-nav button:active { background: var(--raised); }
 [data-vibe="iron-age"] .cal-nav button .glyph { width: 18px; height: 18px; }
-[data-vibe="iron-age"] .cal-nav .gear-btn svg { stroke-width: 1.75; }
+/* The gear is a solid cut (vibes/icons/iron-age.js `cut`): no stroke. */
+[data-vibe="iron-age"] .cal-nav .gear-btn svg { stroke-width: 0; }
 
-/* sectionHeader · plain: the section head alone, h3 (Besley ExtraBold 18),
-   parted from what is above it by space, not a rule; 36 above, 10 below;
-   no trailing hairline. */
-[data-vibe="iron-age"] .you-sec { margin-top: 36px; }
+/* sectionHeader · rule: the section head, h3 (Besley ExtraBold 18), hung
+   from the Oxford rule (shape.rule.head, thick and thin) at full width —
+   the chapter's rule, the heaviest on the page, over the heaviest head. An
+   article under it hangs from the light rule (card-hd, below) and inside an
+   article there is space alone: three ranks, where every head had the one
+   rule (the third AI-made panel). 44 above, 12 below; no trailing hairline. */
+[data-vibe="iron-age"] .you-sec { margin-top: 44px; }
 [data-vibe="iron-age"] .you-sec-t {
   display: block; position: relative;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
+  padding-top: calc(var(--shape-rule-head-0) + var(--shape-rule-head-1) + var(--shape-rule-head-2) + 9px);
   font-family: var(--font-display);
   font-size: 18px; line-height: 1.2;
   letter-spacing: 0; text-transform: none;
@@ -435,11 +441,24 @@
   font-synthesis: none;
 }
 [data-vibe="iron-age"] .you-sec-t::after { display: none; }
+[data-vibe="iron-age"] .you-sec-t::before {
+  content: '';
+  position: absolute; left: 0; right: 0; top: 0;
+  height: calc(var(--shape-rule-head-0) + var(--shape-rule-head-1) + var(--shape-rule-head-2));
+  /* read from the head outward (native looks.jsx Rule): the thick line
+     against the words, the thin one above it */
+  background:
+    -webkit-image-set(url(iron-age/textures/rule-sub@2x.png) 2x, url(iron-age/textures/rule-sub@3x.png) 3x) 0 calc(var(--shape-rule-head-2) + var(--shape-rule-head-1) - 1px) / 144px 3px repeat-x,
+    linear-gradient(var(--shape-rule-ink), var(--shape-rule-ink)) 0 0 / 100% var(--shape-rule-head-2) no-repeat,
+    linear-gradient(var(--shape-rule-ink), var(--shape-rule-ink)) 0 calc(var(--shape-rule-head-2) + var(--shape-rule-head-1)) / 100% var(--shape-rule-head-0) no-repeat;
+}
 
 /* card · ruled (and youCard · ruled): no ground, no box, no corner. The head
-   row hangs from the single rule at full width (rule.place 'above'), 6
-   under it, the content 8 under the head and running to the rule's width;
-   cards part by 20 — tight inside, the space between. */
+   row hangs from the light article rule at full width (rule.sub .75,
+   rule.place 'above'), 6 under it, the content 8 under the head and running
+   to the rule's width; cards part by 20 — tight inside, the space between.
+   The light rule carries no ink-bleed strip: the strip is the heavy rules'
+   (the Oxford rule, the double rule over a total). */
 [data-vibe="iron-age"] .card {
   background: none;
   border: 0;
@@ -456,9 +475,7 @@
   content: '';
   position: absolute; left: 0; right: 0; top: 0;
   height: var(--shape-rule-sub-0);
-  background:
-    -webkit-image-set(url(iron-age/textures/rule-sub@2x.png) 2x, url(iron-age/textures/rule-sub@3x.png) 3x) 0 -1px / 144px 3px repeat-x,
-    linear-gradient(var(--shape-rule-ink), var(--shape-rule-ink)) 0 0 / 100% var(--shape-rule-sub-0) no-repeat;
+  background: var(--shape-rule-ink);
 }
 /* The challenge figure and an exercise's name keep their rule under them:
    a figure over its rule, a table under its title. */
@@ -468,9 +485,7 @@
   content: '';
   position: absolute; left: 0; right: 0; bottom: 0;
   height: var(--shape-rule-sub-0);
-  background:
-    -webkit-image-set(url(iron-age/textures/rule-sub@2x.png) 2x, url(iron-age/textures/rule-sub@3x.png) 3x) 0 -1px / 144px 3px repeat-x,
-    linear-gradient(var(--shape-rule-ink), var(--shape-rule-ink)) 0 0 / 100% var(--shape-rule-sub-0) no-repeat;
+  background: var(--shape-rule-ink);
 }
 /* "Doing well" on a viridian rule, "Could improve" on an amber one, in place
    of v1's side stripes; which is which stays in the title words. */
@@ -557,7 +572,7 @@
   border-radius: 0;
   color: var(--chalk);
 }
-[data-vibe="iron-age"] .you-gear svg { width: 20px; height: 20px; stroke-width: 1.75; }
+[data-vibe="iron-age"] .you-gear svg { width: 20px; height: 20px; stroke-width: 0; }
 [data-vibe="iron-age"] .you-gear:active { background: var(--raised); }
 [data-vibe="iron-age"] .you-since { margin: 10px 0 16px; }
 
@@ -594,10 +609,13 @@
 [data-vibe="iron-age"] .sheet {
   border-radius: 0;
   border-top: 0;
-  padding-top: calc(10px + var(--shape-rule-head-0));
+  padding-top: calc(10px + var(--shape-rule-head-0) + var(--shape-rule-head-1) + var(--shape-rule-head-2));
+  /* the thin line on the sheet's edge, the thick one inward (native
+     Sheet.jsx: the head rule read outward, up) */
   background:
-    -webkit-image-set(url(iron-age/textures/rule-sub@2x.png) 2x, url(iron-age/textures/rule-sub@3x.png) 3x) 0 -1px / 144px 3px repeat-x,
-    linear-gradient(var(--shape-rule-ink), var(--shape-rule-ink)) 0 0 / 100% var(--shape-rule-head-0) no-repeat,
+    -webkit-image-set(url(iron-age/textures/rule-sub@2x.png) 2x, url(iron-age/textures/rule-sub@3x.png) 3x) 0 calc(var(--shape-rule-head-2) + var(--shape-rule-head-1) - 1px) / 144px 3px repeat-x,
+    linear-gradient(var(--shape-rule-ink), var(--shape-rule-ink)) 0 0 / 100% var(--shape-rule-head-2) no-repeat,
+    linear-gradient(var(--shape-rule-ink), var(--shape-rule-ink)) 0 calc(var(--shape-rule-head-2) + var(--shape-rule-head-1)) / 100% var(--shape-rule-head-0) no-repeat,
     var(--bar);
 }
 [data-vibe="iron-age"] .sheet-grab { border-radius: 0; }
@@ -605,62 +623,57 @@
    top edge is its one rule. */
 [data-vibe="iron-age"] .sheet .eyebrow:has(+ h2) { margin-bottom: 2px; }
 
-/* ---------- statRow · folio ----------
-   The stat rows were the ledger (a drawn leader on every stat line) until the second
-   AI-made panel: one print device on every tab read as costume, and lines
-   44 apart as landing-page spacing on data. The leader is Settings' alone.
+/* ---------- statRow · runin ----------
+   The stat rows were the ledger (a drawn leader on every stat line) until the
+   second AI-made panel, then a box-score line between hairlines until the
+   third: three equal columns of big figure over small label, on three tabs,
+   is the stat-banner whatever draws its box.
 
-   statRow · folio: the box-score line between two hairlines — the stats
-   side by side in v1's order, a hairline between the columns, each value
-   (Archivo 18/700, tabular, in the caller's colour) over its label (12/600
-   steel, as written); no ground, no box; the first and last column flush
-   with the rules' ends. The value never truncates; a long label wraps. */
+   statRow · runin: the figures run in, as a manual sets them in its text —
+   each value (Archivo 18/700, tabular, in the caller's colour) with its label
+   after it on the same baseline (12/600 steel, as written), the stats in v1's
+   order one after another, 18 apart, wrapping as a line of text wraps. No
+   columns, no rules, no ground. A value never truncates; a long label wraps. */
 [data-vibe="iron-age"] .stat-row,
 [data-vibe="iron-age"] .mini-stats {
   display: flex;
-  gap: 0; padding: 0;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 18px;
+  padding: 0;
   border: 0;
-  border-top: var(--shape-rule-hair) solid var(--shape-rule-ink);
-  border-bottom: var(--shape-rule-hair) solid var(--shape-rule-ink);
+  background: none;
 }
 [data-vibe="iron-age"] .stat,
 [data-vibe="iron-age"] .mini-stat {
-  display: block;
-  flex: 1 1 0;
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  flex: 0 1 auto;
   min-width: 0;
-  padding: 8px 10px 9px;
+  padding: 0;
   background: none;
   border: 0;
   border-radius: 0;
 }
-/* The mini stats sit in narrow columns (a You pair holds four): 6 in from
-   each hairline, and a value never ends in an ellipsis — a figure cut short
-   is a changed number. */
-[data-vibe="iron-age"] .mini-stat { padding: 7px 6px 8px; }
-[data-vibe="iron-age"] .mini-stat-v { overflow: visible; text-overflow: clip; }
-[data-vibe="iron-age"] .stat + .stat,
-[data-vibe="iron-age"] .mini-stat + .mini-stat { border-left: var(--shape-rule-hair) solid var(--shape-rule-ink); }
-[data-vibe="iron-age"] .stat:first-child,
-[data-vibe="iron-age"] .mini-stat:first-child { padding-left: 0; }
-[data-vibe="iron-age"] .stat:last-child,
-[data-vibe="iron-age"] .mini-stat:last-child { padding-right: 0; }
+/* A value never ends in an ellipsis — a figure cut short is a changed
+   number. */
 [data-vibe="iron-age"] .stat-val,
-[data-vibe="iron-age"] .mini-stat-v { display: block; white-space: nowrap; line-height: 1; }
+[data-vibe="iron-age"] .mini-stat-v { display: block; flex: none; white-space: nowrap; line-height: 1.2; overflow: visible; text-overflow: clip; }
 [data-vibe="iron-age"] .stat-val { font-size: 18px; font-variation-settings: 'wdth' 100, 'wght' 700; }
 [data-vibe="iron-age"] .stat-lbl,
-[data-vibe="iron-age"] .mini-stat-l { display: block; margin-top: 3px; }
-/* An article after a folio line stands 20 clear of it, as cards part. */
+[data-vibe="iron-age"] .mini-stat-l { display: block; margin: 0; min-width: 0; white-space: normal; overflow: visible; text-overflow: clip; }
+/* An article after a run-in line stands 20 clear of it, as cards part. */
 [data-vibe="iron-age"] .stat-row + .card,
 [data-vibe="iron-age"] .mini-stats + .card,
 [data-vibe="iron-age"] .note + .card { margin-top: 20px; }
-[data-vibe="iron-age"] .stat-row { margin-bottom: 12px; }
+[data-vibe="iron-age"] .stat-row { margin-top: 4px; margin-bottom: 14px; }
 [data-vibe="iron-age"] .mini-stats { margin-top: 10px; }
 [data-vibe="iron-age"] .mini-stat-v { font-size: 16px; }
-/* The recap's session totals: the folio under the double rule
-   (shape.rule.total) in place of its upper hairline, the form's totals. */
+/* The recap's session totals: the run-in line under the double rule
+   (shape.rule.total), the form's totals. */
 [data-vibe="iron-age"] .summary-page > .stat-row {
-  border-top: 0;
-  padding-top: calc(var(--shape-rule-total-0) + var(--shape-rule-total-1) + var(--shape-rule-total-2));
+  padding-top: calc(var(--shape-rule-total-0) + var(--shape-rule-total-1) + var(--shape-rule-total-2) + 9px);
   margin-bottom: 24px;
   background:
     -webkit-image-set(url(iron-age/textures/rule-total@2x.png) 2x, url(iron-age/textures/rule-total@3x.png) 3x) 0 -1px / 144px 6px repeat-x,
@@ -700,19 +713,25 @@
 [data-vibe="iron-age"] .headline { position: relative; padding-bottom: 10px; margin-bottom: 4px; }
 [data-vibe="iron-age"] .fuel-top { position: relative; padding-bottom: 12px; margin-bottom: 16px; padding-right: 30px; }
 
-/* ---------- chip · tag, segmented · tabs ----------
-   Chips are slugs of raised paper, no keyline, square: a compositor's tint
-   block, not a drawn box. Chosen: inverted, ink with the words knocked out. */
+/* ---------- chip · stamp, segmented · boxes ----------
+   One letterpress device for every choice on every screen: the words in an
+   ink keyline (shape.keyline), square, no ground; the chosen one printed
+   solid, ink with the words knocked out. Grey slugs for the chips beside an
+   underline for the range pickers read as two stock components restyled
+   (the third AI-made panel). */
 [data-vibe="iron-age"] .chip,
 [data-vibe="iron-age"] .move-opt,
 [data-vibe="iron-age"] .coach-goal-opt {
   border-radius: 0;
-  background: var(--raised);
-  border-color: transparent;
+  background: none;
+  border: var(--shape-keyline-width) solid var(--shape-keyline-ink);
   color: var(--chalk);
   font-size: 12px;
   font-variation-settings: 'wdth' 100, 'wght' 600;
 }
+[data-vibe="iron-age"] .chip:active,
+[data-vibe="iron-age"] .move-opt:active,
+[data-vibe="iron-age"] .coach-goal-opt:active { background: var(--raised); }
 [data-vibe="iron-age"] .chip.on,
 [data-vibe="iron-age"] .move-opt.on,
 [data-vibe="iron-age"] .coach-goal-opt.on,
@@ -738,9 +757,11 @@
 [data-vibe="iron-age"] .coach-chip:active { border-color: transparent; background: rgba(var(--lift-rgb), .04); }
 [data-vibe="iron-age"] .coach-effort.on { padding-left: 12px; text-decoration: none; }
 /* "How did that feel?": the ten energy figures and the five strengths are a
-   printed scale, not a grid of boxes — each figure over a 1pt ink rule with
-   a tick at its left end, the row one ruled line. Chosen: the figure
-   knocked out of an ink block standing on the rule. */
+   printed form's blanks, not a grid of boxes — each figure over its own
+   length of rule (1pt, ink), the row one ruled line. Chosen: the figure
+   knocked out of an ink block standing on the rule. (The tick at each
+   blank's left end is gone: at fractional widths two of ten drew heavier
+   than the rest — the third AI-made panel.) */
 [data-vibe="iron-age"] .feel-grid + .feel-cap { margin-top: 14px; }
 [data-vibe="iron-age"] .feel-grid .coach-chip,
 [data-vibe="iron-age"] .feel-steps .coach-chip {
@@ -751,17 +772,10 @@
   border: 0;
   text-decoration: none;
   text-align: center;
-  box-shadow: inset 0 calc(-1 * var(--shape-rule-sub-0)) 0 var(--shape-rule-ink);
+  box-shadow: inset 0 -1px 0 var(--shape-rule-ink);
   font-size: 13px; line-height: 1.2;
   font-variation-settings: 'wdth' 100, 'wght' 700;
   font-feature-settings: 'tnum' 1;
-}
-[data-vibe="iron-age"] .feel-grid .coach-chip::before,
-[data-vibe="iron-age"] .feel-steps .coach-chip::before {
-  content: '';
-  position: absolute; left: 0; bottom: 0;
-  width: var(--shape-rule-sub-0); height: 9px;
-  background: var(--shape-rule-ink);
 }
 [data-vibe="iron-age"] .feel-grid .coach-chip { padding-left: 0; padding-right: 0; }
 [data-vibe="iron-age"] .feel-grid .coach-chip.on,
@@ -770,28 +784,30 @@
   color: var(--knockout);
   border-color: transparent;
 }
-/* The range pickers (segmented · tabs): the options as words on the page,
-   the chosen one in ink over a 2pt ink underline — the underline is the cue,
-   with the weight — the others steel. v1's height, equal widths. */
+/* The segmented controls (segmented · boxes): the same device joined — the
+   options in one ink keyline, square, parted by the keyline's own rule; the
+   chosen cell printed solid with its words knocked out, the others ink on
+   the paper. v1's height, equal widths. */
 [data-vibe="iron-age"] .seg {
   gap: 0; padding: 0;
   background: none;
-  border: 0;
+  border: var(--shape-keyline-width) solid var(--shape-keyline-ink);
   border-radius: 0;
 }
 [data-vibe="iron-age"] .seg-btn {
-  min-height: 38px;
+  min-height: 36px;
   border-radius: 0;
   background: none;
-  color: var(--steel);
+  color: var(--chalk);
   font-size: 12px; letter-spacing: 0; text-transform: none;
   font-variation-settings: 'wdth' 100, 'wght' 600;
 }
+[data-vibe="iron-age"] .seg-btn + .seg-btn { border-left: var(--shape-keyline-width) solid var(--shape-keyline-ink); }
 [data-vibe="iron-age"] .seg-btn.on {
-  background: none;
-  color: var(--chalk);
-  box-shadow: inset 0 -2px 0 var(--chalk);
-  font-variation-settings: 'wdth' 100, 'wght' 800;
+  background: var(--inverse);
+  color: var(--knockout);
+  box-shadow: none;
+  font-variation-settings: 'wdth' 100, 'wght' 700;
 }
 
 /* ---------- btn · inverse ----------
@@ -1410,7 +1426,9 @@
   text-transform: none;
   font-variation-settings: 'wdth' 100, 'wght' 600;
 }
-[data-vibe="iron-age"] .dock button svg { stroke-width: 1.5; }
+/* The dock's five are solid cuts: the dock sets the width (cssStroke), so
+   it sets none. */
+[data-vibe="iron-age"] .dock button svg { stroke-width: 0; }
 [data-vibe="iron-age"] .dock button.active { font-variation-settings: 'wdth' 100, 'wght' 700; }
 [data-vibe="iron-age"] .dock button.active::before {
   left: 0; right: 0; top: 0;
@@ -1480,7 +1498,7 @@
   border-radius: 0;
 }
 [data-vibe="iron-age"] .add-tile.hero .ic { background: none; color: var(--accent); }
-[data-vibe="iron-age"] .add-tile .ic svg { width: 22px; height: 22px; stroke-width: 1.5; }
+[data-vibe="iron-age"] .add-tile .ic svg { width: 22px; height: 22px; stroke-width: 0; }
 [data-vibe="iron-age"] .add-tile .t { font-size: 15px; font-variation-settings: 'wdth' 100, 'wght' 700; }
 [data-vibe="iron-age"] .add-tile .d { font-size: 13px; }
 /* The "ai" tag: the word as written, in the running meta (type.meta,
@@ -1542,7 +1560,7 @@
   font-variation-settings: 'wdth' 100, 'wght' 700;
 }
 [data-vibe="iron-age"] .wk-cal-btn { color: var(--chalk); margin-right: 6px; }
-[data-vibe="iron-age"] .wk-cal-btn svg { stroke-width: 1.5; }
+[data-vibe="iron-age"] .wk-cal-btn svg { stroke-width: 0; }
 [data-vibe="iron-age"] .wk-coach:active,
 [data-vibe="iron-age"] .wk-cal-btn:active { background: var(--raised); border-color: transparent; }
 [data-vibe="iron-age"] .rest-pill,
@@ -1751,8 +1769,9 @@
 [data-vibe="iron-age"] .ob-tour-card {
   padding-top: 24px;
   background:
-    -webkit-image-set(url(iron-age/textures/rule-sub@2x.png) 2x, url(iron-age/textures/rule-sub@3x.png) 3x) 0 -1px / 144px 3px repeat-x,
-    linear-gradient(var(--shape-rule-ink), var(--shape-rule-ink)) 0 0 / 100% var(--shape-rule-head-0) no-repeat,
+    -webkit-image-set(url(iron-age/textures/rule-sub@2x.png) 2x, url(iron-age/textures/rule-sub@3x.png) 3x) 0 calc(var(--shape-rule-head-2) + var(--shape-rule-head-1) - 1px) / 144px 3px repeat-x,
+    linear-gradient(var(--shape-rule-ink), var(--shape-rule-ink)) 0 0 / 100% var(--shape-rule-head-2) no-repeat,
+    linear-gradient(var(--shape-rule-ink), var(--shape-rule-ink)) 0 calc(var(--shape-rule-head-2) + var(--shape-rule-head-1)) / 100% var(--shape-rule-head-0) no-repeat,
     var(--bar);
 }
 

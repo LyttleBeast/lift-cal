@@ -232,7 +232,7 @@ export default deepFreeze({
       v1: 'v1',
       looks: {
         v1: { grade: 'v1', look: 'the eyebrow over a 26pt h1 (wdth 78 / 800); the nav buttons right of it' },
-        masthead: { grade: 'deep', look: 'a larger title and a full-width head rule (shape.rule.head) placed by shape.rule.place — under the title, the eyebrow above both; or (\'above\') over the title, which hangs from it, with the eyebrow set at the rule\'s right end on its line, a running head in its rule; the nav buttons keep their place', for: ['iron-age', 'ledger'] },
+        masthead: { grade: 'deep', look: 'a larger title and a full-width head rule (shape.rule.head) placed by shape.rule.place — under the title, the eyebrow above both; or (\'above\') the page\'s running head: the eyebrow set small (type.statLbl) over a hairline (shape.rule.hair) across the title\'s column, the title standing clear under it on space, no head rule; the nav buttons keep their place', for: ['iron-age', 'ledger'] },
         inline: { grade: 'deep', look: 'the eyebrow and the title on one baseline, the eyebrow first', for: [] }
       },
       keeps: ['the nav buttons, their order, actions and size (the month and day buttons are 34 in v1 — never smaller); Back',
@@ -291,7 +291,7 @@ export default deepFreeze({
       slots: [],
       reads: ['colors.bar', 'colors.collar', 'radius.sm', 'type.statVal', 'type.statLbl', 'colors.well'],
       type: ['statVal', 'statLbl'],
-      variants: ['v1', 'ledger', 'lead', 'line', 'folio', 'board'],
+      variants: ['v1', 'ledger', 'lead', 'line', 'folio', 'board', 'runin'],
       v1: 'v1',
       looks: {
         v1: { grade: 'v1', look: 'three tiles 8 apart, each bar ground, collar border, radius.sm, padding 10: a 20pt value (wdth 108 / 800, tabular) over a 9pt caps label in dim. Mini stats: the same in small, on the well' },
@@ -299,7 +299,8 @@ export default deepFreeze({
         lead: { grade: 'deep', look: 'the first stat large and the other two small beside it (1 + 2), no boxes. A screen may have one hero figure (R6.7): a vibe naming lead gives up its headline there', for: [] },
         line: { grade: 'shape', look: 'a box-score line: no ground and no outer border; the values on one baseline with a 1pt rule (collar or knurl) between columns, labels under them', for: ['chalk', 'clear-sky', 'ledger'] },
         folio: { grade: 'deep', look: 'the line between two hairlines (shape.rule.hair) above and below it: the period folio line', for: ['iron-age'] },
-        board: { grade: 'deep', look: 'one board strip: the cells butt together with shape.gutter gaps, bar ground, no border, square corners', for: ['meet-day'] }
+        board: { grade: 'deep', look: 'one board strip: the cells butt together with shape.gutter gaps, bar ground, no border, square corners', for: ['meet-day'] },
+        runin: { grade: 'deep', look: 'a run-in line of figures, as a page sets them in its text: each value with its label after it on the same baseline, the stats in order one after another, 18 apart, wrapping as a line of text wraps; no columns, no rules, no ground. A total sits under the double rule (shape.rule.total)', for: ['iron-age'] }
       },
       keeps: ['the stats and their order', 'a value\'s own colour where its caller gives one (a group or subject colour)',
               'tabular figures; a value never truncates (a label may wrap)']

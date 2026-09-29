@@ -9,19 +9,22 @@
 // byte for byte into rack-mobile (src/pure/vibes/icons/iron-age.js).
 //
 // THE STYLE, and why:
-// - A 24-unit grid, no fill, one ink stroke, SQUARE caps and MITER joins. v1
-//   is round and round (Feather's manner); a period "cut" — the engraved
-//   object in a catalogue — has cut ends and sharp corners. This is the most
-//   visible difference between the two sets at 22pt.
-// - The object in profile or frontal elevation, its silhouette plus one or
-//   two defining lines (the globe's centre band, the scale's hand, the nib's
-//   slit). No engraved hatching at icon size: at 22pt it turns to mud.
-// - Stroke 1.5 at the 19–22pt sites (the dock, the add tiles, the calendar),
-//   1.75 at the 14–17pt sites (the gears, the Coach marks, the lock, the
-//   glyphs), so a line looks the same weight at every size it is drawn.
-//   Three sites fix their own and win (vibe.js icon() o.stroke): the Log food
-//   button's 2.6, the two estimator notices' 1.6 (spark), the dock's from the
-//   stylesheet.
+// - A 24-unit grid. Every object is a SOLID CUT (`cut`, below): the
+//   silhouette filled in the site's ink, with no stroke, and the one or two
+//   details the cut shows white (the scale's dial, the gear's hub, the
+//   lock's keyhole, the nib's slit, the ledger's rules) cut out of it — as a
+//   catalogue or a manual printed its small cuts. Until the third AI-made
+//   panel the set was one even outline stroke with square caps; an outline
+//   at one weight is a UI icon set's manner whatever its caps, and it read
+//   as a stock set under a period costume.
+// - The object in profile or frontal elevation. No engraved hatching at icon
+//   size: at 22pt it turns to mud.
+// - The marks of the text stay strokes, square-capped, at 1.5 on the 19–22pt
+//   sites and 1.75 on the 14–17pt sites: the Greek cross, the saltire, the
+//   tick, the rule, the hooked arrow, the fold chevrons, the warning
+//   triangle. Two sites fix their own stroke and win (vibe.js icon()
+//   o.stroke): the Log food button's 2.6 (the cross, a stroke) and the
+//   estimator notices' 1.6 (spark, a cut, which then prints a hair heavier).
 // - No lettering, numerals or trade marks, ever: the calendar carries no date
 //   (a date on it would be a number Rack did not print), the barcode no
 //   digits, the scale no figures on its dial.
@@ -70,6 +73,17 @@ const deepFreeze = o => {
 
 const icon = (stroke, els) =>
   ({ viewBox: '0 0 24 24', stroke, fill: 'none', linecap: 'square', linejoin: 'miter', els });
+/* A solid cut: the object's black printed as black, as a catalogue's and a
+   manual's small cuts are — never the even outline of a UI icon set (the
+   third AI-made panel: "thin, even-stroke, round-capped … a stock icon set
+   under a period costume"). Every element is a closed shape, filled in the
+   site's ink, with no stroke: a detail the cut shows in white (a dial, a
+   hub, a keyhole, a nib's slit, a ruled leaf) is cut out of the same path,
+   wound the other way, so it shows the paper through. Only the lines that
+   are marks of the text — the saltire, the tick, the rule, the cross — stay
+   strokes. */
+const cut = els =>
+  ({ viewBox: '0 0 24 24', stroke: 0, fill: 'currentColor', linecap: 'square', linejoin: 'miter', els });
 const piece = (viewBox, els) =>
   ({ viewBox, stroke: 1.5, linecap: 'square', linejoin: 'miter', els });
 const path = d => ({ tag: 'path', d });
@@ -84,7 +98,10 @@ const rect = (x, y, width, height) => ({ tag: 'rect', x, y, width, height, rx: 0
 const GEAR = 'M10.6 4.94L10.72 2.49L13.28 2.49L13.4 4.94L16 6.01L17.82 4.37L19.63 6.18L17.99 8L19.06 10.6L21.51 10.72' +
   'L21.51 13.28L19.06 13.4L17.99 16L19.63 17.82L17.82 19.63L16 17.99L13.4 19.06L13.28 21.51L10.72 21.51L10.6 19.06L8 17.99' +
   'L6.18 19.63L4.37 17.82L6.01 16L4.94 13.4L2.49 13.28L2.49 10.72L4.94 10.6L6.01 8L4.37 6.18L6.18 4.37L8 6.01Z';
-const GEAR_ELS = [path(GEAR), circle(12, 12, 2.6)];
+// The gear is drawn clockwise; its hub is cut out of it, counter-clockwise,
+// so the cut is solid iron round a bored hub.
+const HUB = 'M14.6 12A2.6 2.6 0 0 0 9.4 12A2.6 2.6 0 0 0 14.6 12Z';
+const GEAR_ELS = [path(GEAR + HUB)];
 
 /* A pen nib drawn point-down, then turned 45 degrees about the centre so the
    point sits lower left, as a hand holds it: shoulders, the slit from the
@@ -92,122 +109,147 @@ const GEAR_ELS = [path(GEAR), circle(12, 12, 2.6)];
    p. 99, broadened so it holds at 19pt (the cut is a slim 1 : 5). Written out
    rather than computed at load, so a verifier can compare strings. */
 const NIB = 'M4.93 19.07L8.46 10.73L11.58 7.62L13.7 7.47L17.23 3.94L20.06 6.77L16.53 10.3L16.38 12.42L13.27 15.54Z';
-const NIB_ELS = [path(NIB), path('M4.93 19.07L10.16 13.84'), circle(11.2, 12.8, 0.35)];
+// The nib is drawn clockwise; the slit from the point and the breather hole
+// are cut out of it.
+const NIB_SLIT = 'M5.55 17.75L6.25 18.45L10.51 14.19L9.81 13.49Z';
+const NIB_HOLE = 'M12 12.8A.8 .8 0 0 0 10.4 12.8A.8 .8 0 0 0 12 12.8Z';
+const NIB_ELS = [path(NIB + NIB_SLIT + NIB_HOLE)];
 
 /* The padlock: a heart-shaped case (Mallory, Wheeler 1871 No. 10), a keyhole,
    and the shackle — which is the only thing that moves between locked and
-   unlocked, as in v1. */
+   unlocked, as in v1. The case is drawn clockwise and the keyhole cut out of
+   it; the shackle is a solid band, its two edges one path. */
 const LOCK_CASE = 'M5 12.2C5 10.9 6 10 7.3 10C9.2 10 10.4 10.9 12 10.9C13.6 10.9 14.8 10 16.7 10C18 10 19 10.9 19 12.2V16C19 19 15.9 21 12 21C8.1 21 5 19 5 16Z';
-const KEYHOLE = 'M12 14.2V16.6';
+const KEYHOLE = 'M12.7 15.21A1.15 1.15 0 1 0 11.3 15.21V17.6H12.7Z';
+const SHACKLE = 'M7.4 10.2V7.4A4.6 4.6 0 0 1 16.6 7.4V10.2H15V7.4A3 3 0 0 0 9 7.4V10.2Z';
+const SHACKLE_UP = 'M7.4 10.2V7.4A4.6 4.6 0 0 1 16.18 5.49L14.73 6.15A3 3 0 0 0 9 7.4V10.2Z';
+
+/* The printers' fist (Polhemus 1895, stock cut No. 431, traced; turned to
+   point right, at the sentence): the cuff and the hand with its pointing
+   finger, printed solid — ☛, the black index. The hand's outline closes on
+   the cuff's edge. It marks the estimator's notices (spark) and Coach's own
+   voice (bubble): a period page points at what it wants read; it has no
+   speech balloons. */
+const FIST = [rect(1.8, 7.6, 2.9, 9),
+  path('M4.7 7.9C4.7 7.9 8.46 7.34 10.8 7.25C13.14 7.16 16.89 7.26 18.75 7.34C20.61 7.42 21.34 7.59 21.97 7.75C22.59 7.91 22.48 8.1 22.5 8.3C22.52 8.51 22.98 8.77 22.1 8.98C21.23 9.19 17.25 9.55 17.25 9.55C17.25 9.55 16.52 10.01 16.2 10.6C15.88 11.19 15.58 12.35 15.3 13.07C15.02 13.79 14.69 14.52 14.5 14.9C14.31 15.29 14.17 15.38 14.17 15.38C14.17 15.38 11.57 15.3 10.39 15.38C9.21 15.46 7.92 15.86 7.07 15.88C6.22 15.9 5.66 15.56 5.27 15.51C4.88 15.46 4.7 15.6 4.7 15.6Z')];
+
+/* A heavy chevron, cut as a solid wedge with square ends: the printer's ‹ ›,
+   not a hairline stroke. */
+const PREV = 'M14.2 4.6L6.8 12L14.2 19.4L15.76 17.84L9.92 12L15.76 6.16Z';
+const NEXT = 'M9.8 4.6L17.2 12L9.8 19.4L8.24 17.84L14.08 12L8.24 6.16Z';
 
 export default deepFreeze({
   id: 'iron-age',
 
   icons: {
     /* ---- the dock, 22pt ---- */
-    // A generic bust on its cut: oval head, shoulders cut square, the plinth
-    // rule it stands on. Never a likeness of anyone.
-    you: icon(1.5, [path('M8.7 7.6a3.3 3.8 0 1 0 6.6 0a3.3 3.8 0 1 0-6.6 0z'),
-                    path('M5.2 20.5V19c0-2.9 3.1-4.9 6.8-4.9s6.8 2 6.8 4.9v1.5'),
-                    path('M3.5 20.5h17')]),
-    // The globe dumb-bell (Spalding c. 1891): two globes, each with its band
-    // turned toward the handle (without the band the pair reads as
-    // spectacles), the handle two rules, thicker than the cut's so it holds
-    // at 22pt. The globes' spacing is the cut's, fitted off its trace.
-    workout: icon(1.5, [circle(4.85, 12, 3.6), circle(19.15, 12, 3.6),
-                        path('M4.85 8.4a1.6 3.6 0 0 1 0 7.2M19.15 8.4a1.6 3.6 0 0 0 0 7.2'),
-                        path('M8.45 11.2h7.1M8.45 12.8h7.1')]),
+    // A generic bust on its cut, printed solid: oval head, shoulders cut
+    // square, the plinth it stands on. Never a likeness of anyone.
+    you: cut([path('M8.7 7.6a3.3 3.8 0 1 0 6.6 0a3.3 3.8 0 1 0-6.6 0z'),
+              path('M5.2 19.8V19c0-2.9 3.1-4.9 6.8-4.9s6.8 2 6.8 4.9v.8z'),
+              path('M3.5 20.6H20.5V21.9H3.5Z')]),
+    // The globe dumb-bell (Spalding c. 1891), solid: two iron globes and the
+    // handle between them. Printed solid the pair is a dumb-bell at 22pt; the
+    // band the outline needed (without it the outline read as spectacles) is
+    // not wanted. The globes' spacing is the cut's, fitted off its trace.
+    workout: cut([circle(4.85, 12, 3.6), circle(19.15, 12, 3.6),
+                  path('M8.3 10.9H15.7V13.1H8.3Z')]),
     // A dessert fork upright (Sears No. 112 p. 101; its head widened across
-    // so the tines stay apart at 22pt) — three tines, the shank, the plain
-    // tipped handle — and a plain tumbler (p. 645), wider at the lip, its
-    // heavy glass foot.
-    food: icon(1.5, [path('M4.6 3V7.8M6.5 3V7.8M8.4 3V7.8'),
-                     path('M4.6 7.8C4.6 9.1 5.4 10 6.5 10.2C7.6 10 8.4 9.1 8.4 7.8'),
-                     path('M6.5 10.2V15.4'),
-                     path('M6.5 15.4C7.4 16.4 7.7 18 7.6 19.6C7.5 20.6 7.1 21 6.5 21C5.9 21 5.5 20.6 5.4 19.6C5.3 18 5.6 16.4 6.5 15.4Z'),
-                     path('M12.5 8.5H20.5L19.75 20.5H13.25Z'),
-                     path('M13.4 18.3H19.6')]),
+    // so the tines stay apart at 22pt) — three tines, the head and shank, the
+    // plain tipped handle — and a plain tumbler (p. 645), wider at the lip:
+    // its glass solid, the empty top of it cut out, so it stands half full.
+    food: cut([path('M4.2 3H5V7.8H4.2Z'), path('M6.1 3H6.9V7.8H6.1Z'), path('M8 3H8.8V7.8H8Z'),
+               path('M4.2 7.8C4.2 9.2 5.1 10.2 6.1 10.4V15.4H6.9V10.4C7.9 10.2 8.8 9.2 8.8 7.8Z'),
+               path('M6.5 15.4C7.4 16.4 7.7 18 7.6 19.6C7.5 20.6 7.1 21 6.5 21C5.9 21 5.5 20.6 5.4 19.6C5.3 18 5.6 16.4 6.5 15.4Z'),
+               path('M12.5 8.5H20.5L19.75 20.5H13.25ZM13.46 9.4L13.68 13H19.32L19.54 9.4Z')]),
     // The dial scale (Fairbanks, Morse & Co., 1919): the cabinet with its
-    // round dial head set to one side, the dial, its hand, the platform wider
-    // than the cabinet. No figures on the dial, no lettering anywhere.
-    weight: icon(1.5, [path('M5.8 17.5V11.9C5.8 10.9 6.4 10.4 7.4 10.4H9.4A5.2 5.2 0 1 1 19.4 8.3V17.5'),
-                       circle(14.2, 8.3, 3.1),
-                       path('M14.2 8.3L12.6 6.4'),
-                       path('M3 17.5H21V21H3Z')]),
+    // round dial head set to one side, solid, the dial's face cut out of it
+    // with the hand and its boss on the face; the platform wider than the
+    // cabinet. No figures on the dial, no lettering anywhere.
+    weight: cut([path('M5.8 17.5V11.9C5.8 10.9 6.4 10.4 7.4 10.4H9.4A5.2 5.2 0 1 1 19.4 8.3V17.5Z' +
+                      'M17.3 8.3A3.1 3.1 0 0 0 11.1 8.3A3.1 3.1 0 0 0 17.3 8.3Z'),
+                 path('M12.4 6.2L14.5 8L13.95 8.6Z'), circle(14.2, 8.3, 0.6),
+                 path('M3 18.3H21V21H3Z')]),
     // Two hair insoles (Sears No. 112 p. 936, traced), toe up, a pair: the
-    // left one the right one reflected, and lower.
-    steps: icon(1.5, [path('M7.91 6.9C7.29 6.56 6.65 6.51 6.11 7.07C5.56 7.63 4.87 9.46 4.64 10.25C4.42 11.05 4.53 11.14 4.74 11.85C4.95 12.55 5.85 13.32 5.92 14.48C5.98 15.63 5.19 17.89 5.15 18.79C5.11 19.7 5.4 19.65 5.68 19.91C5.95 20.17 6.42 20.29 6.79 20.34C7.16 20.39 7.52 20.43 7.91 20.2C8.3 19.96 8.97 19.83 9.14 18.94C9.32 18.04 8.84 15.78 8.95 14.83C9.06 13.88 9.66 14.19 9.8 13.23C9.95 12.28 10.12 10.17 9.8 9.12C9.49 8.06 8.52 7.24 7.91 6.9Z'),
-                      path('M16.24 2.7C16.86 2.36 17.5 2.31 18.04 2.87C18.58 3.43 19.28 5.26 19.5 6.05C19.73 6.85 19.62 6.94 19.41 7.65C19.2 8.35 18.3 9.12 18.23 10.28C18.16 11.43 18.96 13.69 19 14.59C19.04 15.5 18.75 15.45 18.47 15.71C18.2 15.97 17.73 16.09 17.36 16.14C16.98 16.19 16.63 16.23 16.24 16C15.85 15.76 15.18 15.63 15 14.74C14.83 13.84 15.31 11.58 15.2 10.63C15.09 9.68 14.49 9.99 14.34 9.03C14.2 8.08 14.03 5.97 14.34 4.92C14.66 3.86 15.62 3.04 16.24 2.7Z')]),
+    // left one the right one reflected, and lower. Printed solid, a footprint.
+    steps: cut([path('M7.91 6.9C7.29 6.56 6.65 6.51 6.11 7.07C5.56 7.63 4.87 9.46 4.64 10.25C4.42 11.05 4.53 11.14 4.74 11.85C4.95 12.55 5.85 13.32 5.92 14.48C5.98 15.63 5.19 17.89 5.15 18.79C5.11 19.7 5.4 19.65 5.68 19.91C5.95 20.17 6.42 20.29 6.79 20.34C7.16 20.39 7.52 20.43 7.91 20.2C8.3 19.96 8.97 19.83 9.14 18.94C9.32 18.04 8.84 15.78 8.95 14.83C9.06 13.88 9.66 14.19 9.8 13.23C9.95 12.28 10.12 10.17 9.8 9.12C9.49 8.06 8.52 7.24 7.91 6.9Z'),
+                path('M16.24 2.7C16.86 2.36 17.5 2.31 18.04 2.87C18.58 3.43 19.28 5.26 19.5 6.05C19.73 6.85 19.62 6.94 19.41 7.65C19.2 8.35 18.3 9.12 18.23 10.28C18.16 11.43 18.96 13.69 19 14.59C19.04 15.5 18.75 15.45 18.47 15.71C18.2 15.97 17.73 16.09 17.36 16.14C16.98 16.19 16.63 16.23 16.24 16C15.85 15.76 15.18 15.63 15 14.74C14.83 13.84 15.31 11.58 15.2 10.63C15.09 9.68 14.49 9.99 14.34 9.03C14.2 8.08 14.03 5.97 14.34 4.92C14.66 3.86 15.62 3.04 16.24 2.7Z')]),
 
     /* ---- the add flow, 19pt; Foods and Meals at 16 ---- */
-    // A Greek cross. The Log food button draws it at its own 2.6.
+    // A Greek cross: a mark of the text, so a stroke. The Log food button
+    // draws it at its own 2.6.
     plus: icon(1.5, [path('M12 4.5v15M4.5 12h15')]),
-    // A box camera, front: the box, its stiff carrying strap, the lens and
-    // its rim, the finder window.
-    camera: icon(1.5, [rect(3.5, 7.5, 17, 12.5), path('M9.5 7.5V5h5v2.5'),
-                       circle(12, 13.8, 3.3), circle(12, 13.8, 1.1), rect(15.8, 9.3, 2.4, 1.8)]),
-    pen: icon(1.5, NIB_ELS),
+    // A box camera, front, solid: the box with the lens's rim and the finder
+    // window cut out of it, the lens in the rim, the top housing.
+    camera: cut([path('M3.5 7.5H20.5V20H3.5Z' +
+                      'M15.3 13.8A3.3 3.3 0 0 0 8.7 13.8A3.3 3.3 0 0 0 15.3 13.8Z' +
+                      'M15.8 9.3V11.1H18.2V9.3Z'),
+                 circle(12, 13.8, 1.6), path('M9.5 7.5V5H14.5V7.5Z')]),
+    pen: cut(NIB_ELS),
     // Brass rules, thick and thin, square-ended, no digits: the print shop's
-    // own drawing of a barcode. A thick rule is two strokes a unit apart, so
-    // it stays thick at every stroke a site may set.
-    barcode: icon(1.5, [path('M3.6 5.5v13M4.6 5.5v13'), path('M7.6 5.5v13'), path('M10.4 5.5v13'),
-                        path('M13.2 5.5v13M14.2 5.5v13'), path('M17.2 5.5v13'), path('M19.8 5.5v13M20.8 5.5v13')]),
-    // Rimmed keys, three by two, over a space bar, in a keyline box.
-    keypad: icon(1.5, [rect(3.5, 4, 17, 16),
-                       circle(8, 8.6, 1.1), circle(12, 8.6, 1.1), circle(16, 8.6, 1.1),
-                       circle(8, 12.4, 1.1), circle(12, 12.4, 1.1), circle(16, 12.4, 1.1),
-                       path('M8 16.4h8')]),
-    // An open ledger, its leaves ruled.
-    book: icon(1.5, [path('M12 6.6C10 5.3 7.1 4.8 3.5 5.1v13.4c3.6-.3 6.5.2 8.5 1.5c2-1.3 4.9-1.8 8.5-1.5V5.1c-3.6-.3-6.5.2-8.5 1.5zM12 6.6V20'),
-                     path('M6 9.8h3.8M6 12.8h3.8M14.2 9.8H18M14.2 12.8H18')]),
+    // own drawing of a barcode, each rule a solid bar.
+    barcode: cut([path('M3.1 5.5H5.1V18.5H3.1Z' + 'M7.15 5.5H8.05V18.5H7.15Z' + 'M9.95 5.5H10.85V18.5H9.95Z' +
+                       'M12.7 5.5H14.7V18.5H12.7Z' + 'M16.75 5.5H17.65V18.5H16.75Z' + 'M19.3 5.5H21.3V18.5H19.3Z')]),
+    // Rimmed keys, three by two, over a space bar, in a frame: the frame's
+    // inside cut out, the keys and the bar solid in it.
+    keypad: cut([path('M3.5 4H20.5V20H3.5ZM4.9 5.4V18.6H19.1V5.4Z'),
+                 circle(8, 8.6, 1.3), circle(12, 8.6, 1.3), circle(16, 8.6, 1.3),
+                 circle(8, 12.4, 1.3), circle(12, 12.4, 1.3), circle(16, 12.4, 1.3),
+                 path('M8 15.8H16V17H8Z')]),
+    // An open ledger: its two leaves solid either side of the spine, each
+    // with two ruled lines cut out of it.
+    book: cut([path('M11.3 6.3C9.4 5.2 6.8 4.8 3.5 5.1V18.5C6.7 18.2 9.3 18.7 11.3 19.8Z' +
+                    'M5.6 9.3H9.8V10.1H5.6Z' + 'M5.6 12.3H9.8V13.1H5.6Z'),
+               path('M12.7 6.3C14.6 5.2 17.2 4.8 20.5 5.1V18.5C17.3 18.2 14.7 18.7 12.7 19.8Z' +
+                    'M14.2 9.3V10.1H18.4V9.3Z' + 'M14.2 12.3V13.1H18.4V12.3Z')]),
     // Three dishes stacked, seen edge-on: each a rim with its well dipping
-    // under it. Three flat trapezoids read as a menu ("hamburger") at 16px.
-    stack: icon(1.5, [path('M3 6.5H21M6 6.5C7.6 8.7 16.4 8.7 18 6.5'),
-                      path('M3 11.5H21M6 11.5C7.6 13.7 16.4 13.7 18 11.5'),
-                      path('M3 16.5H21M6 16.5C7.6 18.7 16.4 18.7 18 16.5')]),
-    // The printers' fist (Polhemus 1895, stock cut No. 431, traced; turned to
-    // point right, at the sentence): the cuff, the hand and its pointing
-    // finger, the thumb laid along it.
-    spark: icon(1.6, [rect(1.8, 7.6, 2.9, 9),
-                      path('M4.7 7.9C4.7 7.9 8.46 7.34 10.8 7.25C13.14 7.16 16.89 7.26 18.75 7.34C20.61 7.42 21.34 7.59 21.97 7.75C22.59 7.91 22.48 8.1 22.5 8.3C22.52 8.51 22.98 8.77 22.1 8.98C21.23 9.19 17.25 9.55 17.25 9.55C17.25 9.55 16.52 10.01 16.2 10.6C15.88 11.19 15.58 12.35 15.3 13.07C15.02 13.79 14.69 14.52 14.5 14.9C14.31 15.29 14.17 15.38 14.17 15.38C14.17 15.38 11.57 15.3 10.39 15.38C9.21 15.46 7.92 15.86 7.07 15.88C6.22 15.9 5.66 15.56 5.27 15.51C4.88 15.46 4.7 15.6 4.7 15.6'),
-                      path('M16.6 10.1C14.6 10.3 12.6 10.1 10.8 9.4'),
-                      path('M15.3 12.9H11.6')]),
+    // under it, solid. Three flat bars read as a menu ("hamburger") at 16px.
+    stack: cut([path('M3 5.9H21V6.9H18C16.4 9.1 7.6 9.1 6 6.9H3Z'),
+                path('M3 10.9H21V11.9H18C16.4 14.1 7.6 14.1 6 11.9H3Z'),
+                path('M3 15.9H21V16.9H18C16.4 19.1 7.6 19.1 6 16.9H3Z')]),
+    // The printers' fist, solid (FIST above).
+    spark: cut(FIST),
 
     /* ---- the gears (16–17pt), the calendar (19), Coach's marks (14–15) ---- */
-    gear: icon(1.75, GEAR_ELS),
-    gearYou: icon(1.75, GEAR_ELS),
-    // A desk-calendar pad on its two wire posts, a head rule across the leaf.
-    // No numerals and no month; the stand's feet are dropped (with them it
-    // read as a stool).
-    calendar: icon(1.5, [rect(4, 5.5, 16, 15), path('M4 9.8h16'), path('M8 3v4.5M16 3v4.5')]),
-    // A speech balloon with a short tail. Never the manicule: that is spark's.
-    bubble: icon(1.75, [path('M12 3.8c4.8 0 8.5 3 8.5 6.7s-3.7 6.7-8.5 6.7c-1 0-1.9-.1-2.8-.4L4.5 20l1.2-4.2C4.3 14.5 3.5 12.6 3.5 10.5C3.5 6.8 7.2 3.8 12 3.8z')]),
-    lock: icon(1.75, [path(LOCK_CASE), path(KEYHOLE), path('M8.2 10.2V7.4a3.8 3.8 0 0 1 7.6 0v2.8')]),
-    unlock: icon(1.75, [path(LOCK_CASE), path(KEYHOLE), path('M8.2 10.2V7.4a3.8 3.8 0 0 1 7.3-1.6')])
+    gear: cut(GEAR_ELS),
+    gearYou: cut(GEAR_ELS),
+    // A desk-calendar pad on its two wire posts: the pad solid, its leaf cut
+    // out below the head, so the head prints as a solid band. No numerals
+    // and no month; the stand's feet are dropped (with them it read as a
+    // stool).
+    calendar: cut([path('M4 5.5H20V20.5H4ZM5.4 11V19.1H18.6V11Z'),
+                   path('M7.2 3H8.8V7H7.2Z'), path('M15.2 3H16.8V7H15.2Z')]),
+    // Coach's mark: the printers' fist (FIST above), pointing at what Coach
+    // says. A speech balloon is a chat app's mark, not a page's (the third
+    // AI-made panel).
+    bubble: cut(FIST),
+    lock: cut([path(LOCK_CASE + KEYHOLE), path(SHACKLE)]),
+    unlock: cut([path(LOCK_CASE + KEYHOLE), path(SHACKLE_UP)])
   },
 
   /* The glyph keys of vibes/icons/v1.js `glyphs`, drawn at 1.75 in the site's
      own colour and size. Each replaces its character at the glyph-only sites
      v1.js lists; the character stays the drawing's accessible name. */
   glyphs: {
-    prev:     icon(1.75, [path('M14.5 5.5L8 12l6.5 6.5')]),
-    next:     icon(1.75, [path('M9.5 5.5L16 12l-6.5 6.5')]),
-    back:     icon(1.75, [path('M14.5 5.5L8 12l6.5 6.5')]),
-    go:       icon(1.75, [path('M9.5 5.5L16 12l-6.5 6.5')]),
+    // The printer's chevrons, solid wedges (PREV, NEXT above).
+    prev:     cut([path(PREV)]),
+    next:     cut([path(NEXT)]),
+    back:     cut([path(PREV)]),
+    go:       cut([path(NEXT)]),
     // A saltire; the × dismiss is the same, a size smaller.
     close:    icon(1.75, [path('M6.5 6.5l11 11M17.5 6.5l-11 11')]),
     dismiss:  icon(1.75, [path('M7.5 7.5l9 9M16.5 7.5l-9 9')]),
     // A dinkus: three spaced points in a row (the copy calls them "the dots",
     // so they stay three round dots in a row).
-    more:     icon(1.75, [circle(5.5, 12, 0.9), circle(12, 12, 0.9), circle(18.5, 12, 0.9)]),
+    more:     cut([circle(5.5, 12, 1.7), circle(12, 12, 1.7), circle(18.5, 12, 1.7)]),
     minus:    icon(1.75, [path('M5.5 12h13')]),
     plus:     icon(1.75, [path('M12 5.5v13M5.5 12h13')]),
     // A ledger tick, the clerk's check mark.
     check:    icon(1.75, [path('M5 12.8l4.2 4.2L19.5 6.5')]),
     // A hooked arrow, the drop set's ↳.
     drop:     icon(1.75, [path('M7 4.5v8c0 1.4 1.1 2.5 2.5 2.5h9.5M15.5 11.5L19 15l-3.5 3.5')]),
-    edit:     icon(1.75, NIB_ELS),
-    gear:     icon(1.75, GEAR_ELS),
+    edit:     cut(NIB_ELS),
+    gear:     cut(GEAR_ELS),
     expand:   icon(1.75, [path('M6 9.5l6 6 6-6')]),
     collapse: icon(1.75, [path('M6 14.5l6-6 6 6')]),
     // A plain triangle with a rule and a point, for the sentence-leading ⚠
@@ -295,7 +337,7 @@ export default deepFreeze({
     gear: 'hand-drawn: a plain spur gear (Grant 1893\'s gears are drawn in perspective and do not trace to an elevation)',
     gearYou: 'as gear',
     calendar: 'hand-drawn to the proportions of Sears No. 112 p. 158, calendar stand and pad; numerals and feet dropped',
-    bubble: 'hand-drawn: a speech balloon',
+    bubble: 'as spark: the same traced printers\' fist (Polhemus 1895 p. 203, stock cut No. 431), printed solid',
     lock: 'hand-drawn to the proportions of Mallory, Wheeler 1871 p. 292, padlock No. 10, silhouette only',
     unlock: 'as lock; only the shackle moves',
     glyphs: 'hand-drawn: chevrons, saltires, a dinkus, a rule and a Greek cross, a ledger tick, a hooked arrow, a triangle; edit is the nib, gear the gear',
