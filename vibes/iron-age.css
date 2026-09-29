@@ -258,7 +258,8 @@
    ("kcal left today", "to go", "ml of 2,500 ml") — Besley never sets a unit. */
 [data-vibe="iron-age"] .fuel-top .eyebrow,
 [data-vibe="iron-age"] .st-hero-side .eyebrow,
-[data-vibe="iron-age"] .water-right .eyebrow {
+[data-vibe="iron-age"] .water-right .eyebrow,
+[data-vibe="iron-age"] .load-num + .eyebrow {
   font-family: var(--font);
   font-size: 13px; line-height: 1.3;
   color: var(--steel);
@@ -771,6 +772,7 @@
   border-top: var(--shape-rule-hair) solid var(--shape-rule-ink);
 }
 [data-vibe="iron-age"] .note + .note::before,
+[data-vibe="iron-age"] .find-row.note::before,
 [data-vibe="iron-age"] .ai-busy .note::before,
 [data-vibe="iron-age"] .gate-body > .note::before { content: none; }
 
