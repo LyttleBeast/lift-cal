@@ -46,11 +46,13 @@ import CHALK from './vibes/defs/chalk.js';
 import CHALK_ICONS from './vibes/icons/chalk.js';
 import NAVY from './vibes/defs/navy.js';
 import NAVY_ICONS from './vibes/icons/navy.js';
+import OXBLOOD from './vibes/defs/oxblood.js';
+import OXBLOOD_ICONS from './vibes/icons/oxblood.js';
 
 /* Every vibe's definition and every icon set, by id. A new vibe adds its
    imports and its entries here, beside v1's. */
-const DEFS = { v1: V1, chalk: CHALK, navy: NAVY };
-const ICON_SETS = { v1: V1_ICONS, chalk: CHALK_ICONS, navy: NAVY_ICONS };
+const DEFS = { v1: V1, chalk: CHALK, navy: NAVY, oxblood: OXBLOOD };
+const ICON_SETS = { v1: V1_ICONS, chalk: CHALK_ICONS, navy: NAVY_ICONS, oxblood: OXBLOOD_ICONS };
 
 const KEY = 'rack:vibe';
 
