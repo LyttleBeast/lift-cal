@@ -144,7 +144,7 @@ export default deepFreeze({
         v1: { grade: 'v1', look: 'bar ground, a 1pt collar border, radius.r, padding 14, 12 below; its head row is the title left, meta and ⋯ right' },
         flat: { grade: 'shape', look: 'the bar ground with no border, radius.r corners: surfaces told apart by value, not outline (R3.2)',
                 for: ['chalk', 'navy', 'oxblood'] },
-        ruled: { grade: 'deep', look: 'no ground, no border, no radius: the card sits on the page under its article rule (shape.rule.sub, placed by shape.rule.place) drawn full width, its content to the rule\'s width; cards part by space. The tab\'s lead card — its one hero box: Fuel\'s summary, Weight\'s log, Steps\' today — keeps a box (bar ground, radius.r, no border; the keyline, shape.keyline, when shape.lead.keyline), so the page is never boxes-nowhere (R6.1, R6.10)',
+        ruled: { grade: 'deep', look: 'no ground, no border, no radius: the card sits on the page under its article rule (shape.rule.sub, placed by shape.rule.place) drawn full width, its content to the rule\'s width; cards part by space. The tab\'s lead card keeps a box (bar ground, radius.r, no border; the keyline, shape.keyline, when shape.lead.keyline), so the page is never boxes-nowhere (R6.1, R6.10): Fuel\'s summary always, and a hero-slot card (Weight\'s log, Steps\' today) while the vibe draws its photo. A hero-slot card with no photo in the vibe is the open lead: no ground, no sides, the head rule (shape.rule.head) across its top',
                  for: ['ledger', 'iron-age', 'clear-sky'] },
         plate: { grade: 'shape', look: 'the bar ground, square corners (radius.plate) and a 2pt keyline in knurl: a stamped nameplate', for: [] },
         panel: { grade: 'deep', look: 'bar ground, no border, square corners (radius.plate), cards parted by shape.gutter; the head row drawn as a band (shape.band) across the top edge holding the title left and meta and ⋯ right in the band\'s ink',
@@ -232,7 +232,7 @@ export default deepFreeze({
       v1: 'v1',
       looks: {
         v1: { grade: 'v1', look: 'the eyebrow over a 26pt h1 (wdth 78 / 800); the nav buttons right of it' },
-        masthead: { grade: 'deep', look: 'a larger title over a full-width head rule (shape.rule.head), the eyebrow above it; the nav buttons keep their place', for: ['iron-age', 'ledger'] },
+        masthead: { grade: 'deep', look: 'a larger title and a full-width head rule (shape.rule.head) placed by shape.rule.place — under the title, or between the eyebrow and the title, which hangs from it — the eyebrow above both; the nav buttons keep their place', for: ['iron-age', 'ledger'] },
         inline: { grade: 'deep', look: 'the eyebrow and the title on one baseline, the eyebrow first', for: [] }
       },
       keeps: ['the nav buttons, their order, actions and size (the month and day buttons are 34 in v1 — never smaller); Back',

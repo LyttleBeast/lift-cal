@@ -1,8 +1,8 @@
 // Iron Age — ink on cream, circa 1900, as data.
 //
 // A physical-culture manual printed about 1904: warm ink on a matte book
-// stock, each tab opening on a masthead over a thick-and-thin rule, its
-// figures set as a manual's table of measurements, and two pages carrying a
+// stock, each tab's title hanging from a rule under its running head, its
+// figures set as a manual's folio lines, and the finished session carrying a
 // real halftone plate of a man at exercise from a manual of the period.
 // Nothing is boxed except what a page would box, and the one colour that is
 // not data is the rubric red that marks Coach's voice. The spec, with every
@@ -32,7 +32,7 @@
 // and engine v2 took it as a role (index.js ROLES): `shape` (VOCAB §4's
 // params, plus rule.sub, rule.total and lead), `inkOf`, `tagInk`,
 // `colors.band`, `type.meta`, `face.bands` (native build()), `face.web.display
-// / italic / num`, the rings round the calorie head and target
+// / num`, the rings round the calorie head and target
 // (`shadow.calHead / calTarget`), and the image slots' `band`.
 
 // Inline, not imported: this file imports nothing.
@@ -65,11 +65,14 @@ export default deepFreeze({
   experimental: false,
   scheme: 'light',
   icons: 'iron-age',        // vibes/icons/iron-age.js
-  /* The photo slots. Two hero boxes carry a plate, each a man at exercise
-     (Sargent's 1904 model over the greeting, Anderson's 1897 athlete at the
-     pulley weights over the finished session), and each set differently:
-     You's is a loose plate on the page over the greeting, the recap's is cut
-     into its lead box. Five never do:
+  /* The photo slots. One hero box carries a plate: the finished session,
+     Anderson's 1897 athlete at the pulley weights, cut into its framed lead
+     box. Six never do:
+       youHero       dropped after the second AI-made panel (V59 §13.6): the
+                     same halftone over the greeting and again behind every
+                     sheet that opens over You read as wallpaper. img/you.png
+                     (Sargent's 1904 model) stays in the folder, and in
+                     PROVENANCE.json, unused;
        coachCard     its caution, loading and accent lines would need a scrim
                      so heavy the photo keeps 1.07–1.22:1 (research C27);
        startWorkout  an ink plate behind the knocked-out label measures
@@ -85,15 +88,14 @@ export default deepFreeze({
      BAND MODE (`band`, points): the plate is drawn in a strip that tall
      across the top of its box, and the box's own padding grows by the same,
      so no word, control or colour sits on the photo. The photo keeps its full
-     ink-on-stock tone (13.26:1) instead of about 2.8:1 under a scrim, and the
-     greeting's name, the Steps ring and every role colour keep their jobs.
+     ink-on-stock tone (13.26:1) instead of about 2.8:1 under a scrim, and
+     every word and role colour in the box keeps its job.
      Every file is a 4-bit indexed PNG, halftoned ink on this stock, already
      cut to its band around its subject in Phase V, so the focal point is the
      file's centre. A slot whose file is missing closes up: no band, no frame.
      `thumb` is the Vibes card's (vibe.js THUMB): 336 x 264, `315` in ink
      over it at 4.67:1 against its worst pixel. */
   images: {
-    youHero:     { file: 'img/you.png',    focal: { x: 0.5, y: 0.5 }, band: 80, scrim: STOCK_SCRIM },
     summaryHero: { file: 'img/recap.png',  focal: { x: 0.5, y: 0.5 }, band: 80, scrim: STOCK_SCRIM },
     thumb:      { file: 'img/pick.png',   focal: { x: 0.5, y: 0.5 }, scrim: STOCK_SCRIM }
   },
@@ -111,10 +113,15 @@ export default deepFreeze({
      are ledger lines (statRow · ledger, the leader Settings already drew);
      chips are raised tags (chip · tag) and the range pickers words on an
      underline (segmented · tabs). The keyline is kept for the tab's one lead
-     box and the stamps that are objects (plates, the callout). */
+     box and the stamps that are objects (plates, the callout).
+     After the second panel: the three-stat rows are one box-score line
+     between two hairlines (statRow · folio), so the drawn leader is
+     Settings' alone; every head HANGS from its rule (rule.place 'above'), so
+     a tab's running head reads over a single rule, not as a label stacked on
+     its title, and no head is underlined; the Oxford rule is gone. */
   variants: {
     card: 'ruled', youCard: 'ruled', eyebrow: 'v1', sectionHeader: 'plain', screenHeader: 'masthead',
-    sheetHost: 'full', sheetTitle: 'v1', statRow: 'ledger', kpi: 'word', headline: 'rule',
+    sheetHost: 'full', sheetTitle: 'v1', statRow: 'folio', kpi: 'word', headline: 'rule',
     chip: 'tag', segmented: 'tabs', btn: 'inverse', field: 'square', note: 'v1', toast: 'square',
     settingsRow: 'ledger', listRow: 'plain', setTable: 'ruled', setRow: 'ruled', plateStrip: 'stamp',
     calCell: 'ruled', chart: 'print', dock: 'rail', fab: 'inverse', addTile: 'ruled',
@@ -130,34 +137,36 @@ export default deepFreeze({
       ink: 'chalk',
       // A measured print hairline (Physical Culture 1908's folio rule).
       hair: 0.5,
-      // The Oxford rule, read from the head outward: a 3pt line, a 2pt gap, a
-      // 1.2pt line (1 nominal, +0.1 per edge of ink gain). The masthead's
-      // alone — one a tab — and a sheet's top edge; section heads draw none
-      // (sectionHeader · plain).
-      head: [3, 2, 1.2],
-      // The head SITS on its rule, as a chapter head does on a manual page.
-      place: 'below',
-      // The single rule articles sit on — card heads, an exercise's
-      // name, the challenge figure. Without the split every card on You would
-      // stack a thick-and-thin rule under a thick-and-thin rule.
+      // One 2pt line: the rule a tab's title hangs from, under its running
+      // head, and a sheet's top edge; section heads draw none (sectionHeader
+      // · plain). The thick-and-thin Oxford rule under every tab's title read
+      // as a broadsheet stamped on each screen (the second AI-made panel).
+      head: [2],
+      // Every head HANGS from its rule, as a manual's running head and its
+      // section heads do: the rule, then the words. Nothing is underlined.
+      place: 'above',
+      // The single rule an article hangs from — a card's head. The challenge
+      // figure and an exercise's name keep theirs under them: a figure over
+      // its rule, a table under its title.
       sub: [1.2],
       // The double rule a form draws over a total — the recap's
       // session totals and the estimator's total, nowhere else.
       total: [1, 2, 1]
     },
     // Drawn round dots on the baseline, about .3em apart, in the grey ink:
-    // the Settings rows and the stat rows' ledger lines (a manual's table of
-    // measurements: "Chest ........ 42"), nowhere else.
+    // the Settings rows (a table of contents: "Goal ........ ›"), nowhere
+    // else.
     leader: { ink: 'dim', dot: 1.5, pitch: 4.5, min: 16 },
     band: { fill: 'raised', ink: 'chalk', height: 30 },   // VOCAB's default; no look here reads it
     gutter: 2,                                              // VOCAB's default; no look here reads it
     // Stamps: chips, plate chips, the live session's plates, the callout.
     keyline: { ink: 'chalk', width: 1 },
-    // The tab's one boxed card (Fuel's summary, Weight's log,
-    // Steps' today, the recap's head) is a plate: bar paper inside a 1pt ink
-    // keyline. Bar on the stock alone is 1.06:1 and all but vanishes. It is
-    // the only thing in the vibe with both a fill and a border. You's
-    // greeting is not boxed: it stands on the page under its loose plate.
+    // The boxed lead (Fuel's summary, the recap's certificate) is a plate:
+    // bar paper inside a 1pt ink keyline. Bar on the stock alone is 1.06:1
+    // and all but vanishes. It is the only thing in the vibe with both a fill
+    // and a border. Steps' today and Weight's log carry no photo here, so
+    // they are not boxed: they stand open on the page under the head rule
+    // (card · ruled, vocab.js), and You's greeting stands on the page.
     lead: { keyline: true }
   },
 
@@ -337,18 +346,18 @@ export default deepFreeze({
      Two families. Archivo (v1's) sets the body, every label, every table
      value, every delta and arrowed string, every button, chip and dock label,
      and the Coach card, on v1's own metrics. Besley v4 (upstream,
-     indestructible-type) sets the heads, the card heads, the greeting, the
-     challenge figure and the running meta. Besley has no ↑ ↓ →, so it never
-     sets a string that can carry one.
+     indestructible-type) sets the heads, the card heads, the greeting and
+     the challenge figure. Besley has no ↑ ↓ →, so it never sets a string
+     that can carry one.
      HOW NATIVE PICKS THE FACE: face.bands (below), by wdth. Native's
      Archivo package ships the weight axis only, so v1 ignores wdth; a band
      claims a wdth no Archivo site passes (the native tree passes 78, 88, 90,
      92, 94, 96, 100, 104, 108, 110, 112, 118 and nothing else). 101 is
-     Besley roman and 99 Besley italic. On the web Besley's own width axis
-     stops at 100, so 101 draws exactly the width the native statics draw —
-     no parity gap — and the web stylesheet names the family by selector.
-     DO NOT "tidy" 101 or 99 to 100: that silently sets these presets in
-     Archivo on native.
+     Besley. On the web Besley's own width axis stops at 100, so 101 draws
+     exactly the width the native statics draw — no parity gap — and the web
+     stylesheet names the family by selector.
+     DO NOT "tidy" 101 to 100: that silently sets these presets in Archivo
+     on native.
      No caps anywhere: every string shows in the case it was written in, and
      no unit is ever uppercased. Nothing new is under 11pt. */
   type: {
@@ -358,8 +367,7 @@ export default deepFreeze({
     // its two month buttons.
     h1:       { size: 24, wdth: 101, wght: 800, ls: 0, lh: 1.1, color: 'chalk' },
     h2:       { size: 18, wdth: 101, wght: 800, ls: 0, lh: 1.15, color: 'chalk' },
-    // The chapter head: sectionHeader · rule sets its title here, sentence
-    // case, sitting on the Oxford rule.
+    // The section head (sectionHeader · plain), sentence case, on space.
     h3:       { size: 18, wdth: 101, wght: 800, ls: 0, lh: 1.2, color: 'chalk' },
     // The article head (card heads, sheet eyebrows): Besley SemiBold 15,
     // sentence case, ink. v1's is 10pt tracked caps in a grey that reads
@@ -372,7 +380,8 @@ export default deepFreeze({
     dockLbl:  { size: 11, wdth: 100, wght: 600, ls: 0.01, upper: 0, color: 'dim' },
     fieldLbl: { size: 12, wdth: 100, wght: 600, ls: 0, upper: 0, color: 'steel' },
     note:     { size: 13, wght: 400, lh: 1.5, color: 'dim' },
-    statVal:  { size: 20, wdth: 100, wght: 800, lh: 1, tnum: 1 },
+    // A box-score figure (statRow · folio): text weight, not a hero's.
+    statVal:  { size: 18, wdth: 100, wght: 700, lh: 1, tnum: 1 },
     // 600, not 500: native registers Archivo at 400 / 600 / 700 / 800 only.
     // Also the masthead's running head ("Training log", "Fuel") and a
     // sheet's kicker: a page's running head is small roman, not a display.
@@ -390,13 +399,12 @@ export default deepFreeze({
     segBtn:   { size: 12, wdth: 100, wght: 600, ls: 0, upper: 0, color: 'steel' },
     setInput: { size: 15, wdth: 100, wght: 700, tnum: 1, color: 'chalk' },
     mono:     { size: 12, color: 'chalk' },
-    // The running meta — a card's "last 7 days", the greeting's
-    // date, "Member since …", the recap's date — in Besley Italic, the
-    // period's voice for a date line. Never over a head: the masthead's
-    // running head is a small roman label (statLbl), so no screen stacks an
-    // italic kicker over its title. Lining figures: old-style figures on
-    // native are unverified on a device.
-    meta:     { size: 14, wdth: 99, wght: 400, lh: 1.3, color: 'steel' }
+    // The running meta — a card's "last 7 days", the greeting's date,
+    // "Member since …", the recap's date, the "ai" note — in the text face,
+    // roman, steel. It was Besley Italic until the second AI-made panel: an
+    // italic serif date line under a serif head is a recognised machine
+    // signature, and the period set its dates in the text's roman.
+    meta:     { size: 13, wdth: 100, wght: 400, lh: 1.35, color: 'steel' }
   },
   // The stamped numeral, now a challenge figure: Besley ExtraBold at the
   // site's own size (26–40). The Vibes card's `315` is drawn in it, so the
@@ -412,19 +420,19 @@ export default deepFreeze({
     width: 100,
     minLh: 1.088,
     mono: { ios: 'Menlo', android: 'monospace' },
-    /* Besley, native: three upstream v4 statics (the ≤ 4 a vibe may add, the
+    /* Besley, native: two upstream v4 statics (the ≤ 4 a vibe may add, the
        picker face included), each with a unique PostScript name and uniform
-       tabular figures (t5-check). Each band has its own empty snap, so
+       tabular figures (t5-check). The band has its own empty snap, so
        Archivo's {650: 700, 750: 800} can never send it to a weight it does
        not ship; `weights` picks the nearest, a tie going heavier.
        minLh is Besley's hhea, (2500 + 850) / 2000: taller head lines on
        native until a device screenshot proves a tighter clamp (its ink
-       extent is 1.104). Nothing it sets is in a fixed-height box. */
+       extent is 1.104). Nothing it sets is in a fixed-height box. The
+       italic's band (wdth 99) went with the italic meta after the second
+       AI-made panel; nothing sets wdth 99 now. */
     bands: [
       { min: 100.5, max: 101.5, family: 'Besley', keys: ['Besley_600', 'Besley_800'],
-        snap: {}, weights: [600, 800], minLh: 1.675 },
-      { min: 98.5, max: 99.5, family: 'BesleyItalic', keys: ['BesleyItalic_400'],
-        snap: {}, weights: [400], minLh: 1.675 }
+        snap: {}, weights: [600, 800], minLh: 1.675 }
     ],
     web: {
       font: WEB_TEXT,
@@ -435,7 +443,6 @@ export default deepFreeze({
       // wght axis, width pinned at 100. A vibe's @font-face families are
       // named for the vibe (tools-check/vibes-scope.mjs), so 'iron-age …'.
       display: "'iron-age Besley', " + WEB_TEXT,
-      italic: "'iron-age Besley Italic', " + WEB_TEXT,
       // The Vibes card's `315` only: a digits subset of the display face.
       num: "'iron-age Besley Digits'"
     }
