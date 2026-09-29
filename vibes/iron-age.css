@@ -497,24 +497,12 @@
   margin-bottom: 20px;
 }
 /* The open lead: Steps' today and Weight's log carry no photo in this vibe,
-   so they are not boxed (card · ruled). Each stands on the page under the
-   head rule, full width, no ground, no sides: the one box on those tabs is
-   Weight's field, the one it holds. */
+   so they are not boxed (card · ruled). Each stands on the page straight
+   under the tab's title — no ground, no sides, no rule of its own (a rule
+   under a title that already hangs from one would box the title in): the
+   one box on those tabs is Weight's field, the one it holds. */
 [data-vibe="iron-age"] #view-steps .cal-hd + .card,
-[data-vibe="iron-age"] #view-weight .cal-hd + .card {
-  position: relative;
-  padding-top: calc(12px + var(--shape-rule-head-0));
-  margin-bottom: 20px;
-}
-[data-vibe="iron-age"] #view-steps .cal-hd + .card::before,
-[data-vibe="iron-age"] #view-weight .cal-hd + .card::before {
-  content: '';
-  position: absolute; left: 0; right: 0; top: 0;
-  height: var(--shape-rule-head-0);
-  background:
-    -webkit-image-set(url(iron-age/textures/rule-sub@2x.png) 2x, url(iron-age/textures/rule-sub@3x.png) 3x) 0 -1px / 144px 3px repeat-x,
-    linear-gradient(var(--shape-rule-ink), var(--shape-rule-ink)) 0 0 / 100% var(--shape-rule-head-0) no-repeat;
-}
+[data-vibe="iron-age"] #view-weight .cal-hd + .card { margin-bottom: 20px; }
 /* BAND MODE (images.<slot>.band): the plate's halftone in a strip 80 tall
    across the top of its box, the box's padding grown by as much, so no word,
    control or colour sits on the photograph. Cover-cropped round the centre

@@ -165,7 +165,7 @@ export default deepFreeze({
     // bar paper inside a 1pt ink keyline. Bar on the stock alone is 1.06:1
     // and all but vanishes. It is the only thing in the vibe with both a fill
     // and a border. Steps' today and Weight's log carry no photo here, so
-    // they are not boxed: they stand open on the page under the head rule
+    // they are not boxed: they stand open on the page under the tab's title
     // (card · ruled, vocab.js), and You's greeting stands on the page.
     lead: { keyline: true }
   },
