@@ -1412,7 +1412,7 @@
 }
 
 /* ---------- dock · rail ----------
-   Opaque paper under a 2pt ink rule; the engraved cuts at 22 (stroke 1.5)
+   Opaque paper under a 2pt ink rule; the solid cuts at 22 (no stroke)
    over 11/600 labels, as written. Active: a 3pt ink bar the cell's full
    width along the rule, icon and label in ink, the label 700. The dock's
    tabs, order, height and place never change. */

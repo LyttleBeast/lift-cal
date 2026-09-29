@@ -129,8 +129,9 @@ const SHACKLE_UP = 'M7.4 10.2V7.4A4.6 4.6 0 0 1 16.18 5.49L14.73 6.15A3 3 0 0 0 
    finger, printed solid — ☛, the black index. The hand's outline closes on
    the cuff's edge. It marks the estimator's notices (spark) and Coach's own
    voice (bubble): a period page points at what it wants read; it has no
-   speech balloons. */
-const FIST = [rect(1.8, 7.6, 2.9, 9),
+   speech balloons. The cuff stands .7 clear of the hand, so the two read
+   apart when both are solid. */
+const FIST = [rect(1.2, 7.6, 2.8, 9),
   path('M4.7 7.9C4.7 7.9 8.46 7.34 10.8 7.25C13.14 7.16 16.89 7.26 18.75 7.34C20.61 7.42 21.34 7.59 21.97 7.75C22.59 7.91 22.48 8.1 22.5 8.3C22.52 8.51 22.98 8.77 22.1 8.98C21.23 9.19 17.25 9.55 17.25 9.55C17.25 9.55 16.52 10.01 16.2 10.6C15.88 11.19 15.58 12.35 15.3 13.07C15.02 13.79 14.69 14.52 14.5 14.9C14.31 15.29 14.17 15.38 14.17 15.38C14.17 15.38 11.57 15.3 10.39 15.38C9.21 15.46 7.92 15.86 7.07 15.88C6.22 15.9 5.66 15.56 5.27 15.51C4.88 15.46 4.7 15.6 4.7 15.6Z')];
 
 /* A heavy chevron, cut as a solid wedge with square ends: the printer's ‹ ›,
