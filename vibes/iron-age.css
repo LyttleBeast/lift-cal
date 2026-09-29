@@ -510,7 +510,7 @@
    The greeting is not boxed: its plate lies loose on the page, the halftone
    band across the column with a 1pt ink rule under it, and the greeting
    stands on the stock beneath, 16 clear. In v1's order under it: the
-   initial set as a drop cap (Besley ExtraBold 44, ink, no disc round it; a
+   initial set as a drop cap (Besley ExtraBold 30, ink, no disc round it; a
    profile photo is cut square), the greeting and the name in Besley
    ExtraBold 25, all one ink, and the gear as a bare cut. Both keep v1's
    targets (52 and 36). The date in italic meta. */
@@ -522,7 +522,7 @@
   background: none; color: var(--chalk);
   border-radius: 0;
   font-family: var(--font-display);
-  font-size: 44px; line-height: 1;
+  font-size: 30px; line-height: 1;
   font-variation-settings: 'wght' 800;
   font-synthesis: none;
 }
@@ -714,23 +714,19 @@
   text-underline-offset: 4px;
   padding-left: 0; padding-right: 12px;
 }
-[data-vibe="iron-age"] .coach-chip:active { border-color: transparent; background: rgba(var(--lift-rgb), .06); }
+[data-vibe="iron-age"] .coach-chip:active { border-color: transparent; background: rgba(var(--lift-rgb), .04); }
+[data-vibe="iron-age"] .coach-effort.on { padding-left: 12px; text-decoration: none; }
 /* "How did that feel?": the ten energy figures and the five strengths are a
    printed scale, not a grid of boxes — each figure over a 1pt ink rule with
    a tick at its left end, the row one ruled line. Chosen: the figure
    knocked out of an ink block standing on the rule. */
-[data-vibe="iron-age"] .feel-grid,
-[data-vibe="iron-age"] .feel-steps {
-  display: grid; grid-template-columns: repeat(5, 1fr);
-  gap: 0;
-}
 [data-vibe="iron-age"] .feel-grid + .feel-cap { margin-top: 14px; }
 [data-vibe="iron-age"] .feel-grid .coach-chip,
 [data-vibe="iron-age"] .feel-steps .coach-chip {
   position: relative;
   min-height: 44px;
   margin: 0;
-  padding: 6px 2px;
+  padding: 6px 12px;
   border: 0;
   text-decoration: none;
   text-align: center;
@@ -746,13 +742,7 @@
   width: var(--shape-rule-sub-0); height: 9px;
   background: var(--shape-rule-ink);
 }
-[data-vibe="iron-age"] .feel-grid .coach-chip:nth-child(5n)::after,
-[data-vibe="iron-age"] .feel-steps .coach-chip:last-child::after {
-  content: '';
-  position: absolute; right: 0; bottom: 0;
-  width: var(--shape-rule-sub-0); height: 9px;
-  background: var(--shape-rule-ink);
-}
+[data-vibe="iron-age"] .feel-grid .coach-chip { padding-left: 0; padding-right: 0; }
 [data-vibe="iron-age"] .feel-grid .coach-chip.on,
 [data-vibe="iron-age"] .feel-steps .coach-chip.on {
   background: var(--inverse);
@@ -991,7 +981,7 @@
    manual keys a figure to its plate — not a stripe down the side. Its colour
    is v1's inline one. */
 [data-vibe="iron-age"] .ex-tag { width: 10px; height: 10px; border-radius: 0; }
-[data-vibe="iron-age"] .day-ex-tag { width: 8px; height: 8px; align-self: center; border-radius: 0; }
+[data-vibe="iron-age"] .day-ex-tag { width: 8px; height: 8px; align-self: flex-start; margin-top: 5px; border-radius: 0; }
 [data-vibe="iron-age"] .ex-name {
   font-family: var(--font-display);
   font-size: 16px; line-height: 1.2;
