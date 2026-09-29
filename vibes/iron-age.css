@@ -514,9 +514,15 @@
   font-size: 25px; line-height: 1.08; letter-spacing: 0;
   font-variation-settings: 'wght' 800;
   font-synthesis: none;
-}
-[data-vibe="iron-age"] .you-greet-name { color: var(--chalk); }
-[data-vibe="iron-age"] .you-hero .you-sub { margin-top: 6px; }
+}/* The name keeps v1's ellipsis for a long name, so its box clips: Besley's
+   ink runs taller than its 27px line (34), so the clip box is grown by 4
+   above and 8 below (and handed back as margin), and no ascender or
+   descender is cut. */
+[data-vibe="iron-age"] .you-greet-name { color: var(--chalk); padding: 4px 0 8px; margin: -4px 0 -8px; }
+/* The date wraps rather than ending in an ellipsis: at 320 "Friday,
+   September 25" in the italic is wider than the room beside the avatar and
+   the gear, and a date cut short is a changed word. */
+[data-vibe="iron-age"] .you-hero .you-sub { margin-top: 6px; white-space: normal; overflow: visible; text-overflow: clip; }
 [data-vibe="iron-age"] .you-gear {
   background: var(--bar);
   border: 1px solid var(--knurl);
@@ -789,11 +795,14 @@
 [data-vibe="iron-age"] .set-row-nav,
 [data-vibe="iron-age"] .set-row-tog { border-top: 0; }
 [data-vibe="iron-age"] .set-row-nav { min-height: 44px; }
-[data-vibe="iron-age"] .set-row-nav .set-row-l {
+[data-vibe="iron-age"] .set-row-nav .set-row-l { font-variation-settings: 'wdth' 100, 'wght' 600; }
+/* The leader runs only after a label that is one line of words. A label
+   holding lines of its own (the owner's account rows: name, email, last
+   seen; Coach's goal rows) stays v1's block, so nothing is squeezed. */
+[data-vibe="iron-age"] .set-row-nav .set-row-l:not(:has(> *)) {
   display: flex; align-items: baseline; gap: 6px;
-  font-variation-settings: 'wdth' 100, 'wght' 600;
 }
-[data-vibe="iron-age"] .set-row-nav .set-row-l::after {
+[data-vibe="iron-age"] .set-row-nav .set-row-l:not(:has(> *))::after {
   content: '';
   flex: 1 1 auto;
   min-width: var(--shape-leader-min);
