@@ -1,9 +1,9 @@
 // Iron Age — ink on cream, circa 1900, as data.
 //
 // A physical-culture manual printed about 1904: warm ink on a matte book
-// stock, each section opening on a head that sits on a thick-and-thin rule,
-// each figure set like a manual's challenge line, and the roomiest boxes
-// carrying a real halftone plate from a manual or a gymnasium of the period.
+// stock, each tab opening on a masthead over a thick-and-thin rule, its
+// figures set as a manual's table of measurements, and two pages carrying a
+// real halftone plate of a man at exercise from a manual of the period.
 // Nothing is boxed except what a page would box, and the one colour that is
 // not data is the rubric red that marks Coach's voice. The spec, with every
 // number below measured, is ~/dev/vibes-night/design/iron-age.md.
@@ -65,14 +65,23 @@ export default deepFreeze({
   experimental: false,
   scheme: 'light',
   icons: 'iron-age',        // vibes/icons/iron-age.js
-  /* The photo slots. Four hero boxes carry a plate; three never do:
+  /* The photo slots. Two hero boxes carry a plate, each a man at exercise
+     (Sargent's 1904 model over the greeting, Anderson's 1897 athlete at the
+     pulley weights over the finished session), and each set differently:
+     You's is a loose plate on the page over the greeting, the recap's is cut
+     into its lead box. Five never do:
        coachCard     its caution, loading and accent lines would need a scrim
                      so heavy the photo keeps 1.07–1.22:1 (research C27);
        startWorkout  an ink plate behind the knocked-out label measures
                      4.42:1 at the baked .60 it was specced at: the action
                      stays a clean ink block;
        fuelSummary   "its colour is the band you are in right now"
-                     (food.js:3582): one ink over a photo would make it untrue.
+                     (food.js:3582): one ink over a photo would make it untrue;
+       stepsToday,   dropped after the first AI-made panel (V59 §13.6): a
+       weightLog     gymnasium roof over Steps and a vaulting horse over Weight
+                     say nothing about either tab, and a photo-capped box on
+                     four screens read as one template. Their files stay in
+                     the folder, and in PROVENANCE.json, unused.
      BAND MODE (`band`, points): the plate is drawn in a strip that tall
      across the top of its box, and the box's own padding grows by the same,
      so no word, control or colour sits on the photo. The photo keeps its full
@@ -86,9 +95,7 @@ export default deepFreeze({
   images: {
     youHero:     { file: 'img/you.png',    focal: { x: 0.5, y: 0.5 }, band: 80, scrim: STOCK_SCRIM },
     summaryHero: { file: 'img/recap.png',  focal: { x: 0.5, y: 0.5 }, band: 80, scrim: STOCK_SCRIM },
-    stepsToday:  { file: 'img/steps.png',  focal: { x: 0.5, y: 0.5 }, band: 80, scrim: STOCK_SCRIM },
-    weightLog:   { file: 'img/weight.png', focal: { x: 0.5, y: 0.5 }, band: 80, scrim: STOCK_SCRIM },
-    thumb:       { file: 'img/pick.png',   focal: { x: 0.5, y: 0.5 }, scrim: STOCK_SCRIM }
+    thumb:      { file: 'img/pick.png',   focal: { x: 0.5, y: 0.5 }, scrim: STOCK_SCRIM }
   },
   // v1's: a light vibe leaves the theme-color meta alone (research R3.3) —
   // the browser's bar stays as dark as the status band under it.
@@ -96,10 +103,19 @@ export default deepFreeze({
 
   /* One look per block, in vocab.js's order. Each is a name vocab.js
      accepts; what each draws in Iron Age is the spec's §7. */
+  /* After the first AI-made panel (V59 §13.6) the vibe stopped drawing one
+     keyline box round every control and one Oxford rule under every head:
+     the Oxford rule is the masthead's alone (one a tab) and a sheet's top
+     edge; a section head is a plain head on space (sectionHeader · plain); a
+     sheet's title and a footnote carry no device (v1); the three-stat rows
+     are ledger lines (statRow · ledger, the leader Settings already drew);
+     chips are raised tags (chip · tag) and the range pickers words on an
+     underline (segmented · tabs). The keyline is kept for the tab's one lead
+     box and the stamps that are objects (plates, the callout). */
   variants: {
-    card: 'ruled', youCard: 'ruled', eyebrow: 'v1', sectionHeader: 'rule', screenHeader: 'masthead',
-    sheetHost: 'full', sheetTitle: 'rule', statRow: 'folio', kpi: 'word', headline: 'rule',
-    chip: 'stamp', segmented: 'boxes', btn: 'inverse', field: 'square', note: 'rule', toast: 'square',
+    card: 'ruled', youCard: 'ruled', eyebrow: 'v1', sectionHeader: 'plain', screenHeader: 'masthead',
+    sheetHost: 'full', sheetTitle: 'v1', statRow: 'ledger', kpi: 'word', headline: 'rule',
+    chip: 'tag', segmented: 'tabs', btn: 'inverse', field: 'square', note: 'v1', toast: 'square',
     settingsRow: 'ledger', listRow: 'plain', setTable: 'ruled', setRow: 'ruled', plateStrip: 'stamp',
     calCell: 'ruled', chart: 'print', dock: 'rail', fab: 'inverse', addTile: 'ruled',
     sessionChrome: 'plate', youHero: 'banner', coachCard: 'ruled'
@@ -115,8 +131,9 @@ export default deepFreeze({
       // A measured print hairline (Physical Culture 1908's folio rule).
       hair: 0.5,
       // The Oxford rule, read from the head outward: a 3pt line, a 2pt gap, a
-      // 1.2pt line (1 nominal, +0.1 per edge of ink gain). Chapters only:
-      // section heads, the masthead, a sheet's top edge.
+      // 1.2pt line (1 nominal, +0.1 per edge of ink gain). The masthead's
+      // alone — one a tab — and a sheet's top edge; section heads draw none
+      // (sectionHeader · plain).
       head: [3, 2, 1.2],
       // The head SITS on its rule, as a chapter head does on a manual page.
       place: 'below',
@@ -128,17 +145,19 @@ export default deepFreeze({
       // session totals and the estimator's total, nowhere else.
       total: [1, 2, 1]
     },
-    // Drawn round dots on the baseline, about .3em apart, in the grey ink.
-    // Settings rows only: leaders everywhere is another vibe's device.
+    // Drawn round dots on the baseline, about .3em apart, in the grey ink:
+    // the Settings rows and the stat rows' ledger lines (a manual's table of
+    // measurements: "Chest ........ 42"), nowhere else.
     leader: { ink: 'dim', dot: 1.5, pitch: 4.5, min: 16 },
     band: { fill: 'raised', ink: 'chalk', height: 30 },   // VOCAB's default; no look here reads it
     gutter: 2,                                              // VOCAB's default; no look here reads it
     // Stamps: chips, plate chips, the live session's plates, the callout.
     keyline: { ink: 'chalk', width: 1 },
     // The tab's one boxed card (Fuel's summary, Weight's log,
-    // Steps' today, You's greeting) is a plate: bar paper inside a 1pt ink
+    // Steps' today, the recap's head) is a plate: bar paper inside a 1pt ink
     // keyline. Bar on the stock alone is 1.06:1 and all but vanishes. It is
-    // the only thing in the vibe with both a fill and a border.
+    // the only thing in the vibe with both a fill and a border. You's
+    // greeting is not boxed: it stands on the page under its loose plate.
     lead: { keyline: true }
   },
 
@@ -355,7 +374,9 @@ export default deepFreeze({
     note:     { size: 13, wght: 400, lh: 1.5, color: 'dim' },
     statVal:  { size: 20, wdth: 100, wght: 800, lh: 1, tnum: 1 },
     // 600, not 500: native registers Archivo at 400 / 600 / 700 / 800 only.
-    statLbl:  { size: 12, wdth: 100, wght: 600, ls: 0, upper: 0, color: 'steel' },
+    // Also the masthead's running head ("Training log", "Fuel") and a
+    // sheet's kicker: a page's running head is small roman, not a display.
+    statLbl: { size: 12, wdth: 100, wght: 600, ls: 0, upper: 0, color: 'steel' },
     timer:    { size: 22, wdth: 100, wght: 700, ls: 0, tnum: 1 },
     kpiVal:   { size: 22, wdth: 100, wght: 800, ls: 0, lh: 1, tnum: 1 },
     // The challenge figure (research track 7 §6.3: "4,300 LBS." on the Cyr
@@ -370,9 +391,11 @@ export default deepFreeze({
     setInput: { size: 15, wdth: 100, wght: 700, tnum: 1, color: 'chalk' },
     mono:     { size: 12, color: 'chalk' },
     // The running meta — a card's "last 7 days", the greeting's
-    // date, "Member since …", the masthead's running head, the recap's date —
-    // in Besley Italic, the period's voice for a running head. Lining
-    // figures: old-style figures on native are unverified on a device.
+    // date, "Member since …", the recap's date — in Besley Italic, the
+    // period's voice for a date line. Never over a head: the masthead's
+    // running head is a small roman label (statLbl), so no screen stacks an
+    // italic kicker over its title. Lining figures: old-style figures on
+    // native are unverified on a device.
     meta:     { size: 14, wdth: 99, wght: 400, lh: 1.3, color: 'steel' }
   },
   // The stamped numeral, now a challenge figure: Besley ExtraBold at the
