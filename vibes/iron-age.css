@@ -203,6 +203,28 @@
   font-synthesis: none;
 }
 [data-vibe="iron-age"] h1 { font-size: 24px; line-height: 1.1; }
+/* Besley's figures are proportional unless asked (FONTS.json): every run it
+   sets — a head, a card head, the running meta — takes tabular lining
+   figures, so a date or a total in a head never shifts width as it changes. */
+[data-vibe="iron-age"] h1,
+[data-vibe="iron-age"] h2,
+[data-vibe="iron-age"] h3,
+[data-vibe="iron-age"] .eyebrow,
+[data-vibe="iron-age"] .chart-sub,
+[data-vibe="iron-age"] .card-sub,
+[data-vibe="iron-age"] .you-sub,
+[data-vibe="iron-age"] .you-since,
+[data-vibe="iron-age"] .summary-date,
+[data-vibe="iron-age"] .ob-kicker,
+[data-vibe="iron-age"] .you-sec-t,
+[data-vibe="iron-age"] .you-greet,
+[data-vibe="iron-age"] .ex-name,
+[data-vibe="iron-age"] .wk-block-title,
+[data-vibe="iron-age"] .day-title,
+[data-vibe="iron-age"] .review-verdict {
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: 'tnum' 1, 'lnum' 1;
+}
 [data-vibe="iron-age"] h2 { font-size: 18px; line-height: 1.15; }
 
 /* eyebrow · v1, its type role Besley SemiBold 15, sentence case, ink */
@@ -563,6 +585,12 @@
   min-width: 0;
 }
 [data-vibe="iron-age"] .stat:first-child { border-left: 0; padding-left: 0; }
+/* Folio lines stacked (the stats page's three rows) share one hairline, and
+   an article after one stands 20 clear of it, as cards part. */
+[data-vibe="iron-age"] .stat-row + .stat-row { border-top: 0; }
+[data-vibe="iron-age"] .stat-row + .card,
+[data-vibe="iron-age"] .mini-stats + .card,
+[data-vibe="iron-age"] .note + .card { margin-top: 20px; }
 [data-vibe="iron-age"] .stat-lbl { margin-top: 5px; }
 [data-vibe="iron-age"] .mini-stats {
   gap: 0; padding: 7px 0;
@@ -703,6 +731,14 @@
   text-decoration: none;
 }
 [data-vibe="iron-age"] .badge { border-radius: 0; background: var(--inverse); color: var(--knockout); }
+/* Foods and Meals hold a cut, a word and a count: the word is underlined,
+   the count stays a stamp, never a struck-through figure. */
+[data-vibe="iron-age"] .add-secondary .btn-ghost { text-decoration: none; }
+[data-vibe="iron-age"] .add-secondary .btn-ghost > span:not(.cnt) {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+}
 
 /* ---------- field · square ----------
    Bar ground, square, a 1pt knurl keyline (3:1 on bar); focus turns it
@@ -988,7 +1024,8 @@
 [data-vibe="iron-age"] .chart-bar,
 [data-vibe="iron-age"] .chart-bar-bg,
 [data-vibe="iron-age"] .spark-bar,
-[data-vibe="iron-age"] .chart clipPath rect { rx: 0; ry: 0; }
+[data-vibe="iron-age"] .chart clipPath rect,
+[data-vibe="iron-age"] .heat rect { rx: 0; ry: 0; }
 [data-vibe="iron-age"] .chart-bar-bg { opacity: .6; }
 [data-vibe="iron-age"] .chart-target,
 [data-vibe="iron-age"] .spark-ref { stroke: var(--chalk); opacity: 1; }
@@ -1041,6 +1078,15 @@
 [data-vibe="iron-age"] .card:has(.macro-rows) .legend-inline .legend-item:nth-child(2) i {
   -webkit-mask-image: repeating-linear-gradient(45deg, #000 0 1.25px, transparent 1.25px 2.75px);
   mask-image: repeating-linear-gradient(45deg, #000 0 1.25px, transparent 1.25px 2.75px);
+}
+/* …and fat a dot screen, at the same 2.75 pitch. */
+[data-vibe="iron-age"] .fuel-sum .cal-meter + .vol-row + .vol-row + .vol-row .vol-fill,
+[data-vibe="iron-age"] .macro-rows .vol-row:nth-child(3) .vol-fill,
+[data-vibe="iron-age"] .card:has(.macro-rows) .legend-inline .legend-item:nth-child(3) i {
+  -webkit-mask-image: radial-gradient(circle, #000 0 1.05px, transparent 1.25px);
+  -webkit-mask-size: 2.75px 2.75px;
+  mask-image: radial-gradient(circle, #000 0 1.05px, transparent 1.25px);
+  mask-size: 2.75px 2.75px;
 }
 [data-vibe="iron-age"] .fuel-sum .vol-track { height: 8px; }
 
@@ -1219,7 +1265,7 @@
   border: var(--shape-keyline-width) solid var(--shape-keyline-ink);
   border-radius: 0;
 }
-[data-vibe="iron-age"] .wk-cal-btn { color: var(--chalk); }
+[data-vibe="iron-age"] .wk-cal-btn { color: var(--chalk); margin-right: 6px; }
 [data-vibe="iron-age"] .wk-cal-btn svg { stroke-width: 1.5; }
 [data-vibe="iron-age"] .wk-coach:active,
 [data-vibe="iron-age"] .wk-cal-btn:active { background: var(--raised); border-color: var(--shape-keyline-ink); }
