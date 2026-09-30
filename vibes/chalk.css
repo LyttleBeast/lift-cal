@@ -1,0 +1,471 @@
+/* vibes-css:begin — generated from vibes/defs/chalk.js by tools-check/vibes-css.mjs. Do not edit between the markers: change the definition, then run it with --write. */
+:root[data-vibe="chalk"] {
+  --shape-rule-ink: #767c80;
+  --shape-rule-hair: 1px;
+  --shape-rule-head-0: 2px;
+  --shape-rule-head-1: 0;
+  --shape-rule-head-2: 0;
+  --shape-rule-sub-0: 2px;
+  --shape-rule-sub-1: 0;
+  --shape-rule-sub-2: 0;
+  --shape-rule-total-0: 2px;
+  --shape-rule-total-1: 0;
+  --shape-rule-total-2: 0;
+  --shape-leader-ink: #3b4045;
+  --shape-leader-dot: 1.5px;
+  --shape-leader-pitch: 4px;
+  --shape-leader-min: 16px;
+  --shape-band-fill: #dde1e2;
+  --shape-band-ink: #111416;
+  --shape-band-height: 30px;
+  --shape-gutter: 2px;
+  --shape-keyline-ink: #111416;
+  --shape-keyline-width: 1px;
+  --shape-lead-keyline: 0;
+  --shape-cue-ink: #6c3058;
+  --shape-chosen-tick: 0;
+  --shape-rank-column: 0;
+  --rack: #e8ebeb;
+  --bar: #f8fafa;
+  --collar: #cdd3d4;
+  --knurl: #767c80;
+  --chalk: #111416;
+  --steel: #3b4045;
+  --dim: #555a60;
+  --p-red: #8f1117;
+  --p-blue: #1c4aa8;
+  --p-yellow: #8a6b00;
+  --p-green: #056a50;
+  --p-white: #25272b;
+  --p-chrome: #6c727c;
+  --good: #056a50;
+  --warn: #7a5a00;
+  --bad: #8f1117;
+  --ink-plate: #f8fafa;
+  --accent: #6c3058;
+  --focus: #6c3058;
+  --accent-press: #5d224a;
+  --ink: #ffffff;
+  --danger: #8f1117;
+  --on-danger: #ffffff;
+  --done: #056a50;
+  --ink-go: #ffffff;
+  --well: #e8ebeb;
+  --knockout: #f8fafa;
+  --inverse: #111416;
+  --cal-mark: #ffffff;
+  --raised: #dde1e2;
+  --track: #dce0e1;
+  --grip: #898e8f;
+  --faint: #555a60;
+  --band: #111416;
+  --knob: #3b4045;
+  --greet-name: #6c3058;
+  --tint-runway: rgba(118,124,128,1);
+  --tint-runway-edge: rgba(118,124,128,1);
+  --font: 'chalk-sofia', system-ui, -apple-system, sans-serif;
+  --font-mono: ui-monospace, monospace;
+  --font-display: 'chalk-sofia-cond', 'chalk-sofia', system-ui, -apple-system, sans-serif;
+  --font-italic: 'chalk-sofia', system-ui, -apple-system, sans-serif;
+  --font-num: 'chalk-sofia-num', 'chalk-sofia-cond', system-ui, -apple-system, sans-serif;
+  --r: 6px;
+  --r-sm: 4px;
+  --r-sheet: 18px;
+  --r-tile: 6px;
+  --r-pill: 999px;
+  --r-plate: 2px;
+  --r-chip: 3px;
+  --r-mark: 3px;
+  --r-idx: 4px;
+  --r-round: 50%;
+  --r-hair: 1px;
+  --r-bubble: 10px;
+  --r-badge: 8px;
+  --shadow-peek: none;
+  --shadow-rest: none;
+  --shadow-toast: none;
+  --shadow-fab: none;
+  --shadow-fab-pressed: none;
+  --shadow-tour-card: 0 14px 36px rgba(17,20,22,.28);
+  --shadow-cal-tick: 0 0 0 1px rgba(17,20,22,.7);
+  --shadow-flame: inset 0 0 0 1px rgba(108,48,88,.35);
+  --shadow-kpi-day: inset 0 0 0 1.2px #767c80;
+  --shadow-kpi-day-on: none;
+  --shadow-kpi-today: 0 0 0 1.5px #e8ebeb, 0 0 0 2.5px #3b4045;
+  --shadow-kpi-today-on: 0 0 0 1.5px #e8ebeb, 0 0 0 2.5px #111416;
+  --shadow-guide-eaten: inset 0 0 0 1px #767c80;
+  --shadow-traj-good: 0 0 0 4px rgba(5,106,80,.18);
+  --shadow-traj-warn: 0 0 0 4px rgba(122,90,0,.18);
+  --shadow-traj-bad: 0 0 0 4px rgba(143,17,23,.18);
+  --shadow-tour-lit: 0 0 0 2px #6c3058;
+  --shadow-cal-head: 0 0 0 1px rgba(17,20,22,.9);
+  --shadow-cal-target: 0 0 0 1px rgba(17,20,22,.9);
+  --blur-sheet: blur(3px);
+  --blur-dock: none;
+  --blur-wk-bar: none;
+  --scrim-tour: linear-gradient(to bottom, rgba(232,235,235,.55) 0%, rgba(232,235,235,.94) 42%);
+  --video-bg: #000000;
+  --rack-rgb: 232,235,235;
+  --shade-rgb: 17,20,22;
+  --lift-rgb: 17,20,22;
+  --accent-rgb: 108,48,88;
+  --p-yellow-rgb: 138,107,0;
+  --warn-rgb: 122,90,0;
+  --p-red-rgb: 143,17,23;
+  --bad-rgb: 143,17,23;
+  --danger-rgb: 143,17,23;
+  --p-blue-rgb: 28,74,168;
+  --p-green-rgb: 5,106,80;
+  --done-rgb: 5,106,80;
+  --good-rgb: 5,106,80;
+  --p-white-rgb: 37,39,43;
+  --steel-rgb: 59,64,69;
+  --tag-ink-w: #7a5a00;
+  --tag-ink-f: #8f1117;
+  --tag-ink-d: #1c4aa8;
+  --ink-of-p-red: #8f1117;
+  --ink-of-p-blue: #1c4aa8;
+  --ink-of-p-yellow: #8a6b00;
+  --ink-of-p-green: #056a50;
+  --ink-of-p-white: #25272b;
+  --ink-of-p-chrome: #6c727c;
+  color-scheme: light;
+}
+:root[data-vibe="chalk"]::before { content: ''; position: fixed; top: 0; left: 0; right: 0; height: var(--safe-top); background: var(--band); pointer-events: none; z-index: 400; }
+/* vibes-css:end */
+
+/* ================= Chalk, by hand =================
+   Rack printed in two inks on chalk-white stock: graphite for every word,
+   rule and chosen state, one mulberry for the thing to do next, Sofia Sans in
+   sentence case with its Condensed ExtraBold cut on the heads, the greeting
+   and the one hero figure a screen has. The spec, with every number's source,
+   is ~/dev/vibes-night/design/chalk.md; the colours above are generated from
+   vibes/defs/chalk.js and are not restated here.
+
+   A SIMPLE VIBE: v1's layout. What is below is the three things the tokens
+   cannot say on the web:
+     1. the faces (@font-face; weight only through font-variation-settings);
+     2. the type presets. Natively a preset (T.text.*) reaches every site that
+        spends it; on the web each is literal CSS, so each preset Chalk changes
+        is restated on the selectors whose native twin spends that preset.
+        The sites native sets literally (a section title, the settings row,
+        the COACH title, a chart's caps label …) keep v1's size, case and
+        tracking here too, in Sofia Sans;
+     3. the ten `shape`-grade looks the definition names (design/VOCAB.md),
+        and the tints rack.css writes as literal alphas where Chalk's differ.
+   Geometry is v1's: a border a look drops is drawn transparent, not removed,
+   so no box moves by a pixel it did not have to.
+
+   SPECIFICITY. A preset's rule is `[data-vibe="chalk"] :where(.x)`: (0,1,0),
+   the same as rack.css's `.x`, which it beats by coming later, and below any
+   local resize rack.css writes as `.parent .x` (.peek-bar .timer, .ex-actions
+   .btn …), which keeps winning, as it does in v1. Where rack.css's own rule
+   is two-part (.field label, .cal-dow span, .plate-strip .lbl) the preset
+   keeps the first part outside :where() to match it. The few (0,1,0) resizes on
+   an element that also carries the preset's class (.drop-add, .wk-block-btn,
+   .wk-block-add, .btn-sm) are restated after it. */
+
+/* ---------- the faces ----------
+   Sofia Sans v4.101 (Lettersoup; OFL 1.1, no Reserved Font Name; OFL.txt and
+   FONTS.json beside the files). Variable, wght 1-1000, subset to Google's
+   latin range plus ← ↑ → ↓ ≈ ≤ ≥. Named for the vibe, so an installed Sofia
+   Sans never stands in. The digits file is the Vibes card's figure alone
+   (--font-num): the one Chalk file every device prefetches for the picker. */
+@font-face {
+  font-family: 'chalk-sofia';
+  src: url(chalk/fonts/SofiaSans-latin.woff2) format('woff2');
+  font-weight: 1 1000; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'chalk-sofia-cond';
+  src: url(chalk/fonts/SofiaSansCondensed-latin.woff2) format('woff2');
+  font-weight: 1 1000; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'chalk-sofia-num';
+  src: url(chalk/fonts/SofiaSansCondensed-digits.woff2) format('woff2');
+  font-weight: 1 1000; font-style: normal; font-display: swap;
+  unicode-range: U+0030-0039;
+}
+/* No faux bold or italic: Sofia Sans ships no italic, and an italic run
+   stays upright rather than slanted by the browser (never-do #11). */
+:root[data-vibe="chalk"] { font-synthesis: none; }
+
+/* ---------- type presets (vibes/defs/chalk.js `type`) ---------- */
+
+/* h1-h3: the Condensed cut, as native's face band draws wdth <= 80. */
+[data-vibe="chalk"] :where(h1, h2, h3) { font-family: var(--font-display); letter-spacing: 0; }
+[data-vibe="chalk"] :where(h1) { font-size: 30px; }
+[data-vibe="chalk"] :where(h2) { font-size: 21px; }
+[data-vibe="chalk"] :where(h3) { font-size: 17px; }
+
+/* eyebrow: card heads, screen and sheet eyebrows. 13 / 600 steel, sentence
+   case as authored. */
+[data-vibe="chalk"] :where(.eyebrow) {
+  font-size: 13px; letter-spacing: 0; text-transform: none; color: var(--steel);
+  font-variation-settings: 'wght' 600;
+}
+
+/* btn / btnLg */
+[data-vibe="chalk"] :where(.btn) { font-size: 15px; letter-spacing: 0; }
+[data-vibe="chalk"] :where(.btn-lg) {
+  font-size: 17px; letter-spacing: 0; text-transform: none;
+  font-variation-settings: 'wght' 800;
+}
+/* rack.css's own resizes on a .btn at (0,1,0), put back after the preset */
+[data-vibe="chalk"] :where(.drop-add, .wk-block-add, .btn-sm) { font-size: 12px; }
+[data-vibe="chalk"] :where(.wk-block-btn) { font-size: 11px; }
+
+/* dockLbl: 11 / 600, sentence case, dim at rest (chalk when active, v1's
+   rule). (0,2,1) to beat rack.css's `.dock button` twice over. */
+[data-vibe="chalk"] .dock button {
+  font-size: 11px; letter-spacing: 0; text-transform: none;
+  font-variation-settings: 'wght' 600;
+}
+
+/* fieldLbl */
+[data-vibe="chalk"] :where(.field-lbl),
+[data-vibe="chalk"] .field :where(label) {
+  font-size: 13px; letter-spacing: 0; text-transform: none; color: var(--steel);
+  font-variation-settings: 'wght' 600;
+}
+
+/* note */
+[data-vibe="chalk"] :where(.note) { font-size: 13px; }
+
+/* statVal / statLbl. statLbl is also what native sets the KPI label, the
+   calendar's weekday row, the set table's column heads ("Set lb Reps e1RM",
+   as authored) and the plate strip's words in. */
+[data-vibe="chalk"] :where(.stat-val) { font-size: 22px; }
+[data-vibe="chalk"] :where(.stat-lbl, .kpi-lbl, .set-hd),
+[data-vibe="chalk"] .cal-dow :where(span),
+[data-vibe="chalk"] .plate-strip :where(.lbl) {
+  font-size: 12px; letter-spacing: 0; text-transform: none; color: var(--steel);
+  font-variation-settings: 'wght' 600;
+}
+
+/* kpiVal */
+[data-vibe="chalk"] :where(.kpi-val) { font-size: 24px; letter-spacing: 0; }
+
+/* headline: the one numeral treatment. v1's wide stamped figure turned on
+   end: Condensed ExtraBold, tall and narrow, tabular (526 a digit). */
+[data-vibe="chalk"] :where(.headline-v) {
+  font-family: var(--font-display); font-size: 40px; letter-spacing: -.01em; line-height: 1;
+}
+/* loadNum: the same cut at the call sites' own sizes (26-40, set inline). */
+[data-vibe="chalk"] :where(.load-num) {
+  font-family: var(--font-display); letter-spacing: 0; line-height: 1;
+}
+
+/* youGreet: the greeting, in the Condensed cut. The name keeps the accent
+   (the spec's greetName, which would ink it, is a request, not a role). */
+[data-vibe="chalk"] :where(.you-greet) {
+  font-family: var(--font-display); font-size: 30px; letter-spacing: 0; line-height: 1.1;
+}
+
+/* chip / segBtn */
+[data-vibe="chalk"] :where(.chip) { font-size: 12px; }
+[data-vibe="chalk"] :where(.seg-btn) {
+  font-size: 13px; letter-spacing: 0; text-transform: none;
+  font-variation-settings: 'wght' 600;
+}
+
+/* The Coach card's own face table (native T.fit): only these three slots
+   change, each clearing Sofia's 1.2 minimum line height, and every line
+   height the card's budget adds up is v1's, so it fits what v1 fits at
+   190 / 164. The title and COACH ME stay caps: they are literal sites. */
+[data-vibe="chalk"] :where(.coach-ttl, .coach-go-t) { font-size: 11px; line-height: 14px; }
+[data-vibe="chalk"] :where(.coach-go-x) { font-size: 15px; }
+
+/* A meter row's figure ("142/200", 11px, tabular): Sofia's tabular digits are
+   630 a digit where v1's Archivo is narrower, so the widest real value runs
+   4px past v1's 42px column (fit at 320 and 390). The column grows to hold it
+   and the track beside it gives the 4px back; the macro rows' own 74px
+   (rack.css .macro-rows .vol-val) still wins where it is set. */
+[data-vibe="chalk"] :where(.vol-val) { width: auto; min-width: 42px; }
+
+/* ---------- the looks (vibes/defs/chalk.js `variants`) ---------- */
+
+/* card · flat: white on the grey page, no edge — told apart by value. The
+   1px border stays, in the card's own colour, so nothing moves. The PR card
+   and the install card keep their accent edges (v1's). The tour and
+   onboarding card is a card too (native cardSkin). */
+[data-vibe="chalk"] :where(.card:not(.pr-card, .install-card), .ob-card) { border-color: var(--bar); }
+
+/* youCard · flat: Wins and Improve lose their 3pt side stripe (never-do #6)
+   and carry their colour as a 2pt rule along the top; the titles still say
+   which is which. */
+[data-vibe="chalk"] #view-you .card.card-wins,
+[data-vibe="chalk"] #view-you .card.card-improve { border-left: 1px solid var(--bar); border-top-width: 2px; }
+[data-vibe="chalk"] #view-you .card.card-wins { border-top-color: var(--good); }
+[data-vibe="chalk"] #view-you .card.card-improve { border-top-color: var(--warn); }
+
+/* coachCard · flat: the 1pt border in the ground's colour; pressed still
+   shows knurl (rack.css .coach-card:active, which outranks this). */
+[data-vibe="chalk"] :where(.coach-card) { border-color: var(--bar); }
+
+/* statRow · line: a box-score line. No tile, no ground; a 1px collar rule
+   between the columns; the columns and their padding as v1's. Mini stats
+   take the same look. */
+[data-vibe="chalk"] :where(.stat, .mini-stat) {
+  background: transparent; border-color: transparent; border-radius: 0;
+}
+[data-vibe="chalk"] :where(.stat + .stat, .mini-stat:nth-child(even)) { border-left-color: var(--collar); }
+
+/* kpi · plain: the well tile without its corner glow; the delta is bare
+   signed text with its arrow (tint.pill* are 0: no pill ground). */
+[data-vibe="chalk"] .kpi { background: var(--well); }
+[data-vibe="chalk"] .delta-pill,
+[data-vibe="chalk"] .delta-pill.up,
+[data-vibe="chalk"] .delta-pill.down,
+[data-vibe="chalk"] .delta-pill.warn { background: transparent; }
+
+/* field · square: square-ish corners (radius.plate) and a knurl edge, a 3:1
+   control edge on the card and the page; focus still turns it mulberry
+   (rack.css's :focus rules outrank these). */
+[data-vibe="chalk"] .field :where(input, select, textarea),
+[data-vibe="chalk"] .qty-row :where(input),
+[data-vibe="chalk"] .picker-search :where(input),
+[data-vibe="chalk"] :where(.paste-box) {
+  border-color: var(--knurl); border-radius: var(--r-plate);
+}
+/* Placeholders in dim, as native draws them (Field.jsx placeholderTextColor
+   T.colors.dim). rack.css sets one only on .set-row, so every other field
+   kept Chrome's #757575: 3.84:1 on this light ground, under v1's 3.93. */
+[data-vibe="chalk"] ::placeholder { color: var(--dim); }
+
+/* calCell · open: no cell grounds, like a printed calendar. A trained day is
+   its plates and its ink number; today its mulberry keyline and 800. The
+   keyline is the look's cue ink (shape.cue.ink), which Chalk names the
+   accent: the same mulberry rack.css's .cal-day.today draws. */
+[data-vibe="chalk"] .cal-day,
+[data-vibe="chalk"] .cal-day.has-work { background: transparent; }
+[data-vibe="chalk"] .cal-day.today { border-color: var(--shape-cue-ink); }
+
+/* dock · solid: an opaque white bar, no blur, under v1's collar rule. */
+[data-vibe="chalk"] .dock { background: var(--bar); backdrop-filter: none; -webkit-backdrop-filter: none; }
+
+/* addTile · flat: every tile on the well, no border, no wash. Photo is told
+   by its mulberry icon well alone; the lit tiles' icon well and tag sit on
+   raised (steel 7.95), where grip left the tag at 3.16. Tags square. A press
+   still shows knurl, and an off tile stays at v1's .42. */
+[data-vibe="chalk"] .add-tile,
+[data-vibe="chalk"] .add-tile.hero,
+[data-vibe="chalk"] .add-tile.lit { background: var(--well); border-color: transparent; }
+[data-vibe="chalk"] .add-tile:not(:disabled):active { border-color: var(--knurl); }
+[data-vibe="chalk"] .add-tile.lit .ic,
+[data-vibe="chalk"] .add-tile.lit .tag { background: var(--raised); }
+[data-vibe="chalk"] .add-tile .tag { border-radius: var(--r-chip); }
+
+/* sessionChrome · flat: the top bar opaque under its collar rule (the dark
+   band above it is the generated strip); the rest pill and peek bar lose
+   their shadows through the tokens. */
+[data-vibe="chalk"] .wk-bar { background: var(--bar); backdrop-filter: none; -webkit-backdrop-filter: none; }
+
+/* ---------- chart marks the pinned modules paint at fixed strings ----------
+   Native's half is the same numbers, src/state/vibe.js VIBE_DEFS.chalk.chart
+   (theme.js T.chart); the arithmetic is tools vibe-contrast chalk-heat-rs9
+   and chalk-dim-rs9. */
+
+/* The heat strip (analytics.js heatStrip, steps.js heatMap): on the light
+   card an ochre cell at .28 is collar's twin (1.00:1). Trained days are ink,
+   untrained days the well (1.14 on the card, v1's collar is 1.15), and a
+   trained cell's opacity below .70 is lifted by .04·(.70 − a)/.42, rounded to
+   hundredths — monotonic, none from .65 — so the faintest ink is 1.82 against
+   an untrained day (v1 1.69). The ink stands in for the default ochre only;
+   Steps' green keeps its colour, and takes the well and the lift, so the two
+   grids read the same way. The lift reaches .70 for Steps: pGreen on the card
+   sits just under v1's own green from .42 to .64 without it (by up to .06).
+   With it, every cell of both grids is at 3:1 or v1's own contrast at its
+   opacity, against an untrained day and on the card (tools vibe-contrast
+   r2-calc-rs9). SVG presentation attributes lose to any author rule. */
+[data-vibe="chalk"] .heat rect[fill="var(--p-yellow)"] { fill: var(--chalk); }
+[data-vibe="chalk"] .heat rect[fill="var(--collar)"] { fill: var(--well); }
+[data-vibe="chalk"] .heat rect[fill-opacity="0.28"] { fill-opacity: .32; }
+[data-vibe="chalk"] .heat rect[fill-opacity="0.29"] { fill-opacity: .33; }
+[data-vibe="chalk"] .heat rect[fill-opacity="0.30"] { fill-opacity: .34; }
+[data-vibe="chalk"] .heat rect[fill-opacity="0.31"] { fill-opacity: .35; }
+[data-vibe="chalk"] .heat rect[fill-opacity="0.32"] { fill-opacity: .36; }
+[data-vibe="chalk"] .heat rect[fill-opacity="0.33"],
+[data-vibe="chalk"] .heat rect[fill-opacity="0.34"] { fill-opacity: .37; }
+[data-vibe="chalk"] .heat rect[fill-opacity="0.35"] { fill-opacity: .38; }
+[data-vibe="chalk"] .heat rect[fill-opacity="0.36"] { fill-opacity: .39; }
+[data-vibe="chalk"] .heat rect[fill-opacity="0.37"] { fill-opacity: .40; }
+[data-vibe="chalk"] .heat rect[fill-opacity="0.38"] { fill-opacity: .41; }
+[data-vibe="chalk"] .heat rect[fill-opacity="0.39"] { fill-opacity: .42; }
+[data-vibe="chalk"] .heat rect[fill-opacity="0.40"] { fill-opacity: .43; }
+[data-vibe="chalk"] .heat rect[fill-opacity="0.41"] { fill-opacity: .44; }
+[data-vibe="chalk"] .heat rect[fill-opacity="0.42"] { fill-opacity: .45; }
+[data-vibe="chalk"] .heat rect[fill-opacity="0.43"],
+[data-vibe="chalk"] .heat rect[fill-opacity="0.44"] { fill-opacity: .46; }
+[data-vibe="chalk"] .heat rect[fill-opacity="0.45"] { fill-opacity: .47; }
+[data-vibe="chalk"] .heat rect[fill-opacity="0.46"] { fill-opacity: .48; }
+[data-vibe="chalk"] .heat rect[fill-opacity="0.47"] { fill-opacity: .49; }
+[data-vibe="chalk"] .heat rect[fill-opacity="0.48"] { fill-opacity: .50; }
+[data-vibe="chalk"] .heat rect[fill-opacity="0.49"] { fill-opacity: .51; }
+[data-vibe="chalk"] .heat rect[fill-opacity="0.50"] { fill-opacity: .52; }
+[data-vibe="chalk"] .heat rect[fill-opacity="0.51"] { fill-opacity: .53; }
+[data-vibe="chalk"] .heat rect[fill-opacity="0.52"] { fill-opacity: .54; }
+[data-vibe="chalk"] .heat rect[fill-opacity="0.53"] { fill-opacity: .55; }
+[data-vibe="chalk"] .heat rect[fill-opacity="0.54"],
+[data-vibe="chalk"] .heat rect[fill-opacity="0.55"] { fill-opacity: .56; }
+[data-vibe="chalk"] .heat rect[fill-opacity="0.56"] { fill-opacity: .57; }
+[data-vibe="chalk"] .heat rect[fill-opacity="0.57"] { fill-opacity: .58; }
+[data-vibe="chalk"] .heat rect[fill-opacity="0.58"] { fill-opacity: .59; }
+[data-vibe="chalk"] .heat rect[fill-opacity="0.59"] { fill-opacity: .60; }
+[data-vibe="chalk"] .heat rect[fill-opacity="0.60"] { fill-opacity: .61; }
+[data-vibe="chalk"] .heat rect[fill-opacity="0.61"] { fill-opacity: .62; }
+[data-vibe="chalk"] .heat rect[fill-opacity="0.62"] { fill-opacity: .63; }
+[data-vibe="chalk"] .heat rect[fill-opacity="0.63"] { fill-opacity: .64; }
+[data-vibe="chalk"] .heat rect[fill-opacity="0.64"] { fill-opacity: .65; }
+
+/* The day that is not over (.chart-bar-dim, v1 .38): at .38 ochre, ink, slate
+   and green fall under v1 on the light card; at .66 every plate holds v1's
+   contrast or better, and stays plainly lighter than a finished day. */
+[data-vibe="chalk"] .chart-bar-dim { opacity: .66; }
+
+/* The guide's tick swatch takes the bar's own tick ring (shadow.calTick): a
+   white sliver on the light track is 1.27 alone. */
+[data-vibe="chalk"] .guide-sw.tick::after { box-shadow: var(--shadow-cal-tick); }
+
+/* ---------- tints rack.css writes as literal alphas ---------- */
+
+/* the sheet backdrop: graphite at .40, not v1's black .60 (R3.3) */
+[data-vibe="chalk"] .sheet-backdrop { background: rgba(var(--shade-rgb),.4); }
+
+/* setRow: the W / F / D badges keep the plain badge's raised ground and the
+   letter carries the type (tagInk); a done row at .12, seen from the bench;
+   the drop rail at .70, a 3:1 line on white; + Drop's edge at .45. */
+[data-vibe="chalk"] .ex-block .set-idx.t-W,
+[data-vibe="chalk"] .ex-block .set-idx.t-F,
+[data-vibe="chalk"] .ex-block .set-idx.t-D,
+[data-vibe="chalk"] .rt-sets .set-idx.t-W,
+[data-vibe="chalk"] .rt-sets .set-idx.t-F,
+[data-vibe="chalk"] .rt-sets .set-idx.t-D { background: var(--raised); }
+[data-vibe="chalk"] .ex-block .set-row.done { background: rgba(var(--done-rgb),.12); }
+[data-vibe="chalk"] .ex-block .set-row.flash { animation-name: chalk-setFlash; }
+@keyframes chalk-setFlash {
+  0% { background: rgba(var(--accent-rgb),.28); }
+  100% { background: rgba(var(--done-rgb),.12); }
+}
+[data-vibe="chalk"] .ex-block .set-row.drop::before,
+[data-vibe="chalk"] .rt-sets .set-row.drop::before { background: rgba(var(--p-blue-rgb),.7); }
+[data-vibe="chalk"] .drop-add { border-color: rgba(var(--p-blue-rgb),.45); }
+
+/* a lifting block's wash: accent .04 (the knurl keyline carries it) */
+[data-vibe="chalk"] .wk-block,
+[data-vibe="chalk"] .rt-pv-block { background: rgba(var(--accent-rgb),.04); }
+
+/* a settings row pressed: ink at .05 — a light page presses darker */
+[data-vibe="chalk"] .set-list .set-row-nav:active { background: rgba(var(--lift-rgb),.05); }
+
+/* the review box's edge, up from .18 so it shows on white (decorative) */
+[data-vibe="chalk"] .review-take { border-color: rgba(var(--accent-rgb),.24); }
+
+/* ---------- the Vibes sheet: Chalk's own tile ----------
+   Scoped to the tile itself: a worn vibe's [data-vibe] rules would otherwise
+   reach every tile. The figure in the Condensed digits, cap-height matched
+   to v1's (24px caps: 36.6 x .655), its baseline where v1's is: v1 sets 35px
+   Archivo (ascent .878, descent .21) at line-height .95; Sofia's ascent .9
+   and descent .3 put the same baseline at a 34.67px line. */
+[data-vibe="chalk"].vibe-in .vibe-num { font-size: 36.6px; line-height: 34.67px; letter-spacing: 0; }

@@ -44,11 +44,17 @@ import V1 from './vibes/defs/v1.js';
 import V1_ICONS from './vibes/icons/v1.js';
 import IRON_AGE from './vibes/defs/iron-age.js';
 import IRON_AGE_ICONS from './vibes/icons/iron-age.js';
+import CHALK from './vibes/defs/chalk.js';
+import CHALK_ICONS from './vibes/icons/chalk.js';
+import NAVY from './vibes/defs/navy.js';
+import NAVY_ICONS from './vibes/icons/navy.js';
+import OXBLOOD from './vibes/defs/oxblood.js';
+import OXBLOOD_ICONS from './vibes/icons/oxblood.js';
 
 /* Every vibe's definition and every icon set, by id. A new vibe adds its
    imports and its entries here, beside v1's. */
-const DEFS = { v1: V1, 'iron-age': IRON_AGE };
-const ICON_SETS = { v1: V1_ICONS, 'iron-age': IRON_AGE_ICONS };
+const DEFS = { v1: V1, 'iron-age': IRON_AGE, chalk: CHALK, navy: NAVY, oxblood: OXBLOOD };
+const ICON_SETS = { v1: V1_ICONS, 'iron-age': IRON_AGE_ICONS, chalk: CHALK_ICONS, navy: NAVY_ICONS, oxblood: OXBLOOD_ICONS };
 
 const KEY = 'rack:vibe';
 
@@ -386,7 +392,9 @@ const unquote = s => String(s == null ? '' : s).trim().replace(/^(['"])([\s\S]*)
    fuelSummary .card.fuel-sum, coachCard .coach-card (fixed 190 / 164: a band
    would push its words out), and — with no class of their own, which v1's
    DOM keeps — stepsToday #view-steps .cal-hd + .card and weightLog
-   #view-weight .cal-hd + .card; startWorkout is a button, not a box. */
+   #view-weight .cal-hd + .card; startWorkout is a button, not a box. Since
+   engine v3 the three lead cards also say which they are, as
+   .card[data-lead="fuelSummary" | "stepsToday" | "weightLog"]. */
 export function imageUrl(id, slot) {
   if (!own(DEFS, id) || !own(DEFS[id].images, slot)) return null;
   const v = DEFS[id].images[slot];

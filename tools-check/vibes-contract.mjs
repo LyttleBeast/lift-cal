@@ -269,13 +269,25 @@ section('C  every role resolves, every v1 value is covered, every web name is it
 const KINDS = new Set(['color', 'alpha', 'tint', 'radius', 'shadow', 'scrim', 'font', 'type', 'face', 'chrome',
   'table', 'image', 'variant', 'shape', 'meta', 'layout', 'motion']);
 // A role v1 leaves out resolves through valueOf(): the look params to their
-// vocabulary defaults, the photo bands to null. Every other role v1 holds.
+// vocabulary defaults, the photo bands and engine v3's type.tag / type.pill
+// to null (nothing drawn: every site keeps its own literal). Every other role
+// v1 holds.
 const unresolved = ROLES.filter(r => valueOf(V1, r.path) === undefined);
 expect(!unresolved.length, `all ${ROLES.length} ROLES resolve to a value in v1` + (unresolved.length ? ' — not: ' + unresolved.map(r => r.path).join(', ') : ''));
 const leftOut = ROLES.filter(r => at(V1, r.path) === undefined).map(r => r.path);
-expect(leftOut.every(p => /^shape\.|^images\.\w+\.band$/.test(p)),
-  `the only roles v1 leaves to their defaults are the look params and the photo bands (${leftOut.length})` +
-  (leftOut.every(p => /^shape\.|^images\.\w+\.band$/.test(p)) ? '' : ' — not: ' + leftOut.filter(p => !/^shape\.|^images\.\w+\.band$/.test(p)).join(', ')));
+const mayLeave = p => /^shape\.|^images\.\w+\.band$/.test(p) || (roleOf(p).dflt === null && /^type\./.test(p));
+expect(leftOut.every(mayLeave),
+  `the only roles v1 leaves to their defaults are the look params, the photo bands and the null type presets (${leftOut.length})` +
+  (leftOut.every(mayLeave) ? '' : ' — not: ' + leftOut.filter(p => !mayLeave(p)).join(', ')));
+{
+  // engine v3: a number the web spends as a type token says how it is spelled
+  const UNITS = ['px', 'em', '', 'case'];
+  const withUnit = ROLES.filter(r => 'unit' in r);
+  const off = withUnit.filter(r => !UNITS.includes(r.unit) || r.kind !== 'type' || !r.web || !r.web.startsWith('--') || r.native !== null || r.dflt !== null);
+  expect(withUnit.length > 0 && !off.length && ROLES.filter(r => r.kind === 'type' && r.web).every(r => 'unit' in r),
+    `every type role the web spends as a token (${withUnit.length}) names its unit (${UNITS.map(u => `'${u}'`).join(', ')}), is web-only and draws nothing in v1` +
+    (off.length ? ' — not: ' + off.map(r => r.path).join(', ') : ''));
+}
 // what a role says a definition without it takes is a value of its own kind
 {
   const off = ROLES.filter(r => r.or && (at(V1, r.or) === undefined || !roleOf(r.or) || roleOf(r.or).kind !== r.kind || 'dflt' in r)).map(r => r.path);
@@ -339,6 +351,8 @@ function webNameFor(r) {
   if (head === 'tagInk') return '--tag-ink-' + a.toLowerCase();
   if (head === 'inkOf') return '--ink-of-' + kebab(a);
   if (head === 'images' && b === 'band') return '--photo-band-' + kebab(a);
+  // engine v3: a type preset's keys the web spends (type.tag.size -> --type-tag-size)
+  if (head === 'type') return '--type-' + r.path.split('.').slice(1).map(kebab).join('-');
   return null;
 }
 {
@@ -1222,6 +1236,18 @@ for (const f of TEXT_FILES) {
   expect(!!shapeLit && evalLit(shapeLit[1]) === Vs.d && !!wh && Vs.viewBox === `0 0 ${wh[1]} ${wh[2]}` && !!ins && +ins[1] === Vs.insideBottom &&
     +ins[2] === Vs.insideTop && !!sw && +sw[1] === Vs.stroke && !!cap && eq(cap.slice(1).map(Number), [Vs.cap.x, Vs.cap.y, Vs.cap.width, Vs.cap.height, Vs.cap.rx]),
     'icons.vessel is water.js vessel(): the outline, its viewBox, the waterline\'s floor and top, the stroke and the cap');
+
+  // engine v3: the knob and the greeting's name are the colours rack-v58 spends
+  // there (their `at`, read with the other colour roles' in D.2); the hero is
+  // headline's arguments (C's `or` check); the null presets are nothing, and
+  // the pill they would re-set is rack-v58's literal 11.5 / 10px
+  const dv = decl('rack.css', '.delta-pill .delta-v', 'font-size'), da = decl('rack.css', '.delta-pill .delta-a', 'font-size');
+  expect(!('tag' in V1.type) && !('pill' in V1.type) && valueOf(V1, 'type.tag') === null && valueOf(V1, 'type.pill') === null &&
+    ['size', 'ls', 'upper', 'wdth', 'wght'].every(k => valueOf(V1, 'type.tag.' + k) === null) &&
+    !!dv && dv.val === '11.5px' && !!da && da.val === '10px',
+    'type.tag and type.pill are null in v1 — every site keeps its literal, and rack-v58\'s delta pill is 11.5 / 10px');
+  expect(eq(V1.type.hero, V1.type.headline) && V1.colors.knob === V1.colors.steel && V1.colors.greetName === V1.colors.accent,
+    'type.hero is headline\'s arguments, colors.knob steel and colors.greetName the accent in v1');
 }
 
 // ---- 15. every anchor is read ----
@@ -1325,34 +1351,43 @@ section('F  the component vocabulary (vocab.js): well-formed, and v1 names every
   // the params: every key a look reads, with its default; a colour names a colour role
   const P = VOC.params;
   const PARAM_SHAPE = { rule: ['ink', 'hair', 'head', 'place', 'sub', 'total'], leader: ['ink', 'dot', 'pitch', 'min'], band: ['fill', 'ink', 'height'],
-    gutter: null, keyline: ['ink', 'width'], lead: ['keyline'] };
+    gutter: null, keyline: ['ink', 'width'], lead: ['keyline'],
+    // engine v3
+    stripe: null, cue: ['ink'], chosen: ['tick'], rank: ['column'], slab: ['lit'] };
   const COLOUR_PARAM = k => k === 'ink' || k === 'fill';
+  // a param that chooses a drawing, from its own words; it has no web token
+  const CHOICE = { place: ['above', 'below'], stripe: ['side', 'top', 'keyline'], lit: ['both', 'clock', 'rest'] };
   // a list is at most line, gap, line: the web spends it as three tokens
   const paramOk = (k, v, dflt) => {
     if (COLOUR_PARAM(k)) return typeof v === 'string' && COLOR_KEYS.has(v);
-    if (k === 'place') return v === 'above' || v === 'below';
+    if (k in CHOICE) return CHOICE[k].includes(v);
     if (typeof dflt === 'boolean') return typeof v === 'boolean';
     if (Array.isArray(dflt)) return Array.isArray(v) && v.length > 0 && v.length <= 3 && v.every(n => typeof n === 'number' && n > 0);
+    // a hairline may be 0: none drawn (engine v3)
+    if (k === 'hair') return typeof v === 'number' && v >= 0;
     return typeof v === 'number' && v > 0;
   };
+  expect(paramOk('hair', 0, 1) && !paramOk('hair', -1, 1) && !paramOk('width', 0, 1) && !paramOk('head', [0], [2]) && !paramOk('stripe', 'left', 'side'),
+    'a hairline may be 0 (none drawn); every other width, and every entry of a rule list, is above 0; a choice is one of its own words');
   const paramBad = [];
-  expect(eq(Object.keys(P), Object.keys(PARAM_SHAPE)), 'its params are rule, leader, band, gutter, keyline and lead');
+  expect(eq(Object.keys(P), Object.keys(PARAM_SHAPE)), 'its params are rule, leader, band, gutter, keyline and lead, and engine v3\'s stripe, cue, chosen, rank and slab');
   for (const [k, sub] of Object.entries(PARAM_SHAPE)) {
     if (sub === null) { if (!paramOk(k, P[k], P[k])) paramBad.push(k); continue; }
     if (!isObj(P[k]) || !eq(Object.keys(P[k]), sub)) { paramBad.push(k + ' (keys)'); continue; }
     for (const s of sub) if (!paramOk(s, P[k][s], P[k][s])) paramBad.push(k + '.' + s);
   }
-  expect(!paramBad.length, 'every param default is a positive number, a list of them, above/below, a switch, or a colour role v1 defines' +
+  expect(!paramBad.length, 'every param default is a positive number (a hairline 0 or more), a list of them, one of its choice\'s words, a switch, or a colour role v1 defines' +
     (paramBad.length ? ' — not: ' + paramBad.join(', ') : ''));
   {
-    /* index.js carries each param but place as a web token (ROLES shape.*),
+    /* index.js carries each param but the choices (place, stripe, slab.lit)
+       as a web token (ROLES shape.*),
        its default repeated there because index.js imports nothing: each must
        be vocab.js's, a list's entries one role each and 0 past its end — so a
        list default is one entry, or "0 past the end" would disagree with it. */
     const want = [];
     for (const [k, sub] of Object.entries(PARAM_SHAPE)) {
       for (const s of sub === null ? [null] : sub) {
-        if (s === 'place') continue;
+        if ((s || k) in CHOICE) continue;
         const p = s === null ? k : k + '.' + s, d = s === null ? P[k] : P[k][s];
         if (Array.isArray(d)) [0, 1, 2].forEach(i => want.push(['shape.' + p + '.' + i, i < d.length ? d[i] : 0, false]));
         else want.push(['shape.' + p, d, COLOUR_PARAM(s || k)]);
@@ -1362,7 +1397,7 @@ section('F  the component vocabulary (vocab.js): well-formed, and v1 names every
     const off = want.filter(([p, d, colour]) => { const r = roleOf(p); return !r || r.kind !== 'shape' || !eq(r.dflt, d) || (r.ref === 'color') !== colour || !r.web || r.native !== null; });
     const lists = Object.values(P).flatMap(v => (v && typeof v === 'object' && !Array.isArray(v) ? Object.values(v) : [v])).filter(Array.isArray);
     expect(!off.length && got.length === want.length && lists.every(l => l.length === 1) && roleOf('shape').native === 'shape',
-      `every param but place is a --shape-* role with vocab.js's default (${want.length}), colours naming a role; native takes the whole object as T.shape` +
+      `every param but the choices is a --shape-* role with vocab.js's default (${want.length}), colours naming a role; native takes the whole object as T.shape` +
       (off.length ? ' — not: ' + off.map(([p]) => p).join(', ') : got.length !== want.length ? ` — ROLES has ${got.length}` : ''));
   }
   // the blocks

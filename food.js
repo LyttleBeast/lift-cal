@@ -572,6 +572,7 @@ function renderFab() {
 function renderSummary() {
   const t = totals();
   const card = el('div', 'card fuel-sum');
+  card.dataset.lead = 'fuelSummary';    // the tab's lead card (a vibe's hook; VOCAB card)
 
   // The bar is the most information on the tab in the least space, and none
   // of it is labelled with more than one word. The dots open the key.
@@ -587,6 +588,7 @@ function renderSummary() {
 
   const big = el('div', 'load-num num');
   big.style.fontSize = '40px';
+  big.dataset.hero = '';                // the tab's hero figure (VOCAB headline)
   const sub = el('div');
 
   // One number, one meaning. This used to headline the distance from
@@ -601,7 +603,8 @@ function renderSummary() {
   const zone = z ? zoneOf(t.cal, z) : null;
   big.textContent = Math.abs(remain).toLocaleString();
   big.style.color = z ? zoneColor(zone) : (remain < 0 ? 'var(--bad)' : 'var(--chalk)');
-  sub.appendChild(el('div', 'eyebrow', remain < 0 ? 'kcal over target' : 'kcal left today'));
+  // [data-tag]: written in lower case, shown in caps by the preset (type.tag)
+  sub.appendChild(el('div', 'eyebrow', remain < 0 ? 'kcal over target' : 'kcal left today')).dataset.tag = '';
   sub.appendChild(el('div', 'num fuel-eaten',
     t.cal.toLocaleString() + ' eaten  ·  target ' + targets.cal.toLocaleString()));
   top.append(big, sub);
@@ -3255,7 +3258,7 @@ export function openTargets(onSaved) {
     const big = el('div', 'load-num num', n.cal.toLocaleString());
     big.style.fontSize = '30px';
     preview.appendChild(big);
-    preview.appendChild(el('div', 'eyebrow', 'kcal / day'));
+    preview.appendChild(el('div', 'eyebrow', 'kcal / day')).dataset.tag = '';
 
     const row = el('div', 'stat-row');
     row.style.marginTop = '10px';

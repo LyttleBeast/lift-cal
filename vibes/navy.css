@@ -1,0 +1,367 @@
+/* vibes-css:begin — generated from vibes/defs/navy.js by tools-check/vibes-css.mjs. Do not edit between the markers: change the definition, then run it with --write. */
+:root[data-vibe="navy"] {
+  --shape-rule-ink: #6a80bb;
+  --shape-rule-hair: 1px;
+  --shape-rule-head-0: 2px;
+  --shape-rule-head-1: 0;
+  --shape-rule-head-2: 0;
+  --shape-rule-sub-0: 2px;
+  --shape-rule-sub-1: 0;
+  --shape-rule-sub-2: 0;
+  --shape-rule-total-0: 2px;
+  --shape-rule-total-1: 0;
+  --shape-rule-total-2: 0;
+  --shape-leader-ink: #b3bfd6;
+  --shape-leader-dot: 1.5px;
+  --shape-leader-pitch: 4px;
+  --shape-leader-min: 16px;
+  --shape-band-fill: #1d3463;
+  --shape-band-ink: #f4f0e8;
+  --shape-band-height: 30px;
+  --shape-gutter: 2px;
+  --shape-keyline-ink: #f4f0e8;
+  --shape-keyline-width: 1px;
+  --shape-lead-keyline: 0;
+  --shape-cue-ink: #f4f0e8;
+  --shape-chosen-tick: 0;
+  --shape-rank-column: 0;
+  --rack: #0a183b;
+  --bar: #0f223f;
+  --collar: #1d3463;
+  --knurl: #6a80bb;
+  --chalk: #f4f0e8;
+  --steel: #b3bfd6;
+  --dim: #8f9eb9;
+  --p-red: #ff7452;
+  --p-blue: #66a6ff;
+  --p-yellow: #ffe16b;
+  --p-green: #3cc4a0;
+  --p-white: #eee9df;
+  --p-chrome: #a9b4c6;
+  --good: #3cc4a0;
+  --warn: #ffe16b;
+  --bad: #ff7452;
+  --ink-plate: #0a183b;
+  --accent: #acdc9c;
+  --focus: #acdc9c;
+  --accent-press: #9bca8b;
+  --ink: #0a183b;
+  --danger: #ff7452;
+  --on-danger: #0a183b;
+  --done: #3cc4a0;
+  --ink-go: #0a183b;
+  --well: #0a183b;
+  --knockout: #0a183b;
+  --inverse: #f4f0e8;
+  --cal-mark: #f4f0e8;
+  --raised: #1d3463;
+  --track: #1d3463;
+  --grip: #6a80bb;
+  --faint: #8f9eb9;
+  --knob: #b3bfd6;
+  --greet-name: #acdc9c;
+  --tint-runway: rgba(10,24,59,.55);
+  --tint-runway-edge: rgba(10,24,59,.7);
+  --font: 'navy-overpass', 'Archivo', system-ui, -apple-system, sans-serif;
+  --font-mono: ui-monospace, monospace;
+  --font-display: 'navy-overpass', 'Archivo', system-ui, -apple-system, sans-serif;
+  --font-italic: 'navy-overpass', 'Archivo', system-ui, -apple-system, sans-serif;
+  --font-num: 'navy-num', 'navy-overpass', system-ui, -apple-system, sans-serif;
+  --r: 10px;
+  --r-sm: 6px;
+  --r-sheet: 18px;
+  --r-tile: 8px;
+  --r-pill: 999px;
+  --r-plate: 2px;
+  --r-chip: 3px;
+  --r-mark: 4px;
+  --r-idx: 4px;
+  --r-round: 50%;
+  --r-hair: 1px;
+  --r-bubble: 12px;
+  --r-badge: 8px;
+  --shadow-peek: 0 10px 30px rgba(0,0,0,.45);
+  --shadow-rest: 0 6px 24px rgba(0,0,0,.45);
+  --shadow-toast: 0 8px 28px rgba(0,0,0,.5);
+  --shadow-fab: 0 8px 26px rgba(0,0,0,.58), 0 1px 0 rgba(0,0,0,.35);
+  --shadow-fab-pressed: 0 3px 10px rgba(0,0,0,.5);
+  --shadow-tour-card: 0 18px 50px rgba(0,0,0,.55);
+  --shadow-cal-tick: 0 0 0 1px rgba(10,24,59,.55);
+  --shadow-flame: inset 0 0 0 1px rgba(172,220,156,.35);
+  --shadow-kpi-day: inset 0 0 0 1.2px #6a80bb;
+  --shadow-kpi-day-on: none;
+  --shadow-kpi-today: 0 0 0 1.5px #0a183b, 0 0 0 2.5px #b3bfd6;
+  --shadow-kpi-today-on: 0 0 0 1.5px #0a183b, 0 0 0 2.5px #f4f0e8;
+  --shadow-guide-eaten: inset 0 0 0 1px #6a80bb;
+  --shadow-traj-good: 0 0 0 4px rgba(60,196,160,.18);
+  --shadow-traj-warn: 0 0 0 4px rgba(255,225,107,.18);
+  --shadow-traj-bad: 0 0 0 4px rgba(255,116,82,.18);
+  --shadow-tour-lit: 0 0 0 2px #acdc9c;
+  --shadow-cal-head: none;
+  --shadow-cal-target: none;
+  --blur-sheet: blur(3px);
+  --blur-dock: blur(18px) saturate(140%);
+  --blur-wk-bar: blur(16px);
+  --scrim-tour: linear-gradient(to bottom, rgba(10,24,59,.55) 0%, rgba(10,24,59,.94) 42%);
+  --video-bg: #000000;
+  --rack-rgb: 10,24,59;
+  --shade-rgb: 0,0,0;
+  --lift-rgb: 255,255,255;
+  --accent-rgb: 172,220,156;
+  --p-yellow-rgb: 255,225,107;
+  --warn-rgb: 255,225,107;
+  --p-red-rgb: 255,116,82;
+  --bad-rgb: 255,116,82;
+  --danger-rgb: 255,116,82;
+  --p-blue-rgb: 102,166,255;
+  --p-green-rgb: 60,196,160;
+  --done-rgb: 60,196,160;
+  --good-rgb: 60,196,160;
+  --p-white-rgb: 238,233,223;
+  --steel-rgb: 179,191,214;
+  --tag-ink-w: #ffe16b;
+  --tag-ink-f: #ff7452;
+  --tag-ink-d: #66a6ff;
+  --ink-of-p-red: #ff7452;
+  --ink-of-p-blue: #66a6ff;
+  --ink-of-p-yellow: #ffe16b;
+  --ink-of-p-green: #3cc4a0;
+  --ink-of-p-white: #eee9df;
+  --ink-of-p-chrome: #a9b4c6;
+}
+/* vibes-css:end */
+
+/* ================= Navy, by hand =================
+   Rack at night on the interstate: a deep navy ground, warm-white legends,
+   every word and figure set in Overpass (the open-source cut of the US
+   highway-sign alphabet), and one pale pistachio mark for the accent's one
+   job. The spec, with every number's source, is ~/dev/vibes-night/design/
+   navy.md; the colours above are generated from vibes/defs/navy.js and are
+   not restated here.
+
+   A SIMPLE VIBE: v1's layout. What is below is what the tokens cannot say on
+   the web:
+     1. the face (@font-face; weight only through font-variation-settings —
+        rack.css's 'wdth' settings stay, and a font with no wdth axis ignores
+        them);
+     2. the type presets. Natively a preset (T.text.*) reaches every site that
+        spends it; on the web each is literal CSS, so each preset Navy changes
+        is restated on the selectors whose native twin spends that preset.
+        The sites native sets literally (a section title, the settings row,
+        the COACH title, a chart's caps label …) keep v1's size, case and
+        tracking here too, in Overpass;
+     3. the measured surfaces, kept in Archivo on v1's metrics;
+     4. the seven `shape`-grade looks the definition names (design/VOCAB.md),
+        and the tints rack.css writes as literal alphas where Navy's differ.
+   Geometry is v1's: a border a look drops is drawn transparent, not removed,
+   so no box moves by a pixel it did not have to.
+
+   SPECIFICITY, as vibes/chalk.css: a preset's rule is
+   `[data-vibe="navy"] :where(.x)`: (0,1,0), the same as rack.css's `.x`,
+   which it beats by coming later, and below any local resize rack.css writes
+   as `.parent .x`, which keeps winning, as it does in v1. */
+
+/* ---------- the face ----------
+   Overpass v4.000 (Google Fonts v19; RedHatOfficial c580d28; OFL 1.1, no
+   Reserved Font Name; OFL.txt and FONTS.json beside the files). Variable,
+   wght 100-900, subset to Google's latin range plus → ↳ ≈ × ÷ ±. Named for
+   the vibe, so an installed Overpass never stands in. The digits file is the
+   Vibes card's figure alone (--font-num): the one Navy file every device
+   prefetches for the picker. */
+@font-face {
+  font-family: 'navy-overpass';
+  src: url(navy/fonts/Overpass-latin.woff2) format('woff2');
+  font-weight: 100 900; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'navy-num';
+  src: url(navy/fonts/Overpass-digits.woff2) format('woff2');
+  font-weight: 100 900; font-style: normal; font-display: block;
+  unicode-range: U+0030-0039;
+}
+
+/* ---------- type presets (vibes/defs/navy.js `type`) ---------- */
+
+/* h1 24 (v1 26: "September 2026" must fit at 320), h2 18, h3 16 (v1 15) */
+[data-vibe="navy"] :where(h1) { font-size: 24px; }
+[data-vibe="navy"] :where(h3) { font-size: 16px; }
+
+/* eyebrow: card heads, screen and sheet eyebrows. 13 / 600 steel, sentence
+   case as authored. */
+[data-vibe="navy"] :where(.eyebrow) {
+  font-size: 13px; letter-spacing: 0; text-transform: none; color: var(--steel);
+  font-variation-settings: 'wght' 600;
+}
+
+/* btn / btnLg: v1's sizes and weight, no tracking, btnLg in sentence case */
+[data-vibe="navy"] :where(.btn) { letter-spacing: 0; }
+[data-vibe="navy"] :where(.btn-lg) { letter-spacing: 0; text-transform: none; }
+
+/* dockLbl: 12 / 600, sentence case, dim at rest (chalk when active, v1's
+   rule). (0,2,1) to beat rack.css's `.dock button` twice over. */
+[data-vibe="navy"] .dock button {
+  font-size: 12px; letter-spacing: 0; text-transform: none;
+  font-variation-settings: 'wght' 600;
+}
+
+/* fieldLbl */
+[data-vibe="navy"] :where(.field-lbl),
+[data-vibe="navy"] .field :where(label) {
+  font-size: 13px; letter-spacing: 0; text-transform: none; color: var(--steel);
+  font-variation-settings: 'wght' 600;
+}
+
+/* note */
+[data-vibe="navy"] :where(.note) { font-size: 13px; }
+
+/* statLbl (statVal is v1's 20). statLbl is also what native sets the KPI
+   label, the calendar's weekday row, the set table's column heads and the
+   plate strip's words in. */
+[data-vibe="navy"] :where(.stat-lbl, .kpi-lbl, .set-hd),
+[data-vibe="navy"] .cal-dow :where(span),
+[data-vibe="navy"] .plate-strip :where(.lbl) {
+  font-size: 12px; letter-spacing: 0; text-transform: none; color: var(--steel);
+  font-variation-settings: 'wght' 600;
+}
+
+/* The figure presets in tabular Overpass: its default digits are
+   proportional, where Archivo's are not, so the two v1 sets without
+   tabular-nums get it (native: the presets' tnum). */
+[data-vibe="navy"] :where(.kpi-val, .headline-v) {
+  font-variant-numeric: tabular-nums; font-feature-settings: 'tnum' 1;
+}
+/* timer: tracking 0 (v1 -.01em) */
+[data-vibe="navy"] :where(.timer) { letter-spacing: 0; }
+/* headline: 34 / 800, tracking -.01em (v1 -.02em) */
+[data-vibe="navy"] :where(.headline-v) { letter-spacing: -.01em; }
+/* loadNum: the call sites' own sizes (set inline), tracking 0 */
+[data-vibe="navy"] :where(.load-num) { letter-spacing: 0; }
+
+/* youGreet: 26 / 800, -.01em, line-height 1.1. The name keeps the accent
+   (ask E4, a role that would ink it, is a request, not a key). */
+[data-vibe="navy"] :where(.you-greet) { font-size: 26px; letter-spacing: -.01em; line-height: 1.1; }
+
+/* chip / segBtn */
+[data-vibe="navy"] :where(.chip) { font-size: 12px; }
+[data-vibe="navy"] :where(.seg-btn) {
+  font-size: 12px; letter-spacing: 0; text-transform: none;
+  font-variation-settings: 'wght' 600;
+}
+
+/* A meter row's figure ("142/200", 11px, tabular): Overpass's tabular digits
+   (1232/2000 a digit) are wider than Archivo's, so the widest real value ran
+   4px past v1's 42px column (fit at 320 and 390). The column grows to hold it
+   and the track beside it gives the 4px back; the macro rows' own 74px
+   (rack.css .macro-rows .vol-val) still wins where it is set. The same rule
+   as vibes/chalk.css's, for the same reason. */
+[data-vibe="navy"] :where(.vol-val) { width: auto; min-width: 42px; }
+
+/* ---------- the measured surfaces: Archivo, on v1's metrics ----------
+   The Coach card (190 / 164), the goal chips, the recap's feel chips, the
+   movement chips and the estimate row are laid out against Archivo's own
+   advances (tools-check/touch-target.mjs; native MEASURED_FACE, which Navy
+   keeps by handing in no fit table). Overpass runs up to 4.3% wider on real
+   Coach lines and its 1.266 line is taller than two of the card's fixed
+   lines, so these keep v1's face and every size v1 gives them. */
+[data-vibe="navy"] :where(.coach-card, .coach-goal-opt, .move-opt, .pe-row),
+[data-vibe="navy"] .feel-grid :where(.coach-chip) {
+  font-family: 'Archivo', system-ui, -apple-system, sans-serif;
+}
+
+/* ---------- the looks (vibes/defs/navy.js `variants`) ---------- */
+
+/* card · flat: a navy blank on the navy page, no edge — told apart by value.
+   The 1px border stays, in the card's own colour, so nothing moves. The PR
+   card and the install card keep their accent edges (v1's). The tour and
+   onboarding card is a card too (native cardSkin). */
+[data-vibe="navy"] :where(.card:not(.pr-card, .install-card), .ob-card) { border-color: var(--bar); }
+
+/* youCard · flat: Wins and Improve lose their 3pt side stripe and carry their
+   colour as a 2pt rule along the top; the titles still say which is which. */
+[data-vibe="navy"] #view-you .card.card-wins,
+[data-vibe="navy"] #view-you .card.card-improve { border-left: 1px solid var(--bar); border-top-width: 2px; }
+[data-vibe="navy"] #view-you .card.card-wins { border-top-color: var(--good); }
+[data-vibe="navy"] #view-you .card.card-improve { border-top-color: var(--warn); }
+
+/* coachCard · flat: the 1pt border in the ground's colour; pressed still
+   shows knurl (rack.css .coach-card:active, which outranks this). */
+[data-vibe="navy"] :where(.coach-card) { border-color: var(--bar); }
+
+/* statRow · line: a box-score line. No tile, no ground; a 1px collar rule
+   between the columns; the columns and their padding as v1's. Mini stats
+   take the same look. */
+[data-vibe="navy"] :where(.stat, .mini-stat) {
+  background: transparent; border-color: transparent; border-radius: 0;
+}
+[data-vibe="navy"] :where(.stat + .stat, .mini-stat:nth-child(even)) { border-left-color: var(--collar); }
+
+/* kpi · plain: the well recess without its corner glow; the delta is bare
+   signed text with its arrow (tint.pill* are 0: no pill ground). */
+[data-vibe="navy"] .kpi { background: var(--well); }
+[data-vibe="navy"] .delta-pill,
+[data-vibe="navy"] .delta-pill.up,
+[data-vibe="navy"] .delta-pill.down,
+[data-vibe="navy"] .delta-pill.warn { background: transparent; }
+
+/* field · square: a square write-in plate (radius.plate) with a knurl edge,
+   4.10 on a card and 4.48 on the page (v1's collar edge is 1.30); focus
+   still turns it pistachio (rack.css's :focus rules outrank these). */
+[data-vibe="navy"] .field :where(input, select, textarea),
+[data-vibe="navy"] .qty-row :where(input),
+[data-vibe="navy"] .picker-search :where(input),
+[data-vibe="navy"] :where(.paste-box) {
+  border-color: var(--knurl); border-radius: var(--r-plate);
+}
+/* Placeholders in dim, as native draws them (Field.jsx placeholderTextColor
+   T.colors.dim): 5.87 on a card, where Chrome's own #757575 is 3.5.
+   rack.css sets one only on .set-row, which is dim already. */
+[data-vibe="navy"] ::placeholder { color: var(--dim); }
+
+/* addTile · flat: every tile on the well, no border, no wash. Photo is told
+   by its pistachio icon well alone; the lit tiles' icon well and tag sit on
+   raised (steel 6.57), where grip left the tag at 2.09. Tags square. A press
+   still shows knurl, and an off tile stays at v1's .42. The same rules as
+   vibes/chalk.css's, for the one shared look (vocab.js addTile · flat). */
+[data-vibe="navy"] .add-tile,
+[data-vibe="navy"] .add-tile.hero,
+[data-vibe="navy"] .add-tile.lit { background: var(--well); border-color: transparent; }
+[data-vibe="navy"] .add-tile:not(:disabled):active { border-color: var(--knurl); }
+[data-vibe="navy"] .add-tile.lit .ic,
+[data-vibe="navy"] .add-tile.lit .tag { background: var(--raised); }
+[data-vibe="navy"] .add-tile .tag { border-radius: var(--r-chip); }
+
+/* ---------- tints rack.css writes as literal alphas ---------- */
+
+/* setRow: the W / F / D badges have no wash (tint.tag* 0): the letter stands
+   bare on the row in its plate colour (tagInk), 12.29 / 5.95 / 6.40 on a
+   card; the numbered badges keep their raised box. A done row at .10 (v1
+   .07), seen from the bench; the tick's flash eases into it. The drop rail
+   and + Drop's edge at .70, real 3:1 graphics on navy (3.85). */
+[data-vibe="navy"] .ex-block .set-idx.t-W,
+[data-vibe="navy"] .ex-block .set-idx.t-F,
+[data-vibe="navy"] .ex-block .set-idx.t-D,
+[data-vibe="navy"] .rt-sets .set-idx.t-W,
+[data-vibe="navy"] .rt-sets .set-idx.t-F,
+[data-vibe="navy"] .rt-sets .set-idx.t-D { background: transparent; }
+[data-vibe="navy"] .ex-block .set-row.done { background: rgba(var(--done-rgb),.1); }
+[data-vibe="navy"] .ex-block .set-row.flash { animation-name: navy-setFlash; }
+@keyframes navy-setFlash {
+  0% { background: rgba(var(--accent-rgb),.28); }
+  100% { background: rgba(var(--done-rgb),.1); }
+}
+[data-vibe="navy"] .ex-block .set-row.drop::before,
+[data-vibe="navy"] .rt-sets .set-row.drop::before { background: rgba(var(--p-blue-rgb),.7); }
+[data-vibe="navy"] .drop-add { border-color: rgba(var(--p-blue-rgb),.7); }
+
+/* "Next week" loses its box-in-a-box (tint.reviewBg / reviewBorder 0): its
+   pistachio head carries it. The border is drawn transparent, not removed. */
+[data-vibe="navy"] .review-take { background: transparent; border-color: transparent; }
+
+/* ---------- the Vibes sheet: Navy's own tile ----------
+   Scoped to the tile itself: a worn vibe's [data-vibe] rules would otherwise
+   reach every tile. The figure in the Overpass ExtraBold digits, cap-height
+   matched to v1's (24px caps: 34.29 x .700), its baseline where v1's is: v1
+   sets 35px Archivo (ascent .878, descent .21) at line-height .95, a baseline
+   28.32px down; Overpass's ascent .883 and descent .383 put the same baseline
+   at a 39.48px line. The figure is absolutely placed, so nothing moves. */
+[data-vibe="navy"].vibe-in .vibe-num { font-size: 34.29px; line-height: 39.48px; letter-spacing: 0; }

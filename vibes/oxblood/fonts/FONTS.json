@@ -1,0 +1,177 @@
+{
+  "vibe": "oxblood",
+  "families": [
+    {
+      "family": "Schibsted Grotesk",
+      "designer": "Bakken & Bæck, Henrik Kongsvoll",
+      "googleFontsDir": "ofl/schibstedgrotesk"
+    }
+  ],
+  "version": "Version 1.100 (gftools 0.9.25; upstream d485f61)",
+  "upstream": {
+    "repository": "https://github.com/schibsted/schibsted-grotesk",
+    "commit": "d485f61f105e1b3935f4d21dfb4d371359798603",
+    "per": "METADATA.pb source.commit; the upstream fonts/variable/SchibstedGrotesk[wght].ttf at this commit is byte-identical to google/fonts' file (sha256 6ceeadf6…823d, both fetched)"
+  },
+  "licence": "OFL-1.1",
+  "licenceConfirmedFrom": [
+    {
+      "file": "https://raw.githubusercontent.com/google/fonts/main/ofl/schibstedgrotesk/OFL.txt",
+      "sha256": "3b4f3063b6ac7c1e403e2c4a5e8ef3a58190ff83ed7b15af66511858699139ce",
+      "says": "This Font Software is licensed under the SIL Open Font License, Version 1.1."
+    },
+    {
+      "file": "https://raw.githubusercontent.com/schibsted/schibsted-grotesk/d485f61f105e1b3935f4d21dfb4d371359798603/OFL.txt",
+      "sha256": "3b4f3063b6ac7c1e403e2c4a5e8ef3a58190ff83ed7b15af66511858699139ce",
+      "says": "byte-identical to google/fonts' OFL.txt"
+    },
+    {
+      "file": "https://raw.githubusercontent.com/google/fonts/main/ofl/schibstedgrotesk/METADATA.pb",
+      "sha256": "d1adceaf0f93819b907c4ee7777944372ba18ea801128e730c9638a10c1449ac",
+      "says": "license: \"OFL\""
+    }
+  ],
+  "copyright": "Copyright 2023 The Schibsted-Grotesk Project Authors (https://github.com/schibsted/schibsted-grotesk)",
+  "reservedFontName": "none (the OFL.txt header names no Reserved Font Name, so a subset may keep the name)",
+  "subset": {
+    "tool": "subset-font 2.4.0 (harfbuzz hb-subset wasm; layout features: all kept; name IDs: harfbuzz default)",
+    "alsoUsed": "opentype.js 1.3.4 for names and metrics; harfbuzzjs 0.4.15 for tnum and cmap checks",
+    "script": "~/dev/vibes-night/tools/oxblood-fonts-s1/build.mjs (coverage: coverage.mjs beside it)",
+    "unicodeRange": "U+0020-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2190-2193, U+2212, U+2215, U+2248, U+2264-2265, U+FEFF, U+FFFD",
+    "rangeNote": "Chalk's range, so both vibes cover the same text: Google's latin plus the arrows and signs Rack prints. 229 code points land in the font."
+  },
+  "retrieved": "2026-09-29",
+  "checks": {
+    "tnum": "digits 0-9 advance 1300/2048 with tnum at wght 400, 600, 700, 800 and 900 (web) and in each static",
+    "lineMetrics": "UPM 2048; hhea 2000 / -528 / 0, so minLh 1.234",
+    "falls back (not in the font at all; Archivo lacks them too)": "⋯ ✓ ✕ ↳ ⚙ ⚠ ✎ ▾ ▴",
+    "present": "’ “ ” — – · … × ÷ ± − → ← ↑ ↓ › ‹ ≈ ≤ ≥ € £ °",
+    "outsideTheRange": "Δ Σ σ τ ∞ ⌈ ⌉ appear in the sources only inside comments (weightmodel.js, coach-overlap.js, coach-prog.js, analytics.js), so nothing drawn needs them. Text a person types (food, exercise and routine names) outside U+0020-00FF, e.g. latin-ext letters such as Ł ő ş, falls back glyph by glyph: on the web to Archivo (next in --font), on iOS to the system face; the full upstream font has latin-ext, the subset drops it for size, as Chalk's does.",
+    "recheck": "2026-09-29, resumed session: google/fonts variable file and OFL.txt re-fetched (same sha256); build.mjs re-run from the sources reproduces all six shipped files byte for byte; the committed files decoded and re-checked with verify-committed.mjs beside build.mjs (sha256, bytes, wght 400-900, tnum 1300 at 400/600/700/800/900 while pnum digits vary 708-1358, usWeightClass, PostScript names, fsType 0 = installable)"
+  },
+  "web": [
+    {
+      "file": "vibes/oxblood/fonts/SchibstedGrotesk-latin.woff2",
+      "family": "Schibsted Grotesk",
+      "cssFamily": "oxblood-schibsted (proposed; vibes/oxblood.css's @font-face is the record)",
+      "axes": "wght 400–900",
+      "unicodeRange": "U+0020-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2190-2193, U+2212, U+2215, U+2248, U+2264-2265, U+FEFF, U+FFFD",
+      "bytes": 49428,
+      "sha256": "38a272f213e61b2985ad2d5d48b9765c2046119908b54a52268f3914b5c7f3fc",
+      "source": {
+        "url": "https://raw.githubusercontent.com/google/fonts/main/ofl/schibstedgrotesk/SchibstedGrotesk%5Bwght%5D.ttf",
+        "bytes": 176068,
+        "sha256": "6ceeadf6be8e1fd7687011c7fa38ed0edd1abe967a0b73d97caec183552e823d",
+        "ps": "SchibstedGrotesk-Regular",
+        "version": "Version 1.100;gftools[0.9.25]"
+      }
+    },
+    {
+      "file": "vibes/oxblood/fonts/SchibstedGrotesk-digits.woff2",
+      "family": "Schibsted Grotesk",
+      "cssFamily": "oxblood-num (proposed; vibes/oxblood.css's @font-face is the record)",
+      "role": "picker digits (the Vibes card figure; the tile draws 800)",
+      "axes": "wght 400–900",
+      "unicodeRange": "U+0030-0039",
+      "bytes": 6560,
+      "sha256": "9e2d0e5810e93ef33d537a2cb7efdefd6c2f8d9e3acc13d28f3c52b81d638d9f",
+      "source": {
+        "url": "https://raw.githubusercontent.com/google/fonts/main/ofl/schibstedgrotesk/SchibstedGrotesk%5Bwght%5D.ttf",
+        "bytes": 176068,
+        "sha256": "6ceeadf6be8e1fd7687011c7fa38ed0edd1abe967a0b73d97caec183552e823d"
+      }
+    },
+    {
+      "file": "vibes/oxblood/fonts/SchibstedGrotesk-punct.woff2",
+      "family": "Schibsted Grotesk",
+      "cssFamily": "oxblood-schibsted (a second face of the text family, unicode-range U+0025, U+002C, U+002E, U+003A-003B, declared after the latin face so it wins for those five)",
+      "role": "the figure punctuation without its tabular forms: Schibsted's tnum makes , . : ; and % 1300/2048 wide like a digit (the comma is 622 without it), so with tnum on — every figure in Rack — \"1,950\" drew as \"1 , 950\" and \"25:00\" as \"25 : 00\". Subset with every layout feature but tnum, so the digits stay tabular and these five keep their proportional forms.",
+      "axes": "wght 400–900",
+      "unicodeRange": "U+0025, U+002C, U+002E, U+003A-003B",
+      "features": "all but tnum",
+      "bytes": 1756,
+      "sha256": "2530101b119bae6408117f17e818e64db6d4564ca04732d76b894ed0d2462199",
+      "build": "~/dev/vibes-night/tools/oxblood-punct-s1/build.mjs (subset-font 2.4.0's harfbuzz hb-subset wasm and call, the feature set minus 'tnum'; fontverter 2.0.0 for woff2); checks in report.json beside it: each character's advance equals the source's proportional one at wght 400/600/700/800/900, and tnum changes nothing; rebuilt twice, same sha256",
+      "source": {
+        "url": "https://raw.githubusercontent.com/google/fonts/main/ofl/schibstedgrotesk/SchibstedGrotesk%5Bwght%5D.ttf",
+        "bytes": 176068,
+        "sha256": "6ceeadf6be8e1fd7687011c7fa38ed0edd1abe967a0b73d97caec183552e823d"
+      }
+    }
+  ],
+  "native": [
+    {
+      "key": "SchibstedGrotesk_400",
+      "file": "assets/fonts/SchibstedGrotesk/SchibstedGrotesk_400.ttf",
+      "family": "SchibstedGrotesk",
+      "ps": "SchibstedGrotesk-Regular",
+      "usWeightClass": 400,
+      "version": "Version 1.100; ttfautohint (v1.8.4.7-5d5b);gftools[0.9.25]",
+      "unicodeRange": "U+0020-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2190-2193, U+2212, U+2215, U+2248, U+2264-2265, U+FEFF, U+FFFD",
+      "bytes": 76280,
+      "sha256": "977b066e182d3770bd1e522d17c572797364c41cd6f9eb05e2cdcf3cff4663d9",
+      "source": {
+        "url": "https://raw.githubusercontent.com/schibsted/schibsted-grotesk/d485f61f105e1b3935f4d21dfb4d371359798603/fonts/ttf/SchibstedGrotesk-Regular.ttf",
+        "bytes": 122624,
+        "sha256": "e2cc0926fd159816bd934df5875000077e5ec8b1f9cd18154fe4d3e482b03b42"
+      }
+    },
+    {
+      "key": "SchibstedGrotesk_600",
+      "file": "assets/fonts/SchibstedGrotesk/SchibstedGrotesk_600.ttf",
+      "family": "SchibstedGrotesk",
+      "ps": "SchibstedGrotesk-SemiBold",
+      "usWeightClass": 600,
+      "version": "Version 1.100; ttfautohint (v1.8.4.7-5d5b);gftools[0.9.25]",
+      "unicodeRange": "U+0020-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2190-2193, U+2212, U+2215, U+2248, U+2264-2265, U+FEFF, U+FFFD",
+      "bytes": 76240,
+      "sha256": "96331e9690c6a4e18ad4e08223e4007656d366a56091717cb7af4307c67d794f",
+      "source": {
+        "url": "https://raw.githubusercontent.com/schibsted/schibsted-grotesk/d485f61f105e1b3935f4d21dfb4d371359798603/fonts/ttf/SchibstedGrotesk-SemiBold.ttf",
+        "bytes": 123064,
+        "sha256": "b9d93d5f737a3afdc9ec47ce97968ca41450413f741900927c382b8707798854"
+      }
+    },
+    {
+      "key": "SchibstedGrotesk_700",
+      "file": "assets/fonts/SchibstedGrotesk/SchibstedGrotesk_700.ttf",
+      "family": "SchibstedGrotesk",
+      "ps": "SchibstedGrotesk-Bold",
+      "usWeightClass": 700,
+      "version": "Version 1.100; ttfautohint (v1.8.4.7-5d5b);gftools[0.9.25]",
+      "unicodeRange": "U+0020-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2190-2193, U+2212, U+2215, U+2248, U+2264-2265, U+FEFF, U+FFFD",
+      "bytes": 76632,
+      "sha256": "c59fbc456ac93af0a8d4006a856c268067f2a6d684e578e4ce4cefb080d3543d",
+      "source": {
+        "url": "https://raw.githubusercontent.com/schibsted/schibsted-grotesk/d485f61f105e1b3935f4d21dfb4d371359798603/fonts/ttf/SchibstedGrotesk-Bold.ttf",
+        "bytes": 123216,
+        "sha256": "d1d1ed9301f19a994161b0b763db11cce356204477e81bf3434d2f5dd85905e0"
+      }
+    },
+    {
+      "key": "SchibstedGrotesk_800",
+      "file": "assets/fonts/SchibstedGrotesk/SchibstedGrotesk_800.ttf",
+      "family": "SchibstedGrotesk",
+      "role": "also the picker face (the Vibes card figure)",
+      "ps": "SchibstedGrotesk-ExtraBold",
+      "usWeightClass": 800,
+      "version": "Version 1.100; ttfautohint (v1.8.4.7-5d5b);gftools[0.9.25]",
+      "unicodeRange": "U+0020-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2190-2193, U+2212, U+2215, U+2248, U+2264-2265, U+FEFF, U+FFFD",
+      "bytes": 76788,
+      "sha256": "f98931ebdd193dd03c371392c9605ba008dd4d482d6266d2a71e31c1434627d5",
+      "source": {
+        "url": "https://raw.githubusercontent.com/schibsted/schibsted-grotesk/d485f61f105e1b3935f4d21dfb4d371359798603/fonts/ttf/SchibstedGrotesk-ExtraBold.ttf",
+        "bytes": 123428,
+        "sha256": "2a00896fe6bf6507323f4028e157858c7ba3cb82b9ba009bbc058d5b10230b96"
+      }
+    }
+  ],
+  "totals": {
+    "webBytesPerFamily": {
+      "Schibsted Grotesk": 51184,
+      "picker digits": 6560
+    },
+    "nativeBytes": 305940,
+    "nativeFiles": 4
+  }
+}

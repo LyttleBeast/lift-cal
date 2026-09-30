@@ -108,6 +108,10 @@ function cssText(d, role) {
     case 'image':                                   // a photo band's height, px
       if (typeof v === 'number') return len(v);
       throw new Error(role.path + ' is not a number');
+    case 'type':                                    // a preset's key (type.tag.*), by its unit
+      if (typeof v !== 'number') throw new Error(role.path + ' is not a number');
+      if (role.unit === 'case') return v ? 'uppercase' : 'none';
+      return num(v) + (role.unit || '');
     default: {
       const s = sideOf(v, 'web');
       if (typeof s !== 'string') throw new Error(role.path + ' is not a string');

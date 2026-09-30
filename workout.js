@@ -1405,7 +1405,7 @@ function renderPlates(total, barWeight = 45, u = 'lb') {
   const strip = el('div', 'plate-strip');
   strip.appendChild(el('span', 'lbl', u === 'lb' ? 'Per side' : 'Per side · lb plates'));
   let side = (total - barWeight) / 2;
-  if (side <= 0) { strip.appendChild(el('span', 'lbl', 'bar only')); return strip; }
+  if (side <= 0) { strip.appendChild(el('span', 'lbl', 'bar only')).dataset.tag = ''; return strip; }
   PLATES.forEach(p => {
     let n = Math.floor(side / p.w);
     if (n <= 0) return;

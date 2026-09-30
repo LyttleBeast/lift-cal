@@ -1,0 +1,176 @@
+{
+  "vibe": "chalk",
+  "families": [
+    {
+      "family": "Sofia Sans",
+      "designer": "Lettersoup, Botio Nikoltchev, Ani Petrova",
+      "googleFontsDir": "ofl/sofiasans"
+    },
+    {
+      "family": "Sofia Sans Condensed",
+      "designer": "Lettersoup, Botio Nikoltchev, Ani Petrova",
+      "googleFontsDir": "ofl/sofiasanscondensed"
+    }
+  ],
+  "version": "Version 4.101 (google/fonts; css2 v20 / v6)",
+  "upstream": {
+    "repository": "https://github.com/lettersoup/Sofia-Sans",
+    "commit": "185877d082cebb40facd65143326147431863688",
+    "per": "METADATA.pb source.commit"
+  },
+  "licence": "OFL-1.1",
+  "licenceConfirmedFrom": [
+    {
+      "file": "https://raw.githubusercontent.com/google/fonts/main/ofl/sofiasans/OFL.txt",
+      "sha256": "3e824d5099202de2c98cbd8e5ecba54da7d220c1ad851330726e65f3e60842d1",
+      "says": "SIL Open Font License, Version 1.1"
+    },
+    {
+      "file": "https://raw.githubusercontent.com/google/fonts/main/ofl/sofiasanscondensed/OFL.txt",
+      "sha256": "3e824d5099202de2c98cbd8e5ecba54da7d220c1ad851330726e65f3e60842d1",
+      "says": "byte-identical to the Sofia Sans OFL.txt"
+    },
+    {
+      "file": "https://raw.githubusercontent.com/google/fonts/main/ofl/sofiasans/METADATA.pb",
+      "sha256": "980ff4279cf06a9dde0b7bff1fdb63fbda17d61421488c8951d0c5a62ee4a7ad",
+      "says": "license: \"OFL\""
+    },
+    {
+      "file": "https://raw.githubusercontent.com/google/fonts/main/ofl/sofiasanscondensed/METADATA.pb",
+      "sha256": "ed33bcaa0c543abaabbcbada251be46eeef6420b7dcfcbf6ccaaf66e2c281dbc",
+      "says": "license: \"OFL\""
+    }
+  ],
+  "copyright": "Copyright 2019 The Sofia Sans Project Authors (https://github.com/lettersoup/Sofia-Sans)",
+  "reservedFontName": "none (the OFL.txt header names no Reserved Font Name, so a subset may keep the name)",
+  "subset": {
+    "tool": "subset-font 2.4.0 (harfbuzz hb-subset wasm; layout features: all kept; name IDs: harfbuzz default)",
+    "alsoUsed": "opentype.js 1.3.4 for names and checks",
+    "script": "~/dev/vibes-night/tools/chalk-fonts/build.mjs",
+    "unicodeRange": "U+0020-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2190-2193, U+2212, U+2215, U+2248, U+2264-2265, U+FEFF, U+FFFD"
+  },
+  "retrieved": "2026-09-27",
+  "web": [
+    {
+      "file": "vibes/chalk/fonts/SofiaSans-latin.woff2",
+      "family": "Sofia Sans",
+      "cssFamily": "chalk-sofia",
+      "axes": "wght 1–1000",
+      "unicodeRange": "U+0020-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2190-2193, U+2212, U+2215, U+2248, U+2264-2265, U+FEFF, U+FFFD",
+      "bytes": 52508,
+      "sha256": "82badf4a33f0a63ded6fdd4c06c87ff4b7303797bc215a41e35f90abcb8443af",
+      "source": {
+        "url": "https://raw.githubusercontent.com/google/fonts/main/ofl/sofiasans/SofiaSans%5Bwght%5D.ttf",
+        "bytes": 345684,
+        "sha256": "a3e1019b8867e21b75d26a7b59d4eb2c81d1acf6b69b9ae6cedca269fb68e291",
+        "ps": "SofiaSans-Regular",
+        "version": "Version 4.101"
+      }
+    },
+    {
+      "file": "vibes/chalk/fonts/SofiaSansCondensed-latin.woff2",
+      "family": "Sofia Sans Condensed",
+      "cssFamily": "chalk-sofia-cond",
+      "axes": "wght 1–1000",
+      "unicodeRange": "U+0020-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2190-2193, U+2212, U+2215, U+2248, U+2264-2265, U+FEFF, U+FFFD",
+      "bytes": 53416,
+      "sha256": "0f60aeffafb0a9289d2de9520f87fd3990abea3f2c7ced3f1838cfc209504c42",
+      "source": {
+        "url": "https://raw.githubusercontent.com/google/fonts/main/ofl/sofiasanscondensed/SofiaSansCondensed%5Bwght%5D.ttf",
+        "bytes": 346828,
+        "sha256": "3282c4e1a09d14e91c5fdb10aadee93048d017fa00f857f43fdcc29c989221fd",
+        "ps": "SofiaSansCondensed-Regular",
+        "version": "Version 4.101"
+      }
+    },
+    {
+      "file": "vibes/chalk/fonts/SofiaSansCondensed-digits.woff2",
+      "family": "Sofia Sans Condensed",
+      "role": "picker digits (the Vibes card figure)",
+      "axes": "wght 1–1000",
+      "unicodeRange": "U+0030-0039",
+      "bytes": 6972,
+      "sha256": "fa9afd69f38a25b3ddd7717cc70ee5681cf393c6d783b6adb47b52002b701387",
+      "source": {
+        "url": "https://raw.githubusercontent.com/google/fonts/main/ofl/sofiasanscondensed/SofiaSansCondensed%5Bwght%5D.ttf",
+        "bytes": 346828,
+        "sha256": "3282c4e1a09d14e91c5fdb10aadee93048d017fa00f857f43fdcc29c989221fd"
+      }
+    }
+  ],
+  "native": [
+    {
+      "key": "SofiaSans_400",
+      "file": "assets/fonts/SofiaSans/SofiaSans_400.ttf",
+      "family": "SofiaSans",
+      "ps": "SofiaSans-Regular",
+      "version": "Version 4.101",
+      "unicodeRange": "U+0020-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2190-2193, U+2212, U+2215, U+2248, U+2264-2265, U+FEFF, U+FFFD",
+      "bytes": 42968,
+      "sha256": "07ec8d9123d991a2cc1684a8e80c75da6addb8ef60a3a306700098a2196f8a18",
+      "source": {
+        "url": "https://fonts.gstatic.com/s/sofiasans/v20/Yq6E-LCVXSLy9uPBwlAThu1SY8Cx8rlT69B6sK3t.ttf",
+        "via": "https://fonts.googleapis.com/css2?family=Sofia+Sans:wght@400;600;700;800&family=Sofia+Sans+Condensed:wght@800 (user-agent \"node\")",
+        "bytes": 110624,
+        "sha256": "928f8146f72b210bb6553c356ad5d007462da1bc63a483b73161de305a35a64b"
+      }
+    },
+    {
+      "key": "SofiaSans_600",
+      "file": "assets/fonts/SofiaSans/SofiaSans_600.ttf",
+      "family": "SofiaSans",
+      "ps": "SofiaSans-SemiBold",
+      "version": "Version 4.101",
+      "unicodeRange": "U+0020-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2190-2193, U+2212, U+2215, U+2248, U+2264-2265, U+FEFF, U+FFFD",
+      "bytes": 43004,
+      "sha256": "093077d9c06e4a917664b54d49ed91d92b1ba798789aa4fd140522f7e560a76e",
+      "source": {
+        "url": "https://fonts.gstatic.com/s/sofiasans/v20/Yq6E-LCVXSLy9uPBwlAThu1SY8Cx8rlT69Ckt63t.ttf",
+        "via": "https://fonts.googleapis.com/css2?family=Sofia+Sans:wght@400;600;700;800&family=Sofia+Sans+Condensed:wght@800 (user-agent \"node\")",
+        "bytes": 110740,
+        "sha256": "360a4f02716e97884baff300ec00dca4c33ecf92b47ac8063aee08518171ee6b"
+      }
+    },
+    {
+      "key": "SofiaSans_800",
+      "file": "assets/fonts/SofiaSans/SofiaSans_800.ttf",
+      "family": "SofiaSans",
+      "ps": "SofiaSans-ExtraBold",
+      "version": "Version 4.101",
+      "unicodeRange": "U+0020-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2190-2193, U+2212, U+2215, U+2248, U+2264-2265, U+FEFF, U+FFFD",
+      "bytes": 43012,
+      "sha256": "9b0ebb4ea04079e7df43f9cf46890dffed782cce87e18de29e61dc50aa2f27f8",
+      "source": {
+        "url": "https://fonts.gstatic.com/s/sofiasans/v20/Yq6E-LCVXSLy9uPBwlAThu1SY8Cx8rlT69D6t63t.ttf",
+        "via": "https://fonts.googleapis.com/css2?family=Sofia+Sans:wght@400;600;700;800&family=Sofia+Sans+Condensed:wght@800 (user-agent \"node\")",
+        "bytes": 110800,
+        "sha256": "19f14468c66717d7af9306edf8aad762948163392c8d86563971035cf44f5e36"
+      }
+    },
+    {
+      "key": "SofiaSansCondensed_800",
+      "file": "assets/fonts/SofiaSansCondensed/SofiaSansCondensed_800.ttf",
+      "family": "SofiaSansCondensed",
+      "ps": "SofiaSansCondensed-ExtraBold",
+      "version": "Version 4.101",
+      "unicodeRange": "U+0020-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2190-2193, U+2212, U+2215, U+2248, U+2264-2265, U+FEFF, U+FFFD",
+      "bytes": 42996,
+      "sha256": "0063555821d7abd4fb584251d8b78c3faa66f149a2ff5723bf05352a6e4c3438",
+      "source": {
+        "url": "https://fonts.gstatic.com/s/sofiasanscondensed/v6/r05xGKVS5aVKd567NYXawnFKJaTtoAuLnK0EjiAN5s9CZwUqB-aslw.ttf",
+        "via": "https://fonts.googleapis.com/css2?family=Sofia+Sans:wght@400;600;700;800&family=Sofia+Sans+Condensed:wght@800 (user-agent \"node\")",
+        "bytes": 110256,
+        "sha256": "dcbe466174ed70e7e0e4c2fbdd78c41e9ebd8add26e7ddc007e3e83221f8c321"
+      }
+    }
+  ],
+  "totals": {
+    "webBytesPerFamily": {
+      "chalk-sofia": 52508,
+      "chalk-sofia-cond": 53416,
+      "picker digits": 6972
+    },
+    "nativeBytes": 171980,
+    "nativeFiles": 4
+  }
+}

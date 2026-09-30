@@ -104,8 +104,8 @@
 .gate-sep {
   display: flex; align-items: center; gap: 10px;
   margin: 20px 0 14px;
-  font-size: 10px; letter-spacing: .16em; text-transform: uppercase;
-  color: var(--dim); font-variation-settings: 'wdth' 88, 'wght' 700;
+  font-size: var(--type-tag-size, 10px); letter-spacing: var(--type-tag-ls, .16em); text-transform: var(--type-tag-upper, uppercase);
+  color: var(--dim); font-variation-settings: 'wdth' var(--type-tag-wdth, 88), 'wght' var(--type-tag-wght, 700);
 }
 .gate-sep::before, .gate-sep::after {
   content: ''; flex: 1; height: 1px; background: var(--collar);
@@ -163,8 +163,8 @@
 .ob-foot { padding: 12px 18px 18px; flex: none; }
 
 .ob-kicker {
-  font-size: 10px; letter-spacing: .16em; text-transform: uppercase;
-  color: var(--dim); font-variation-settings: 'wdth' 88, 'wght' 700;
+  font-size: var(--type-tag-size, 10px); letter-spacing: var(--type-tag-ls, .16em); text-transform: var(--type-tag-upper, uppercase);
+  color: var(--dim); font-variation-settings: 'wdth' var(--type-tag-wdth, 88), 'wght' var(--type-tag-wght, 700);
   margin-bottom: 6px;
 }
 .ob-title {
@@ -182,8 +182,8 @@
 .ob-list { margin: 16px 0 4px; display: grid; gap: 11px; }
 .ob-item { display: grid; grid-template-columns: 62px 1fr; gap: 10px; align-items: baseline; }
 .ob-item-t {
-  font-size: 11px; letter-spacing: .12em; text-transform: uppercase;
-  color: var(--accent); font-variation-settings: 'wdth' 88, 'wght' 800;
+  font-size: var(--type-tag-size, 11px); letter-spacing: var(--type-tag-ls, .12em); text-transform: var(--type-tag-upper, uppercase);
+  color: var(--accent); font-variation-settings: 'wdth' var(--type-tag-wdth, 88), 'wght' var(--type-tag-wght, 800);
 }
 .ob-item-d { font-size: 13px; color: var(--steel); line-height: 1.5; }
 

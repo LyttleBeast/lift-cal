@@ -183,15 +183,18 @@ function renderToday() {
   const n = stepsOn(k);
   const g = goal();
   const card = el('div', 'card');
+  card.dataset.lead = 'stepsToday';     // the tab's lead card (a vibe's hook; VOCAB card)
 
   const row = el('div', 'st-hero');
   row.appendChild(ring(n / g, n, g));
 
   const side = el('div', 'st-hero-side');
   const left = Math.max(0, g - n);
-  side.appendChild(el('div', 'eyebrow', n >= g ? 'goal met' : 'to go'));
+  // [data-tag]: written in lower case, shown in caps by the preset (type.tag)
+  side.appendChild(el('div', 'eyebrow', n >= g ? 'goal met' : 'to go')).dataset.tag = '';
   const big = el('div', 'load-num num', (n >= g ? n - g : left).toLocaleString());
   big.style.fontSize = '26px';
+  big.dataset.hero = '';                // the tab's hero figure (VOCAB headline)
   big.style.color = n >= g ? 'var(--good)' : 'var(--chalk)';
   side.appendChild(big);
   side.appendChild(el('div', 'st-side-lbl', n >= g ? 'steps past goal' : 'steps'));

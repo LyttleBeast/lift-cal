@@ -1,0 +1,411 @@
+/* vibes-css:begin — generated from vibes/defs/oxblood.js by tools-check/vibes-css.mjs. Do not edit between the markers: change the definition, then run it with --write. */
+:root[data-vibe="oxblood"] {
+  --shape-rule-ink: #846368;
+  --shape-rule-hair: 1px;
+  --shape-rule-head-0: 2px;
+  --shape-rule-head-1: 0;
+  --shape-rule-head-2: 0;
+  --shape-rule-sub-0: 2px;
+  --shape-rule-sub-1: 0;
+  --shape-rule-sub-2: 0;
+  --shape-rule-total-0: 2px;
+  --shape-rule-total-1: 0;
+  --shape-rule-total-2: 0;
+  --shape-leader-ink: #bcaaa4;
+  --shape-leader-dot: 1.5px;
+  --shape-leader-pitch: 4px;
+  --shape-leader-min: 16px;
+  --shape-band-fill: #352125;
+  --shape-band-ink: #f3ece2;
+  --shape-band-height: 30px;
+  --shape-gutter: 2px;
+  --shape-keyline-ink: #f3ece2;
+  --shape-keyline-width: 1px;
+  --shape-lead-keyline: 0;
+  --shape-cue-ink: #f3ece2;
+  --shape-chosen-tick: 0;
+  --shape-rank-column: 0;
+  --rack: #1a0f11;
+  --bar: #241518;
+  --collar: #352125;
+  --knurl: #846368;
+  --chalk: #f3ece2;
+  --steel: #bcaaa4;
+  --dim: #9c8a85;
+  --p-red: #ff6b4a;
+  --p-blue: #62a8ff;
+  --p-yellow: #ffe07a;
+  --p-green: #3cc4a0;
+  --p-white: #efe8dc;
+  --p-chrome: #8f99a5;
+  --good: #3cc4a0;
+  --warn: #ffe07a;
+  --bad: #ff6b4a;
+  --ink-plate: #1a0f11;
+  --accent: #a8d8ff;
+  --focus: #a8d8ff;
+  --accent-press: #97bddc;
+  --ink: #1a0f11;
+  --danger: #ff6b4a;
+  --on-danger: #1a0f11;
+  --done: #3cc4a0;
+  --ink-go: #1a0f11;
+  --well: #1a0f11;
+  --knockout: #1a0f11;
+  --inverse: #f3ece2;
+  --cal-mark: #f5f1ea;
+  --raised: #352125;
+  --track: #352125;
+  --grip: #7c5d62;
+  --faint: #9c8a85;
+  --knob: #f3ece2;
+  --greet-name: #a8d8ff;
+  --tint-runway: rgba(26,15,17,.55);
+  --tint-runway-edge: rgba(26,15,17,.7);
+  --font: 'oxblood-schibsted', 'Archivo', system-ui, -apple-system, sans-serif;
+  --font-mono: ui-monospace, monospace;
+  --font-display: 'oxblood-schibsted', 'Archivo', system-ui, -apple-system, sans-serif;
+  --font-italic: 'oxblood-schibsted', 'Archivo', system-ui, -apple-system, sans-serif;
+  --font-num: 'oxblood-num', 'oxblood-schibsted', system-ui, -apple-system, sans-serif;
+  --r: 2px;
+  --r-sm: 3px;
+  --r-sheet: 18px;
+  --r-tile: 3px;
+  --r-pill: 999px;
+  --r-plate: 2px;
+  --r-chip: 2px;
+  --r-mark: 2px;
+  --r-idx: 2px;
+  --r-round: 50%;
+  --r-hair: 1px;
+  --r-bubble: 4px;
+  --r-badge: 3px;
+  --shadow-peek: 0 10px 30px rgba(0,0,0,.45);
+  --shadow-rest: 0 6px 24px rgba(0,0,0,.45);
+  --shadow-toast: 0 8px 28px rgba(0,0,0,.5);
+  --shadow-fab: 0 8px 26px rgba(0,0,0,.58), 0 1px 0 rgba(0,0,0,.35);
+  --shadow-fab-pressed: 0 3px 10px rgba(0,0,0,.5);
+  --shadow-tour-card: 0 18px 50px rgba(0,0,0,.55);
+  --shadow-cal-tick: 0 0 0 1px rgba(26,15,17,.55);
+  --shadow-flame: inset 0 0 0 1px rgba(168,216,255,.35);
+  --shadow-kpi-day: inset 0 0 0 1.2px #846368;
+  --shadow-kpi-day-on: none;
+  --shadow-kpi-today: 0 0 0 1.5px #1a0f11, 0 0 0 2.5px #bcaaa4;
+  --shadow-kpi-today-on: 0 0 0 1.5px #1a0f11, 0 0 0 2.5px #f3ece2;
+  --shadow-guide-eaten: inset 0 0 0 1px #846368;
+  --shadow-traj-good: 0 0 0 4px rgba(60,196,160,.18);
+  --shadow-traj-warn: 0 0 0 4px rgba(255,224,122,.18);
+  --shadow-traj-bad: 0 0 0 4px rgba(255,107,74,.18);
+  --shadow-tour-lit: 0 0 0 2px #a8d8ff;
+  --shadow-cal-head: none;
+  --shadow-cal-target: none;
+  --blur-sheet: blur(3px);
+  --blur-dock: blur(18px) saturate(140%);
+  --blur-wk-bar: blur(16px);
+  --scrim-tour: linear-gradient(to bottom, rgba(26,15,17,.55) 0%, rgba(26,15,17,.94) 42%);
+  --video-bg: #000000;
+  --rack-rgb: 26,15,17;
+  --shade-rgb: 0,0,0;
+  --lift-rgb: 255,255,255;
+  --accent-rgb: 168,216,255;
+  --p-yellow-rgb: 255,224,122;
+  --warn-rgb: 255,224,122;
+  --p-red-rgb: 255,107,74;
+  --bad-rgb: 255,107,74;
+  --danger-rgb: 255,107,74;
+  --p-blue-rgb: 98,168,255;
+  --p-green-rgb: 60,196,160;
+  --done-rgb: 60,196,160;
+  --good-rgb: 60,196,160;
+  --p-white-rgb: 239,232,220;
+  --steel-rgb: 188,170,164;
+  --tag-ink-w: #ffe07a;
+  --tag-ink-f: #ff6b4a;
+  --tag-ink-d: #62a8ff;
+  --ink-of-p-red: #ff6b4a;
+  --ink-of-p-blue: #62a8ff;
+  --ink-of-p-yellow: #ffe07a;
+  --ink-of-p-green: #3cc4a0;
+  --ink-of-p-white: #efe8dc;
+  --ink-of-p-chrome: #8f99a5;
+}
+/* vibes-css:end */
+
+/* ================= Oxblood, by hand =================
+   Oxblood leather with bone ink and one ice-blue mark, set in Schibsted
+   Grotesk; printed-plate corners on everything a thumb does not tap as a
+   chip. The spec, with every number's source, is
+   ~/dev/vibes-night/design/oxblood.md; the colours above are generated from
+   vibes/defs/oxblood.js and are not restated here.
+
+   A SIMPLE VIBE: v1's layout. What is below is what the tokens cannot say on
+   the web:
+     1. the face (@font-face; weight only through font-variation-settings);
+     2. the type presets. Natively a preset (T.text.*) reaches every site that
+        spends it; on the web each is literal CSS, so each preset Oxblood
+        changes is restated on the selectors whose native twin spends it —
+        the same selectors Chalk restates. The sites native sets literally (a
+        section title, the settings row, the COACH title, a chart's caps
+        label, the mini-stat labels, the add-tile tag, LOG FOOD …) keep v1's
+        size, case and tracking, in Schibsted;
+     3. the measured surfaces, which keep Archivo on v1's metrics;
+     4. the eleven `shape`-grade looks the definition names (design/VOCAB.md),
+        and the tints rack.css writes as literal alphas where Oxblood's differ.
+   Geometry is v1's: a border a look drops is drawn in its ground's colour,
+   not removed, and the 1.5pt keylines add their half point inside the box,
+   so no box moves by a pixel it did not have to.
+
+   SPECIFICITY, as in Chalk: a preset's rule is `[data-vibe="oxblood"]
+   :where(.x)`, (0,1,0), the same as rack.css's `.x`, which it beats by coming
+   later, and below any local resize rack.css writes as `.parent .x`
+   (.peek-bar .timer, .ex-actions .btn …), which keeps winning, as it does in
+   v1. Where rack.css's own rule is two-part (.field label, .cal-dow span,
+   .plate-strip .lbl) the preset keeps the first part outside :where(). */
+
+/* ---------- the faces ----------
+   Schibsted Grotesk v1.100 (Bakken & Bæck; OFL 1.1, no Reserved Font Name;
+   OFL.txt and FONTS.json beside the files). Variable, wght 400-900, subset to
+   Google's latin range plus the arrows and signs Rack prints. Named for the
+   vibe, so an installed Schibsted never stands in. Its digits are tabular
+   only with tnum on, which rack.css and the rules below ask for wherever v1
+   and the definition do. The digits file is the Vibes card's figure alone
+   (--font-num): the one Oxblood file every device prefetches for the picker. */
+@font-face {
+  font-family: 'oxblood-schibsted';
+  src: url(oxblood/fonts/SchibstedGrotesk-latin.woff2) format('woff2');
+  font-weight: 400 900; font-style: normal; font-display: swap;
+}
+/* The figure punctuation, , . : ; %, from a file with every feature but
+   tnum. Schibsted's tnum makes these five as wide as a digit (the comma 1300
+   against 622), so with tnum on — every figure in Rack — "1,950" drew as
+   "1 , 950" and "25:00" as "25 : 00". Declared after the face above, so for
+   these five the browser takes this one: the digits stay tabular, the
+   punctuation stays proportional, as Archivo's does in v1. 1,756 bytes. */
+@font-face {
+  font-family: 'oxblood-schibsted';
+  src: url(oxblood/fonts/SchibstedGrotesk-punct.woff2) format('woff2');
+  font-weight: 400 900; font-style: normal; font-display: swap;
+  unicode-range: U+0025, U+002C, U+002E, U+003A-003B;
+}
+@font-face {
+  font-family: 'oxblood-num';
+  src: url(oxblood/fonts/SchibstedGrotesk-digits.woff2) format('woff2');
+  font-weight: 400 900; font-style: normal; font-display: swap;
+  unicode-range: U+0030-0039;
+}
+
+/* ---------- type presets (vibes/defs/oxblood.js `type`) ----------
+   Schibsted has no wdth axis, so rack.css's 'wdth' settings fall away on
+   their own; only a changed weight is restated. */
+
+/* h1-h3: Bold, not v1's 800 (800 is for figures). h1 24: "September 2026"
+   is 194.8px against 214 of room at 320. */
+[data-vibe="oxblood"] :where(h1, h2, h3) { font-variation-settings: 'wght' 700; letter-spacing: -.01em; }
+[data-vibe="oxblood"] :where(h1) { font-size: 24px; }
+[data-vibe="oxblood"] :where(h3) { font-size: 16px; }
+
+/* eyebrow: card heads, screen and sheet eyebrows. 13 / 600 steel, sentence
+   case as authored. */
+[data-vibe="oxblood"] :where(.eyebrow) {
+  font-size: 13px; letter-spacing: 0; text-transform: none; color: var(--steel);
+  font-variation-settings: 'wght' 600;
+}
+
+/* btn / btnLg: 14 and 16 / 700 as v1, untracked; the large one in sentence
+   case ("Start workout"). */
+[data-vibe="oxblood"] :where(.btn) { letter-spacing: 0; }
+[data-vibe="oxblood"] :where(.btn-lg) { letter-spacing: 0; text-transform: none; }
+
+/* dockLbl: 11 / 600, sentence case, dim at rest (chalk when active, v1's
+   rule). (0,2,1) to beat rack.css's `.dock button` twice over. */
+[data-vibe="oxblood"] .dock button { font-size: 11px; letter-spacing: 0; text-transform: none; }
+
+/* fieldLbl */
+[data-vibe="oxblood"] :where(.field-lbl),
+[data-vibe="oxblood"] .field :where(label) {
+  font-size: 13px; letter-spacing: 0; text-transform: none; color: var(--steel);
+  font-variation-settings: 'wght' 600;
+}
+
+/* note */
+[data-vibe="oxblood"] :where(.note) { font-size: 13px; }
+
+/* statLbl: also what native sets the KPI label, the calendar's weekday row,
+   the set table's column heads ("Set lb Reps e1RM", as authored) and the
+   plate strip's words in. statVal is v1's 20 / 800, tabular already. */
+[data-vibe="oxblood"] :where(.stat-lbl, .kpi-lbl, .set-hd),
+[data-vibe="oxblood"] .cal-dow :where(span),
+[data-vibe="oxblood"] .plate-strip :where(.lbl) {
+  font-size: 12px; letter-spacing: 0; text-transform: none; color: var(--steel);
+  font-variation-settings: 'wght' 600;
+}
+
+/* kpiVal: 21, not 22 — "1,950" at 21 is 66.6px, inside v1's 66.7. Tabular,
+   as the definition's tnum says (rack.css leaves it to Archivo's default). */
+[data-vibe="oxblood"] :where(.kpi-val) { font-size: 21px; font-variant-numeric: tabular-nums; }
+
+/* timer: 20, not 22 — "1:32:05" is 88.9px, inside v1's 92.0 on the live bar.
+   The peek bar's own 12px (.peek-bar .timer) still wins there. */
+[data-vibe="oxblood"] :where(.timer) { font-size: 20px; letter-spacing: 0; }
+
+/* headline and loadNum: the one numeral treatment, Schibsted ExtraBold
+   tabular figures, the results-table figure. */
+[data-vibe="oxblood"] :where(.headline-v) { letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
+[data-vibe="oxblood"] :where(.load-num) { letter-spacing: -.01em; }
+
+/* youGreet */
+[data-vibe="oxblood"] :where(.you-greet) { letter-spacing: -.01em; }
+
+/* Two one-line boxes that clip to ellipsize, at line-heights under the
+   face's own 1.234 (fit at 320 and 390): the greeting's name (27px at 1.05)
+   and a mini-stat's figure (14px at 1). Schibsted's ascent and descent reach
+   2-3px past those line boxes, so a descender (the y of "Gary", a comma)
+   would be cut. Each clip box grows by padding and gives it straight back as
+   negative margin: nothing moves, and the ink has room. Every other box the
+   fit finds with the same 2-4px of ink past its line box (the headline and
+   stat figures, a card's right-hand meta) does not clip, so the ink shows
+   whole and the box is left at v1's size, as in Chalk. */
+[data-vibe="oxblood"] :where(.you-greet-name) { padding: 3px 0; margin: -3px 0; }
+[data-vibe="oxblood"] :where(.mini-stat-v) { padding: 2px 0; margin: -2px 0; }
+
+/* A meter row's figure ("142/200", 11px, tabular): Schibsted's tabular
+   digits are 1300/2048 wide, so the widest real value runs 5px past v1's
+   42px column and out of the card (fit at 320 and 390). The column is 47px,
+   what "NNN/NNN" takes in Schibsted as 42 did in Archivo, so every row's
+   track still ends at one x (Protein, Carbs and Fat line up as in v1); a
+   longer figure grows it rather than spill. The macro rows' own 74px
+   (rack.css .macro-rows .vol-val) still wins there. */
+[data-vibe="oxblood"] :where(.vol-val) { width: auto; min-width: 47px; }
+
+/* chip / segBtn: 12pt, the segments in sentence case and untracked */
+[data-vibe="oxblood"] :where(.chip) { font-size: 12px; }
+[data-vibe="oxblood"] :where(.seg-btn) { font-size: 12px; letter-spacing: 0; text-transform: none; }
+
+/* ---------- the measured surfaces: Archivo, on v1's metrics ----------
+   The Coach card (190 / 164), the goal chips, the recap's feel chips, the
+   movement chips and the estimator's row were fitted in Archivo (coach-view.js
+   CARD_TYPE, tools-check/touch-target.mjs, coach-surface.mjs); Schibsted runs
+   5-7% wider on real Coach lines. They keep v1's face — loaded by rack.css
+   line 1 for everyone, so no new bytes — and every size, weight and width
+   rack.css gives them; only their colours are Oxblood's. Native draws the
+   same five in MEASURED_FACE / T.fit.archivo. */
+[data-vibe="oxblood"] :where(.coach-card, .coach-goal-opt, .move-opt, .pe-row),
+[data-vibe="oxblood"] .feel-grid :where(.coach-chip) {
+  font-family: 'Archivo', system-ui, -apple-system, sans-serif;
+}
+
+/* ---------- the looks (vibes/defs/oxblood.js `variants`) ---------- */
+
+/* card · flat: an oxblood plate on the page, no edge — told apart by value.
+   The 1px border stays, in the card's own colour, so nothing moves. The PR
+   card and the install card keep their accent edges (v1's). The tour and
+   onboarding card is a card too (native cardSkin). */
+[data-vibe="oxblood"] :where(.card:not(.pr-card, .install-card), .ob-card) { border-color: var(--bar); }
+
+/* youCard · flat: Wins and Improve lose their 3pt side stripe and carry their
+   colour as a 2pt rule along the top; the titles still say which is which. */
+[data-vibe="oxblood"] #view-you .card.card-wins,
+[data-vibe="oxblood"] #view-you .card.card-improve { border-left: 1px solid var(--bar); border-top-width: 2px; }
+[data-vibe="oxblood"] #view-you .card.card-wins { border-top-color: var(--good); }
+[data-vibe="oxblood"] #view-you .card.card-improve { border-top-color: var(--warn); }
+
+/* coachCard · flat: the 1pt border in the ground's colour; pressed still
+   shows knurl (rack.css .coach-card:active, which outranks this). */
+[data-vibe="oxblood"] :where(.coach-card) { border-color: var(--bar); }
+
+/* statRow · line: a box-score line. No tile, no ground; a 1px collar rule
+   between the columns; the columns and their padding as v1's. */
+[data-vibe="oxblood"] :where(.stat) {
+  background: transparent; border-color: transparent; border-radius: 0;
+}
+[data-vibe="oxblood"] :where(.stat + .stat) { border-left-color: var(--collar); }
+
+/* kpi · plain: the well tile without its corner glow; the delta is bare
+   signed text with its arrow (tint.pill* are 0: no pill ground). */
+[data-vibe="oxblood"] .kpi { background: var(--well); }
+[data-vibe="oxblood"] .delta-pill,
+[data-vibe="oxblood"] .delta-pill.up,
+[data-vibe="oxblood"] .delta-pill.down,
+[data-vibe="oxblood"] .delta-pill.warn { background: transparent; }
+
+/* btn · square: every kind at radius.plate; the ghost and danger keylines
+   1.5pt — v1's 1px border plus half a point drawn inside it, so no button
+   grows. + Drop's keyline is its own blue (below). */
+[data-vibe="oxblood"] :where(.btn) { border-radius: var(--r-plate); }
+[data-vibe="oxblood"] :where(.btn-ghost) { box-shadow: inset 0 0 0 .5px var(--collar); }
+[data-vibe="oxblood"] :where(.btn-danger) { box-shadow: inset 0 0 0 .5px var(--danger); }
+
+/* segmented · boxes: joined square cells on the bar ground, a 1px collar rule
+   between them, the chosen cell inverted. The track's 3px inset and gaps go
+   into each cell's own padding (8 + 3 above and below), so the control is
+   v1's height and its cells stay equal widths; the rule is a shadow and takes
+   no width. */
+[data-vibe="oxblood"] .seg { padding: 0; gap: 0; border-radius: var(--r-plate); }
+[data-vibe="oxblood"] .seg-btn { padding: 11px 4px; border-radius: 0; }
+[data-vibe="oxblood"] .seg-btn + .seg-btn { box-shadow: inset 1px 0 0 var(--collar); }
+[data-vibe="oxblood"] .seg-btn.on { box-shadow: none; }
+
+/* field · square: plate corners and a knurl edge, a 3:1 control edge on the
+   card and the page (3.31 / 3.53); focus still turns it ice (rack.css's
+   :focus rules outrank these). */
+[data-vibe="oxblood"] .field :where(input, select, textarea),
+[data-vibe="oxblood"] .qty-row :where(input),
+[data-vibe="oxblood"] .picker-search :where(input),
+[data-vibe="oxblood"] :where(.paste-box) {
+  border-color: var(--knurl); border-radius: var(--r-plate);
+}
+/* Placeholders in dim, as native draws them (Field.jsx placeholderTextColor
+   T.colors.dim): 5.34 on the card. rack.css sets one only on .set-row. */
+[data-vibe="oxblood"] ::placeholder { color: var(--dim); }
+
+/* toast · square: an inverted plate, no shadow */
+[data-vibe="oxblood"] .toast { border-radius: var(--r-plate); box-shadow: none; }
+
+/* fab · square: an ice plate, v1's shadow (shadow.fab, the tokens) */
+[data-vibe="oxblood"] .fuel-fab { border-radius: var(--r-plate); }
+
+/* addTile · flat: every tile on the well, no border, no wash — Chalk's case.
+   Photo is told by its ice icon well alone; the lit tiles' icon well and tag
+   sit on raised (steel 6.75), where grip would leave the tag at 2.61. Tags
+   square. A press still shows knurl, and an off tile stays at v1's .42. */
+[data-vibe="oxblood"] .add-tile,
+[data-vibe="oxblood"] .add-tile.hero,
+[data-vibe="oxblood"] .add-tile.lit { background: var(--well); border-color: transparent; }
+[data-vibe="oxblood"] .add-tile:not(:disabled):active { border-color: var(--knurl); }
+[data-vibe="oxblood"] .add-tile.lit .ic,
+[data-vibe="oxblood"] .add-tile.lit .tag { background: var(--raised); }
+[data-vibe="oxblood"] .add-tile .tag { border-radius: var(--r-chip); }
+
+/* ---------- tints rack.css writes as literal alphas ---------- */
+
+/* setRow: the W / F / D badges lose their wash (tint.tag* 0), the letter on
+   raised carries the type; a done row at .10, seen from the bench; the drop
+   rail and + Drop's edge at .70, 3:1 lines on the card (4.11). */
+[data-vibe="oxblood"] .ex-block .set-idx.t-W,
+[data-vibe="oxblood"] .ex-block .set-idx.t-F,
+[data-vibe="oxblood"] .ex-block .set-idx.t-D,
+[data-vibe="oxblood"] .rt-sets .set-idx.t-W,
+[data-vibe="oxblood"] .rt-sets .set-idx.t-F,
+[data-vibe="oxblood"] .rt-sets .set-idx.t-D { background: var(--raised); }
+[data-vibe="oxblood"] .ex-block .set-row.done { background: rgba(var(--done-rgb),.10); }
+[data-vibe="oxblood"] .ex-block .set-row.flash { animation-name: oxblood-setFlash; }
+@keyframes oxblood-setFlash {
+  0% { background: rgba(var(--accent-rgb),.28); }
+  100% { background: rgba(var(--done-rgb),.10); }
+}
+[data-vibe="oxblood"] .ex-block .set-row.drop::before,
+[data-vibe="oxblood"] .rt-sets .set-row.drop::before { background: rgba(var(--p-blue-rgb),.7); }
+[data-vibe="oxblood"] .drop-add { border-color: rgba(var(--p-blue-rgb),.7); box-shadow: inset 0 0 0 .5px rgba(var(--p-blue-rgb),.7); }
+
+/* "Next week": the vibe's callout, a flat ice band (accent .10) with no
+   border — drawn transparent, so its width stays and nothing moves. */
+[data-vibe="oxblood"] .review-take { background: rgba(var(--accent-rgb),.10); border-color: transparent; }
+
+/* ---------- the Vibes sheet: Oxblood's own tile ----------
+   Scoped to the tile itself: a worn vibe's [data-vibe] rules would otherwise
+   reach every tile. The figure in the digits file, cap-height matched to
+   v1's (24px caps: 34.14 x .703), its baseline where v1's is: v1 sets 35px
+   Archivo (ascent .878, descent .21) at line-height .95, a baseline 28.3px
+   down; Schibsted's ascent .977 and descent .258 put the same baseline at a
+   32.08px line. "315" is 64.9px, inside the 92px card. */
+[data-vibe="oxblood"].vibe-in .vibe-num { font-size: 34.14px; line-height: 32.08px; letter-spacing: -.01em; }

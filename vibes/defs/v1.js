@@ -199,7 +199,14 @@ export default deepFreeze({
     // The strip under the installed web app's status bar, whose text is
     // always white. rack-v58 draws no strip, so v1's is null — none; a light
     // vibe sets a dark one. Native ignores it (chrome.statusBar).
-    band:          null
+    band:          null,
+    // Engine v3. The toggle's off knob (rack.css .tog::after, native
+    // coach/settings.jsx's Switch thumbColor when off): steel. And the name in
+    // the You greeting (.you-greet-name, native you/Hero.jsx): the accent. A
+    // definition without either takes its own steel / accent (index.js ROLES
+    // `or`), so neither moves in any vibe that does not set it.
+    knob:          '#8d939f',
+    greetName:     '#f0be1e'
   },
 
   /* native T.alpha: helper name -> the colour role it tints. The first five
@@ -286,7 +293,13 @@ export default deepFreeze({
     // one preset, for a look that sets it in one voice. No v1 site spends it —
     // v1 sets each at its own literal — so v1's is note's arguments, and a
     // vibe without one takes its own note (index.js ROLES `or`).
-    meta:     { size: 12, wght: 400, lh: 1.5, color: 'dim' }
+    meta:     { size: 12, wght: 400, lh: 1.5, color: 'dim' },
+    // Engine v3. The hero figure a headline look (vocab headline · solo) sets
+    // alone at a site marked hero. No v1 site spends it — v1 names no such
+    // look — so v1's is headline's arguments, and a vibe without one takes its
+    // own headline (index.js ROLES `or`). v1 holds no `tag` and no `pill`:
+    // their roles' default is null, every site keeping its own literal.
+    hero:     { size: 34, wdth: 112, wght: 800, ls: -0.02, lh: 1, tnum: 1 }
   },
   // .load-num, "wide + heavy, stamped like a plate": type({ size, ...these }).
   // A function of the size on purpose (theme.js:278-296) — no size here.
