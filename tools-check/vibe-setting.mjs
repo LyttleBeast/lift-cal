@@ -209,7 +209,8 @@ const A_DEFS = 'const DEFS = { v1: V1 };', A_IMPORT = "import V1 from './vibes/d
 const IDX_REAL = read('vibes/defs/index.js'), VJ_REAL = read('vibe.js');
 const V1_ENTRY = IDX_REAL.indexOf(A_V1), VIBES_END = IDX_REAL.indexOf('\n]);', V1_ENTRY);
 const IDX_SRC = V1_ENTRY > 0 && VIBES_END > 0 ? IDX_REAL.slice(0, V1_ENTRY + A_V1.length) + IDX_REAL.slice(VIBES_END) : IDX_REAL;
-const VJ_SRC = VJ_REAL.replace(/const DEFS = \{ v1: V1(, [a-z0-9]+: [A-Z0-9_]+)* \};/, A_DEFS);
+// A registered id with a hyphen is a quoted key: 'clear-sky': CLEAR_SKY.
+const VJ_SRC = VJ_REAL.replace(/const DEFS = \{ v1: V1(, (?:[a-z0-9]+|'[a-z0-9][a-z0-9-]*'): [A-Z0-9_]+)* \};/, A_DEFS);
 const anchors = IDX_SRC.includes(A_VIBES) && IDX_SRC.includes(A_V1) && VJ_SRC.includes(A_DEFS) && VJ_SRC.includes(A_IMPORT);
 stageFile('vibes/defs/index.js', IDX_SRC
   .replace(A_VIBES, A_VIBES + "  { id: 'tst', name: 'Test', feel: 'A staged vibe.', experimental: true, scheme: 'dark' },\n")
