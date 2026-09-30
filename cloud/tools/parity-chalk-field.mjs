@@ -1,0 +1,22 @@
+// Parity gate (chalk): what native draws for a Field label and the in-card inputs under Chalk.
+const NAT = '/Users/micahflunker/dev/vibes-night/wt/nat-v-chalk';
+const { open, dump } = await import(NAT + '/tools/lib/vibe-snap.mjs');
+const H = await open(NAT);
+const { R } = H;
+const THEME = R.load('src/ui/theme.js');
+const V = R.load('src/state/vibe.js');
+const VAR = R.load('src/ui/variant.js');
+const e = V.VIBE_DEFS.chalk;
+THEME.applyTheme(THEME.build(e.def, { images: e.images, fit: e.fit }));
+console.log('variant field =', VAR.variantOf('field'), ' card =', VAR.variantOf('card'));
+const Field = R.load('src/ui/Field.jsx').default;
+const m = R.mount(R.h(Field, { label: 'Name', value: 'Oats', onChangeText: () => {} }));
+await R.act(async () => { await new Promise(r => setTimeout(r, 0)); });
+const d = dump(R, m.box);
+const lbl = d.find(x => x.t === 'Text' && x.x === 'Name');
+const inp = d.find(x => x.t === 'TextInput');
+console.log('Field label style:', JSON.stringify(lbl && lbl.s));
+console.log('Field input box:', JSON.stringify(inp && { bg: inp.s.backgroundColor, bc: inp.s.borderColor, br: inp.s.borderRadius }));
+m.unmount();
+const T = THEME.default;
+console.log('T.cardSkin() under chalk:', JSON.stringify(T.cardSkin()));

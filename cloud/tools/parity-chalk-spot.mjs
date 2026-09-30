@@ -1,0 +1,46 @@
+// Parity gate spot-check (chalk): the web's generated block + hand rules vs native's build().
+import { readFileSync } from 'node:fs';
+const NAT = '/Users/micahflunker/dev/vibes-night/wt/nat-v-chalk';
+const WEB = '/Users/micahflunker/dev/vibes-night/wt/web-v-chalk';
+const { open } = await import(NAT + '/tools/lib/vibe-snap.mjs');
+const H = await open(NAT);
+const { R } = H;
+const THEME = R.load('src/ui/theme.js');
+const T = THEME.default;
+const V = R.load('src/state/vibe.js');
+const e = V.VIBE_DEFS.chalk;
+THEME.applyTheme(THEME.build(e.def, { images: e.images, fit: e.fit }));
+const css = readFileSync(WEB + '/vibes/chalk.css', 'utf8');
+const tok = n => { const m = css.match(new RegExp('\\n\\s*' + n.replace(/[-]/g, '\\-') + ':\\s*([^;]+);')); return m ? m[1].trim() : null; };
+const rule = sel => { const i = css.indexOf(sel); if (i < 0) return null; const a = css.indexOf('{', i), b = css.indexOf('}', a); return css.slice(a + 1, b).replace(/\s+/g, ' ').trim(); };
+const rgbOf = n => tok('--' + n + '-rgb');
+const norm = s => String(s).replace(/\s+/g, '').replace(/,0?\./g, ',.').replace(/,1\)$/, ',1)').toLowerCase();
+const out = [];
+const cmp = (role, web, nat, same) => out.push({ role, web, native: nat, agree: same != null ? same : norm(web) === norm(nat) });
+cmp('colors.accent', tok('--accent'), T.colors.accent);
+cmp('colors.bar', tok('--bar'), T.colors.bar);
+cmp('colors.collar', tok('--collar'), T.colors.collar);
+cmp('colors.knurl', tok('--knurl'), T.colors.knurl);
+cmp('colors.inverse', tok('--inverse'), T.colors.inverse);
+cmp('colors.steel', tok('--steel'), T.colors.steel);
+cmp('tagInk.W', tok('--tag-ink-w'), T.tagInk.W);
+cmp('tagInk.F', tok('--tag-ink-f'), T.tagInk.F);
+cmp('tint.setDone (hand rule .12 of --done-rgb)', 'rgba(' + rgbOf('done') + ',.12)', T.tint.setDone);
+cmp('tint.backdrop (hand rule .4 of --shade-rgb)', 'rgba(' + rgbOf('shade') + ',.4)', T.tint.backdrop);
+cmp('tint.dropRail (hand rule .7 of --p-blue-rgb)', 'rgba(' + rgbOf('p-blue') + ',.7)', T.tint.dropRail);
+cmp('tint.runway', tok('--tint-runway'), T.tint.runway);
+cmp('shadow.calHead / T.ring.calHead', tok('--shadow-cal-head'), JSON.stringify(T.ring && T.ring.calHead),
+    /0 0 0 1px rgba\(17,20,22,\.9\)/.test(tok('--shadow-cal-head')) && T.ring.calHead.borderWidth === 1 && norm(T.ring.calHead.borderColor) === norm('rgba(17,20,22,.9)'));
+for (const [k, n] of [['r', '--r'], ['sm', '--r-sm'], ['plate', '--r-plate'], ['chip', '--r-chip'], ['tile', '--r-tile'], ['idx', '--r-idx'], ['mark', '--r-mark']])
+  cmp('radius.' + k, tok(n), T.radius[k], tok(n) === T.radius[k] + 'px');
+cmp('type.eyebrow', rule('[data-vibe="chalk"] :where(.eyebrow)'), JSON.stringify(T.text.eyebrow), null);
+cmp('type.h1', rule('[data-vibe="chalk"] :where(h1)') + ' | ' + rule('[data-vibe="chalk"] :where(h1, h2, h3)'), JSON.stringify(T.text.h1), null);
+cmp('type.dockLbl', rule('[data-vibe="chalk"] .dock button'), JSON.stringify(T.text.dockLbl), null);
+cmp('type.statLbl', rule('[data-vibe="chalk"] .plate-strip :where(.lbl)'), JSON.stringify(T.text.statLbl), null);
+cmp('type.segBtn', rule('[data-vibe="chalk"] :where(.seg-btn)'), JSON.stringify(T.text.segBtn), null);
+cmp('type.btnLg', rule('[data-vibe="chalk"] :where(.btn-lg)'), JSON.stringify(T.text.btnLg), null);
+cmp('type.chip', rule('[data-vibe="chalk"] :where(.chip)'), JSON.stringify(T.text.chip), null);
+cmp('fit title/goT/goX', rule('[data-vibe="chalk"] :where(.coach-ttl, .coach-go-t)') + ' | ' + rule('[data-vibe="chalk"] :where(.coach-go-x)'), JSON.stringify(T.fit && T.fit.type), null);
+cmp('chrome', tok('color-scheme') , JSON.stringify(T.chrome), null);
+cmp('fonts.keys', '', JSON.stringify(T.fonts.keys), null);
+for (const o of out) console.log((o.agree === true ? 'AGREE ' : o.agree === false ? 'DIFF  ' : 'READ  ') + o.role + '\n    web: ' + o.web + '\n    nat: ' + o.native);

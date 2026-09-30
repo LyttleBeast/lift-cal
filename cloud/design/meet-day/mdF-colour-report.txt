@@ -1,0 +1,210 @@
+== 1. Text, every ink on every surface (4.5:1; track reported, not gated) ==
+ink          rack     bar  raised    well   track
+chalk      17.61   15.61   13.84   17.61   12.13 
+steel       7.89    6.99    6.20    7.89    5.43 
+dim         6.81    6.04    5.35    6.81    4.69 
+faint       6.81    6.04    5.35    6.81    4.69 
+good       12.07   10.70    9.49   12.07    8.32 
+warn       10.11    8.97    7.95   10.11    6.97 
+bad         6.47    5.73    5.08    6.47    4.46*
+danger      6.47    5.73    5.08    6.47    4.46*
+accent     17.61   15.61   13.84   17.61   12.13 
+pRed        6.47    5.73    5.08    6.47    4.46*
+pBlue       6.86    6.08    5.39    6.86    4.72 
+pYellow    15.39   13.64   12.09   15.39   10.60 
+pGreen      9.15    8.11    7.19    9.15    6.31 
+pWhite     17.90   15.86   14.06   17.90   12.33 
+pChrome     5.90    5.23    4.64    5.90    4.07*
+pairs under 4.5 (* above):
+  bad on track 4.46 — no text sits on the track in Meet Day; not a text pair
+  danger on track 4.46 — no text sits on the track in Meet Day; not a text pair
+  pRed on track 4.46 — no text sits on the track in Meet Day; not a text pair
+  pChrome on track 4.07 — no text sits on the track in Meet Day; not a text pair
+
+== 2. Text over tints and washes (4.5:1) ==
+  set flash peak (accent 0.1 over panel) = #2c2e31: chalk 11.97, steel 5.36, dim 4.63
+  picker selection (accent .10 over panel) = #2c2e31: chalk 11.97, steel 5.36, dim 4.63
+  pressed row (lift .05 over panel) = #222428: chalk 13.66, steel 6.12, dim 5.29
+  "Next week" callout (accent .07 over panel) = #26272b: chalk 13.11, steel 5.87, dim 5.07, warn 7.53, good 8.99
+  estimator notice .ai-warn (warn .07 over sheet) = #26221e: warn 7.97, chalk 13.88
+  trial bar .trial-bar (warn .10 over board) = #20180e: warn 8.85
+  calorie cut zone (pBlue .16 over track) = #303e54: steel 4.26 (no text here: labels sit under the track)
+  calorie hold zone (pYellow .18 over track) = #504d38: steel 3.36 (no text here: labels sit under the track)
+  calorie gain zone (pRed .16 over track) = #4c3434: steel 4.47 (no text here: labels sit under the track)
+
+== 3. Ink on its own fill (4.5:1) ==
+  onAccent on accent (primary, FAB, chosen chip/segment, active dock cell, current attempt box, toast): 17.61
+  knockout on inverse: 17.61
+  onAccent on accentPressed: 13.42
+  onDone on done: 17.61
+  onDanger on danger (swipe-to-delete): 6.47
+  onWarn on warn (native trial bar): 10.11
+  banner.devText on pRed: 6.47
+  banner.guardText on pGreen: 9.15
+  shape.band.ink on shape.band.fill (a card head): 13.84
+  steel meta in the band: 6.20
+  dim in the band: 5.35
+  tagInk W on the attempt box: 12.09
+  tagInk F on the attempt box: 5.08
+  tagInk D on the attempt box: 5.39
+  accent (COACH, the mark) on the Coach band: 13.84
+  warn caution line on the Coach panel: 8.97
+  steel add-tile tag on raised (addTile · flat, decision b): 6.20
+  chalk add-tile tag on raised: 13.84
+  dim dock label (not used) / steel dock label on a dock cell (bar): 6.99
+  knockout icon and label on the active dock cell (inverse): 17.61
+  calendar: an untrained day number (dim) on its cell (bar): 6.04
+  calendar: a trained day number (chalk) on its cell (raised): 13.84
+  calendar: today, board figure on its lamp tab: 17.61
+  lamp words on the "Next week" callout (reviewBg over a panel): 13.11
+  a set input figure (chalk) in its well: 17.61
+  a grey target placeholder (dim) in its well: 6.81
+  the e1RM (steel) on a set row (panel): 6.99
+  the e1RM (steel) at the tick flash peak: 5.36
+  the e1RM (steel) on a chosen picker row (pickSel): 5.36
+  pChrome small text (inkOf) on the band: 4.64
+  pRed small text (inkOf) on the band: 5.08
+  onPlate on plate 45 lb: 6.47
+  onPlate on plate 35 lb: 6.86
+  onPlate on plate 25 lb: 15.39
+  onPlate on plate 10 lb: 9.15
+  onPlate on plate 5 lb: 17.90
+  onPlate on plate 2.5 lb: 5.90
+
+== 4. Graphics and control edges (3:1) ==
+  knurl control edge on a panel: 3.88
+  knurl control edge on the board: 4.38
+  knurl control edge on the band / a cell: 3.44
+  grab handle (grip) on the sheet: 3.88
+  focus ring (lamp) on a panel: 15.61
+  focus ring (lamp) on the well (set inputs): 17.61
+  lit panel / primary (inverse) on a panel: 15.61
+  active dock cell (inverse) on the board: 17.61
+  current attempt box (inverse) against its row (panel): 15.61
+  lit lamp (done) on a panel: 15.61
+  lit lamp (done) against an unlit lamp disc (track): 12.13
+  unlit lamp ring (grip) on a panel: 3.88
+  unlit lamp ring (grip) on the band: 3.44
+  unlit lamp ring (grip) against its disc (track): the ring is judged on its ground: 3.01 (reported)
+  toggle, off: lamp knob on the grip track (spec E1): 4.02
+  toggle, off: v1's steel knob on the grip track (what E1 replaces): 1.80 (reported)
+  toggle, on: lamp knob on the accent .28 track over a panel: 6.66
+  toggle, on track against off track (panel): 2.35 (reported)
+  drop rail (pBlue at 1) on a panel: 6.08
+  + Drop edge (pBlue .5) on a panel: 2.47 (reported)
+  KPI day lamp unlit bezel (knurl) on the well: 4.38
+  KPI today ring (steel) on the well: 7.89
+  KPI day lamp lit (pYellow) on the well: 15.39
+  KPI day lamp lit (pBlue) on the well: 6.86
+  KPI day lamp lit (pWhite) on the well: 17.90
+  pRed as a meter fill against the empty track: 4.46
+  pBlue as a meter fill against the empty track: 4.72
+  pYellow as a meter fill against the empty track: 10.60
+  pGreen as a meter fill against the empty track: 6.31
+  pWhite as a meter fill against the empty track: 12.33
+  pChrome as a meter fill against the empty track: 4.07
+  good as a meter fill against the empty track: 8.32
+  warn as a meter fill against the empty track: 6.97
+  bad as a meter fill against the empty track: 4.46
+  pRed as a mark on a panel (calendar sliver, exercise tag, chart): 5.73
+  pBlue as a mark on a panel (calendar sliver, exercise tag, chart): 6.08
+  pYellow as a mark on a panel (calendar sliver, exercise tag, chart): 13.64
+  pGreen as a mark on a panel (calendar sliver, exercise tag, chart): 8.11
+  pWhite as a mark on a panel (calendar sliver, exercise tag, chart): 15.86
+  pChrome as a mark on a panel (calendar sliver, exercise tag, chart): 5.23
+  pChrome as a mark on a trained calendar cell (raised): 4.64
+  the 5 lb (pWhite) plate edge (grip) against the lamp-white...: 4.09 (reported)
+  -- the lamp tick at a meter target and the calorie marks, in the 1px board notch / ring --
+  lamp tick against the board notch: 17.61
+  board notch against a pRed fill: 6.47
+  board notch against a pBlue fill: 6.86
+  board notch against a pYellow fill: 15.39
+  board notch against a pGreen fill: 9.15
+  board notch against a pWhite fill: 17.90
+  board notch against a pChrome fill: 5.90
+  board notch against a good fill: 12.07
+  (bare, no notch) lamp tick against a pRed fill: 2.72 (reported)
+  (bare, no notch) lamp tick against a pBlue fill: 2.57 (reported)
+  (bare, no notch) lamp tick against a pYellow fill: 1.14 (reported)
+  (bare, no notch) lamp tick against a pGreen fill: 1.92 (reported)
+  (bare, no notch) lamp tick against a pWhite fill: 1.02 (reported)
+  (bare, no notch) lamp tick against a pChrome fill: 2.98 (reported)
+  white head / target against its board ring (shadow.calHead / calTarget): 17.61
+  white head on the bare track #2a2d33: lamp body 12.13, board ring 1.45 → 12.13
+  white head on the cut zone wash #303e54: lamp body 9.50, board ring 1.85 → 9.50
+  white head on the eaten fill in the cut zone (pBlue at .92) #4b90f1: lamp body 2.81, board ring 6.26 → 6.26
+  white head on the hold zone wash #504d38: lamp body 7.50, board ring 2.35 → 7.50
+  white head on the eaten fill in the hold zone (pYellow at .92) #f1d54b: lamp body 1.29, board ring 13.70 → 13.70
+  white head on the gain zone wash #4c3434: lamp body 9.99, board ring 1.76 → 9.99
+  white head on the eaten fill in the gain zone (pRed at .92) #f1573b: lamp body 2.99, board ring 5.88 → 5.88
+  -- the Coach pulse on the set check (warn), the unlit lamp inside it --
+  unlit lamp ring (grip) on the check washed coachLow (warn 0.05): 3.58 (reported)
+  unlit lamp ring (grip) on the check washed coachBase (warn 0.1): 3.26
+  unlit lamp ring (grip) on the check washed coachHigh (warn 0.24): 2.35 (reported)
+  the check box edge in warn on a panel: 8.97
+  the check box edge in warn on its own coachBase wash: 7.53
+  what A's lamp .38 pulse did to the ring (for the record): 1.18 (reported)
+  -- structure only (reported, not gated: never the only cue) --
+  gutter: panel against the board: 1.13 (reported)
+  band against its panel: 1.13 (reported)
+  attempt box against its row: 1.13 (reported)
+  track against a panel: 1.29 (reported)
+  collar hairline on a panel: 1.22 (reported)
+  gutter dE00 (panel vs board): 4.56; band vs panel dE00 3.47
+
+== 5. Colour vision (Machado 2009, severity 1, linear RGB; CIEDE2000) ==
+group         normal    deutan    protan    tritan
+chest        #ff5a3c   #b2a036   #897b37   #ff2a54
+back         #4d97ff   #488ffd   #66a0ff   #00afbf
+legs         #ffe14d   #ffe656   #f7dc37   #ffd0c3
+shoulders    #3cc4a0   #acaaa2   #beb79e   #00c6ba
+arms         #f2f2f2   #f2f2f2   #f2f2f2   #f2f2f2
+core         #858c96   #878b96   #898c97   #818e8f
+  normal: worst back/core 19.01; next arms/core 27.43, legs/arms 27.81  (>= 12 ok)
+  deutan: worst shoulders/core 14.09; next shoulders/arms 17.96, chest/legs 18.31  (>= 12 ok)
+  protan: worst shoulders/arms 17.46; next back/core 21.34, shoulders/core 21.38  (>= 12 ok)
+  tritan: worst back/shoulders 11.73; next legs/arms 16.86, back/core 18.88  (information only)
+  good / bad: normal 71.77 / deutan 13.86 / protan 25.63
+  good / warn (the weight rate's "green … amber"): normal 47.30 / deutan 13.33 / protan 13.02
+  warn / bad (meet only at the worded confidence dot): normal 26.00 / deutan 9.95 / protan 18.40
+  warn / legs yellow (MD-1 had 0.00): normal 21.06 / deutan 8.77 / protan 12.54
+  lit lamp / unlit lamp: normal 71.39 / deutan 72.10 / protan 71.06
+  lamp white / arms white: normal 6.00 / deutan 6.34 / protan 5.99
+  good / shoulders green: normal 12.69 / deutan 15.07 / protan 13.78
+  v1 for reference: worst group pair normal 16.40 / deutan 10.90 / protan 15.18; good/bad deutan 10.90
+
+== 6. Hues the copy names (index.js HUE_NAMED), OKLCH ==
+  pBlue #4d97ff (copy: blue): L 0.679 C 0.171 h 257.4
+  pYellow #ffe14d (copy: yellow): L 0.909 C 0.163 h 97.5
+  pRed #ff5a3c (copy: red): L 0.685 C 0.206 h 32.5
+  calMark #f5f0e3 (copy: white): L 0.955 C 0.018 h 89.4
+  good #4be38a (copy: green): L 0.815 C 0.179 h 153.5
+  bad #ff5a3c (copy: red): L 0.685 C 0.206 h 32.5
+  dim #9097a3 (copy: grey): L 0.675 C 0.019 h 261.3
+  warn #ffa42e (copy: amber): L 0.792 C 0.162 h 67.1
+
+== 7. The Tailwind v3 guard (R2.7) and neutrality ==
+  rack #07080a: OKLCH C 0.005 (neutral: R3.1 governs); nearest zinc-950 0.45
+  bar #16181d: OKLCH C 0.010 (neutral: R3.1 governs); nearest zinc-900 1.64
+  raised #202329: OKLCH C 0.012 (neutral: R3.1 governs); nearest zinc-800 2.70
+  track #2a2d33: OKLCH C 0.012 (neutral: R3.1 governs); nearest zinc-800 2.85
+  accent #f5f0e3: OKLCH C 0.018; nearest amber-50 2.59
+  accentPressed #d9d3c4: OKLCH C 0.021; nearest stone-300 5.90
+  warn #ffa42e: OKLCH C 0.162; nearest amber-500 3.03
+
+== 8. The lamp: Q-P5 options (the AI-cream #F7F1E4, the arms white, text on a panel) ==
+  #f5f0e3: dE00 to #F7F1E4 0.55; to arms #f2f2f2 6.00; on a panel 15.61; nearest amber-50 2.59
+  #f3f0e8: dE00 to #F7F1E4 2.25; to arms #f2f2f2 3.90; on a panel 15.59; nearest orange-50 2.81
+  #f0eee8: dE00 to #F7F1E4 3.24; to arms #f2f2f2 3.09; on a panel 15.31; nearest stone-100 2.86
+  #eeeeea: dE00 to #F7F1E4 4.38; to arms #f2f2f2 2.28; on a panel 15.27; nearest stone-100 2.16
+
+== 9. Distance from the lineup (dE00: ground / panel / accent) ==
+  v1: 3.65 / 2.47 / 26.39
+  chalk: 89.04 / 87.54 / 62.53
+  navy: 16.74 / 11.63 / 20.79
+  oxblood: 7.05 / 10.29 / 24.15
+  iron-age: 82.91 / 83.33 / 52.29
+  ledger (draft): 7.75 / 15.13 / 27.37
+  clear-sky (draft): 72.70 / 87.65 / 71.57
+
+no failure in any pair that occurs

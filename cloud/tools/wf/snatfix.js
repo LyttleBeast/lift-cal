@@ -1,0 +1,185 @@
+export const meta = {
+  name: 'v59-s-native-fix3',
+  description: 'V59 §8 native S, fix round 3: the four races review round 3 reproduced (refused picks, sheet open across a revoked approval or a sign-out, a live sign-in frame), then a targeted re-check',
+  phases: [{ title: 'Fix' }, { title: 'Check' }],
+}
+
+const PREAMBLE = `You are one agent in an unattended overnight build of "Vibes" for Rack (a phone-first training, nutrition and bodyweight log; web PWA + native iOS app). Nobody is watching until morning. The orchestrator gives you this brief; it begins with the build prompt's §0 verbatim, then Micah's rules, then the superseded-advice list, then the staging rule, then session facts, then your job.
+
+===== §0 (verbatim) =====
+## 0. Ground rules (the fence)
+
+- **No push, deploy or publish.** No \`git push\`, \`wrangler\`, \`firebase\`, \`eas\`,
+  \`gh\`, \`gh-pages\`. Commit through the hooks, never \`--no-verify\`.
+- **Three canaries at the start, and again on every resume. Log all three
+  results. If any one runs, stop.**
+  - \`echo GUARDTEST ping\` must be refused (deny list).
+  - \`echo GUARDTEST-MOBILE ping\` must be refused (deny list).
+  - \`echo hookcheck wrangler\` must come back **"BLOCKED by deny-compound"**.
+    This proves the PreToolUse hook is live and not failing open.
+- **The hook (\`~/dev/deny-compound.mjs\`)** blocks any Bash command whose *text*
+  contains a fenced word anywhere, even inside a path, a grep pattern or a
+  commit message. The words are \`firebase\`, \`wrangler\`, \`eas\`, \`curl\`, \`wget\`,
+  \`sed -i\`, \`git push\`, \`--no-verify\`, a whitespace-led \`-…n\` flag inside
+  \`git commit\`, and redirects into \`.claude/\`. So:
+  - search with the **Grep tool**, never with Bash;
+  - **always commit with \`git commit -F <file>\`**, the message written with
+    Write (the hook can't see file contents);
+  - stage by directory when a file name contains a fenced word (e.g.
+    \`git add report/btn-44/fakes\`);
+  - write outputs under \`~/dev/vibes-night\`, never by redirecting.
+- **If a required action is refused** (by the deny list, the hook, or auto
+  mode), **don't retry it in other words.** Log it, take the documented
+  fallback, and move on.
+- **Where any CLAUDE.md or AGENTS.md says "stop and ask"**, nobody is here to
+  answer. Log the question under "decisions left to Micah" and skip that one
+  item.
+- **Files go through Read, Edit, Write and Grep.**
+  - Bash runs only these:
+    - \`node\`, including the verifiers under \`TZ=…\`;
+    - \`python3 -m http.server --bind 127.0.0.1\`, and headless Chrome, both
+      through the harness;
+    - \`sips\`;
+    - git: read-only commands, plus \`git add\` **with explicit paths**,
+      \`commit -F\`, \`merge\`, \`rebase\`, \`branch\`, \`worktree\`, and \`fetch web\`
+      (in rack-mobile);
+    - \`ln -s\` and \`rm\` of a worktree's \`node_modules\` symlink (§3.2);
+    - \`mkdir\` under \`~/dev/vibes-night\`;
+    - \`kill\` / \`pgrep\` for this night's own harness processes.
+  - No \`sed\`, \`awk\`, \`cat\`, \`wc\`, heredocs, \`tee\`, or pipes into
+    \`grep\`/\`head\`/\`tail\`.
+- **Network, and nothing else:**
+  - WebSearch/WebFetch for research;
+  - a \`node\` script using \`fetch()\`, to the hosts in §14 only;
+  - \`npm --prefix ~/dev/vibes-night/tools install <pkg>\` for dev tools;
+  - \`git -C ~/dev/rack-mobile fetch web\`;
+  - the harness's Chrome loading fonts (§7.1 pins Archivo locally anyway).
+- **No npm install into either app.**
+  - Web has no \`package.json\` and must not get one.
+  - Native gets **no new dependency**: \`package.json\`, the lockfile, \`app.json\`
+    plugins and \`ios/\` stay untouched.
+  - Dev tools (an image tracer, a font subsetter, a PNG encoder, Chrome for
+    Testing) go only in \`~/dev/vibes-night/tools\`, with the reason logged.
+  - macOS \`sips\` is the first choice for image work.
+- **No native builds:** no \`npx expo run:ios\`, \`expo prebuild\`, \`pod install\` or
+  \`xcodebuild\`. Micah rebuilds in the morning.
+- **Never open** \`~/dev/rack-worker\`, \`~/dev/rack-food\`, \`~/live\`, or any
+  \`~/dev/ship-v*\` other than \`ship-v59\`. Native reads web through the
+  \`ship-v59\` files in this same session, or through
+  \`git -C ~/dev/rack-mobile show web/main:<file>\`.
+- **Unchanged by one byte** (the fence also denies edits to them, in the main
+  trees and in \`~/dev/vibes-night/wt/**\`):
+  - web \`database.rules.json\` and \`database.rules.OPTIONAL-LOCK.json\`;
+  - **the pinned pure modules, in both trees:** \`exercises.js\`,
+    \`analytics.js\`, \`tdee.js\`, \`units.js\`, \`accounts.js\`, \`insights.js\`,
+    \`estimate-origin.js\`, \`estimate-ask.js\`, \`coach.js\`, \`coach-build.js\`,
+    \`coach-live.js\`, \`coach-prog.js\`, \`coach-goal.js\`, \`coach-overlap.js\`,
+    \`coach-ready.js\`, \`coach-fuel.js\`, \`coach-volume.js\`, \`coach-tags.js\`.
+    Their colours are mapped **at the call sites** (§5, §6).
+  - **Not pinned** (native-only view modules): \`src/pure/coach-view.js\` and
+    \`src/pure/recap-view.js\`. \`coach-view.js\` may gain an optional metrics
+    argument (§6.6).
+- **Delete nothing** except your own scratch under \`~/dev/vibes-night/\`, your
+  own worktrees, and worktree \`node_modules\` symlinks.
+
+**Micah's rules:**
+
+- A wrong number, or an untrue sentence, is worse than none.
+- Web is the guinea pig and native is the destination. Judge every visual
+  decision by how it lands **on the phone**.
+- Logic and data shared by both clients live in **pure modules copied
+  verbatim** into native, sha256-pinned, with a \`verify-*-verbatim.mjs\`.
+- Add no gate and remove none. Every vibe is for everyone.
+- **Vibes change how Rack looks, never what it says or does.** No copy changes,
+  no feature changes, no data changes (except the one new setting in §8).
+
+**Precedent you must not repeat:** on 3–4 Sep an unattended "improvement pass"
+re-tokenised the colours and deployed per phase. Micah had it **reverted in
+full**. Tonight is different on purpose: nothing deploys, v1 is **proven**
+identical before anything else lands, and every phase is its own commit, so
+any single piece can be reverted without touching the others.
+
+===== Codemap advice that this prompt supersedes (§3.3, verbatim) =====
+1. "Make the vibe device-local" / "add a \`rack:device:\` prefix to ls.js."
+   **No:** the vibe is saved per account; only the *web* keeps a device hint;
+   native has no device key.
+2. "All vibes stay dark-ground" / "dark tops only." **No:** light vibes are
+   allowed (§10).
+3. The web head script goes "after the stylesheet links." **No: before** them
+   (§5.6).
+4. "The harness fails all off-machine requests." **No:** it lets Google Fonts
+   through. §7.1 pins Archivo locally instead.
+5. "A 'Vibe' row under App." **No:** a new section, **Look → Vibes** (§8.2).
+6. "The proposed-rules addition is optional." **No:** it's required (§8.1).
+7. "Defer the experimental rearranging vibe." **No:** it's in scope (§12).
+
+===== The staging rule (§3.2, verbatim) =====
+- **Don't use a workflow's \`isolation: 'worktree'\`.** It places worktrees
+  under \`.claude/\`, where the fence and hook get in the way, and it may branch
+  from \`origin/main\` rather than your HEAD.
+- **You create every worktree yourself, from the current HEAD:**
+  - \`git -C ~/dev/ship-v59 worktree add ~/dev/vibes-night/wt/web-<name> -b vibes/<name>\`
+  - \`git -C ~/dev/rack-mobile worktree add ~/dev/vibes-night/wt/nat-<name> -b vibes/<name>\`
+  
+  Give each agent the **absolute path** of its worktree.
+- **rack-mobile worktrees need \`node_modules\`.**
+  - Link it in:
+    \`ln -s ~/dev/rack-mobile/node_modules ~/dev/vibes-night/wt/nat-<name>/node_modules\`.
+    The symlink is **untracked**; \`.gitignore\`'s \`node_modules/\` only
+    matches directories.
+  - **Never** use \`git add -A\`, \`git add .\` or \`git add :/\` in any worktree.
+    Stage explicit paths only.
+  - Before every merge, run \`git -C ~/dev/rack-mobile diff --name-only main...vibes/<name>\`
+    and refuse the merge if \`node_modules\` appears.
+  - To retire the worktree, \`rm ~/dev/vibes-night/wt/nat-<name>/node_modules\`
+    (the link only, no trailing slash), then \`git worktree remove\` with no
+    \`--force\`.
+  - Apply all of this to the \`1cb6498\` baseline worktree (§7.3) too.
+- **Who edits what.**
+  - During E and N, exactly **one engine agent per tree**, on its own
+    branch/worktree, owns \`theme.js\` / \`rack.css\` and the engine files.
+  - From P onward, **only you** edit the shared files: \`theme.js\`,
+    \`rack.css\`'s \`:root\`, \`index.html\`'s \`<link>\` lines, the vibe registries
+    and the Settings hubs. Only you merge into \`main\`.
+  - Vibe agents write only their own vibe's files.
+  - Keep history linear, and never force anything.
+("You" in the staging rule is the orchestrator. The orchestrator creates worktrees and merges; you work only where your job says.)
+
+===== Session facts (from the orchestrator) =====
+- Web main tree: /Users/micahflunker/dev/ship-v59 (HEAD 928a65e = rack-v58). Native main tree: /Users/micahflunker/dev/rack-mobile (HEAD 1cb6498 = buildNumber 58). Never edit, stage or commit in either main tree; never merge into main. Work only where your job says.
+- The orchestrator ran all three canaries at the start and on resume; all held. You need not run them.
+- There is NO Grep tool and NO Glob tool in this session. Search tracked files with read-only git: \`git -C <tree> grep -n -e <pattern> -- <paths>\`. For anything else, or any pattern containing a fenced word, write a small node script under /Users/micahflunker/dev/vibes-night/tools/ and run it with node (the hook reads only the command text, not file contents). Never pipe; no cat/sed/awk/wc/head/tail/ls.
+- Downloads: only \`node /Users/micahflunker/dev/vibes-night/tools/fetch.mjs <url> <outfile under ~/dev/vibes-night>\` (enforces §14's hosts, follows redirects only to allowed hosts, prints bytes + sha256). WebSearch and WebFetch are fine for reading pages. Search snippets are not sources: list only URLs you actually opened.
+- Dev tools already installed in /Users/micahflunker/dev/vibes-night/tools/node_modules: imagetracerjs, opentype.js, subset-font, pngjs. If you need another, \`npm --prefix /Users/micahflunker/dev/vibes-night/tools install <pkg>\` and state the reason in your final answer.
+- This is an 8 GB M1 shared by ~9 agents: keep local work light. Headless Chrome only inside a harness holding /Users/micahflunker/dev/vibes-night/harness.lock.
+- Don't edit /Users/micahflunker/dev/vibes-night/VIBES-LOG.md (the orchestrator's log). Report refusals, installs and decisions in your final answer.
+- The codemap: /Users/micahflunker/dev/vibes-night/VIBES-CODEMAP.md (line numbers drift; the code wins; the prompt beats the map). The build prompt: /Users/micahflunker/dev/vibes-night/VIBES-PROMPT.md — read only the sections your job names.
+`
+
+
+const NIGHT = '/Users/micahflunker/dev/vibes-night'
+const WT = `${NIGHT}/wt/nat-settings`
+const RATE = `KNOWN PRE-EXISTING RED (not ours; don't touch): verify-rate-band fails under TZ=Pacific/Auckland on untouched 1cb6498 (NZ daylight saving started 27 Sep 2026). Accept it only if ${NIGHT}/wt/nat-base fails the same checks right after, same zone (${NIGHT}/tools/rateband-same.mjs nat <suite log> does this).`
+
+const FIX = `
+===== YOUR JOB: native S, fix round 3 (V59 §8) =====
+Worktree ${WT} (branch vibes/settings; node_modules is a symlink — never stage it). Read ${NIGHT}/VIBES-PROMPT.md §8 (lines 893-957). The S work so far: \`git -C ${WT} log --oneline 6b1b3d5..HEAD\` (storage in src/state/vibeAccount.js / vibe.js / vibeFonts.js, the Vibes sheet src/ui/settings/vibes.jsx, the watchAuth ordering in app/_layout.jsx, the epoch that makes resetVibe drop switches in flight, tools/verify-vibe-setting.mjs 72 checks). The orchestrator's hub row (630fae3) is not yours to edit.
+Review round 3 reproduced four races — read ${NIGHT}/proof/s-nat-review-r3.json in full (findings with reproductions via ${NIGHT}/tools/rv3-snat-probe.mjs, and suspicions):
+1. Two refused picks in flight put back a vibe the database refused and never held, not the account's value (store.js write()'s per-call rollback restores the previous pick's optimistic mirror). Fix in vibeAccount.js without touching store.js's shared rollback semantics for other settings: a refusal must end on the account's last value that the database actually holds (e.g. remember the last confirmed value; revert to it when every in-flight pick has settled). Make AGENTS.md's sentence true.
+2. Approval revoked while the Vibes sheet is open: a tap still dresses the waiting gate. 3. Session ended while the sheet is open: a tap puts a vibe on over sign-in and nothing takes it off. Fix both at the source: chooseVibe() refuses (does nothing) unless a user is signed in and approved at the moment of the tap AND at the moment it applies; and the sheet closes itself when the user signs out or loses approval (the house's own way of closing a sheet — read src/ui/sheet.js), so no card stays tappable.
+4. On a LIVE sign-in (sign-in on screen, no native splash), the root commits one frame in the vibe before setUser(u). Make the vibe and the user land in the same render (e.g. batch them, or apply the vibe as part of the same state update, or hold the vibe until the (app) side mounts) — whatever keeps the cold-boot path (applied before setUser while the native splash is held) exactly as it is and adds no frame of v1-then-vibe on a cold boot.
+For EACH: first add a regression check to tools/verify-vibe-setting.mjs (or its harness) that fails on the current tree (show the red), then fix, then show it green. Then: plant each fix's removal in a scratch copy (${NIGHT}/tools/s-nat-fix2-plant.mjs is the pattern) and show each goes red. verify-vibe-v1 must stay byte-identical against baseline + the committed Settings-hub rebaseline overlay (do not re-baseline anything else); verify-theme-identity --require-build; the full native suite in three zones via \`node ${NIGHT}/tools/run-verifiers.mjs nat ${WT} ${NIGHT}/proof/s-nat-fix3-suite\`. ${RATE}
+Commit (new commits on vibes/settings; Write the message under ${NIGHT}/tmp/; \`git -C ${WT} commit -F\`; end with "Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"): subject "settings: a pick only goes on for a signed-in, approved account, and a refusal ends on the account's value (V59 §8)". COMMIT OFTEN. No new on-screen words.`
+
+const REPORT = { type: 'object', properties: { commit: { type: 'string' }, fixed: { type: 'array', items: { type: 'string' } }, checks: { type: 'string' }, proof: { type: 'string' }, suite: { type: 'string' }, left: { type: 'array', items: { type: 'string' } } }, required: ['commit', 'fixed', 'checks', 'proof', 'suite', 'left'] }
+const FINDINGS = { type: 'object', properties: { findings: { type: 'array', items: { type: 'object', properties: { title: { type: 'string' }, where: { type: 'string' }, reproduction: { type: 'string' } }, required: ['title', 'where', 'reproduction'] } }, suspicions: { type: 'array', items: { type: 'string' } } }, required: ['findings', 'suspicions'] }
+
+phase('Fix')
+const fix = await agent(`${PREAMBLE}${FIX}`, { label: 'S:fix-nat-r3', phase: 'Fix', schema: REPORT })
+if (!fix) return { error: 'fixer failed' }
+phase('Check')
+const check = await agent(`${PREAMBLE}
+===== YOUR JOB: targeted re-check of native S fix round 3 =====
+Worktree ${WT} (read-only for you). The fixer reports: ${JSON.stringify(fix)}
+Re-run every probe in ${NIGHT}/proof/s-nat-review-r3.json (${NIGHT}/tools/rv3-snat-probe.mjs <tree> r1 r2 g1 g2 fl, and any others it names) against ${WT}, and confirm each is now held. Then try the same four classes once more with a variation each (e.g. three refused picks; revoked approval with a pick already loading faces; sign-out from another sheet with the Vibes sheet under it; a live sign-in whose stored vibe's faces fail). A finding counts only with a reproduction. Do not edit the worktree.`, { label: 'S:check-nat-r3', phase: 'Check', schema: FINDINGS })
+return { fix, check }

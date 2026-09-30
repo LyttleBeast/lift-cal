@@ -1,0 +1,266 @@
+export const meta = {
+  name: 'v59-proof-tooling',
+  description: 'V59 §7 proof tooling: the web two-tree pixel+computed-style harness and the native host-prop snapshot + theme identity, baselines on the untouched trees, each mutation-tested',
+  phases: [
+    { title: 'Build', detail: 'web harness (report/btn-44) and native verify-vibe-v1 + verify-theme-identity' },
+    { title: 'Skeptic', detail: 'plant a known one-value change; the tool must catch it' },
+    { title: 'Fix', detail: 'close any blindness, re-test' },
+  ],
+}
+
+const PREAMBLE = `You are one agent in an unattended overnight build of "Vibes" for Rack (a phone-first training, nutrition and bodyweight log; web PWA + native iOS app). Nobody is watching until morning. The orchestrator gives you this brief; it begins with the build prompt's §0 verbatim, then Micah's rules, then the superseded-advice list, then the staging rule, then session facts, then your job.
+
+===== §0 (verbatim) =====
+## 0. Ground rules (the fence)
+
+- **No push, deploy or publish.** No \`git push\`, \`wrangler\`, \`firebase\`, \`eas\`,
+  \`gh\`, \`gh-pages\`. Commit through the hooks, never \`--no-verify\`.
+- **Three canaries at the start, and again on every resume. Log all three
+  results. If any one runs, stop.**
+  - \`echo GUARDTEST ping\` must be refused (deny list).
+  - \`echo GUARDTEST-MOBILE ping\` must be refused (deny list).
+  - \`echo hookcheck wrangler\` must come back **"BLOCKED by deny-compound"**.
+    This proves the PreToolUse hook is live and not failing open.
+- **The hook (\`~/dev/deny-compound.mjs\`)** blocks any Bash command whose *text*
+  contains a fenced word anywhere, even inside a path, a grep pattern or a
+  commit message. The words are \`firebase\`, \`wrangler\`, \`eas\`, \`curl\`, \`wget\`,
+  \`sed -i\`, \`git push\`, \`--no-verify\`, a whitespace-led \`-…n\` flag inside
+  \`git commit\`, and redirects into \`.claude/\`. So:
+  - search with the **Grep tool**, never with Bash;
+  - **always commit with \`git commit -F <file>\`**, the message written with
+    Write (the hook can't see file contents);
+  - stage by directory when a file name contains a fenced word (e.g.
+    \`git add report/btn-44/fakes\`);
+  - write outputs under \`~/dev/vibes-night\`, never by redirecting.
+- **If a required action is refused** (by the deny list, the hook, or auto
+  mode), **don't retry it in other words.** Log it, take the documented
+  fallback, and move on.
+- **Where any CLAUDE.md or AGENTS.md says "stop and ask"**, nobody is here to
+  answer. Log the question under "decisions left to Micah" and skip that one
+  item.
+- **Files go through Read, Edit, Write and Grep.**
+  - Bash runs only these:
+    - \`node\`, including the verifiers under \`TZ=…\`;
+    - \`python3 -m http.server --bind 127.0.0.1\`, and headless Chrome, both
+      through the harness;
+    - \`sips\`;
+    - git: read-only commands, plus \`git add\` **with explicit paths**,
+      \`commit -F\`, \`merge\`, \`rebase\`, \`branch\`, \`worktree\`, and \`fetch web\`
+      (in rack-mobile);
+    - \`ln -s\` and \`rm\` of a worktree's \`node_modules\` symlink (§3.2);
+    - \`mkdir\` under \`~/dev/vibes-night\`;
+    - \`kill\` / \`pgrep\` for this night's own harness processes.
+  - No \`sed\`, \`awk\`, \`cat\`, \`wc\`, heredocs, \`tee\`, or pipes into
+    \`grep\`/\`head\`/\`tail\`.
+- **Network, and nothing else:**
+  - WebSearch/WebFetch for research;
+  - a \`node\` script using \`fetch()\`, to the hosts in §14 only;
+  - \`npm --prefix ~/dev/vibes-night/tools install <pkg>\` for dev tools;
+  - \`git -C ~/dev/rack-mobile fetch web\`;
+  - the harness's Chrome loading fonts (§7.1 pins Archivo locally anyway).
+- **No npm install into either app.**
+  - Web has no \`package.json\` and must not get one.
+  - Native gets **no new dependency**: \`package.json\`, the lockfile, \`app.json\`
+    plugins and \`ios/\` stay untouched.
+  - Dev tools (an image tracer, a font subsetter, a PNG encoder, Chrome for
+    Testing) go only in \`~/dev/vibes-night/tools\`, with the reason logged.
+  - macOS \`sips\` is the first choice for image work.
+- **No native builds:** no \`npx expo run:ios\`, \`expo prebuild\`, \`pod install\` or
+  \`xcodebuild\`. Micah rebuilds in the morning.
+- **Never open** \`~/dev/rack-worker\`, \`~/dev/rack-food\`, \`~/live\`, or any
+  \`~/dev/ship-v*\` other than \`ship-v59\`. Native reads web through the
+  \`ship-v59\` files in this same session, or through
+  \`git -C ~/dev/rack-mobile show web/main:<file>\`.
+- **Unchanged by one byte** (the fence also denies edits to them, in the main
+  trees and in \`~/dev/vibes-night/wt/**\`):
+  - web \`database.rules.json\` and \`database.rules.OPTIONAL-LOCK.json\`;
+  - **the pinned pure modules, in both trees:** \`exercises.js\`,
+    \`analytics.js\`, \`tdee.js\`, \`units.js\`, \`accounts.js\`, \`insights.js\`,
+    \`estimate-origin.js\`, \`estimate-ask.js\`, \`coach.js\`, \`coach-build.js\`,
+    \`coach-live.js\`, \`coach-prog.js\`, \`coach-goal.js\`, \`coach-overlap.js\`,
+    \`coach-ready.js\`, \`coach-fuel.js\`, \`coach-volume.js\`, \`coach-tags.js\`.
+    Their colours are mapped **at the call sites** (§5, §6).
+  - **Not pinned** (native-only view modules): \`src/pure/coach-view.js\` and
+    \`src/pure/recap-view.js\`. \`coach-view.js\` may gain an optional metrics
+    argument (§6.6).
+- **Delete nothing** except your own scratch under \`~/dev/vibes-night/\`, your
+  own worktrees, and worktree \`node_modules\` symlinks.
+
+**Micah's rules:**
+
+- A wrong number, or an untrue sentence, is worse than none.
+- Web is the guinea pig and native is the destination. Judge every visual
+  decision by how it lands **on the phone**.
+- Logic and data shared by both clients live in **pure modules copied
+  verbatim** into native, sha256-pinned, with a \`verify-*-verbatim.mjs\`.
+- Add no gate and remove none. Every vibe is for everyone.
+- **Vibes change how Rack looks, never what it says or does.** No copy changes,
+  no feature changes, no data changes (except the one new setting in §8).
+
+**Precedent you must not repeat:** on 3–4 Sep an unattended "improvement pass"
+re-tokenised the colours and deployed per phase. Micah had it **reverted in
+full**. Tonight is different on purpose: nothing deploys, v1 is **proven**
+identical before anything else lands, and every phase is its own commit, so
+any single piece can be reverted without touching the others.
+
+===== Codemap advice that this prompt supersedes (§3.3, verbatim) =====
+1. "Make the vibe device-local" / "add a \`rack:device:\` prefix to ls.js."
+   **No:** the vibe is saved per account; only the *web* keeps a device hint;
+   native has no device key.
+2. "All vibes stay dark-ground" / "dark tops only." **No:** light vibes are
+   allowed (§10).
+3. The web head script goes "after the stylesheet links." **No: before** them
+   (§5.6).
+4. "The harness fails all off-machine requests." **No:** it lets Google Fonts
+   through. §7.1 pins Archivo locally instead.
+5. "A 'Vibe' row under App." **No:** a new section, **Look → Vibes** (§8.2).
+6. "The proposed-rules addition is optional." **No:** it's required (§8.1).
+7. "Defer the experimental rearranging vibe." **No:** it's in scope (§12).
+
+===== The staging rule (§3.2, verbatim) =====
+- **Don't use a workflow's \`isolation: 'worktree'\`.** It places worktrees
+  under \`.claude/\`, where the fence and hook get in the way, and it may branch
+  from \`origin/main\` rather than your HEAD.
+- **You create every worktree yourself, from the current HEAD:**
+  - \`git -C ~/dev/ship-v59 worktree add ~/dev/vibes-night/wt/web-<name> -b vibes/<name>\`
+  - \`git -C ~/dev/rack-mobile worktree add ~/dev/vibes-night/wt/nat-<name> -b vibes/<name>\`
+  
+  Give each agent the **absolute path** of its worktree.
+- **rack-mobile worktrees need \`node_modules\`.**
+  - Link it in:
+    \`ln -s ~/dev/rack-mobile/node_modules ~/dev/vibes-night/wt/nat-<name>/node_modules\`.
+    The symlink is **untracked**; \`.gitignore\`'s \`node_modules/\` only
+    matches directories.
+  - **Never** use \`git add -A\`, \`git add .\` or \`git add :/\` in any worktree.
+    Stage explicit paths only.
+  - Before every merge, run \`git -C ~/dev/rack-mobile diff --name-only main...vibes/<name>\`
+    and refuse the merge if \`node_modules\` appears.
+  - To retire the worktree, \`rm ~/dev/vibes-night/wt/nat-<name>/node_modules\`
+    (the link only, no trailing slash), then \`git worktree remove\` with no
+    \`--force\`.
+  - Apply all of this to the \`1cb6498\` baseline worktree (§7.3) too.
+- **Who edits what.**
+  - During E and N, exactly **one engine agent per tree**, on its own
+    branch/worktree, owns \`theme.js\` / \`rack.css\` and the engine files.
+  - From P onward, **only you** edit the shared files: \`theme.js\`,
+    \`rack.css\`'s \`:root\`, \`index.html\`'s \`<link>\` lines, the vibe registries
+    and the Settings hubs. Only you merge into \`main\`.
+  - Vibe agents write only their own vibe's files.
+  - Keep history linear, and never force anything.
+("You" in the staging rule is the orchestrator. The orchestrator creates worktrees and merges; you work only where your job says.)
+
+===== Session facts (from the orchestrator) =====
+- Web main tree: /Users/micahflunker/dev/ship-v59 (HEAD 928a65e = rack-v58). Native main tree: /Users/micahflunker/dev/rack-mobile (HEAD 1cb6498 = buildNumber 58). Never edit, stage or commit in either main tree; never merge into main. Work only where your job says.
+- The orchestrator ran all three canaries at the start and on resume; all held. You need not run them.
+- There is NO Grep tool and NO Glob tool in this session. Search tracked files with read-only git: \`git -C <tree> grep -n -e <pattern> -- <paths>\`. For anything else, or any pattern containing a fenced word, write a small node script under /Users/micahflunker/dev/vibes-night/tools/ and run it with node (the hook reads only the command text, not file contents). Never pipe; no cat/sed/awk/wc/head/tail/ls.
+- Downloads: only \`node /Users/micahflunker/dev/vibes-night/tools/fetch.mjs <url> <outfile under ~/dev/vibes-night>\` (enforces §14's hosts, follows redirects only to allowed hosts, prints bytes + sha256). WebSearch and WebFetch are fine for reading pages. Search snippets are not sources: list only URLs you actually opened.
+- Dev tools already installed in /Users/micahflunker/dev/vibes-night/tools/node_modules: imagetracerjs, opentype.js, subset-font, pngjs. If you need another, \`npm --prefix /Users/micahflunker/dev/vibes-night/tools install <pkg>\` and state the reason in your final answer.
+- This is an 8 GB M1 shared by ~9 agents: keep local work light. Headless Chrome only inside a harness holding /Users/micahflunker/dev/vibes-night/harness.lock.
+- Don't edit /Users/micahflunker/dev/vibes-night/VIBES-LOG.md (the orchestrator's log). Report refusals, installs and decisions in your final answer.
+- The codemap: /Users/micahflunker/dev/vibes-night/VIBES-CODEMAP.md (line numbers drift; the code wins; the prompt beats the map). The build prompt: /Users/micahflunker/dev/vibes-night/VIBES-PROMPT.md — read only the sections your job names.
+`
+
+
+const NIGHT = '/Users/micahflunker/dev/vibes-night'
+const PROMPT = `${NIGHT}/VIBES-PROMPT.md`
+const CODEMAP = `${NIGHT}/VIBES-CODEMAP.md`
+
+const WEB_JOB = `
+===== YOUR JOB: the web v1 proof harness (V59 §7.1) =====
+Read first: ${PROMPT} §7 (lines 790-889) in full, §3 "Long commands" (lines 284-287), §13.3 (lines 1140-1146), §15.2 (lines 1262-1269). Codemap ${CODEMAP}: Web styling §9 "Proving v1 is identical" (lines 342-349) and Tooling §3 (lines 1343-1371). Then read the harness: report/btn-44/{measure.mjs, helpers.js, seed.mjs, diff.mjs, scenes.json, fakes/*} and report/btn-44.md.
+
+Your worktree: ${NIGHT}/wt/web-harness (branch vibes/harness at 928a65e). You commit ONLY under report/btn-44/ there. The BASE tree is ${NIGHT}/wt/web-base (detached at 928a65e) — read-only for you: never edit it or write into it (serve it as-is). A scratch copy you may edit for experiments: ${NIGHT}/wt/web-hmut (detached 928a65e) — restore it to clean when done (\`git -C ${NIGHT}/wt/web-hmut checkout -- .\` and delete any file you added).
+The pinned Archivo: ${NIGHT}/tools/fonts/archivo/Archivo-wdth-wght.ttf, sha256 0e094a7d3c7c4c25cf1310c4b30014f1dae9332220b1c2c88f4fa996f0b05053 (assert it at startup). Chrome: /Applications/Google Chrome.app/Contents/MacOS/Google Chrome (CHROME overrides). A working one-scene smoke harness you may crib from: ${NIGHT}/tools/harness-smoke.mjs.
+
+BUILD:
+1. Parametrise report/btn-44/measure.mjs: REPO, PORT, CDP_PORT (env or flags), a per-run --user-data-dir under ${NIGHT}/tmp/<run>; fail loudly on a bind error (python's "Address already in use"); serialise through the night's lock ${NIGHT}/harness.lock (create with O_EXCL, your pid inside; reclaim only if that pid is dead; remove on exit, including on errors/signals); keep its existing CLI and default behaviour working.
+2. A two-tree proof runner (e.g. report/btn-44/prove.mjs + a shared lib file): serves REPO_A and REPO_B with \`python3 -m http.server <port> --bind 127.0.0.1 --directory <repo>\` on two ports (8765, 8766), one headless Chrome on CDP 9333 (flags as measure.mjs plus --use-mock-keychain). For each scene group × width: boot A, run the scene steps, capture; boot B identically, capture; compare.
+   - Before measuring, ASSERT which tree each port serves: GET /vibe.js must be 404 on base and 200 on engine; the expected status per side is a CLI flag (the control expects 404/404).
+   - Hold fixed on both sides: a fixed Date / Date.now / performance.now injected with Page.addScriptToEvaluateOnNewDocument (NOW = 2026-09-25T19:30:00-04:00, a Friday evening; let time advance deterministically if the app needs timers to fire, or freeze — whichever gives a stable control; document it); a seeded Math.random; Emulation.setTimezoneOverride America/New_York; stop animations (Emulation.setEmulatedMedia prefers-reduced-motion: reduce, and/or Animation.setPlaybackRate 0 after boot — pick what gives a stable control; document it); blur the active element (no caret); hide scrollbars.
+   - Seed ONCE: generate seed.json with seed.mjs under TZ=America/New_York with its clock frozen at the same NOW (a node --import preload under ${NIGHT}/tools/ that fixes Date), written to ${NIGHT}/proof/seed/seed.json (never into a tree; seed.mjs may gain an env var for the output path and NOW, defaults unchanged). Both trees use that one file.
+   - Fonts: pin Archivo locally. In the Fetch interception, answer the fonts.googleapis.com/css2?family=Archivo… request with a local @font-face (family 'Archivo', font-weight 300 900, font-stretch 62% 125%) whose src is a URL you also intercept and fulfil with the pinned TTF bytes, identically for both sides. Fail every other off-machine request (keep the Firebase fakes). Guard after boot with BOTH \`(await document.fonts.load('700 16px Archivo')).length > 0\` AND \`[...document.fonts].some(f => f.family.replace(/["']/g,'') === 'Archivo' && f.status === 'loaded')\` — fonts.check() alone passes when nothing loaded.
+   - Also assert rack.css line 1 (the Archivo @import) is byte-identical between A and B.
+   - Scenes: the existing 58 at 390 and 320px. Add ONLY the missing "summary" (the workout summary screen) and "live session with a drop set" scenes to scenes.json (read AGENTS.md's drop-set section in the base tree: a drop is a set with type 'D' and dp: 1 under its parent; add a second live-session variant to seed.mjs's output, e.g. liveDrop, used by a cfg flag). Check first that no existing scene already shows them.
+   - Capture per scene and width: Page.captureScreenshot {format:'png', captureBeyondViewport:true}; a getComputedStyle dump of EVERY element and its ::before/::after (every property except custom properties --*), bounding rects, and SVG attributes (geometry attributes raw: d, points, x, y, cx, cy, r, rx, width, height, viewBox, transform, stroke-width…; paint attributes fill/stroke/stop-color: record the COMPUTED value, because the engine may move a hex from an attribute into a style — say so in the output). Key each element by a stable path (tag + nth-of-type chain).
+   - Be efficient on an 8 GB machine: hash each element's dump; store the full dumps gzipped (zlib) per scene under ${NIGHT}/proof/<run>/; compare hashes first and emit detail only for differing elements. Compare screenshot bytes first; if they differ, decode with a small node PNG reader written with zlib only (no npm) and list every differing region (bounding boxes of differing-pixel clusters, with pixel counts). Output ${NIGHT}/proof/<run>/summary.json: per scene × width {pixelsEqual, diffRegions, styleDiffs (count + first 20 with element path/property/A/B), rectDiffs, svgDiffs, errors}. NEVER write proof output under report/ (Pages publishes it).
+   - Modes for later phases (build now, test on base): --vibe <id> (sets localStorage 'rack:vibe' to <id> right after the harness's localStorage.clear(), before the app loads — inert on base); "shoot" (one tree, 390px, a named scene list → PNGs in an out dir, for the gallery and the judges; also the full list from §15.2: You, Train calendar, live session with a drop set, summary, Fuel day, the add-food sheet, the Coach sheet, Weight, Steps, the Settings hub, the Vibes sheet (skip if absent), sign-in); "fit" (one tree at 320 and 390: horizontal overflow — document scrollWidth > innerWidth and any element whose rect exceeds the viewport; clipped text in fixed-height boxes — elements with a fixed height or overflow hidden/clip whose scrollHeight > clientHeight+1 or scrollWidth > clientWidth+1 and that contain text, especially .coach-card (190/164), .btn, .chip; interactive targets under 44px tall — buttons/links/[role=button]/inputs, reusing helpers.measure's notion). Scene/width/group filters (--scenes, --groups, --widths) so a run can be sharded under Bash's 10-minute cap.
+3. CONTROL FIRST: serve the base tree on BOTH ports (REPO_A = REPO_B = ${NIGHT}/wt/web-base, expected /vibe.js 404/404): every scene × both widths must give 0 pixel and 0 computed-style differences. If not, find the nondeterminism and remove it (document each fix). Run the full control TWICE. Runs are long: use Bash run_in_background writing ${NIGHT}/proof/<run>/run.log and poll it with Read, or shard by group/width. Record the timing per full run.
+4. BASELINE: keep the control's A-side dumps and PNGs as the base baseline at ${NIGHT}/proof/web-base-baseline/ (gzipped), with a manifest (sha 928a65e, pinned Archivo sha256, NOW, TZ, Chrome version from /json/version).
+5. COMMIT on vibes/harness, explicit paths under report/btn-44/ only (NEVER seed.json, never proof output): subject "The v1 proof harness: two trees, pixels and computed styles, a pinned Archivo"; body: what it holds fixed, the control numbers, how to run each mode; end with the line "Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>". Message via Write to ${NIGHT}/tmp/msg-harness.txt, then \`git -C <wt> commit -F <file>\`. The web verifier suite must stay 52/52 (you touch no verifier) — run tools-check once in UTC to confirm.
+Return the exact commands for each mode, the control numbers (scenes × widths, pixel diffs, style diffs, per run), timings, determinism fixes, and anything you could not do.`
+
+const NAT_JOB = `
+===== YOUR JOB: the native v1 proof (V59 §7.3 host-prop snapshot and §7.4 theme identity) =====
+Read first: ${PROMPT} §6 (lines 651-787) and §7.3-§7.6 (lines 843-877). Codemap ${CODEMAP}: Native styling §1, §2, §7 and "Engine seam §6" (lines 353-424, 530-555, 593-597), Screens §1 (lines 673-761). Then the code: tools/lib/rn-render.mjs, tools/verify-top-inset.mjs (its 12 screens and store stub), tools/verify-text-color.mjs, tools/verify-coach-surface.mjs, src/ui/theme.js, app/_layout.jsx, app/(app)/_layout.jsx, the tabs layout, src/ui/Dock.jsx, src/ui/Sheet.jsx, src/ui/settings/index.jsx, the Coach sheet, onboarding/Setup, app/(auth)/sign-in.jsx.
+
+Your worktree: ${NIGHT}/wt/nat-proof (branch vibes/proof at 1cb6498; node_modules is a symlink — NEVER stage it; stage explicit paths only). The BASE tree: ${NIGHT}/wt/nat-base (detached 1cb6498, node_modules linked) — read-only for you. Scratch for experiments: ${NIGHT}/wt/nat-hmut (detached 1cb6498, linked) — restore it clean when done.
+
+BUILD (in tools/, house style — read two existing verifiers first):
+1. tools/verify-vibe-v1.mjs on tools/lib/rn-render.mjs. With a FROZEN clock (NOW = 2026-09-25T19:30:00-04:00) and any seed frozen, it mounts: verify-top-inset.mjs's 12 screens (You, Train, Fuel, Weight, Steps, Stats, one-lift Stats, Admin, Summary, Session idle, Session live, Recap), plus the Dock and the Tabs layout, SheetHost with the Settings hub open, the Coach sheet, a live session (with a drop set if the store stub allows), the Setup (onboarding) steps, and sign-in. BlurView, LinearGradient (expo-linear-gradient), StatusBar (expo-status-bar), DateTimePicker and ImageBackground as PROP-RECORDING stubs (hosts that appear in the dump with their props). Define the stubs in the verifier's own files (e.g. tools/lib/vibe-snap.mjs), not by editing rn-render, so the SAME verifier can render the base tree: take --root <tree> (default: its own tree) and load that tree's rn-render and sources.
+   Dump for each host, in tree order: its type; its flattened style (canonical key order); its colour/SVG props (fill, stroke, stopColor, stopOpacity, placeholderTextColor, trackColor, thumbColor, ios_backgroundColor, keyboardAppearance, tint, intensity, colors, locations, start, end, style (StatusBar), themeVariant, source (ImageBackground), color, backgroundColor, selectionColor, cursorColor) and every other string/number/boolean prop (skip functions; skip non-deterministic values; if something is non-deterministic, freeze it and say how). Canonical JSON with sorted keys.
+   Modes: default = render and compare with the committed baseline tools/vibe-v1.baseline.json, byte-identical, printing a readable diff (first N differing hosts with path/prop/before/after) on failure and exiting 1; --write-baseline = write the baseline including the sha it was captured at (\`git -C <root> rev-parse HEAD\`) and a per-screen host count.
+   Time zones: the suite runs under TZ=America/New_York, UTC and Pacific/Auckland. Either make the dump zone-independent or pin the zone for the render (e.g. re-spawn under a fixed TZ) — choose, document why, and prove it passes in all three.
+   CONTROL FIRST: render the base tree twice → identical; render your own tree (same code as base) → identical to base. Then write the baseline FROM THE BASE TREE (--root ${NIGHT}/wt/nat-base) and commit it.
+2. tools/verify-theme-identity.mjs (§7.4). Load src/ui/theme.js the way rn-render does (compiled module, NOT by regex), so it survives the engine's refactor. Dump the pre-engine exports: every table (colors, tint, space, radius, layout constants, motion, text presets); alpha.* sampled on a grid of values (e.g. 0, .02, .05, .07, .1, .12, .14, .16, .18, .2, .25, .3, .4, .5, .6, .8, .82, .9, 1); layout functions on a grid of safe-area insets (top/bottom 0, 20, 24, 44, 47, 48, 59; plus whatever keyboard/height args they take); all 20 text presets; face() for all 31 wdth×wght pairs used in the code (find them by AST; list them); type() for every argument set found at the ~155 call sites (AST scan with @babel/parser from node_modules over app/ and src/; literal object args evaluated; non-literal args listed as skipped with file:line); loadNum() for each size used (AST). Write tools/theme-v1.baseline.json at 1cb6498 (sha inside). The verifier compares the current theme.js default export against the baseline, deep-equal; AND, when theme.js exports build and src/pure/vibes/defs/v1.js exists, also build(v1) — say "build() not present yet" and pass otherwise.
+3. DATA for the engine (do not commit lints): an AST scan written to ${NIGHT}/proof/nat-lint-baseline.json: (a) every colour literal outside src/ui/theme.js (hex, rgb/rgba, named colours except 'transparent'), excluding the pinned pure files; (b) every module-scope \`T.\` read (file:line, what); (c) every \`T\` reference inside a worklet (useAnimatedStyle / useDerivedValue / useAnimatedProps callbacks, interpolateColor args inside them, functions with a 'worklet' directive). Compare the counts with the codemap's (14 files / 76 module-scope refs; 45 hex literals in 12 files; 9 rgba sites; 2 worklet sites) and explain differences.
+4. RUN the full native suite in three zones via \`node ${NIGHT}/tools/run-verifiers.mjs nat ${NIGHT}/wt/nat-proof ${NIGHT}/proof/natproof-suite\` — 83/83 (81 + your 2), batteries unchanged.
+5. COMMIT on vibes/proof (explicit paths; message via Write to ${NIGHT}/tmp/msg-natproof.txt; \`git -C <wt> commit -F <file>\`): subject "tools: the v1 proof — host props over N screens, and theme identity, baselined at 1cb6498 (V59 §7)"; body with screens covered, host count, the TZ decision; end with "Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>".
+Return: screens covered and host counts, the control result, run commands, the lint-baseline counts vs the codemap, anything not coverable and why.`
+
+const WEB_SKEPTIC = `
+===== YOUR JOB: skeptic of the web v1 proof harness =====
+The harness in ${NIGHT}/wt/web-harness/report/btn-44/ (branch vibes/harness) claims: served two trees, it reports every pixel and computed-style difference, and base-vs-base gives 0/0. A harness that cannot see a real difference would let a broken engine through. Try to show it is BLIND. Use the scratch worktree ${NIGHT}/wt/web-hmut (detached 928a65e; you may edit it; restore it clean at the end — \`git -C ${NIGHT}/wt/web-hmut checkout -- .\` and delete added files; verify with git status). Plant, one at a time, small real differences in web-mut and run the harness with A = ${NIGHT}/wt/web-base, B = ${NIGHT}/wt/web-hmut on a few scenes (use its scene filters; expected /vibe.js 404/404 — or add an empty vibe.js to web-mut to test the port assertion too): (1) --dim #5c6270 → #5c6271 in rack.css :root (a 1-unit colour change); (2) a 1px padding change on a common card rule; (3) one SVG path char in a dock icon in index.html; (4) a letter-spacing .02em → .021em on a label; (5) a ::before/::after content or colour change; (6) swap one hex in an inline style set by JS (e.g. a plate colour in workout.js) for its rgb() equivalent — this one must report ZERO differences (same computed value), proving the harness compares computed values, not source text. For 1-5 the harness must report a difference (pixel and/or style) in an affected scene. Also check: the port assertion really fails when a side serves the wrong tree; the Archivo guard really fails if the font is blocked (point the pinned path at a missing file in a scratch copy of the harness under ${NIGHT}/tmp/ rather than editing the committed one); the lock works (a second run refuses while one holds it). The harness holds ${NIGHT}/harness.lock — never run two at once. Report each probe: planted change, scenes run, what the harness reported, pass/blind.`
+
+const NAT_SKEPTIC = `
+===== YOUR JOB: skeptic of the native v1 proof =====
+tools/verify-vibe-v1.mjs and tools/verify-theme-identity.mjs in ${NIGHT}/wt/nat-proof (branch vibes/proof) claim to catch any change to v1's host props / theme exports. Try to show they are BLIND. Use the scratch worktree ${NIGHT}/wt/nat-hmut (detached 1cb6498, node_modules linked; restore clean at the end — \`git -C ${NIGHT}/wt/nat-hmut checkout -- .\`, delete added files, check git status). Plant, one at a time, in nat-mut: (1) T.colors.dim #5c6270 → #5c6271 in theme.js; (2) one tint alpha .14 → .15; (3) a padding 14 → 15 in one screen component; (4) a Dock icon path char; (5) Settings hub: one row's label colour; (6) BlurView intensity 40 → 41 in Dock.jsx; (7) sign-in: one literal hex; (8) a text preset's letterSpacing. Run \`node ${NIGHT}/wt/nat-proof/tools/verify-vibe-v1.mjs --root ${NIGHT}/wt/nat-hmut\` (and the theme-identity verifier against nat-mut the same way, if it supports --root; if it doesn't, that is itself a finding to fix — it must be able to judge a tree other than its own) and confirm each goes red with a readable diff. Also: does a change in a screen NOT in its list go unseen? Name the screens/hosts it cannot see (e.g. screens behind navigation it never mounts) — list them as coverage gaps (not failures). Report each probe: planted change, result, pass/blind.`
+
+const SKEPTIC_SCHEMA = {
+  type: 'object',
+  properties: {
+    probes: { type: 'array', items: { type: 'object', properties: {
+      change: { type: 'string' }, ran: { type: 'string' }, reported: { type: 'string' }, verdict: { type: 'string', enum: ['caught', 'blind', 'correctly-zero', 'wrongly-nonzero', 'could-not-run'] } },
+      required: ['change', 'ran', 'reported', 'verdict'] } },
+    coverage_gaps: { type: 'array', items: { type: 'string' } },
+    scratch_restored_clean: { type: 'boolean' },
+    summary: { type: 'string' },
+  },
+  required: ['probes', 'coverage_gaps', 'scratch_restored_clean', 'summary'],
+}
+const BUILD_SCHEMA = {
+  type: 'object',
+  properties: {
+    commit: { type: 'string' },
+    commands: { type: 'object', description: 'mode -> exact command' },
+    control: { type: 'string', description: 'the control numbers, per run' },
+    baseline_location: { type: 'string' },
+    counts: { type: 'object', description: 'scenes/screens, widths, hosts, verifier suite results' },
+    determinism_fixes: { type: 'array', items: { type: 'string' } },
+    not_done: { type: 'array', items: { type: 'string' } },
+    notes: { type: 'string' },
+  },
+  required: ['commit', 'commands', 'control', 'baseline_location', 'counts', 'determinism_fixes', 'not_done', 'notes'],
+}
+
+const TRACKS = [
+  { key: 'web', job: WEB_JOB, skeptic: WEB_SKEPTIC, wt: `${NIGHT}/wt/web-harness` },
+  { key: 'nat', job: NAT_JOB, skeptic: NAT_SKEPTIC, wt: `${NIGHT}/wt/nat-proof` },
+]
+
+const out = await pipeline(TRACKS,
+  t => agent(`${PREAMBLE}${t.job}`, { label: `build:${t.key}`, phase: 'Build', schema: BUILD_SCHEMA }),
+  async (built, t) => {
+    if (!built) return { key: t.key, built: null }
+    let sk = await agent(`${PREAMBLE}${t.skeptic}\n\nThe builder reported:\n${JSON.stringify(built, null, 1)}`, { label: `skeptic:${t.key}`, phase: 'Skeptic', schema: SKEPTIC_SCHEMA })
+    const history = [sk]
+    for (let round = 1; round <= 2 && sk && sk.probes.some(p => p.verdict === 'blind' || p.verdict === 'wrongly-nonzero'); round++) {
+      const bad = sk.probes.filter(p => p.verdict === 'blind' || p.verdict === 'wrongly-nonzero')
+      log(`${t.key}: skeptic found ${bad.length} blind spots; fixing (round ${round})`)
+      const fixed = await agent(`${PREAMBLE}${t.job}\n\n===== YOU ARE THE FIXER (round ${round}) =====\nThe tool above is built and committed in ${t.wt}. A skeptic planted real differences and the tool missed or mis-reported these:\n${JSON.stringify(bad, null, 1)}\nReproduce each in the scratch worktree the skeptic used (restore it clean after), fix the tool so it catches them, re-run the CONTROL (it must stay 0/0 / identical), and commit the fix on the same branch as a new commit (subject: web "The v1 proof harness: what the skeptic found"; native "tools: the v1 proof — what the skeptic found (V59 §7)"; Co-Authored-By line at the end).`, { label: `fix:${t.key}-r${round}`, phase: 'Fix', schema: BUILD_SCHEMA })
+      if (!fixed) break
+      sk = await agent(`${PREAMBLE}${t.skeptic}\n\nThis is a RE-TEST after a fix. Re-run every probe, especially these, which were blind before:\n${JSON.stringify(bad, null, 1)}`, { label: `skeptic:${t.key}-r${round + 1}`, phase: 'Skeptic', schema: SKEPTIC_SCHEMA })
+      history.push(sk)
+    }
+    return { key: t.key, built, skeptic: history }
+  })
+return out
