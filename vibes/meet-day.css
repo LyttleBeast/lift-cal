@@ -835,3 +835,12 @@
    the pulsing ring take the board ink instead. */
 [data-vibe="meet-day"] #dock button.active.tour-lit { color: var(--knockout); }
 [data-vibe="meet-day"] #dock button.active.tour-lit::after { box-shadow: 0 0 0 2px var(--knockout); }
+
+/* ---------- panel round 1 ----------
+   A disabled lit panel is one the board has not armed: a raised cell with its
+   words in dim (6.81 on raised is not needed: disabled controls are exempt, but
+   it still reads), not the lamp at .4, which drew a muddy grey slab. The
+   strength chips are a grid of three, not four and an orphan. */
+[data-vibe="meet-day"] .btn-primary:disabled { opacity: 1; background: var(--raised); color: var(--dim); }
+[data-vibe="meet-day"] .feel-card .coach-chips:not(.feel-grid) { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+[data-vibe="meet-day"] .feel-card .coach-chips:not(.feel-grid) .coach-chip { padding-left: 4px; padding-right: 4px; }
