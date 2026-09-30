@@ -466,13 +466,11 @@
 /* ---------- coachCard · panel ----------
    Bar ground, its 1pt border in the ground's own colour, square; a band
    (raised) behind the header row, taking no layout. The box is v1's. */
-[data-vibe="meet-day"] .coach-card { border-color: var(--bar); border-radius: var(--r-plate); position: relative; isolation: isolate; }
-[data-vibe="meet-day"] .coach-card:active { border-color: var(--bar); transform: none; background: var(--raised); }
-[data-vibe="meet-day"] .coach-hd { position: relative; }
-[data-vibe="meet-day"] .coach-hd::before {
-  content: ''; position: absolute; z-index: -1;
-  left: -14px; right: -14px; top: -14px; bottom: -7px; background: var(--shape-band-fill);
+[data-vibe="meet-day"] .coach-card {
+  border-color: var(--bar); border-radius: var(--r-plate);
+  background: linear-gradient(var(--shape-band-fill), var(--shape-band-fill)) 0 0 / 100% 40px no-repeat, var(--bar);
 }
+[data-vibe="meet-day"] .coach-card:active { border-color: var(--bar); transform: none; }
 [data-vibe="meet-day"] .coach-go { border-top-color: var(--collar); }
 
 /* ---------- calCell · edge ----------
@@ -830,3 +828,10 @@
   font-variation-settings: 'wdth' 62.5, 'wght' 800; letter-spacing: 0; font-size: 40px; line-height: 38px; font-synthesis: none;
 }
 [data-vibe="meet-day"].vibe-in .vibe-accent { border-radius: 0; }
+
+/* ---------- the tour ----------
+   The tour lights a dock cell in the accent (lamp here). On the active cell,
+   which is itself the lamp inverted, that would be lamp on lamp: the words and
+   the pulsing ring take the board ink instead. */
+[data-vibe="meet-day"] #dock button.active.tour-lit { color: var(--knockout); }
+[data-vibe="meet-day"] #dock button.active.tour-lit::after { box-shadow: 0 0 0 2px var(--knockout); }
