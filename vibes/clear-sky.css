@@ -281,7 +281,9 @@
    good past the step goal). */
 [data-vibe="clear-sky"] [data-hero] {
   font-size: 76px !important;   /* beats food.js:590 and steps.js:196's inline fontSize */
-  line-height: 1; letter-spacing: -.02em;
+  /* type.hero's lh 1, floored at the face's minLh (878 + 210 on 1000) as
+     native floors every Text: the Light's ink never spills its line box */
+  line-height: 1.088; letter-spacing: -.02em;
   font-variation-settings: 'wdth' 100, 'wght' 300;
 }
 @media (max-width: 359.98px) {
@@ -345,6 +347,10 @@
    only coloured lines in the vibe; the titles still say which is which. */
 [data-vibe="clear-sky"] #view-you .card.card-wins > .card-hd { border-bottom-color: var(--good); }
 [data-vibe="clear-sky"] #view-you .card.card-improve > .card-hd { border-bottom-color: var(--warn); }
+/* The weekly review's verdict ("A solid week"), v1's literal 24 / 800 wide:
+   re-set as a head at normal width and 600, so the one heavy wide word on
+   You is not louder than the Goal's figure. Size and line as v1's. */
+[data-vibe="clear-sky"] .review-verdict { letter-spacing: -.01em; font-variation-settings: 'wdth' 100, 'wght' 600; }
 /* What paints its own ground to cover a swipe panel takes the ground it sits
    on: the sky on the page, the sheet's white in a sheet (v1's). */
 [data-vibe="clear-sky"] #app .swipe-front { background: var(--rack); }
