@@ -416,6 +416,10 @@
   margin-bottom: 10px;
   border-bottom: var(--shape-rule-hair) solid var(--shape-rule-ink);
 }
+/* A sheet whose first thing is a chapter (the Settings hub: "You" on its
+   2pt rule) lets the chapter's rule be the one under the title: a hairline
+   and a 2pt rule a step apart would box the title in. */
+[data-vibe="ledger"] .sheet h2:has(+ .you-sec) { border-bottom: 0; padding-bottom: 0; }
 [data-vibe="ledger"] .sheet .field input,
 [data-vibe="ledger"] .sheet .field select,
 [data-vibe="ledger"] .sheet .field textarea { background: var(--well); }
@@ -928,7 +932,9 @@
 [data-vibe="ledger"] .donut-sub,
 [data-vibe="ledger"] .ring-sub { font-size: 11px; }
 [data-vibe="ledger"] .pb-track,
-[data-vibe="ledger"] .pb-fill { border-radius: 0; }
+[data-vibe="ledger"] .pb-fill,
+[data-vibe="ledger"] .vol-track,
+[data-vibe="ledger"] .vol-fill { border-radius: 0; }
 [data-vibe="ledger"] .ring-fill,
 [data-vibe="ledger"] .st-ring circle { stroke-linecap: square; }
 [data-vibe="ledger"] .chart-empty { border-style: solid; border-color: var(--collar); border-radius: 0; font-size: 13px; }
