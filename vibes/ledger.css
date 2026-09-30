@@ -1126,7 +1126,12 @@
    The page green; the six-plate mark in plate colours, radius 2; the title
    in the condensed head at 34 over a 2pt rule; square knurl fields; the
    cream slab; links as underlined steel words; errors and success in their
-   words. The invite, waiting and paused gates the same. */
+   words. The invite, waiting and paused gates the same. Sign-in wears this
+   device's hint; once somebody is signed in, the account's own vibe wins
+   (store.js), and an account that never chose is v1 — so the gates and
+   onboarding are Ledger only for an account that picked it. The night's
+   harness shoots those screens with such new accounts and cannot force a
+   vibe onto them: the gate and onboarding rules here were read, not seen. */
 [data-vibe="ledger"] .auth-title,
 [data-vibe="ledger"] .gate-title {
   font-size: 34px; line-height: 1.1;
