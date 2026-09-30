@@ -1,0 +1,60 @@
+{
+  "vibe": "meet-day",
+  "families": [
+    {
+      "family": "Archivo",
+      "designer": "Omnibus-Type",
+      "googleFontsDir": "ofl/archivo",
+      "note": "v1's own face, pushed to the narrow end of its width axis; one family, cut two ways"
+    }
+  ],
+  "version": "Version 2.001 (google/fonts)",
+  "upstream": {
+    "repository": "https://github.com/Omnibus-Type/Archivo",
+    "commit": "b5d63988ce19d044d3e10362de730af00526b672",
+    "per": "METADATA.pb source.commit"
+  },
+  "licence": "OFL-1.1",
+  "licenceConfirmedFrom": [
+    {
+      "file": "https://raw.githubusercontent.com/google/fonts/main/ofl/archivo/OFL.txt",
+      "sha256": "108b4e57c9c796d3d38d0428ca7ee39de47ad93187302718d9b2d8864b9b716b",
+      "says": "SIL Open Font License, Version 1.1"
+    },
+    {
+      "file": "https://raw.githubusercontent.com/google/fonts/main/ofl/archivo/METADATA.pb",
+      "sha256": "a2e8f63ffa4f9dfe43a65c349b4742e9cd85298802aed890a6315152f2ae231d",
+      "says": "license: \"OFL\""
+    }
+  ],
+  "copyright": "Copyright 2020 The Archivo Project Authors (https://github.com/Omnibus-Type/Archivo)",
+  "reservedFontName": "none (the OFL.txt header names no Reserved Font Name, so a subset may keep the name)",
+  "source": {
+    "url": "https://raw.githubusercontent.com/google/fonts/main/ofl/archivo/Archivo%5Bwdth,wght%5D.ttf",
+    "bytes": 658596,
+    "sha256": "0e094a7d3c7c4c25cf1310c4b30014f1dae9332220b1c2c88f4fa996f0b05053"
+  },
+  "subset": {
+    "tool": "subset-font 2.4.0 (harfbuzz hb-subset wasm; layout features: all kept)",
+    "script": "cloud/tools/mdF-webfont.mjs (design/meet-day.md section 5.3)",
+    "note": "the two woff2 files below are the ones design/meet-day.md section 5.3 measured, byte for byte"
+  },
+  "files": [
+    {
+      "file": "meet-day-archivo-latin.woff2",
+      "family": "meet-day-archivo",
+      "axes": "wdth 62-100, wght 400-800",
+      "characters": "Google's latin range plus U+2190-2193, U+2212, U+2215, U+2248, U+2264-2265",
+      "bytes": 63016,
+      "sha256": "bda86b541b9d8a9a3a1209eab114c821d125b786b894ade9317b5d898718b0ec"
+    },
+    {
+      "file": "meet-day-num.woff2",
+      "family": "meet-day-num",
+      "axes": "wdth 62-75, wght 700-800",
+      "characters": "0-9",
+      "bytes": 9016,
+      "sha256": "361c40c8bfea637fcb3313c76f270478681974af1070caefc3514ccf53b570cd"
+    }
+  ]
+}

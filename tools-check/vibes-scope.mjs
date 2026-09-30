@@ -22,7 +22,9 @@
 //      - every @keyframes name starts with "<id>-", because keyframes are
 //        global and a vibe's `setFlash` would replace rack.css's for v1 too;
 //      - every @font-face family starts with the id and never says
-//        "Archivo", so a vibe cannot swap v1's face out from under it; a
+//        "Archivo" (a hyphenated "<id>-archivo", v1's own family cut for the
+//        vibe, is named for the vibe and is fine), so a vibe cannot swap
+//        v1's face out from under it; a
 //        vibe's own face downloads only when a rule of that vibe asks for it;
 //      - every url() is a data: URL or a file under vibes/<id>/ that exists
 //        (nothing remote: a vibe must work offline once cached);
@@ -121,7 +123,7 @@ function lint(id, css, exists, sizeOf = () => 0) {
           if (!f) probs.push(`line ${ln}: @font-face with no font-family`);
           else {
             if (!f.toLowerCase().startsWith(id)) probs.push(`line ${ln}: @font-face "${f}" — a vibe's face is named for the vibe, "${id} …"`);
-            if (/archivo/i.test(f)) probs.push(`line ${ln}: @font-face "${f}" — never "Archivo": that is v1's face, and redefining it changes v1`);
+            if (/archivo/i.test(f) && !f.toLowerCase().startsWith(id + '-')) probs.push(`line ${ln}: @font-face "${f}" — never "Archivo": that is v1's face, and redefining it changes v1`);
           }
           for (const m of body.matchAll(/url\(\s*(['"]?)([^'")]*)\1\s*\)/g)) { urls.push([ln, m[2]]); faces.push([ln, f.toLowerCase(), m[2]]); }
         } else probs.push(`line ${ln}: @${name} is not allowed in a vibe's file (only @media, @supports, @font-face, @keyframes)`);

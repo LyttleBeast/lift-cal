@@ -1,0 +1,832 @@
+/* vibes-css:begin — generated from vibes/defs/meet-day.js by tools-check/vibes-css.mjs. Do not edit between the markers: change the definition, then run it with --write. */
+:root[data-vibe="meet-day"] {
+  --shape-rule-ink: #70767f;
+  --shape-rule-hair: 1px;
+  --shape-rule-head-0: 2px;
+  --shape-rule-head-1: 0;
+  --shape-rule-head-2: 0;
+  --shape-rule-sub-0: 2px;
+  --shape-rule-sub-1: 0;
+  --shape-rule-sub-2: 0;
+  --shape-rule-total-0: 1px;
+  --shape-rule-total-1: 2px;
+  --shape-rule-total-2: 1px;
+  --shape-leader-ink: #70767f;
+  --shape-leader-dot: 1.5px;
+  --shape-leader-pitch: 4px;
+  --shape-leader-min: 16px;
+  --shape-band-fill: #202329;
+  --shape-band-ink: #f5f0e3;
+  --shape-band-height: 30px;
+  --shape-gutter: 2px;
+  --shape-keyline-ink: #f5f0e3;
+  --shape-keyline-width: 1px;
+  --shape-lead-keyline: 0;
+  --shape-cue-ink: #f5f0e3;
+  --shape-chosen-tick: 0;
+  --shape-rank-column: 0;
+  --rack: #07080a;
+  --bar: #16181d;
+  --collar: #26292f;
+  --knurl: #70767f;
+  --chalk: #f5f0e3;
+  --steel: #a8a295;
+  --dim: #9097a3;
+  --p-red: #ff5a3c;
+  --p-blue: #4d97ff;
+  --p-yellow: #ffe14d;
+  --p-green: #3cc4a0;
+  --p-white: #f2f2f2;
+  --p-chrome: #858c96;
+  --good: #4be38a;
+  --warn: #ffa42e;
+  --bad: #ff5a3c;
+  --ink-plate: #07080a;
+  --accent: #f5f0e3;
+  --focus: #f5f0e3;
+  --accent-press: #d9d3c4;
+  --ink: #07080a;
+  --danger: #ff5a3c;
+  --on-danger: #07080a;
+  --done: #f5f0e3;
+  --ink-go: #07080a;
+  --well: #07080a;
+  --knockout: #07080a;
+  --inverse: #f5f0e3;
+  --cal-mark: #f5f0e3;
+  --raised: #202329;
+  --track: #2a2d33;
+  --grip: #70767f;
+  --faint: #9097a3;
+  --knob: #f5f0e3;
+  --greet-name: #f5f0e3;
+  --tint-runway: rgba(7,8,10,.55);
+  --tint-runway-edge: rgba(7,8,10,.7);
+  --type-tag-size: 11px;
+  --type-tag-ls: 0em;
+  --type-tag-upper: none;
+  --type-tag-wdth: 100;
+  --type-tag-wght: 600;
+  --font: 'meet-day-archivo', 'Archivo', system-ui, -apple-system, sans-serif;
+  --font-mono: ui-monospace, monospace;
+  --font-display: 'meet-day-archivo', 'Archivo', system-ui, -apple-system, sans-serif;
+  --font-italic: 'meet-day-archivo', 'Archivo', system-ui, -apple-system, sans-serif;
+  --font-num: 'meet-day-num', 'meet-day-archivo', 'Archivo', system-ui, -apple-system, sans-serif;
+  --r: 2px;
+  --r-sm: 2px;
+  --r-sheet: 0;
+  --r-tile: 2px;
+  --r-pill: 2px;
+  --r-plate: 0;
+  --r-chip: 0;
+  --r-mark: 0;
+  --r-idx: 0;
+  --r-round: 50%;
+  --r-hair: 0;
+  --r-bubble: 0;
+  --r-badge: 0;
+  --shadow-peek: none;
+  --shadow-rest: none;
+  --shadow-toast: none;
+  --shadow-fab: none;
+  --shadow-fab-pressed: none;
+  --shadow-tour-card: 0 18px 50px rgba(0,0,0,.55);
+  --shadow-cal-tick: 0 0 0 1px #07080a;
+  --shadow-flame: inset 0 0 0 1px rgba(245,240,227,.35);
+  --shadow-kpi-day: inset 0 0 0 1.2px #70767f;
+  --shadow-kpi-day-on: none;
+  --shadow-kpi-today: 0 0 0 1.5px #07080a, 0 0 0 2.5px #a8a295;
+  --shadow-kpi-today-on: 0 0 0 1.5px #07080a, 0 0 0 2.5px #f5f0e3;
+  --shadow-guide-eaten: inset 0 0 0 1px #70767f;
+  --shadow-traj-good: 0 0 0 4px rgba(75,227,138,.18);
+  --shadow-traj-warn: 0 0 0 4px rgba(255,164,46,.18);
+  --shadow-traj-bad: 0 0 0 4px rgba(255,90,60,.18);
+  --shadow-tour-lit: 0 0 0 2px #f5f0e3;
+  --shadow-cal-head: 0 0 0 1px #07080a;
+  --shadow-cal-target: 0 0 0 1px #07080a;
+  --blur-sheet: blur(3px);
+  --blur-dock: none;
+  --blur-wk-bar: none;
+  --scrim-tour: linear-gradient(to bottom, rgba(7,8,10,.55) 0%, rgba(7,8,10,.94) 42%);
+  --video-bg: #000000;
+  --rack-rgb: 7,8,10;
+  --shade-rgb: 0,0,0;
+  --lift-rgb: 255,255,255;
+  --accent-rgb: 245,240,227;
+  --p-yellow-rgb: 255,225,77;
+  --warn-rgb: 255,164,46;
+  --p-red-rgb: 255,90,60;
+  --bad-rgb: 255,90,60;
+  --danger-rgb: 255,90,60;
+  --p-blue-rgb: 77,151,255;
+  --p-green-rgb: 60,196,160;
+  --done-rgb: 245,240,227;
+  --good-rgb: 75,227,138;
+  --p-white-rgb: 242,242,242;
+  --steel-rgb: 168,162,149;
+  --tag-ink-w: #ffe14d;
+  --tag-ink-f: #ff5a3c;
+  --tag-ink-d: #4d97ff;
+  --ink-of-p-red: #ff5a3c;
+  --ink-of-p-blue: #4d97ff;
+  --ink-of-p-yellow: #ffe14d;
+  --ink-of-p-green: #3cc4a0;
+  --ink-of-p-white: #f2f2f2;
+  --ink-of-p-chrome: #858c96;
+  color-scheme: dark;
+}
+:root[data-vibe="meet-day"] [data-tag] { font-size: var(--type-tag-size); letter-spacing: var(--type-tag-ls); text-transform: var(--type-tag-upper); font-variation-settings: 'wdth' var(--type-tag-wdth), 'wght' var(--type-tag-wght); }
+:root[data-vibe="meet-day"] :where(.ai-cost, .cal-legend-item) { font-variation-settings: 'wdth' var(--type-tag-wdth), 'wght' var(--type-tag-wght); }
+:root[data-vibe="meet-day"] :where(.plate-chip) { font-size: max(10px, var(--type-tag-size)); }
+:root[data-vibe="meet-day"] :where(.cal-daynum) { font-size: max(12px, var(--type-tag-size)); }
+/* vibes-css:end */
+
+/* ================= Meet Day, by hand =================
+   Rack as the board on the platform on competition day: a black board of
+   square panels parted by 2px gutters, each card's head in a filled band,
+   every word and figure in lamp white, figures cut from Archivo's own
+   extra-condensed end. "This one" (the primary action, the chosen chip,
+   today, the active tab, the set he is on) is shown by INVERTING a cell,
+   lamp ground and board ink, never by a hue: colour is left to the data. A
+   done set lights a lamp; the set badge is an attempt box; the plate strip is
+   the loading chart. The spec, with every number's source, is
+   design/meet-day.md; the colours above are generated from
+   vibes/defs/meet-day.js and are not restated here.
+
+   THE EXPERIMENTAL SLOT. Meet Day's definition carries a `compose`
+   (vocab.js compose, vibe.js composeScreen): on You, Train, Steps, the recap,
+   the session's title and each exercise card the blocks are re-ordered, and a
+   group is drawn as one board ([data-group], below). Fuel, Weight, the
+   session's stack and its bar are fallbacks: v1's order in these shapes.
+
+   SPECIFICITY, as vibes/chalk.css: a type preset is `[data-vibe="meet-day"]
+   :where(.x)`, (0,1,0), the same as rack.css's `.x`, which it beats by coming
+   later and which stays below any local resize rack.css writes as `.parent
+   .x`. A look is written with its selector's own weight so it beats rack.css's
+   rule for the same thing. Geometry is v1's wherever a border a look drops is
+   drawn transparent rather than removed, so no box moves by a pixel it did not
+   have to. Every animation that used v1's colours is restated under a
+   meet-day- keyframe name (keyframes are global). */
+
+/* ---------- the face ----------
+   Archivo v2.001 (google/fonts b5d6398; OFL 1.1, no Reserved Font Name;
+   OFL.txt and FONTS.json beside the files), the same family v1 draws, cut to
+   wdth 62-100 and wght 400-800 so nothing in this vibe can be set wider than a
+   sentence. Weight only through font-variation-settings. 'meet-day-num' is the
+   digits alone (wdth 62-75, wght 700-800): the one file the Vibes card needs. */
+@font-face {
+  font-family: 'meet-day-archivo';
+  src: url(meet-day/fonts/meet-day-archivo-latin.woff2) format('woff2');
+  font-weight: 400 800; font-stretch: 62% 100%; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'meet-day-num';
+  src: url(meet-day/fonts/meet-day-num.woff2) format('woff2');
+  font-weight: 700 800; font-stretch: 62% 75%; font-style: normal; font-display: block;
+  unicode-range: U+0030-0039;
+}
+[data-vibe="meet-day"] { font-synthesis: none; }
+
+/* ---------- type: three widths, three jobs ----------
+   wdth 62.5 / 800: every figure.   wdth 75 / 700: every head, the greeting,
+   button and segment words, the set inputs.   wdth 100: every sentence, label
+   and the Coach card. Condensed is never a sentence; no preset is caps. */
+[data-vibe="meet-day"] :where(h1, h2, h3) { font-variation-settings: 'wdth' 75, 'wght' 700; letter-spacing: 0; }
+[data-vibe="meet-day"] :where(h1) { font-size: 28px; }
+[data-vibe="meet-day"] :where(h2) { font-size: 20px; }
+[data-vibe="meet-day"] :where(h3) { font-size: 16px; }
+
+/* eyebrow: a card's title, a screen's or a sheet's kicker, and a small head
+   inside a card (.chart-sub) */
+[data-vibe="meet-day"] :where(.eyebrow, .chart-sub) {
+  font-size: 13px; letter-spacing: 0; text-transform: none; color: var(--steel);
+  font-variation-settings: 'wdth' 75, 'wght' 700;
+}
+[data-vibe="meet-day"] :where(.chart-sub) { margin: 14px 0 6px; }
+
+/* btn / btnLg: the condensed cut, like a board's cell legends; sentence case */
+[data-vibe="meet-day"] .btn { font-size: 15px; letter-spacing: 0; font-variation-settings: 'wdth' 75, 'wght' 700; }
+[data-vibe="meet-day"] .btn-lg { font-size: 17px; letter-spacing: 0; text-transform: none; }
+/* the local resizes rack.css writes keep their sizes (12 / 11) in the cut */
+[data-vibe="meet-day"] :where(.day-actions .btn, .ex-actions .btn, .add-row .btn, .photo-btns .btn) { font-variation-settings: 'wdth' 75, 'wght' 700; }
+
+/* dockLbl, fieldLbl, note, statLbl and the small heads that share statLbl */
+[data-vibe="meet-day"] .dock button {
+  font-size: 11px; letter-spacing: 0; text-transform: none;
+  font-variation-settings: 'wdth' 100, 'wght' 600;
+}
+[data-vibe="meet-day"] :where(.field label, .field-lbl) {
+  font-size: 13px; letter-spacing: 0; text-transform: none; color: var(--steel);
+  font-variation-settings: 'wdth' 100, 'wght' 600;
+}
+[data-vibe="meet-day"] :where(.note) { font-size: 13px; }
+[data-vibe="meet-day"] :where(.stat-lbl, .kpi-lbl, .mini-stat-l, .ring-lbl, .sess-e1lbl, .cal-legend-item) {
+  font-size: 12px; letter-spacing: 0; text-transform: none; color: var(--steel);
+  font-variation-settings: 'wdth' 100, 'wght' 600;
+}
+[data-vibe="meet-day"] .plate-strip .lbl,
+[data-vibe="meet-day"] .meal-blank .meal-kcal {
+  font-size: 12px; letter-spacing: 0; text-transform: none; color: var(--steel);
+  font-variation-settings: 'wdth' 100, 'wght' 600;
+}
+[data-vibe="meet-day"] .wk-coach .coach-ttl {
+  font-size: 13px; letter-spacing: 0; text-transform: none; color: var(--chalk);
+  font-variation-settings: 'wdth' 75, 'wght' 700;
+}
+[data-vibe="meet-day"] :where(.mini-stat-l) { font-size: 11px; }
+[data-vibe="meet-day"] :where(.cal-legend-item) { font-size: 12px; }
+[data-vibe="meet-day"] .cal-dow span {
+  font-size: 12px; letter-spacing: 0; text-transform: none; color: var(--steel);
+  font-variation-settings: 'wdth' 75, 'wght' 700;
+}
+[data-vibe="meet-day"] .set-hd {
+  font-size: 12px; letter-spacing: 0; text-transform: none; color: var(--steel);
+  font-variation-settings: 'wdth' 75, 'wght' 700;
+}
+[data-vibe="meet-day"] :where(.wk-block-title) {
+  font-size: 13px; letter-spacing: 0; text-transform: none; color: var(--chalk);
+  font-variation-settings: 'wdth' 75, 'wght' 700;
+}
+[data-vibe="meet-day"] :where(.ex-item .eq) { font-size: 11px; letter-spacing: 0; text-transform: none; }
+[data-vibe="meet-day"] :where(.meal-kcal) { font-size: 12px; letter-spacing: 0; text-transform: none; color: var(--steel); }
+[data-vibe="meet-day"] :where(.kpi-unit) {
+  font-size: 13px; letter-spacing: 0; text-transform: none; color: var(--steel);
+  font-variation-settings: 'wdth' 100, 'wght' 600;
+}
+/* chart text: 11 or more, sentence case as authored */
+[data-vibe="meet-day"] :where(.donut-sub, .ring-sub, .cal-band-lab, .st-ring-s) {
+  font-size: 11px; letter-spacing: 0; text-transform: none;
+  font-variation-settings: 'wdth' 100, 'wght' 600;
+}
+[data-vibe="meet-day"] :where(.chart-axis, .chart-barval, .chart-peak-lbl, .tod-h, .traj-ends, .chart-foot) {
+  font-size: 11px; letter-spacing: 0;
+}
+[data-vibe="meet-day"] :where(.cal-band-lab) { line-height: 13px; }
+
+/* chip / segBtn / setInput / meta */
+[data-vibe="meet-day"] :where(.chip) { font-size: 12px; font-variation-settings: 'wdth' 100, 'wght' 600; }
+[data-vibe="meet-day"] .seg-btn {
+  font-size: 13px; letter-spacing: 0; text-transform: none;
+  font-variation-settings: 'wdth' 75, 'wght' 700;
+}
+[data-vibe="meet-day"] :where(.card-sub, .ex-prev, .you-sub, .fe-sub, .pr-sub, .pb-sub, .rank-sub, .sess-sub, .st-side-lbl, .st-src, .we-time, .day-ex-sets, .rt-meta, .kpi-prev, .delta-l, .fuel-eaten, .picker-sub) {
+  font-size: 12px; letter-spacing: 0; color: var(--steel);
+  font-variation-settings: 'wdth' 100, 'wght' 400;
+}
+[data-vibe="meet-day"] :where(.ex-prev) { font-variant-numeric: tabular-nums; }
+
+/* The figures. The digits come from the small file (wdth 62-75); a comma, a
+   colon or a minus from the full one. tnum on every one. */
+[data-vibe="meet-day"] :where(.stat-val, .kpi-val, .headline-v, .load-num, .timer, .pr-val, .pb-val, .rank-val, .rank-no, .sess-e1,
+    .fe-cal, .st-row-n, .adm-n, .mini-stat-v, .set-e1rm, .cal-daynum, .delta-v, .delta-a, .vol-val, .macro-pct, .donut-top, .ring-top, .st-ring-n,
+    .wp-amt, .pr-delta, .coach-rate-n) {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums; font-feature-settings: 'tnum' 1;
+  font-variation-settings: 'wdth' 62.5, 'wght' 800;
+  letter-spacing: 0;
+}
+[data-vibe="meet-day"] :where(.stat-val) { font-size: 28px; line-height: 1; }
+[data-vibe="meet-day"] :where(.kpi-val) { font-size: 30px; line-height: 1; }
+[data-vibe="meet-day"] :where(.headline-v) { font-size: 34px; line-height: 1; }
+[data-vibe="meet-day"] :where(.load-num) { line-height: .95; }
+[data-vibe="meet-day"] :where(.timer) { font-size: 22px; }
+[data-vibe="meet-day"] :where(.pr-val) { font-size: 22px; }
+[data-vibe="meet-day"] :where(.pb-val, .rank-val, .fe-cal, .st-row-n, .sess-e1) { font-size: 18px; }
+[data-vibe="meet-day"] :where(.vol-val, .macro-pct) { font-size: 12px; font-weight: normal; font-variation-settings: 'wdth' 62.5, 'wght' 700; }
+[data-vibe="meet-day"] :where(.set-e1rm) { font-size: 11px; color: var(--steel); font-variation-settings: 'wdth' 62.5, 'wght' 700; }
+[data-vibe="meet-day"] :where(.cal-daynum) { font-size: 13px; }
+[data-vibe="meet-day"] :where(.delta-v) { font-size: 13px; }
+[data-vibe="meet-day"] .delta-pill .delta-v { font-size: 13px; }
+[data-vibe="meet-day"] .delta-pill .delta-a { font-size: 12px; }
+/* the rest of a ring's and a donut's words are SVG text: fill, not color */
+[data-vibe="meet-day"] :where(.donut-top, .ring-top, .st-ring-n) { fill: var(--chalk); }
+[data-vibe="meet-day"] :where(.st-ring-n) { font-size: 26px; }
+[data-vibe="meet-day"] :where(.donut-sub, .ring-sub, .st-ring-s) { fill: var(--steel); }
+
+/* youGreet: 30 / 75 / 700, both lines lamp */
+[data-vibe="meet-day"] :where(.you-greet) {
+  font-size: 30px; line-height: 1.05; letter-spacing: 0;
+  font-variation-settings: 'wdth' 75, 'wght' 700;
+}
+[data-vibe="meet-day"] :where(.you-name, .day-title, .day-ex-name, .ex-name, .rt-name, .pr-name, .pb-lbl, .rank-name, .sess-date, .fe-name, .peek-name, .wk-name, .guide-t, .find-t, .review-take-t, .st-streak-t) {
+  font-variation-settings: 'wdth' 75, 'wght' 700;
+}
+[data-vibe="meet-day"] :where(.ex-name) { font-size: 16px; color: var(--chalk); }
+[data-vibe="meet-day"] :where(.review-verdict) { font-variation-settings: 'wdth' 75, 'wght' 700; letter-spacing: 0; }
+
+/* ---------- the measured surfaces ----------
+   The Coach card (190 / 164) and the chips laid out against Archivo's own
+   advances keep v1's face and every size v1 gives them. The face is Archivo
+   either way: at wdth 100 the subset advances exactly as the pinned source
+   does, so the card's fit is v1's. */
+[data-vibe="meet-day"] :where(.coach-card, .coach-goal-opt, .move-opt, .pe-row),
+[data-vibe="meet-day"] .feel-grid :where(.coach-chip) { font-synthesis: none; }
+
+/* ---------- card · panel, youCard · panel ----------
+   Bar ground, square, no edge (the 1px border is kept and drawn in the
+   ground's own colour so no box moves), every card's head row a 30pt band in
+   the raised ground holding the title left and the meta and ⋯ right. */
+[data-vibe="meet-day"] .card {
+  border-color: var(--bar); border-radius: var(--r-plate);
+}
+[data-vibe="meet-day"] :where(.card-hd) {
+  margin: -15px -15px 12px; padding: 0 15px; min-height: var(--shape-band-height);
+  background: var(--shape-band-fill);
+}
+[data-vibe="meet-day"] .card-hd .eyebrow { color: var(--shape-band-ink); }
+[data-vibe="meet-day"] .card-hd .card-sub { color: var(--steel); }
+[data-vibe="meet-day"] .card-hd .card-why,
+[data-vibe="meet-day"] .card-hd .fuel-more { color: var(--steel); }
+[data-vibe="meet-day"] .pr-card,
+[data-vibe="meet-day"] .install-card { background: var(--bar); border-color: var(--bar); }
+[data-vibe="meet-day"] .card.fuel-sum .card-hd { margin-bottom: 4px; }
+/* Wins and Improve: a 3pt rule under the band, never a side stripe */
+[data-vibe="meet-day"] #view-you .card.card-wins,
+[data-vibe="meet-day"] #view-you .card.card-improve { border-left: 1px solid var(--bar); }
+[data-vibe="meet-day"] #view-you .card.card-wins .card-hd { border-bottom: 3px solid var(--good); min-height: 33px; }
+[data-vibe="meet-day"] #view-you .card.card-improve .card-hd { border-bottom: 3px solid var(--warn); min-height: 33px; }
+/* the tab screens' own cards, each its own panel: v1's 12 apart. A section's
+   cards, and a joined group's, are one board, 2 apart. */
+[data-vibe="meet-day"] .you-sec .card,
+[data-vibe="meet-day"] [data-group] > .card { margin-bottom: var(--shape-gutter); }
+
+/* a half tile (Steps | Water) has 12 of padding, not 14 */
+[data-vibe="meet-day"] .you-pair { gap: var(--shape-gutter); }
+[data-vibe="meet-day"] .you-pair .card { margin-bottom: 0; }
+[data-vibe="meet-day"] .you-pair .card .card-hd { margin: -13px -13px 10px; padding: 0 13px; }
+
+/* ---------- sectionHeader · banner ----------
+   A full-width 30pt band on the board with the title in h3 (16 / 75 / 700,
+   lamp) 12 in from the left; v1's trailing hairline is the 2px gutter to the
+   first panel. 26 above, as v1. */
+[data-vibe="meet-day"] .you-sec-t {
+  min-height: var(--shape-band-height); padding: 0 12px; margin-bottom: var(--shape-gutter);
+  background: var(--shape-band-fill); color: var(--shape-band-ink);
+  font-size: 16px; letter-spacing: 0; text-transform: none;
+  font-variation-settings: 'wdth' 75, 'wght' 700;
+}
+[data-vibe="meet-day"] .you-sec-t::after { display: none; }
+
+/* ---------- statRow · board ----------
+   One board strip: cells butted on 2px gutters, bar ground, no border, square.
+   Inside a card the cells sit on the well (the board) within the padding, 2px
+   apart, so no box nests in its own fill. */
+[data-vibe="meet-day"] .stat-row { gap: var(--shape-gutter); }
+[data-vibe="meet-day"] .stat { border-color: transparent; border-radius: var(--r-plate); }
+[data-vibe="meet-day"] .card .stat,
+[data-vibe="meet-day"] .mini-stat { background: var(--well); }
+[data-vibe="meet-day"] .mini-stats { gap: var(--shape-gutter); }
+[data-vibe="meet-day"] .mini-stat { border-color: transparent; border-radius: var(--r-plate); padding: 8px; }
+[data-vibe="meet-day"] .mini-stat-v { font-size: 14px; }
+/* the recap's totals are the score card's total row: under the double rule */
+[data-vibe="meet-day"] .summary-page .stat-row { margin-bottom: 12px; }
+
+/* ---------- kpi · plain ----------
+   The tile without its corner tint, bare signed deltas, seven day lamps. */
+[data-vibe="meet-day"] .kpi-grid { gap: var(--shape-gutter); }
+[data-vibe="meet-day"] .kpi {
+  background: var(--well); border-color: var(--collar); border-radius: var(--r-plate);
+}
+[data-vibe="meet-day"] .delta-pill { background: none; padding: 0; }
+[data-vibe="meet-day"] .delta-pill.up,
+[data-vibe="meet-day"] .delta-pill.down,
+[data-vibe="meet-day"] .delta-pill.warn { background: none; }
+[data-vibe="meet-day"] .kpi-days i { width: 9px; height: 9px; }
+
+/* ---------- chip · square, segmented · boxes ---------- */
+[data-vibe="meet-day"] .chip { border-radius: var(--r-chip); }
+[data-vibe="meet-day"] .chip.on { border-color: var(--inverse); }
+[data-vibe="meet-day"] .seg { gap: 0; padding: 0; background: var(--bar); border-radius: var(--r-plate); }
+[data-vibe="meet-day"] .seg-btn { border-radius: var(--r-plate); border-left: 1px solid var(--collar); }
+[data-vibe="meet-day"] .seg-btn:first-child { border-left: 0; }
+[data-vibe="meet-day"] .seg-btn.on { border-left-color: var(--inverse); }
+[data-vibe="meet-day"] .seg-btn.on + .seg-btn { border-left-color: var(--inverse); }
+
+/* ---------- btn · panel ----------
+   The lit panel: primary = lamp ground, board words, square, no glow, pressed
+   = accentPressed; plain and ghost = a raised cell with lamp words and no
+   border; danger = a square 1.5pt danger keyline with danger words. */
+[data-vibe="meet-day"] .btn { border-radius: var(--r-sm); }
+[data-vibe="meet-day"] .btn-primary { background: var(--inverse); color: var(--knockout); }
+[data-vibe="meet-day"] .btn-primary:active { background: var(--accent-press); }
+[data-vibe="meet-day"] .btn-ghost { background: var(--raised); color: var(--chalk); border-color: transparent; }
+[data-vibe="meet-day"] .btn-danger { border: 1.5px solid var(--danger); color: var(--danger); background: transparent; }
+
+/* ---------- field · square ---------- */
+[data-vibe="meet-day"] .field input,
+[data-vibe="meet-day"] .field select { border-color: var(--knurl); border-radius: var(--r-plate); }
+[data-vibe="meet-day"] .field input:focus,
+[data-vibe="meet-day"] .field select:focus { border-color: var(--focus); }
+[data-vibe="meet-day"] :where(.qty-row input, .picker-search input, .paste-box, .wpe-row input) { border-color: var(--knurl); border-radius: var(--r-plate); }
+[data-vibe="meet-day"] .qty-row input,
+[data-vibe="meet-day"] .wpe-row input { font-variation-settings: 'wdth' 75, 'wght' 700; }
+[data-vibe="meet-day"] :where(.qty-row input, .picker-search input, .paste-box, .wpe-row input):focus { border-color: var(--focus); }
+
+/* ---------- toast · square ---------- */
+[data-vibe="meet-day"] .toast { border-radius: var(--r-plate); box-shadow: none; }
+
+/* ---------- sheetHost · full, sheetTitle · band ----------
+   Edge to edge, square top corners, the head rule (2pt knurl) along the top
+   edge in place of the round shoulder; the grab handle stays at 3:1. The title
+   is a band drawn to the sheet's edges, its eyebrow floating above it. */
+[data-vibe="meet-day"] .sheet { border-radius: 0; border-top: var(--shape-rule-head-0) solid var(--shape-rule-ink); }
+@media (min-width: 900px) {
+  [data-vibe="meet-day"] .sheet { border-radius: 0; }
+}
+[data-vibe="meet-day"] .sheet h2 {
+  margin: 0 calc(-1 * var(--pad)); padding: 7px var(--pad);
+  background: var(--shape-band-fill); color: var(--shape-band-ink);
+  min-height: var(--shape-band-height);
+}
+[data-vibe="meet-day"] .sheet .eyebrow:has(+ h2) { margin-bottom: 6px; }
+[data-vibe="meet-day"] .sheet h2 + * { margin-top: 12px; }
+
+/* ---------- dock · board ----------
+   An opaque board strip; five bar cells on 2px gutters; the active cell is
+   inverted (lamp ground, board icon and label). Tabs, words, order, height and
+   place are v1's. */
+[data-vibe="meet-day"] .dock {
+  background: var(--rack); border-top: 0; gap: var(--shape-gutter); padding-top: var(--shape-gutter);
+}
+[data-vibe="meet-day"] .dock button { background: var(--bar); color: var(--steel); }
+[data-vibe="meet-day"] .dock button.active { background: var(--inverse); color: var(--knockout); }
+[data-vibe="meet-day"] .dock button.active::before { display: none; }
+[data-vibe="meet-day"] .dock button:active { background: var(--raised); }
+[data-vibe="meet-day"] .dock button.active:active { background: var(--accent-press); }
+
+/* ---------- screenHeader · v1: the nav buttons keep v1's look ---------- */
+[data-vibe="meet-day"] .cal-nav button { border-radius: var(--r-sm); }
+
+/* ---------- youHero: the avatar stays round, the gear a square cell ---------- */
+[data-vibe="meet-day"] .you-gear { border-radius: var(--r-sm); }
+[data-vibe="meet-day"] .you-since { margin: 8px 0 0; }
+[data-vibe="meet-day"] [data-group] > .you-since { margin: 6px 0 0; }
+[data-vibe="meet-day"] .you-hero + .you-since { color: var(--steel); }
+
+/* ---------- coachCard · panel ----------
+   Bar ground, its 1pt border in the ground's own colour, square; a band
+   (raised) behind the header row, taking no layout. The box is v1's. */
+[data-vibe="meet-day"] .coach-card { border-color: var(--bar); border-radius: var(--r-plate); position: relative; isolation: isolate; }
+[data-vibe="meet-day"] .coach-card:active { border-color: var(--bar); transform: none; background: var(--raised); }
+[data-vibe="meet-day"] .coach-hd { position: relative; }
+[data-vibe="meet-day"] .coach-hd::before {
+  content: ''; position: absolute; z-index: -1;
+  left: -14px; right: -14px; top: -14px; bottom: -7px; background: var(--shape-band-fill);
+}
+[data-vibe="meet-day"] .coach-go { border-top-color: var(--collar); }
+
+/* ---------- calCell · edge ----------
+   Seven columns on 2px gutters, v1's 1 : 1.18 cell. A trained day is raised,
+   an untrained day bar, pad cells have no ground. Today is its number in an
+   inverted tab (18 x 16): inversion and weight, never colour alone. Up to four
+   plates as edge-on slivers (3 x 10) under the number. */
+[data-vibe="meet-day"] .cal-dow,
+[data-vibe="meet-day"] .cal-grid { gap: var(--shape-gutter); }
+[data-vibe="meet-day"] .cal-day { border-radius: var(--r-plate); border-color: transparent; }
+[data-vibe="meet-day"] .cal-day.empty { background: var(--bar); }
+[data-vibe="meet-day"] .cal-day.today { border-color: transparent; }
+[data-vibe="meet-day"] .cal-day.today .cal-daynum {
+  background: var(--inverse); color: var(--knockout);
+  min-width: 18px; height: 16px; display: grid; place-items: center;
+  font-variation-settings: 'wdth' 62.5, 'wght' 800;
+}
+[data-vibe="meet-day"] .cal-plates { flex-direction: row; justify-content: center; gap: 1px; width: auto; padding: 0; }
+[data-vibe="meet-day"] .cal-plates i { width: 3px; height: 10px; border-radius: var(--r-hair); }
+[data-vibe="meet-day"] .cal-legend-item i { width: 3px; height: 10px; border-radius: var(--r-hair); }
+
+/* ---------- a joined group: one board ----------
+   A [data-group] is what vibe.js composeScreen() wraps round blocks the
+   composition draws together: its members are 2px apart and the group is one
+   board, v1's 12 below it. */
+[data-vibe="meet-day"] [data-group] { margin-bottom: 12px; }
+[data-vibe="meet-day"] [data-group] > * { margin-bottom: var(--shape-gutter); }
+[data-vibe="meet-day"] [data-group] > :last-child { margin-bottom: 0; }
+/* Train's board: the weekday row, the month and its three totals */
+[data-vibe="meet-day"] [data-group~="grid"] > .cal-dow { margin-bottom: var(--shape-gutter); }
+[data-vibe="meet-day"] [data-group~="grid"] { margin-bottom: 0; }
+[data-vibe="meet-day"] [data-group~="grid"] > :last-child .stat-row { margin-top: 0; }
+[data-vibe="meet-day"] [data-group~="grid"] .stat { background: var(--bar); }
+/* You's greeting and its since line are one row of the board */
+[data-vibe="meet-day"] [data-group~="hero"] { margin-bottom: 0; }
+[data-vibe="meet-day"] [data-group~="hero"] > .you-hero { margin-bottom: 0; }
+/* the recap's score card: what you did, the double rule, then the totals */
+[data-vibe="meet-day"] [data-group~="did"] { margin-bottom: 12px; }
+[data-vibe="meet-day"] [data-group~="did"] > .card { margin-bottom: 0; }
+[data-vibe="meet-day"] [data-group~="did"] > .stat-row {
+  margin: 0; padding-top: calc(var(--shape-rule-total-0) + var(--shape-rule-total-1) + var(--shape-rule-total-2));
+  background:
+    linear-gradient(var(--shape-rule-ink), var(--shape-rule-ink)) 0 0 / 100% var(--shape-rule-total-0) no-repeat,
+    linear-gradient(var(--shape-rule-ink), var(--shape-rule-ink)) 0 calc(var(--shape-rule-total-0) + var(--shape-rule-total-1)) / 100% var(--shape-rule-total-2) no-repeat,
+    var(--rack);
+}
+[data-vibe="meet-day"] [data-group~="did"] > .stat-row .stat { background: var(--bar); }
+/* Steps: today's count and its streak are one board */
+[data-vibe="meet-day"] [data-group~="today"] { margin-bottom: 12px; }
+[data-vibe="meet-day"] [data-group~="today"] > .card { margin-bottom: var(--shape-gutter); }
+[data-vibe="meet-day"] [data-group~="today"] > .card:last-child { margin-bottom: 0; }
+
+/* ---------- setTable · panel ----------
+   The exercise card is a panel, cards 2px apart. Its head is a band holding
+   the group's plate seen edge-on (4 x 18, its group colour), the name and ⋯;
+   then "Last …" in steel, then the column heads on a raised sub-band. */
+[data-vibe="meet-day"] .ex-block { border: 0; border-radius: var(--r-plate); margin-bottom: var(--shape-gutter); }
+[data-vibe="meet-day"] .ex-hd { background: var(--shape-band-fill); padding: 6px 12px; min-height: var(--shape-band-height); }
+[data-vibe="meet-day"] .ex-tag { width: 4px; height: 18px; border-radius: var(--r-plate); }
+[data-vibe="meet-day"] .ex-menu { color: var(--steel); }
+[data-vibe="meet-day"] .ex-prev { padding-top: 8px; }
+[data-vibe="meet-day"] .ex-block .set-hd { background: var(--shape-band-fill); }
+[data-vibe="meet-day"] .ex-block .set-hd span { color: var(--steel); }
+
+/* a lifting block is a band ("Block N", its check, Duplicate, ✕) over its
+   cards, closed by shape.rule.total (1pt, 2pt gap, 1pt), and it does not inset
+   its cards: the columns fall at the same x from the first set to the last */
+[data-vibe="meet-day"] .wk-block { border: 0; border-radius: var(--r-plate); background: none; margin-bottom: 12px; }
+[data-vibe="meet-day"] .wk-block-hd { background: var(--shape-band-fill); padding: 6px 12px; min-height: var(--shape-band-height); margin-bottom: var(--shape-gutter); }
+[data-vibe="meet-day"] .wk-block-body { padding: 0; }
+[data-vibe="meet-day"] .wk-block-body > .ex-block:last-child { margin-bottom: 0; }
+[data-vibe="meet-day"] .wk-block::after {
+  content: ''; display: block; height: calc(var(--shape-rule-total-0) + var(--shape-rule-total-1) + var(--shape-rule-total-2));
+  border-top: var(--shape-rule-total-0) solid var(--shape-rule-ink);
+  border-bottom: var(--shape-rule-total-2) solid var(--shape-rule-ink);
+  margin-top: var(--shape-gutter);
+}
+[data-vibe="meet-day"] .wk-block-x { color: var(--steel); }
+[data-vibe="meet-day"] .rt-pv-block { border: 0; background: var(--bar); border-radius: var(--r-plate); }
+
+/* ---------- setRow · attempt ----------
+   Rows parted by the panel's own gutters. The attempt box: 28 x 28, raised,
+   the set number in chalk or W / F / D in tagInk. The current set (the
+   session's first set not done, derived and never stored: vibe.js
+   markCurrentSet) is the inverted box, whatever its type. */
+[data-vibe="meet-day"] .ex-block .set-row,
+[data-vibe="meet-day"] .rt-sets .set-row { border-top: var(--shape-gutter) solid var(--rack); }
+[data-vibe="meet-day"] .set-row.done { background: transparent; }
+[data-vibe="meet-day"] .set-idx {
+  width: 28px; height: 28px; padding: 0; justify-self: center; display: grid; place-items: center;
+  background: var(--raised); color: var(--chalk); border-radius: var(--r-idx);
+  font-family: var(--font-num); font-size: 14px;
+  font-variation-settings: 'wdth' 62.5, 'wght' 800; font-variant-numeric: tabular-nums;
+}
+[data-vibe="meet-day"] .set-idx.t-W { background: var(--raised); color: var(--tag-ink-w); }
+[data-vibe="meet-day"] .set-idx.t-F { background: var(--raised); color: var(--tag-ink-f); }
+[data-vibe="meet-day"] .set-idx.t-D { background: var(--raised); color: var(--tag-ink-d); }
+[data-vibe="meet-day"] .set-row[data-current] .set-idx,
+[data-vibe="meet-day"] .set-row[data-current] .set-idx.t-W,
+[data-vibe="meet-day"] .set-row[data-current] .set-idx.t-F,
+[data-vibe="meet-day"] .set-row[data-current] .set-idx.t-D { background: var(--inverse); color: var(--knockout); }
+/* square wells (the board) with a 2pt lamp focus outline; grey targets as
+   placeholders in dim */
+[data-vibe="meet-day"] .set-row input {
+  background: var(--well); border-radius: var(--r-plate);
+  font-size: 15px; font-variation-settings: 'wdth' 75, 'wght' 700; font-variant-numeric: tabular-nums;
+}
+[data-vibe="meet-day"] .set-row input:focus { border-color: transparent; outline: 2px solid var(--chalk); outline-offset: -2px; }
+[data-vibe="meet-day"] .set-row input::placeholder { color: var(--dim); font-variation-settings: 'wdth' 75, 'wght' 400; }
+/* the check: v1's 30 x 30 box with its 1.5pt knurl edge holding a 12pt lamp;
+   unlit a track disc in a 1pt grip ring, done lit (filled done). No ✓ is
+   painted; the checkbox's state stays in its accessible name. */
+[data-vibe="meet-day"] .set-check {
+  position: relative; border-radius: var(--r-sm); font-size: 0; color: transparent; background: transparent;
+}
+[data-vibe="meet-day"] .set-check::after {
+  content: ''; position: absolute; left: 50%; top: 50%; width: 12px; height: 12px; margin: -6px 0 0 -6px;
+  border-radius: var(--r-round); background: var(--track); box-shadow: 0 0 0 1px var(--grip);
+  transition: background var(--fast) var(--ease);
+}
+[data-vibe="meet-day"] .set-check.on { background: transparent; border-color: var(--knurl); color: transparent; }
+[data-vibe="meet-day"] .set-check.on::after { background: var(--done); box-shadow: 0 0 0 1px var(--done); }
+[data-vibe="meet-day"] .wk-block-chk { font-size: 0; }
+/* the tick's flash at .10 in lamp white (v1's .28 would drop the row's steel
+   words under 3:1 at the peak) */
+[data-vibe="meet-day"] .set-row.flash { animation: meet-day-flash 600ms var(--ease); }
+@keyframes meet-day-flash {
+  0%   { background: rgba(var(--accent-rgb), .10); }
+  100% { background: transparent; }
+}
+/* the coach state (the first workout): the check's edge in warn and its fill
+   pulsing warn .05 <-> .24; the lamp stays unlit, so a box that looks already
+   ticked is never drawn */
+[data-vibe="meet-day"] .set-check.coach {
+  border-color: var(--warn); color: transparent; background: rgba(var(--warn-rgb), .10);
+  animation: meet-day-coach 1.6s var(--ease) infinite;
+}
+@keyframes meet-day-coach {
+  0%, 100% { background: rgba(var(--warn-rgb), .05); }
+  50%      { background: rgba(var(--warn-rgb), .24); }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-vibe="meet-day"] .set-check.coach { animation: none; background: rgba(var(--warn-rgb), .10); }
+}
+/* drops keep v1's indent and hang on a 2px rail in the drop blue; + Drop is a
+   raised cell with a pBlue .5 edge */
+[data-vibe="meet-day"] .set-row.drop::before { background: var(--p-blue); border-radius: var(--r-hair); }
+[data-vibe="meet-day"] .drop-add { background: var(--raised); border-color: rgba(var(--p-blue-rgb), .5); }
+[data-vibe="meet-day"] .ex-actions .btn { background: var(--raised); }
+[data-vibe="meet-day"] .swipe-hint { color: var(--dim); opacity: 1; letter-spacing: 0; }
+[data-vibe="meet-day"] .swipe-del { font-size: 12px; letter-spacing: 0; text-transform: none; }
+[data-vibe="meet-day"] .swipe-hint.coach-nudge .coach-nudge-t { color: var(--chalk); }
+
+/* ---------- plateStrip · loaded ----------
+   The loading chart: beside v1's words and chips, which stay, the plates drawn
+   edge-on (vibe.js plateArt, the list renderPlates already computed): a short
+   stub of bar, the plates heaviest innermost one per count, a sleeve; no
+   collar. The chips are square on their plate colours with board figures. */
+[data-vibe="meet-day"] .plate-chip { border-radius: var(--r-chip); font-size: 11px; font-variation-settings: 'wdth' 75, 'wght' 800; }
+[data-vibe="meet-day"] .plate-strip { align-items: center; gap: 3px; }
+[data-vibe="meet-day"] .plate-strip .plate-art { flex: none; display: block; margin-right: 6px; }
+
+/* ---------- sessionChrome · slab ----------
+   The score bug: an opaque bar slab under a collar rule; its slots parted by
+   1pt knurl rules. The clock in the numeral cut, lamp, not inverted. The rest
+   line 3pt across the top in lamp while running, danger when over. The rest
+   pill a square raised slab with a knurl edge and no shadow: the time
+   inverted. The peek bar the same, Resume as the lit panel. */
+[data-vibe="meet-day"] .wk-bar { background: var(--bar); border-bottom: 1px solid var(--collar); }
+[data-vibe="meet-day"] .wk-bar-left { padding-right: 10px; }
+[data-vibe="meet-day"] .wk-bar > * + * { }
+[data-vibe="meet-day"] .wk-coach,
+[data-vibe="meet-day"] .wk-cal-btn { border-color: var(--knurl); border-radius: var(--r-plate); }
+[data-vibe="meet-day"] .wk-cal-btn { margin-right: 8px; }
+[data-vibe="meet-day"] .wk-name { font-size: 13px; color: var(--steel); }
+[data-vibe="meet-day"] .wk-name:focus { color: var(--chalk); }
+[data-vibe="meet-day"] .wk-bar .timer { color: var(--chalk); }
+[data-vibe="meet-day"] .rest-pill { border-color: var(--knurl); border-radius: var(--r-plate); box-shadow: none; }
+[data-vibe="meet-day"] .rest-pill .t {
+  background: var(--inverse); color: var(--knockout); padding: 3px 8px; text-align: center;
+  font-family: var(--font-num); font-size: 15px; font-variation-settings: 'wdth' 62.5, 'wght' 800;
+}
+[data-vibe="meet-day"] .rest-pill button { background: var(--bar); color: var(--chalk); padding: 6px 10px; min-height: 28px; font-variation-settings: 'wdth' 75, 'wght' 700; }
+[data-vibe="meet-day"] .peek-bar { border-color: var(--knurl); border-radius: var(--r-plate); box-shadow: none; }
+
+/* ---------- listRow · board ----------
+   A leaderless board row: the name left, the value right in the numeral cut
+   at 800, rows parted by the gutter in place of rules. Record rows (the
+   recap's PR hits, Stats' PR rows, You's Strongest lifts) draw their value in
+   the record cell, a 1pt lamp keyline, square. */
+[data-vibe="meet-day"] :where(.pb-row, .sess-row, .food-entry, .pr-hit, .pr-row, .rank-row, .day-ex, .rt-pv-row, .review-row, .find-row, .st-row, .adm-r, .water-entry) {
+  border-top: var(--shape-gutter) solid var(--rack);
+}
+[data-vibe="meet-day"] :where(.pb-row, .sess-row, .rank-row, .pr-card .pr-hit, .find-row, .review-row):first-of-type,
+[data-vibe="meet-day"] :where(.find-row, .review-row):first-child { border-top-color: transparent; border-top-width: 0; }
+[data-vibe="meet-day"] :where(.pr-hit .pr-val, .pr-row .pr-val, #view-you .pb-row .pb-val) {
+  padding: 3px 7px 2px; border: var(--shape-keyline-width) solid var(--shape-keyline-ink); color: var(--chalk);
+}
+[data-vibe="meet-day"] .card-hd + :where(.food-entry, .pr-hit, .pr-row, .pb-row, .sess-row, .rank-row, .day-ex, .st-row),
+[data-vibe="meet-day"] .card-hd + .find-list > :first-child,
+[data-vibe="meet-day"] .pr-card .pr-hit:first-of-type { border-top-width: 0; }
+[data-vibe="meet-day"] .pr-val { color: var(--chalk); }
+[data-vibe="meet-day"] .sess-row.is-pr { background: none; }
+[data-vibe="meet-day"] .ex-item { border-bottom-color: var(--collar); }
+
+/* ---------- headline · bare, youHero · joined ----------
+   The figure alone, its unit re-set in type.meta; the since line in type.meta
+   as authored (no caps, no tracking). */
+[data-vibe="meet-day"] .headline-u {
+  font-size: 12px; letter-spacing: 0; text-transform: none; color: var(--steel);
+  font-variation-settings: 'wdth' 100, 'wght' 400;
+}
+[data-vibe="meet-day"] .you-since {
+  font-size: 12px; line-height: 1.5; letter-spacing: 0; text-transform: none; color: var(--steel);
+  font-variation-settings: 'wdth' 100, 'wght' 400;
+}
+
+/* ---------- kpi · lane ----------
+   The week as four lanes on the well, 2px apart, each holding its children in
+   their order in two columns: the head, the value and "last week …" left, the
+   sparkline over the seven day lamps right. The right column is one width, so
+   the four rows of lamps sit at the same x: a 4 x 7 board, today's column
+   ringed. */
+[data-vibe="meet-day"] .kpi-grid { grid-template-columns: 1fr; }
+[data-vibe="meet-day"] .kpi {
+  display: grid; grid-template-columns: minmax(0, 1fr) 132px; column-gap: 14px; align-items: start;
+  grid-template-areas: "hd spark" "val spark" "prev days";
+  background: var(--well); border-color: transparent; padding: 10px 12px;
+}
+[data-vibe="meet-day"] .kpi-hd { grid-area: hd; flex-wrap: wrap; justify-content: flex-start; gap: 4px 8px; }
+[data-vibe="meet-day"] .kpi-val { grid-area: val; }
+[data-vibe="meet-day"] .kpi-prev { grid-area: prev; font-size: 12px; letter-spacing: 0; color: var(--steel); align-self: end; }
+[data-vibe="meet-day"] .kpi .chart-spark { grid-area: spark; margin: 0; align-self: center; height: 46px; }
+[data-vibe="meet-day"] .kpi-days { grid-area: days; margin: 0; align-self: end; padding: 0 2px; }
+
+/* ---------- fab · inverse ---------- */
+[data-vibe="meet-day"] .fuel-fab {
+  background: var(--inverse); color: var(--knockout); border-radius: var(--r-sm); box-shadow: none;
+  font-size: 15px; letter-spacing: 0; text-transform: none; font-variation-settings: 'wdth' 75, 'wght' 700;
+}
+[data-vibe="meet-day"] .fuel-fab:active { background: var(--accent-press); box-shadow: none; }
+
+/* ---------- addTile · flat ----------
+   No washes and no border: tiles on the well; the Photo tile marked by its lamp
+   icon well alone; the lit tiles' icon well and "ai" tag on raised; the tag
+   square. */
+[data-vibe="meet-day"] .add-tile { background: var(--well); border-color: transparent; border-radius: var(--r-sm); }
+[data-vibe="meet-day"] .add-tile.hero,
+[data-vibe="meet-day"] .add-tile.lit { background: var(--well); border-color: transparent; }
+[data-vibe="meet-day"] .add-tile.hero .ic { background: var(--inverse); color: var(--knockout); }
+[data-vibe="meet-day"] .add-tile.lit .ic { background: var(--raised); }
+[data-vibe="meet-day"] .add-tile .tag { border-radius: var(--r-chip); }
+[data-vibe="meet-day"] .add-tile.lit .tag { background: var(--raised); color: var(--steel); }
+[data-vibe="meet-day"] .add-tile .t { font-variation-settings: 'wdth' 75, 'wght' 700; font-size: 15px; }
+[data-vibe="meet-day"] .ai-warn { border-radius: var(--r-plate); }
+
+/* ---------- chart · board ----------
+   Square-topped columns 2 apart, the day that is not over hatched in its own
+   colour (vibe.js patterns) in place of dimmed; 2pt lines in their own colour
+   with no area fill and no end glow; meters 6pt square; a target mark only
+   where v1 draws one; rings as ten cells with 3-degree board gaps through the
+   annulus only, each lit to the exact fraction; legends 3 x 10 slivers.
+   analytics.js is pinned: this restyles what it draws. */
+[data-vibe="meet-day"] .chart path[stroke="none"][fill^="url(#"],
+[data-vibe="meet-day"] .spark-glow { display: none; }
+[data-vibe="meet-day"] .chart-line { stroke-width: 2; stroke-linecap: square; stroke-linejoin: miter; }
+[data-vibe="meet-day"] .chart-line2 { stroke-linecap: butt; stroke-linejoin: miter; opacity: 1; }
+[data-vibe="meet-day"] .spark-line,
+[data-vibe="meet-day"] .spark-line-dim { stroke-width: 2; stroke-linecap: square; stroke-linejoin: miter; }
+[data-vibe="meet-day"] .chart-grid { stroke: var(--collar); stroke-dasharray: none; opacity: 1; }
+[data-vibe="meet-day"] .chart-bar,
+[data-vibe="meet-day"] .chart-bar-bg,
+[data-vibe="meet-day"] .spark-bar,
+[data-vibe="meet-day"] .chart clipPath rect,
+[data-vibe="meet-day"] .heat rect { rx: 0; ry: 0; }
+[data-vibe="meet-day"] .chart-bar-bg { opacity: .6; }
+[data-vibe="meet-day"] .chart-target,
+[data-vibe="meet-day"] .spark-ref { stroke: var(--chalk); opacity: 1; }
+[data-vibe="meet-day"] .wc-avg { stroke-linecap: square; stroke-linejoin: miter; }
+[data-vibe="meet-day"] .chart-empty { border-color: var(--knurl); border-radius: var(--r-plate); }
+[data-vibe="meet-day"] .ring-fill,
+[data-vibe="meet-day"] .st-ring circle { stroke-linecap: butt; }
+/* the ten cells: one mask over the whole ring, 36 degrees a cell less a 3
+   degree gap centred on each boundary, the centre disc (the ring's words)
+   exempt. The arc's own end is the hard stop. */
+[data-vibe="meet-day"] .chart-ring,
+[data-vibe="meet-day"] .st-ring {
+  -webkit-mask-image: radial-gradient(circle closest-side, #000 0 70%, transparent 70%), repeating-conic-gradient(from 1.5deg, #000 0 33deg, transparent 33deg 36deg);
+  mask-image: radial-gradient(circle closest-side, #000 0 70%, transparent 70%), repeating-conic-gradient(from 1.5deg, #000 0 33deg, transparent 33deg 36deg);
+}
+/* donuts: 2pt board gaps between segments */
+[data-vibe="meet-day"] .donut-seg { stroke: var(--rack); stroke-width: 2; stroke-linejoin: miter; paint-order: stroke; }
+/* the day that is not over: hatched at 45 degrees in its own colour */
+[data-vibe="meet-day"] rect.chart-bar-dim,
+[data-vibe="meet-day"] g.chart-bar-dim { opacity: 1; }
+[data-vibe="meet-day"] rect.chart-bar-dim[fill="var(--p-red)"],
+[data-vibe="meet-day"] g.chart-bar-dim rect[fill="var(--p-red)"] { fill: url(#vibe-hatch-p-red); }
+[data-vibe="meet-day"] rect.chart-bar-dim[fill="var(--p-blue)"],
+[data-vibe="meet-day"] g.chart-bar-dim rect[fill="var(--p-blue)"] { fill: url(#vibe-hatch-p-blue); }
+[data-vibe="meet-day"] rect.chart-bar-dim[fill="var(--p-yellow)"],
+[data-vibe="meet-day"] g.chart-bar-dim rect[fill="var(--p-yellow)"] { fill: url(#vibe-hatch-p-yellow); }
+[data-vibe="meet-day"] rect.chart-bar-dim[fill="var(--p-green)"],
+[data-vibe="meet-day"] g.chart-bar-dim rect[fill="var(--p-green)"] { fill: url(#vibe-hatch-p-green); }
+[data-vibe="meet-day"] rect.chart-bar-dim[fill="var(--p-white)"],
+[data-vibe="meet-day"] g.chart-bar-dim rect[fill="var(--p-white)"] { fill: url(#vibe-hatch-p-white); }
+[data-vibe="meet-day"] rect.chart-bar-dim[fill="var(--p-chrome)"],
+[data-vibe="meet-day"] g.chart-bar-dim rect[fill="var(--p-chrome)"] { fill: url(#vibe-hatch-p-chrome); }
+[data-vibe="meet-day"] rect.chart-bar-dim[fill="var(--good)"],
+[data-vibe="meet-day"] g.chart-bar-dim rect[fill="var(--good)"] { fill: url(#vibe-hatch-good); }
+[data-vibe="meet-day"] rect.chart-bar-dim[fill="var(--bad)"],
+[data-vibe="meet-day"] g.chart-bar-dim rect[fill="var(--bad)"] { fill: url(#vibe-hatch-bad); }
+/* meters: 6pt, square-ended, the fill in its data colour on the track */
+[data-vibe="meet-day"] .vol-track,
+[data-vibe="meet-day"] .vol-fill,
+[data-vibe="meet-day"] .traj-bar,
+[data-vibe="meet-day"] .traj-fill,
+[data-vibe="meet-day"] .split-bar,
+[data-vibe="meet-day"] .import-bar,
+[data-vibe="meet-day"] .pb-track,
+[data-vibe="meet-day"] .pb-fill { border-radius: 0; }
+[data-vibe="meet-day"] .split-bar { gap: var(--shape-gutter); }
+/* the calorie meter: square ends, v1's zone washes in their named hues, the
+   white head and dashed target ringed in board (shadow.calHead / calTarget),
+   the zone ticks ringed */
+[data-vibe="meet-day"] .cal-track { border-radius: var(--r-mark); overflow: visible; }
+[data-vibe="meet-day"] .cal-fill { border-radius: 0; opacity: 1; }
+[data-vibe="meet-day"] .cal-tick { opacity: 1; }
+[data-vibe="meet-day"] .cal-target { opacity: 1; }
+[data-vibe="meet-day"] .cal-head { border-radius: 0; }
+[data-vibe="meet-day"] .cal-status i { border-radius: 0; }
+[data-vibe="meet-day"] .legend-item i { width: 3px; height: 10px; border-radius: 0; }
+[data-vibe="meet-day"] .legend-inline .legend-item i.sw-dot { border-radius: 0; }
+[data-vibe="meet-day"] .water-pip { border-radius: 0; }
+[data-vibe="meet-day"] .tod-col i { border-radius: 0; }
+[data-vibe="meet-day"] .conf { border-radius: 0; border-color: var(--collar); font-size: 12px; letter-spacing: 0; text-transform: none; font-variation-settings: 'wdth' 100, 'wght' 600; }
+[data-vibe="meet-day"] .conf i { border-radius: 0; }
+[data-vibe="meet-day"] .cnt { border-radius: var(--r-chip); font-size: 11px; }
+[data-vibe="meet-day"] .adm-flag,
+[data-vibe="meet-day"] .group-pill { border-radius: var(--r-chip); }
+
+/* ---------- the pieces of v1 that keep their shape here ---------- */
+[data-vibe="meet-day"] .install-n,
+[data-vibe="meet-day"] .st-flame { border-radius: var(--r-round); }
+[data-vibe="meet-day"] .tog,
+[data-vibe="meet-day"] .tog::after { border-radius: var(--r-pill); }
+[data-vibe="meet-day"] .tog::after { border-radius: var(--r-round); }
+[data-vibe="meet-day"] .tog { border-radius: 13px; }
+
+/* ---------- the Vibes sheet, worn, and Meet Day's own tile ---------- */
+[data-vibe="meet-day"] .vibe-tile { border-radius: 0; }
+[data-vibe="meet-day"] .vibe-tile[aria-current="true"] { box-shadow: 0 0 0 3px var(--bar), 0 0 0 5px var(--chalk); }
+[data-vibe="meet-day"].vibe-in { border-radius: 0; }
+[data-vibe="meet-day"].vibe-in .vibe-sample { border-radius: 0; border-color: var(--bar); }
+[data-vibe="meet-day"].vibe-in .vibe-num {
+  font-variation-settings: 'wdth' 62.5, 'wght' 800; letter-spacing: 0; font-size: 40px; line-height: 38px; font-synthesis: none;
+}
+[data-vibe="meet-day"].vibe-in .vibe-accent { border-radius: 0; }

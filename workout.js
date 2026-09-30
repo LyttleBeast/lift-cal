@@ -33,7 +33,7 @@ import { wOut, wIn, fmtSetW, fmtSetLoad, fmtVol, volOut, unitW, limW } from './u
 // app copies verbatim; vibe.js's paint() makes it the token that paints it
 // (V59 §5.4). vibePaint in every file that uses it, because paint is the
 // app's usual name for a local repaint.
-import { paint as vibePaint, iconHtml, glyphed, tail, blk, composeScreen } from './vibe.js';
+import { paint as vibePaint, iconHtml, glyphed, tail, blk, composeScreen, markCurrentSet, plateArt } from './vibe.js';
 
 // Volume is a sum of stored pounds, so it converts like a weight. Round to a
 // whole number BEFORE the abbreviation, never after: "41.3k" is a string and
@@ -1087,7 +1087,8 @@ function renderSession() {
 
   wrap.appendChild(body);
   if (!editing) setTimeout(paintClock, 0);
-  return wrap;
+  // the set he is on, for a vibe that draws one (none in v1: no attribute is added)
+  return editing ? wrap : markCurrentSet(wrap);
 }
 
 // Date + duration editor, shown only when reworking a past session.
@@ -1409,6 +1410,7 @@ function renderPlates(total, barWeight = 45, u = 'lb') {
   strip.appendChild(el('span', 'lbl', u === 'lb' ? 'Per side' : 'Per side · lb plates'));
   let side = (total - barWeight) / 2;
   if (side <= 0) { strip.appendChild(el('span', 'lbl', 'bar only')).dataset.tag = ''; return strip; }
+  const loaded = [];
   PLATES.forEach(p => {
     let n = Math.floor(side / p.w);
     if (n <= 0) return;
@@ -1416,7 +1418,11 @@ function renderPlates(total, barWeight = 45, u = 'lb') {
     const chip = el('span', 'plate-chip', `${n}×${p.w}`);
     chip.style.background = p.c;
     strip.appendChild(chip);
+    loaded.push({ n, w: p.w, c: p.c });
   });
+  // the loading chart, for a vibe that draws one (none in v1): this list, edge-on
+  const art = plateArt(loaded);
+  if (art) strip.insertBefore(art, strip.children[1] || null);
   if (side > 0.01) strip.appendChild(el('span', 'lbl', `+${side} left over`));
   return strip;
 }

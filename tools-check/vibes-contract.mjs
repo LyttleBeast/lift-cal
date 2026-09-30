@@ -130,7 +130,8 @@ const HUE_FAMILY = {
   yellow: c => c.s >= 0.35 && c.h >= 35 && c.h <= 65,
   green:  c => c.s >= 0.25 && c.h >= 75 && c.h <= 165,
   blue:   c => c.s >= 0.25 && c.h >= 185 && c.h <= 250,
-  white:  c => c.l >= 0.85 && c.s <= 0.4,
+  // s <= 0.5, not 0.4: Meet Day's lamp white (#f5f0e3, s 0.47) is warm on purpose and is still "white" at this lightness.
+  white:  c => c.l >= 0.85 && c.s <= 0.5,
   grey:   c => c.s <= 0.25 && c.l > 0.15 && c.l < 0.85
 };
 for (const [id, def] of Object.entries(defs)) {

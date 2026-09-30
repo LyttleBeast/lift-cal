@@ -50,11 +50,13 @@ import NAVY from './vibes/defs/navy.js';
 import NAVY_ICONS from './vibes/icons/navy.js';
 import OXBLOOD from './vibes/defs/oxblood.js';
 import OXBLOOD_ICONS from './vibes/icons/oxblood.js';
+import MEET_DAY from './vibes/defs/meet-day.js';
+import MEET_DAY_ICONS from './vibes/icons/meet-day.js';
 
 /* Every vibe's definition and every icon set, by id. A new vibe adds its
    imports and its entries here, beside v1's. */
-const DEFS = { v1: V1, 'iron-age': IRON_AGE, chalk: CHALK, navy: NAVY, oxblood: OXBLOOD };
-const ICON_SETS = { v1: V1_ICONS, 'iron-age': IRON_AGE_ICONS, chalk: CHALK_ICONS, navy: NAVY_ICONS, oxblood: OXBLOOD_ICONS };
+const DEFS = { v1: V1, 'iron-age': IRON_AGE, chalk: CHALK, navy: NAVY, oxblood: OXBLOOD, 'meet-day': MEET_DAY };
+const ICON_SETS = { v1: V1_ICONS, 'iron-age': IRON_AGE_ICONS, chalk: CHALK_ICONS, navy: NAVY_ICONS, oxblood: OXBLOOD_ICONS, 'meet-day': MEET_DAY_ICONS };
 
 const KEY = 'rack:vibe';
 
@@ -331,6 +333,60 @@ export function composeScreen(screen, parent) {
     parent.insertBefore(frag, ref);
   } catch {}
   return parent;
+}
+
+/* ---------- setRow · attempt: the current set ----------
+   The session's first set not yet done, in drawing order: derived here at
+   every render and never stored, so a tick or an untick just moves it. A
+   vibe whose setRow look is not 'attempt' (v1 among them) gets nothing: no
+   attribute is added. The look's stylesheet inverts that row's badge. */
+export function markCurrentSet(root) {
+  if (!root || valueOf(def(), 'variants.setRow') !== 'attempt') return root;
+  try {
+    const row = root.querySelector('.ex-block .set-row:not(.done)');
+    if (row) row.setAttribute('data-current', '');
+  } catch {}
+  return root;
+}
+
+/* ---------- plateStrip · loaded: the loading chart ----------
+   Beside renderPlates()'s own words and chips, the plates drawn edge-on from
+   the list it already computed ([{ n, w, c }], heaviest first): never a second
+   plate calculation. A 6pt stub of bar, the plates heaviest innermost one per
+   count (2 x 45 draws two), 1pt apart, on a 3pt sleeve running 10pt past the
+   last plate; heights keep the disc ratio. It draws while the whole fits 132pt;
+   past that the chips alone say it, never a rescaled bar. Null for any other
+   look, and the strip is exactly v1's. */
+const PLATE_ART = { 45: [36, 8], 35: [32, 7], 25: [26, 6], 10: [18, 5], 5: [15, 4], 2.5: [13, 4] };
+export function plateArt(list) {
+  if (valueOf(def(), 'variants.plateStrip') !== 'loaded' || !Array.isArray(list)) return null;
+  try {
+    const plates = [];
+    for (const p of list) {
+      const d = own(PLATE_ART, p.w) ? PLATE_ART[p.w] : null;
+      if (!d) return null;
+      for (let i = 0; i < p.n; i++) plates.push({ h: d[0], w: d[1], c: p.c, edge: p.w <= 5 });
+    }
+    if (!plates.length) return null;
+    const W = 6 + plates.reduce((a, p) => a + p.w, 0) + (plates.length - 1) + 1 + 10, H = 36;
+    if (W > 132) return null;
+    const svg = document.createElementNS(SVG_NS, 'svg');
+    for (const [k, v] of [['viewBox', `0 0 ${W} ${H}`], ['width', String(W)], ['height', String(H)], ['aria-hidden', 'true'], ['focusable', 'false'], ['class', 'plate-art']]) svg.setAttribute(k, v);
+    const rect = (x, y, w, h, fill, stroke) => {
+      const r = document.createElementNS(SVG_NS, 'rect');
+      for (const [k, v] of [['x', x], ['y', y], ['width', w], ['height', h], ['fill', fill]]) r.setAttribute(k, String(v));
+      if (stroke) { r.setAttribute('stroke', stroke); r.setAttribute('stroke-width', '1'); }
+      return r;
+    };
+    svg.appendChild(rect(0, H / 2 - 1.5, W, 3, 'var(--steel)'));   // the stub of bar, then the sleeve
+    let x = 6;
+    for (const p of plates) {
+      const y = (H - p.h) / 2;
+      svg.appendChild(p.edge ? rect(x + .5, y + .5, p.w - 1, p.h - 1, p.c, 'var(--grip)') : rect(x, y, p.w, p.h, p.c));
+      x += p.w + 1;
+    }
+    return svg;
+  } catch { return null; }
 }
 
 /* ---------- the dock ----------
