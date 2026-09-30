@@ -661,6 +661,15 @@
 [data-vibe="iron-age"] .stat-val,
 [data-vibe="iron-age"] .mini-stat-v { display: block; flex: none; white-space: nowrap; line-height: 1.2; overflow: visible; text-overflow: clip; }
 [data-vibe="iron-age"] .stat-val { font-size: 18px; font-variation-settings: 'wdth' 100, 'wght' 700; }
+/* A run-in figure is small text (18/700), so a graphic-only plate is inked
+   through inkOf: ochre as warn (5.74:1, 5.42 on the grain, where ochre is
+   3.92) and pewter as steel. The callers set the colour inline
+   (stats.js statRow: 'Best e1RM', 'var(--p-yellow)'); redefining the plate on
+   the value itself re-inks that var() without !important. */
+[data-vibe="iron-age"] .stat-val {
+  --p-yellow: var(--ink-of-p-yellow);
+  --p-chrome: var(--ink-of-p-chrome);
+}
 [data-vibe="iron-age"] .stat-lbl,
 [data-vibe="iron-age"] .mini-stat-l { display: block; margin: 0; min-width: 0; white-space: normal; overflow: visible; text-overflow: clip; }
 /* An article after a run-in line stands 20 clear of it, as cards part. */
