@@ -1005,10 +1005,17 @@
 [data-vibe="iron-age"] .ex-menu { min-height: 33px; }
 
 /* Swipe to delete. The rows lie on the page, so the front takes no ground,
-   and the Indian-red panel is only there while a row is pulled aside. */
+   and the Indian-red panel is only there while a row is pulled aside. A
+   closed row clips its back out of sight rather than hiding it, so Delete
+   stays in the accessibility tree and the tab order as it is in v1 (under
+   v1's opaque front) — VoiceOver and a keyboard never make the drag that
+   opens a row. Reached from the keyboard, Delete stands over the row's end,
+   where an opened row shows it. */
 [data-vibe="iron-age"] .swipe-front { background: transparent; }
-[data-vibe="iron-age"] .swipe-back { background: none; visibility: hidden; }
-[data-vibe="iron-age"] .swipe:has(> .swipe-front[style*="translate"]) > .swipe-back { visibility: visible; }
+[data-vibe="iron-age"] .swipe-back { background: none; clip-path: inset(50%); }
+[data-vibe="iron-age"] .swipe:has(> .swipe-front[style*="translate"]) > .swipe-back { clip-path: none; }
+[data-vibe="iron-age"] .swipe-back:has(> .swipe-del:focus-visible) { clip-path: none; z-index: 1; pointer-events: none; }
+[data-vibe="iron-age"] .swipe-back:has(> .swipe-del:focus-visible) > .swipe-del { pointer-events: auto; }
 [data-vibe="iron-age"] .swipe-del {
   background: var(--danger);
   font-size: 13px; letter-spacing: 0; text-transform: none;
