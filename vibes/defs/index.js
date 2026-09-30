@@ -70,7 +70,8 @@ export const VIBES = deepFreeze([
   { id: 'v1', name: 'v1', feel: 'The original Rack look.', experimental: false, scheme: 'dark' },
   { id: 'chalk', name: 'Chalk', feel: 'Chalk-white page, dark ink.', experimental: false, scheme: 'light' },
   { id: 'navy', name: 'Navy', feel: 'Deep navy ground, pale ink.', experimental: false, scheme: 'dark' },
-  { id: 'oxblood', name: 'Oxblood', feel: 'Oxblood and ice blue.', experimental: false, scheme: 'dark' }
+  { id: 'oxblood', name: 'Oxblood', feel: 'Oxblood and ice blue.', experimental: false, scheme: 'dark' },
+  { id: 'clear-sky', name: 'Clear sky', feel: 'Pale sky, open and calm.', experimental: false, scheme: 'light' }
 ]);
 
 export const IDS = Object.freeze(VIBES.map(v => v.id));
