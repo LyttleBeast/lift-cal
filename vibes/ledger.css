@@ -252,7 +252,7 @@
 
 /* btn / btnLg: 16 / 600 and 17 / 700, untracked, sentence case as authored
    ("Start workout"). Local resizes (.ex-actions .btn 12 …) keep winning. */
-[data-vibe="ledger"] :where(.btn) { font-size: 16px; letter-spacing: 0; font-variation-settings: 'wght' 600; }
+[data-vibe="ledger"] :where(.btn) { font-size: 16px; line-height: 1.25; letter-spacing: 0; font-variation-settings: 'wght' 600; }
 [data-vibe="ledger"] :where(.btn-lg) { font-size: 17px; letter-spacing: 0; text-transform: none; font-variation-settings: 'wght' 700; }
 [data-vibe="ledger"] :where(.back-btn) { font-size: 13px; letter-spacing: 0; font-variation-settings: 'wght' 600; }
 
@@ -376,6 +376,10 @@
   border-top-width: var(--shape-rule-head-0);
   padding-top: 10px;
 }
+/* A card straight under a masthead hangs from the masthead's own rule: a
+   second rule a step under it would box the title in. */
+[data-vibe="ledger"] .cal-hd + .card:not(.fuel-sum),
+[data-vibe="ledger"] .summary-hero + .card { border-top: 0; padding-top: 0; }
 /* Fuel's empty meal card stays one line. */
 [data-vibe="ledger"] .meal-blank { padding-bottom: 0; }
 [data-vibe="ledger"] .meal-kcal { font-size: 13px; color: var(--steel); }
@@ -665,42 +669,55 @@
 [data-vibe="ledger"] :where(.ex-item .nm, .rt-pv-row, .day-ex) { font-variation-settings: 'wght' 400; }
 [data-vibe="ledger"] .ex-item .nm { font-size: 16px; }
 [data-vibe="ledger"] .ex-item .eq { font-size: 11px; letter-spacing: 0; text-transform: none; }
-/* The leader: a flex row gets it between the name's block and the value, on
-   the name's baseline. (The weigh-in rows end in a drawn ✕, not a figure:
-   no leader to a delete mark.) */
-[data-vibe="ledger"] .food-entry:not(:has(> .fe-cal > .glyph)),
+/* The leader. A row's body (the name, its sub-line under it, and on You's
+   Strongest lifts the lift's bar) takes the row's free width, and its
+   ground carries the drawn dots on the name's baseline; the name, sized to
+   its words, covers them in the ground it sits on, so the dots run from the
+   end of the name to the end of the body, and the value follows on that
+   line. The name keeps v1's ellipsis. (The weigh-in rows end in a drawn ✕,
+   not a figure: no leader to a delete mark. The estimator's rows are a
+   measured surface and keep v1's drawing.) --ledger-ground is the ground a
+   row lies on: the page, or bar in a sheet and in Fuel's lead. */
+[data-vibe="ledger"] :where(.sheet, .card.fuel-sum) { --ledger-ground: var(--bar); }
+[data-vibe="ledger"] .food-entry:not(.pe-row):not(:has(> .fe-cal > .glyph)),
 [data-vibe="ledger"] .pb-row,
 [data-vibe="ledger"] .pr-hit,
 [data-vibe="ledger"] .pr-row,
 [data-vibe="ledger"] .rank-row,
 [data-vibe="ledger"] .sess-row { align-items: baseline; }
-[data-vibe="ledger"] .food-entry:not(:has(> .fe-cal > .glyph)) > .fe-body,
+[data-vibe="ledger"] .food-entry:not(.pe-row):not(:has(> .fe-cal > .glyph)) > .fe-body,
 [data-vibe="ledger"] .pb-row > div:first-child,
 [data-vibe="ledger"] .pr-body,
 [data-vibe="ledger"] .rank-body,
-[data-vibe="ledger"] .sess-row > div:first-child { flex: 0 1 auto; min-width: 0; }
-[data-vibe="ledger"] .food-entry:not(:has(> .fe-cal > .glyph))::after,
-[data-vibe="ledger"] .pb-row::after,
-[data-vibe="ledger"] .pr-hit::after,
-[data-vibe="ledger"] .pr-row::after,
-[data-vibe="ledger"] .rank-row::after,
-[data-vibe="ledger"] .sess-row::after,
+[data-vibe="ledger"] .sess-row > div:first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+  background: radial-gradient(circle, var(--shape-leader-ink) 0 calc(var(--shape-leader-dot) / 2), transparent calc(var(--shape-leader-dot) / 2 + .25px))
+    0 1.08em / var(--shape-leader-pitch) var(--shape-leader-dot) repeat-x;
+}
+[data-vibe="ledger"] .food-entry:not(.pe-row):not(:has(> .fe-cal > .glyph)) > .fe-body > .fe-name,
+[data-vibe="ledger"] .pb-row > div:first-child > .pb-lbl,
+[data-vibe="ledger"] .pr-body > .pr-name,
+[data-vibe="ledger"] .rank-body > .rank-name,
+[data-vibe="ledger"] .sess-row > div:first-child > .sess-date {
+  width: fit-content;
+  max-width: 100%;
+  padding-right: 6px;
+  background: var(--ledger-ground, var(--rack));
+}
+[data-vibe="ledger"] .pr-hit > .pr-right,
+[data-vibe="ledger"] .pr-row > .pr-val,
+[data-vibe="ledger"] .pb-row > .pb-val,
+[data-vibe="ledger"] .rank-row > .rank-val,
+[data-vibe="ledger"] .sess-row > .sess-right,
+[data-vibe="ledger"] .food-entry > .fe-cal { padding-left: 6px; }
 [data-vibe="ledger"] .st-row::after {
   content: '';
-  order: 1;
-  flex: 1 1 var(--shape-leader-min);
   min-width: var(--shape-leader-min);
   height: var(--shape-leader-dot);
   background: radial-gradient(circle, var(--shape-leader-ink) 0 calc(var(--shape-leader-dot) / 2), transparent calc(var(--shape-leader-dot) / 2 + .25px))
     0 0 / var(--shape-leader-pitch) var(--shape-leader-dot) repeat-x;
 }
-[data-vibe="ledger"] .food-entry > .fe-cal,
-[data-vibe="ledger"] .pb-row > .pb-val,
-[data-vibe="ledger"] .pr-hit > :not(.pr-body):not(:first-child),
-[data-vibe="ledger"] .pr-row > :not(.pr-body):not(:first-child),
-[data-vibe="ledger"] .rank-row > .rank-val,
-[data-vibe="ledger"] .rank-row > .rank-body ~ *,
-[data-vibe="ledger"] .sess-row > :not(:first-child) { order: 2; }
 /* A day's steps: the grid gains the leader's column between the date and
    the figure. */
 [data-vibe="ledger"] .st-row { grid-template-columns: auto 1fr auto 46px; column-gap: 8px; }
@@ -1007,7 +1024,7 @@
 [data-vibe="ledger"] .wk-bar .timer { color: var(--steel); }
 [data-vibe="ledger"] .wk-coach,
 [data-vibe="ledger"] .wk-cal-btn { border-color: var(--knurl); }
-[data-vibe="ledger"] .wk-cal-btn { color: var(--chalk); }
+[data-vibe="ledger"] .wk-cal-btn { color: var(--chalk); margin-right: 6px; }
 [data-vibe="ledger"] .wk-coach .coach-ttl { font-size: 11px; letter-spacing: .04em; font-variation-settings: 'wght' 700; }
 [data-vibe="ledger"] .rest-pill .t { font-size: 16px; font-variation-settings: 'wght' 700; }
 [data-vibe="ledger"] .rest-pill button { font-size: 13px; color: var(--chalk); font-variation-settings: 'wght' 600; }
@@ -1047,6 +1064,17 @@
 [data-vibe="ledger"] .group-pill { border-radius: var(--r-chip); background: var(--raised); border-color: transparent; }
 [data-vibe="ledger"] .install-card { background: none; }
 [data-vibe="ledger"] .day-title { font-size: 16px; font-variation-settings: 'wght' 700; }
+
+[data-vibe="ledger"] :where(.find-d, .guide-d, .traj-reason, .feel-sub, .person-sub, .person-note) { font-size: 13px; }
+[data-vibe="ledger"] :where(.guide-t) { font-size: 15px; font-variation-settings: 'wght' 600; }
+[data-vibe="ledger"] :where(.person-name) { font-size: 16px; font-variation-settings: 'wght' 600; }
+[data-vibe="ledger"] .install-n { border-radius: var(--r-sm); }
+[data-vibe="ledger"] .split-bar,
+[data-vibe="ledger"] .import-bar { border-radius: 0; }
+[data-vibe="ledger"] .traj-bar,
+[data-vibe="ledger"] .traj-fill { border-radius: 0; }
+[data-vibe="ledger"] .tod-col i { border-radius: 0; }
+[data-vibe="ledger"] .tod-h { font-size: 11px; letter-spacing: 0; }
 
 /* ---------- water ---------- */
 [data-vibe="ledger"] .water-preset {
