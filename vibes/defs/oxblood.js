@@ -175,9 +175,11 @@ export default deepFreeze({
     // the dots 3.01 on a card. The lit add tile's tag no longer sits on it
     // (addTile · flat puts it on `raised`, steel 6.75), so grip is free to be
     // this light. A toggle's steel knob on it would be 2.61 (v1 3.80), so the
-    // off knob is chalk instead, 4.97 (vibes/oxblood.css; native, the vibe's
-    // registry entry in src/state/vibe.js).
+    // off knob is chalk instead, 4.97: knob, below.
     grip:          '#7c5d62',
+    // knob (engine v3): the toggle's off knob, on grip. Chalk, 4.97 — steel,
+    // the knob a definition without one takes, would be 2.61 there.
+    knob:          '#f3ece2',
     // faint = dim: no fourth, fainter grey tier (never-do 5). v1's faint is
     // 1.41:1; an optional field's label is text and must read.
     faint:         '#9c8a85',

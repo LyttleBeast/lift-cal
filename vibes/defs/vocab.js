@@ -100,11 +100,15 @@ export default deepFreeze({
      no look, so it reads none of them. index.js ROLES carries each one: native
      build() hands the object on as T.shape, and the web spends each param as a
      --shape-* token (a list as one token per entry, at most three: line, gap,
-     line), generated from the definition by tools-check/vibes-css.mjs. */
+     line), generated from the definition by tools-check/vibes-css.mjs — all
+     but rule.place, stripe and slab.lit, which choose a drawing and have no
+     token: a vibe's stylesheet draws its own choice. */
   params: {
     rule: {
       ink: 'knurl',   // every drawn rule; 3:1 on its ground where it carries structure (R2.2)
-      hair: 1,        // a hairline: row, cell and column dividers
+      // A hairline: row, cell and column dividers. 0 draws none — rows and
+      // cells parted by space alone (engine v3); every other number is > 0.
+      hair: 1,
       head: [2],      // the head rule, line and gap widths outermost first: [2] one 2pt rule, [3, 2, 1] an Oxford rule
       place: 'above', // the head rule above a head (the head hangs from it) or 'below' it (the head sits on it)
       // The single rule an article sits on — a card's head, an exercise's
@@ -112,9 +116,12 @@ export default deepFreeze({
       // heads, a masthead, a sheet's top edge). Its default is head's, so a
       // vibe that sets neither draws one 2pt rule at both.
       sub: [2],
-      // The rule a form draws over a total (the recap's session totals, the
-      // estimator's total). No block carries those sites yet: a vibe's own
-      // stylesheet spends it until one does. Its default is head's.
+      // The rule a form draws over a total. Its one site on both clients is
+      // the stat row marked total — the recap's session totals (web
+      // .summary-page > .stat-row; native StatRow `total`) — under
+      // statRow · folio and ledger (engine v3). The estimator's total has no
+      // native site: a vibe's stylesheet may rule it on the web alone. Its
+      // default is head's.
       total: [2]
     },
     leader: { ink: 'steel', dot: 1.5, pitch: 4, min: 16 },   // drawn dots on the text baseline, name … value
@@ -124,15 +131,42 @@ export default deepFreeze({
     // The tab's lead card — its one kept box under card · ruled — also wears
     // the keyline (shape.keyline's ink and width), for a page its ground alone
     // would vanish on.
-    lead: { keyline: false }
+    lead: { keyline: false },
+    /* Engine v3. */
+    // The two side stripes no block reaches — the tour tip (auth.css .ob-tip;
+    // native TourOverlay's tip) and the Coach sheet's asking bubble (rack.css
+    // .coach-bub.ask; native coach/sheets.jsx's bubble) — drawn as v1 draws
+    // them ('side': the 2 / 3pt accent stripe down the left), as a rule across
+    // the top edge ('top'), or as an outline all round ('keyline'); 'top' and
+    // 'keyline' are shape.keyline.width wide, in the stripe's own accent.
+    stripe: 'side',
+    // The ink of a drawn state cue that is not an inversion: dock · rail's
+    // active bar, segmented · tabs' underline, calCell · ruled's and
+    // calCell · open's today keyline. A colour role, as the inks above.
+    cue: { ink: 'chalk' },
+    // A drawn tick in a chosen choice card — onboarding's, and wherever else
+    // the card is drawn (web .ob-choice.on; native onboarding/Setup.jsx
+    // Choice with `on`) — beside v1's border and fill: a non-colour chosen
+    // cue. v1 draws none.
+    chosen: { tick: false },
+    // Under listRow · ledger, the ranked rows (Stats' three rank cards: web
+    // .rank-row and its .rank-no; native train/stats.jsx RankCard) hang their
+    // rank numeral in a leading 28pt tabular column.
+    rank: { column: false },
+    // sessionChrome · slab's inverted slot: 'both' (the running clock in the
+    // top bar and the time in the rest pill, as the look was first written),
+    // 'clock' or 'rest'.
+    slab: { lit: 'both' }
   },
 
   blocks: {
     card: {
       label: 'Card',
       web: ['.card outside #view-you (stats.js card() and the tab screens\' own cards; You\'s and the admin\'s are youCard)', '.card-hd', '.card-sub',
-            '.card.fuel-sum (Fuel\'s summary: its tab\'s lead card)'],
-      native: ['src/ui/Card.jsx Card, CardHead', 'T.cardSkin() — the hand-rolled card Views that are not <Card> (V59 §6.8)'],
+            '.card.fuel-sum (Fuel\'s summary: its tab\'s lead card)',
+            '.card[data-lead] (engine v3: the tab\'s lead card, marked with its hero slot — fuelSummary, weightLog, stepsToday)'],
+      native: ['src/ui/Card.jsx Card, CardHead', 'T.cardSkin() — the hand-rolled card Views that are not <Card> (V59 §6.8)',
+               'Card `lead` (Fuel\'s summary) and `photo` (a hero-slot card: Weight\'s log, Steps\' today) — the tab\'s lead card'],
       switches: ['src/ui/Card.jsx Card'],
       add: ['T.cardSkin(): the hand-rolled card Views follow this block, but Stat, Segmented and GroupPill call it for a tile, a track and a pill and follow their own blocks — cardSkin needs to know which it is drawing'],
       slots: ['stepsToday', 'weightLog'],
@@ -144,7 +178,7 @@ export default deepFreeze({
         v1: { grade: 'v1', look: 'bar ground, a 1pt collar border, radius.r, padding 14, 12 below; its head row is the title left, meta and ⋯ right' },
         flat: { grade: 'shape', look: 'the bar ground with no border, radius.r corners: surfaces told apart by value, not outline (R3.2)',
                 for: ['chalk', 'navy', 'oxblood'] },
-        ruled: { grade: 'deep', look: 'no ground, no border, no radius: the card sits on the page under its article rule (shape.rule.sub, placed by shape.rule.place) drawn full width, its content to the rule\'s width; cards part by space. The tab\'s lead card — its one hero box: Fuel\'s summary, Weight\'s log, Steps\' today — keeps a box (bar ground, radius.r, no border; the keyline, shape.keyline, when shape.lead.keyline), so the page is never boxes-nowhere (R6.1, R6.10)',
+        ruled: { grade: 'deep', look: 'no ground, no border, no radius: the card sits on the page under its article rule (shape.rule.sub, placed by shape.rule.place) drawn full width, its content to the rule\'s width; cards part by space. The tab\'s lead card keeps a box (bar ground, radius.r, no border; the keyline, shape.keyline, when shape.lead.keyline), so the page is never boxes-nowhere (R6.1, R6.10): Fuel\'s summary always, and a hero-slot card (Weight\'s log, Steps\' today) while the vibe draws its photo. A hero-slot card with no photo in the vibe is the open lead: no ground, no sides, the head rule (shape.rule.head) across its top',
                  for: ['ledger', 'iron-age', 'clear-sky'] },
         plate: { grade: 'shape', look: 'the bar ground, square corners (radius.plate) and a 2pt keyline in knurl: a stamped nameplate', for: [] },
         panel: { grade: 'deep', look: 'bar ground, no border, square corners (radius.plate), cards parted by shape.gutter; the head row drawn as a band (shape.band) across the top edge holding the title left and meta and ⋯ right in the band\'s ink',
@@ -152,7 +186,8 @@ export default deepFreeze({
       },
       keeps: ['what the card holds, in order; the head\'s title, meta and ⋯ where they are, the ⋯ still opening its sheet',
               'the photo slot on Steps\' today and Weight\'s log cards, drawn inside the look\'s own box',
-              'the clearance between the last card and the dock', 'Fuel\'s empty meal card stays one line']
+              'the clearance between the last card and the dock', 'Fuel\'s empty meal card stays one line',
+              'the tour card (auth.css .ob-tour-card; native TourOverlay, which spreads T.cardSkin()) is not a card of this block: it keeps its box (ground, border, radius, in the vibe\'s roles) under every look']
     },
 
     youCard: {
@@ -203,13 +238,13 @@ export default deepFreeze({
       switches: ['src/ui/you/bits.jsx Section', 'src/ui/settings/index.jsx Sec'],
       add: [],
       slots: [],
-      reads: ['colors.dim', 'colors.collar'],
-      type: ['literal — the same arguments as type.eyebrow at both native sites'],
+      reads: ['colors.dim', 'colors.collar', 'type.h3'],
+      type: ['literal — the same arguments as type.eyebrow at both native sites', 'h3 (the rule and plain looks)'],
       variants: ['v1', 'rule', 'banner', 'plain'],
       v1: 'v1',
       looks: {
         v1: { grade: 'v1', look: 'the title (10pt caps .16em, dim) and a collar hairline running on to the edge; 26 above, 10 below' },
-        rule: { grade: 'deep', look: 'the title with the head rule (shape.rule.head in shape.rule.ink) at full width, above it or below it by shape.rule.place; no trailing hairline',
+        rule: { grade: 'deep', look: 'the title set as a head in type.h3, with the head rule (shape.rule.head in shape.rule.ink) at full width, above it or below it by shape.rule.place; no trailing hairline',
                 for: ['ledger', 'iron-age'] },
         banner: { grade: 'deep', look: 'a full-width band (shape.band) with the title inside it, left; the hairline becomes a shape.gutter gap', for: ['meet-day'] },
         plain: { grade: 'deep', look: 'the title alone, set as a real head in type.h3; no hairline', for: ['clear-sky'] }
@@ -232,7 +267,7 @@ export default deepFreeze({
       v1: 'v1',
       looks: {
         v1: { grade: 'v1', look: 'the eyebrow over a 26pt h1 (wdth 78 / 800); the nav buttons right of it' },
-        masthead: { grade: 'deep', look: 'a larger title over a full-width head rule (shape.rule.head), the eyebrow above it; the nav buttons keep their place', for: ['iron-age', 'ledger'] },
+        masthead: { grade: 'deep', look: 'a larger title and a full-width head rule (shape.rule.head) placed by shape.rule.place — under the title, or between the eyebrow and the title, which hangs from it — the eyebrow above both; the nav buttons keep their place', for: ['iron-age', 'ledger'] },
         inline: { grade: 'deep', look: 'the eyebrow and the title on one baseline, the eyebrow first', for: [] }
       },
       keeps: ['the nav buttons, their order, actions and size (the month and day buttons are 34 in v1 — never smaller); Back',
@@ -284,8 +319,10 @@ export default deepFreeze({
 
     statRow: {
       label: 'Stat row',
-      web: ['.stat-row', '.stat', '.stat-val', '.stat-lbl', 'you.js, stats.js and admin.js statRow()', '.mini-stats', '.mini-stat', '.mini-stat-v', '.mini-stat-l'],
-      native: ['src/ui/Stat.jsx StatRow, Stat', 'src/ui/you/bits.jsx MiniStats'],
+      web: ['.stat-row', '.stat', '.stat-val', '.stat-lbl', 'you.js, stats.js and admin.js statRow()', '.mini-stats', '.mini-stat', '.mini-stat-v', '.mini-stat-l',
+            '.summary-page > .stat-row (the recap\'s session totals: a total row)'],
+      native: ['src/ui/Stat.jsx StatRow, Stat', 'src/ui/you/bits.jsx MiniStats',
+               'StatRow `total` (engine v3: app/(app)/(tabs)/workout/summary.jsx\'s session totals, a total row)'],
       switches: ['src/ui/Stat.jsx StatRow', 'src/ui/Stat.jsx Stat'],
       add: ['src/ui/you/bits.jsx MiniStats'],
       slots: [],
@@ -295,11 +332,11 @@ export default deepFreeze({
       v1: 'v1',
       looks: {
         v1: { grade: 'v1', look: 'three tiles 8 apart, each bar ground, collar border, radius.sm, padding 10: a 20pt value (wdth 108 / 800, tabular) over a 9pt caps label in dim. Mini stats: the same in small, on the well' },
-        ledger: { grade: 'deep', look: 'one line per stat, in order: the label left, a drawn leader (shape.leader), the value right; lines on a 44pt pitch, no box', for: ['ledger'] },
+        ledger: { grade: 'deep', look: 'one line per stat, in order: the label left, a drawn leader (shape.leader), the value right; lines on a 44pt pitch, no box. A total row sits under the total rule (shape.rule.total)', for: ['ledger'] },
         lead: { grade: 'deep', look: 'the first stat large and the other two small beside it (1 + 2), no boxes. A screen may have one hero figure (R6.7): a vibe naming lead gives up its headline there', for: [] },
         line: { grade: 'shape', look: 'a box-score line: no ground and no outer border; the values on one baseline with a 1pt rule (collar or knurl) between columns, labels under them', for: ['chalk', 'clear-sky', 'ledger'] },
-        folio: { grade: 'deep', look: 'the line between two hairlines (shape.rule.hair) above and below it: the period folio line', for: ['iron-age'] },
-        board: { grade: 'deep', look: 'one board strip: the cells butt together with shape.gutter gaps, bar ground, no border, square corners', for: ['meet-day'] }
+        folio: { grade: 'deep', look: 'the line between two hairlines (shape.rule.hair) above and below it: the period folio line. A total row sits under the total rule (shape.rule.total) in place of its upper hairline', for: ['iron-age'] },
+        board: { grade: 'deep', look: 'one board strip: the cells butt together with shape.gutter gaps, bar ground, no border, square corners. Inside a card the strip runs to the card\'s edges and cuts it into cells, its gutters in the page ground; where it cannot cross the card\'s padding, the cells sit on the well within it, shape.gutter apart (never bar on bar)', for: ['meet-day'] }
       },
       keeps: ['the stats and their order', 'a value\'s own colour where its caller gives one (a group or subject colour)',
               'tabular figures; a value never truncates (a label may wrap)']
@@ -315,13 +352,14 @@ export default deepFreeze({
       reads: ['colors.well', 'colors.collar', 'radius.sm', 'kpi', 'tint.pillBase', 'tint.pillUp', 'tint.pillDown', 'tint.pillWarn',
               'colors.good', 'colors.bad', 'colors.warn', 'colors.dim', 'type.kpiVal', 'shadow.kpiDay', 'shadow.kpiToday'],
       type: ['kpiVal', 'literal label — the same arguments as type.statLbl'],
-      variants: ['v1', 'plain', 'band', 'word'],
+      variants: ['v1', 'plain', 'band', 'word', 'lane'],
       v1: 'v1',
       looks: {
         v1: { grade: 'v1', look: 'a well tile (collar border, radius.sm) with its subject\'s corner tint (a radial wash on the web, a flat corner block on native); the 9pt caps label and the delta in a tinted pill; the 22pt value and unit; "last week …"; a 46pt sparkline; seven day dots, today ringed' },
         plain: { grade: 'shape', look: 'the tile without its corner tint. The delta pill\'s fill is tint.pill*, which a vibe may set to 0 without a look', for: ['chalk', 'navy', 'oxblood'] },
         band: { grade: 'deep', look: 'no corner tint; a 3pt band of the subject colour across the tile\'s top edge', for: [] },
-        word: { grade: 'deep', look: 'no tile: the sparkline drawn word-sized (17–22 tall, 60–90 wide, a 3–4pt end dot, no frame) in its own place; the delta in its pill while the vibe\'s tint.pill* are above 0, and as bare signed text with its arrow when they are 0', for: ['clear-sky', 'iron-age'] }
+        word: { grade: 'deep', look: 'no tile: the sparkline drawn word-sized (17–22 tall, 60–90 wide, a 3–4pt end dot, no frame) in its own place; the delta in its pill while the vibe\'s tint.pill* are above 0, and as bare signed text with its arrow when they are 0. The delta\'s figure and arrow are set in type.pill where the vibe gives one (else the pill\'s literal 11.5 / 10)', for: ['clear-sky', 'iron-age', 'ledger'] },
+        lane: { grade: 'deep', look: 'no tile tint: the four tiles as four lanes on the well, one under another, each holding its children in their order in two columns (the head, value and "last week …" left; the sparkline and the day dots right), the four rows of day dots aligned into one 4 × 7 board; "last week …" re-set at 12 in steel. On native the week card\'s tiles stand in one column', for: ['meet-day'] }
       },
       keeps: ['the 2 × 2 grid and its order', 'every figure; the arrow on each delta and its "…" / "–" states',
               'seven day dots, today ringed (a shape cue)', '"last week …" in its place']
@@ -330,20 +368,24 @@ export default deepFreeze({
     headline: {
       label: 'Headline number',
       web: ['.load-num (food.js Fuel\'s summary and the targets preview, steps.js today, water.js total, weight.js peak and maintenance)', '.fuel-top',
-            '.headline', '.headline-v', '.headline-u (you.js)'],
-      native: ['T.loadNum(size) at app/(app)/(tabs)/food.jsx (3 sites), steps.jsx (1), weight.jsx (2)', 'src/ui/you/bits.jsx Headline, HeadlineV, HeadlineU'],
+            '.headline', '.headline-v', '.headline-u (you.js)',
+            '[data-hero] (engine v3\'s hero mark, on three figures: Fuel\'s summary .load-num, Steps\' today .load-num, the Goal\'s .headline-v)'],
+      native: ['T.loadNum(size) at app/(app)/(tabs)/food.jsx (2 sites), weight.jsx (2) and src/ui/LoadNum.jsx (the two hero figures below)', 'src/ui/you/bits.jsx Headline, HeadlineV, HeadlineU',
+               'the `hero` prop (engine v3\'s hero mark) at the same three: food.jsx\'s summary figure and steps.jsx\'s today figure (each a LoadNum), HeadlineV in the Goal\'s card'],
       switches: [],
-      add: ['src/ui/you/bits.jsx HeadlineV', 'the six T.loadNum sites, which have no component (a wrapper that draws the same Text, or a switch at each)'],
+      add: ['src/ui/you/bits.jsx HeadlineV', 'src/ui/LoadNum.jsx LoadNum', 'the four other T.loadNum sites, which have no component (a wrapper that draws the same Text, or a switch at each)'],
       slots: ['fuelSummary'],
-      reads: ['loadNum', 'type.headline'],
-      type: ['headline', 'loadNum'],
-      variants: ['v1', 'rule', 'stamp', 'flap'],
+      reads: ['loadNum', 'type.headline', 'type.hero', 'type.meta'],
+      type: ['headline', 'loadNum', 'hero (solo)', 'meta (bare\'s unit)'],
+      variants: ['v1', 'rule', 'stamp', 'flap', 'solo', 'bare'],
       v1: 'v1',
       looks: {
         v1: { grade: 'v1', look: 'the figure alone: loadNum is wdth 118 / 800, tabular, -.02em, line-height .95, at 26–40; You\'s headline is 34pt wdth 112 / 800 with its unit beside it. Face, width and weight are type roles, with no look' },
         rule: { grade: 'deep', look: 'the challenge line: the figure over the article rule (shape.rule.sub), its unit on the same baseline', for: ['iron-age'] },
         stamp: { grade: 'deep', look: 'the figure inside a keyline plate (shape.keyline, square corners): a stamped scale plate, a record cell', for: ['iron-age', 'meet-day'] },
-        flap: { grade: 'deep', look: 'a split-flap cell behind the figure: two flat halves meeting at 50% with no blend (C22) and a 1pt seam; only at 32pt and up', for: ['meet-day'] }
+        flap: { grade: 'deep', look: 'a split-flap cell behind the figure: two flat halves meeting at 50% with no blend (C22) and a 1pt seam; only at 32pt and up', for: ['meet-day'] },
+        solo: { grade: 'deep', look: 'the hero figure: at a figure with the hero mark, the figure stands alone on its line in type.hero; where its row cannot hold it (Fuel\'s .fuel-top, Steps\' today) the row wraps or stacks in its own order. Every headline figure\'s unit sits on the figure\'s baseline at text size in steel — in type.tag where the unit is authored in lower case and the vibe sets one. An unmarked figure keeps its size', for: ['clear-sky'] },
+        bare: { grade: 'deep', look: 'the figure alone in the vibe\'s numeral type, its unit re-set in type.meta, as authored (no caps transform, no tracking)', for: ['meet-day'] }
       },
       keeps: ['the figure\'s text, sign and "≈"', 'its colour role (Fuel\'s zone colour, Weight\'s pYellow) — except over a photo, where every word is one ink (R9.6)',
               'its unit and qualifier where they are']
@@ -383,7 +425,7 @@ export default deepFreeze({
       v1: 'v1',
       looks: {
         v1: { grade: 'v1', look: 'a pill track (bar ground, collar border) with pill segments; the chosen one inverted; 11pt caps .06em' },
-        tabs: { grade: 'deep', look: 'no track: the options as words, the chosen one in chalk over a 2pt underline — the underline is the cue', for: [] },
+        tabs: { grade: 'deep', look: 'no track: the options as words, the chosen one in chalk over a 2pt underline in shape.cue.ink — the underline is the cue', for: ['clear-sky', 'ledger'] },
         boxes: { grade: 'shape', look: 'joined square cells (radius.plate) with 1pt rules between them; the chosen cell inverted', for: ['iron-age', 'meet-day'] }
       },
       keeps: ['the options in order, at equal widths', 'a tap on the chosen option does nothing', 'chosen told by inversion or underline',
@@ -499,22 +541,25 @@ export default deepFreeze({
     listRow: {
       label: 'List rows',
       web: ['.food-entry', '.pb-row', '.pr-hit', '.pr-row', '.rank-row', '.sess-row', '.ex-item', '.find-row', '.review-row', '.rt-item', '.rt-pv-row',
-            '.day-ex', '.st-row', '.guide-row', '.person (auth.css; admin)'],
+            '.day-ex', '.st-row', '.guide-row', '.person (auth.css; admin)',
+            'the record rows: .pr-hit (the recap\'s PR hits), .pr-row (Stats\' PR rows), #view-you .pb-row (You\'s Strongest lifts)'],
       native: ['app/(app)/(tabs)/food.jsx EntryRow', 'app/(app)/(tabs)/steps.jsx RecentRow', 'src/ui/train/stats.jsx PrRow, PbRow, SessRow, PickerRow',
                'src/ui/train/picker.jsx ExRow', 'src/ui/train/routines.jsx RoutineRow, PreviewRow', 'src/ui/train/DayEx.jsx DayEx',
-               'src/ui/you/bits.jsx FindingRow', 'src/ui/food/common.jsx LibraryRow, ProposedRow'],
+               'src/ui/you/bits.jsx FindingRow', 'src/ui/food/common.jsx LibraryRow, ProposedRow',
+               'the record rows: app/(app)/(tabs)/workout/summary.jsx\'s PR rows, src/ui/train/stats.jsx PrRow, src/ui/you/cards.jsx\'s Strongest lifts rows'],
       switches: [],
       add: ['each row component above — a switch in each, or one row-skin fragment they spread, as the card Views spread T.cardSkin()'],
       slots: [],
       reads: ['colors.collar', 'colors.chalk', 'colors.steel', 'colors.dim', 'colors.accent', 'tint.pickSel'],
       type: ['literal at every row'],
-      variants: ['v1', 'plain', 'ledger'],
+      variants: ['v1', 'plain', 'ledger', 'board'],
       v1: 'v1',
       looks: {
         v1: { grade: 'v1', look: 'rows 9–11 padded top and bottom, a collar rule between rows (none above the first); the name 13–14pt 600, an 11pt dim line under it, the value right at 15pt wdth 108 / 800' },
         plain: { grade: 'shape', look: 'no rules between rows — separators between groups only (T3 D2); rows at least on a 44pt pitch', for: ['clear-sky', 'ledger'] },
-        ledger: { grade: 'deep', look: 'on name … value rows (PR, PB, rank, session, food entry, recent steps): a drawn leader (shape.leader) from the name to the value, the value alone at 800 (bold only the ranked column, T3 D5); rows of another shape draw as plain',
-                  for: ['ledger', 'iron-age', 'meet-day'] }
+        ledger: { grade: 'deep', look: 'on name … value rows (PR, PB, rank, session, food entry, recent steps): a drawn leader (shape.leader) from the name to the value, the value alone at 800 (bold only the ranked column, T3 D5); rows of another shape draw as plain. A record row (the recap\'s PR hits, Stats\' PR rows, You\'s Strongest lifts) sets its value in a keyline cell (shape.keyline): the record cell. With shape.rank.column, a ranked row hangs its rank numeral in a leading 28pt tabular column',
+                  for: ['ledger', 'iron-age', 'meet-day'] },
+        board: { grade: 'deep', look: 'a leaderless board row: the name left, the value right in the vibe\'s numeral type at 800, no leader; rows parted by shape.gutter in place of rules; a record row\'s value in a keyline cell (shape.keyline)', for: ['meet-day'] }
       },
       keeps: ['every row, in order, with its tap target and swipe to delete', 'the chosen and PR states told by more than colour',
               'the name ellipsises; the value never truncates']
@@ -561,7 +606,7 @@ export default deepFreeze({
         v1: { grade: 'v1', look: 'five columns under a collar rule: the type badge (raised, radius.idx; W / F / D in their plate colour — tagInk — over a .16 wash, tint.tag*), two well inputs (radius.sm, a focus border), the e1RM (10pt dim), a 30 × 30 check (a 1.5pt knurl edge; done = the done ground with an onDone ✓). A done row washes done at .07; a tick flashes accent into done over 600ms; drops hang on a pBlue .45 rail' },
         ruled: { grade: 'deep', look: 'rows parted by hairlines (shape.rule.hair); the inputs lose their ground and sit on a 1pt rule; the badge a bare figure (W / F / D keep their letter, inked in tagInk); done = the filled check with its ✓, and the row wash',
                  for: ['iron-age', 'ledger'] },
-        attempt: { grade: 'deep', look: 'the attempt card: the badge a 28 × 28 square box (raised; W / F / D inked in tagInk), the current set\'s box inverted; square inputs (radius.plate) with a 2pt focus outline; done = a 12pt lamp inside the unchanged 30 × 30 check, lit (done, filled) or unlit (track with a grip ring), in place of the row wash. "Current" is the session\'s first set not yet done — derived, never stored; the caller passes it',
+        attempt: { grade: 'deep', look: 'the attempt card: the badge a 28 × 28 square box (raised; W / F / D inked in tagInk), the current set\'s box inverted; square inputs (radius.plate) with a 2pt focus outline; done = a 12pt lamp inside the unchanged 30 × 30 check, lit (done, filled) or unlit (track with a grip ring), in place of the row wash. The coach state (the pulse) is warn\'s, never the accent\'s: the check\'s edge in warn and the tint.coach* wash, which the vibe inks in warn. "Current" is the session\'s first set not yet done — derived, never stored; the caller passes it',
                    for: ['meet-day'] }
       },
       keeps: ['the five columns, in order, at v1\'s widths', 'the inputs: typed text kept until blur, \'\' apart from 0, grey targets as placeholders',
@@ -603,8 +648,8 @@ export default deepFreeze({
       v1: 'v1',
       looks: {
         v1: { grade: 'v1', look: 'seven columns 4 apart; a 1 : 1.18 cell, radius.sm (a bar ground on the web, none on native), raised when trained; the 12pt day number (dim; chalk when trained; accent at 800 today, with an accent edge); up to four 3pt plate bars in group colours' },
-        open: { grade: 'shape', look: 'no cell grounds: a trained day shown by its plates and chalk number, today by its keyline and weight', for: ['clear-sky'] },
-        ruled: { grade: 'deep', look: 'a printed calendar: hairlines between cells (shape.rule.hair), no grounds; today boxed by a 2pt keyline', for: ['ledger', 'iron-age'] },
+        open: { grade: 'shape', look: 'no cell grounds: a trained day shown by its plates and chalk number, today by its keyline (in shape.cue.ink) and weight', for: ['clear-sky'] },
+        ruled: { grade: 'deep', look: 'a printed calendar: hairlines between cells (shape.rule.hair; at 0, none: cells parted by space), no grounds; today boxed by a 2pt keyline in shape.cue.ink', for: ['ledger', 'iron-age', 'clear-sky'] },
         edge: { grade: 'deep', look: 'the plates as edge-on slivers (3 × 10, side by side) under the number in place of stacked bars', for: ['meet-day'] }
       },
       keeps: ['the grid, its first weekday and its pad cells', 'the day numbers; at most four plates a day, in group colours',
@@ -619,7 +664,9 @@ export default deepFreeze({
               '.donut-sub, .chart-empty, .legend-item, .legend-lbl, .legend-val',
             '.heat', 'you.js .legend-inline, .legend-grid, .ring-cell, .ring-lbl, .ring-of', 'steps.js .st-ring, .st-ring-n, .st-ring-s (the today ring), .chart-foot',
             'weight.js .wchart, .wc-dot, .wc-avg',
-            'meters: .vol-row, .vol-track, .vol-fill, .macro-rows, .traj-bar, .traj-fill, and the calorie meter .cal-meter, .cal-track, .cal-zone, .cal-fill, .cal-tick, .cal-head, .cal-target'],
+            'meters: .vol-row, .vol-track, .vol-fill, .macro-rows, .traj-bar, .traj-fill, and the calorie meter .cal-meter, .cal-track, .cal-zone, .cal-fill, .cal-tick, .cal-head, .cal-target',
+            'the area washes the pinned analytics.js draws under lineChart\'s line and a sparkline\'s: the unclassed path[fill^="url(#"] in their svg, which a look with no area sets fill: none (engine v3\'s hook; no code)',
+            'a legend key: .legend-item i (9 × 9 in v1)'],
       native: ['src/ui/chart/LineChart.jsx', 'src/ui/chart/BarChart.jsx', 'src/ui/chart/Ring.jsx', 'src/ui/chart/Donut.jsx', 'src/ui/chart/Sparkline.jsx',
                'src/ui/chart/HeatStrip.jsx', 'src/ui/chart/Legend.jsx', 'src/ui/you/bits.jsx VolRow', 'app/(app)/(tabs)/food.jsx CalMeter',
                'app/(app)/(tabs)/steps.jsx StepRing'],
@@ -634,10 +681,10 @@ export default deepFreeze({
       v1: 'v1',
       looks: {
         v1: { grade: 'v1', look: 'lines over an area wash with a glowing end dot, rounded bars on track, ring and donut arcs, a heat strip of cells, sparklines, dashed targets; meters are rounded bars on track' },
-        ink: { grade: 'deep', look: 'single-ink strokes: 1.5pt lines with no area and no glow, flat square-topped bars, rings with square caps, hairline grids', for: ['ledger', 'clear-sky'] },
+        ink: { grade: 'deep', look: 'single-ink strokes: 1.5pt lines with square caps, no area and no glow (on the web the look sets fill: none on the pinned module\'s area washes; native draws no area), flat square-topped bars, rings with square caps, hairline grids; legend keys drawn as 12 × 3 strokes', for: ['ledger', 'clear-sky'] },
         print: { grade: 'deep', look: 'heavier 2pt lines, square-topped bars, the day that is not over hatched in place of dimmed (a shape cue), macro fills optionally hatched with matching legend swatches; no area wash. The calorie meter\'s bands (cut, hold, gain) hatched in their zone colours at full strength — a pattern each, CSS on the web and react-native-svg <Pattern> in CalMeter — where v1 washes them (tint.zone* stay the fallback); its head, ticks and target keep calMark, edged by shadow.calTick / calHead / calTarget',
                  for: ['iron-age'] },
-        board: { grade: 'deep', look: 'square-topped columns 2 apart, the day that is not over hatched in the knurl pattern, 2pt lines over an LED dot-matrix fill under the line only, square-ended meters with a tick at the target',
+        board: { grade: 'deep', look: 'square-topped columns 2 apart, the day that is not over hatched in the knurl pattern, 2pt lines with no area fill, square-ended meters; a target mark only where v1 draws one, as a 2pt tick in a 1pt notch of the page ground; rings as ten cells with 3° board gaps through the annulus only, each cell lit to the exact fraction by a hard stop',
                  for: ['meet-day'] }
       },
       keeps: ['every value where v1 draws it: scales, a shared origin for bars, axes and targets', 'every label and figure in and under a chart',
@@ -661,7 +708,7 @@ export default deepFreeze({
       looks: {
         v1: { grade: 'v1', look: 'glass: rack at .82 over an 18px blur (native: BlurView at 40) under a collar top rule; five cells, 22pt icons (1.9 stroke) over 10pt caps labels in dim; the active one chalk, with a 26 × 2 accent mark on the top edge' },
         solid: { grade: 'shape', look: 'an opaque bar ground, no blur, the collar rule; v1\'s cells and mark', for: ['chalk', 'clear-sky', 'iron-age'] },
-        rail: { grade: 'deep', look: 'opaque, under a 2pt rule (shape.rule.ink); the active cell carries a 3pt bar its full width along that rule, and a heavier label', for: ['ledger', 'iron-age'] },
+        rail: { grade: 'deep', look: 'opaque, under a 2pt rule (shape.rule.ink); the active cell carries a 3pt bar in shape.cue.ink its full width along that rule, and a heavier label', for: ['ledger', 'iron-age'] },
         board: { grade: 'deep', look: 'a board strip: five cells parted by shape.gutter, the active cell inverted (inverse ground, knockout icon and label)', for: ['meet-day'] }
       },
       keeps: ['five tabs — You, Train, Fuel, Weight, Steps — their words, order and place at the bottom',
@@ -727,7 +774,7 @@ export default deepFreeze({
       looks: {
         v1: { grade: 'v1', look: 'the top bar (native: bar ground; web: rack at .9 over a 16px blur) under a collar rule: the session name, the clock (tabular, steel), the Coach chip (38 tall, collar edge, accent caps), the calendar button (38, collar edge), Finish. The rest line, 3pt across the top in done (danger when over). The rest pill: raised, knurl edge, round, the rest shadow — time, +30, Skip. The peek bar: raised, knurl edge, radius.r, the peek shadow — name, clock, Resume' },
         flat: { grade: 'shape', look: 'no glass and no shadows: every piece on an opaque ground with its edge; shapes as v1', for: ['chalk', 'navy', 'oxblood', 'clear-sky'] },
-        slab: { grade: 'deep', look: 'a score bug: square slabs (radius.plate) whose slots are parted by 1pt rules, figures in the vibe\'s timer type, one slot inverted (the running clock in the top bar, the time in the rest pill: inverse ground, knockout figures); no shadows',
+        slab: { grade: 'deep', look: 'a score bug: square slabs (radius.plate) whose slots are parted by 1pt rules, figures in the vibe\'s timer type; the slots shape.slab.lit names inverted (inverse ground, knockout figures) — \'both\': the running clock in the top bar and the time in the rest pill; \'clock\' or \'rest\': that one alone; no shadows',
                 for: ['meet-day'] },
         plate: { grade: 'deep', look: 'stamped plates: square, a keyline (shape.keyline) on the bar ground, no shadow; figures tabular', for: ['iron-age'] }
       },
@@ -744,14 +791,15 @@ export default deepFreeze({
       switches: ['src/ui/you/Hero.jsx Hero'],
       add: [],
       slots: ['youHero'],
-      reads: ['colors.raised', 'colors.steel', 'colors.accent', 'colors.bar', 'colors.collar', 'colors.dim', 'type.youGreet'],
-      type: ['youGreet'],
-      variants: ['v1', 'banner', 'stacked'],
+      reads: ['colors.raised', 'colors.steel', 'colors.accent', 'colors.bar', 'colors.collar', 'colors.dim', 'type.youGreet', 'colors.greetName', 'type.meta'],
+      type: ['youGreet', 'meta (joined\'s since-line)'],
+      variants: ['v1', 'banner', 'stacked', 'joined'],
       v1: 'v1',
       looks: {
-        v1: { grade: 'v1', look: 'avatar (52, round, raised) | the two-line greeting (27pt 800, the name in accent) | the gear (36, bar ground, collar edge), avatar and gear level with the greeting; the sub-line and the "member since" line' },
+        v1: { grade: 'v1', look: 'avatar (52, round, raised) | the two-line greeting (27pt 800, the name in colors.greetName — the accent in v1, and in any vibe that does not set it) | the gear (36, bar ground, collar edge), avatar and gear level with the greeting; the sub-line and the "member since" line' },
         banner: { grade: 'deep', look: 'the greeting set in a box over its photo (the youHero slot) under the vibe\'s scrim; every word over the photo one ink — the name loses the accent (R9.6)', for: ['iron-age'] },
-        stacked: { grade: 'deep', look: 'the avatar above the greeting, left; the gear stays top right', for: [] }
+        stacked: { grade: 'deep', look: 'the avatar above the greeting, left; the gear stays top right', for: ['clear-sky'] },
+        joined: { grade: 'deep', look: 'as v1, with the "member since" line re-set in type.meta, as authored (no caps transform, no tracking), where it sits. Moving it under the greeting is the composition\'s (Phase X), not this look\'s', for: ['meet-day'] }
       },
       keeps: ['the avatar (tap: a photo), the greeting and name, the gear (tap: settings) at the top right', 'the sub-line and "member since …"',
               'the name ellipsises; the gear never leaves the screen']

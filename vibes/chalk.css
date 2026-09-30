@@ -22,6 +22,9 @@
   --shape-keyline-ink: #111416;
   --shape-keyline-width: 1px;
   --shape-lead-keyline: 0;
+  --shape-cue-ink: #6c3058;
+  --shape-chosen-tick: 0;
+  --shape-rank-column: 0;
   --rack: #e8ebeb;
   --bar: #f8fafa;
   --collar: #cdd3d4;
@@ -56,6 +59,8 @@
   --grip: #898e8f;
   --faint: #555a60;
   --band: #111416;
+  --knob: #3b4045;
+  --greet-name: #6c3058;
   --tint-runway: rgba(118,124,128,1);
   --tint-runway-edge: rgba(118,124,128,1);
   --font: 'chalk-sofia', system-ui, -apple-system, sans-serif;
@@ -330,9 +335,12 @@
 [data-vibe="chalk"] ::placeholder { color: var(--dim); }
 
 /* calCell · open: no cell grounds, like a printed calendar. A trained day is
-   its plates and its ink number; today its mulberry keyline and 800. */
+   its plates and its ink number; today its mulberry keyline and 800. The
+   keyline is the look's cue ink (shape.cue.ink), which Chalk names the
+   accent: the same mulberry rack.css's .cal-day.today draws. */
 [data-vibe="chalk"] .cal-day,
 [data-vibe="chalk"] .cal-day.has-work { background: transparent; }
+[data-vibe="chalk"] .cal-day.today { border-color: var(--shape-cue-ink); }
 
 /* dock · solid: an opaque white bar, no blur, under v1's collar rule. */
 [data-vibe="chalk"] .dock { background: var(--bar); backdrop-filter: none; -webkit-backdrop-filter: none; }

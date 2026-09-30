@@ -1535,11 +1535,12 @@ function trajectoryCard(found, est, maint) {
   const called = !(t.enough && t.rate != null && rateVerdict(t.rate, t.dir) == null);
   const dot = el('i', 'traj-dot ' + (!called ? '' : t.status === 'on' || t.status === 'ahead' ? 'good' : t.status === 'wrong' || t.status === 'drift' ? 'bad' : t.status ? 'warn' : ''));
   hl.appendChild(dot);
+  // data-hero: the Goal's pace is a hero figure (a vibe's hook; VOCAB headline)
   if (t.enough && t.rate != null) {
-    hl.appendChild(el('span', 'headline-v num', fmtRate(Math.abs(t.rate), gu)));
+    hl.appendChild(el('span', 'headline-v num', fmtRate(Math.abs(t.rate), gu))).dataset.hero = '';
     hl.appendChild(el('span', 'headline-u', unitW(gu) + ' / week ' + (t.rate < 0 ? 'down' : t.rate > 0 ? 'up' : 'flat')));
   } else {
-    hl.appendChild(el('span', 'headline-v num', '–'));
+    hl.appendChild(el('span', 'headline-v num', '–')).dataset.hero = '';
     hl.appendChild(el('span', 'headline-u', unitW(gu) + ' / week'));
   }
   c.appendChild(hl);

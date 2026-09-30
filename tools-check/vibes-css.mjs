@@ -51,6 +51,14 @@
 //      runwayEdge), and the rings round the calorie head and dashed target
 //      and their guide swatches (shadow.calHead / calTarget). A vibe with a
 //      band (colors.band) gets the status strip generated after its tokens.
+//      Engine v3's two colour roles (the toggle's knob, the greeting's name)
+//      are anchored in ROLES `at` and held by D; its type.tag preset writes
+//      --type-tag-* tokens only where a vibe sets it (v1's is null).
+//   E3 the engine v3 sites: the caps tag's sites in rack.css and auth.css
+//      spend --type-tag-* with v1's literal as the fallback, and the page
+//      modules carry the hooks the contract names ([data-lead], [data-hero],
+//      [data-tag]). A vibe that sets the tag, or a stripe other than 'side',
+//      gets its rules generated after its tokens (tagRules, stripeRules).
 //   C  canaries — the checks above fail on a definition with one colour
 //      changed, on a block with one byte changed and on an anchored site
 //      moved off its token, so a pass means something.
@@ -134,6 +142,10 @@ function cssText(def, role) {
     case 'image':                                                 // a photo band's height (images.<slot>.band), px
       if (typeof v === 'number') return len(v);
       throw new Error(`${role.path}: not a number`);
+    case 'type':                                                  // a preset's key (type.tag.*), spelled by its unit
+      if (typeof v !== 'number') throw new Error(`${role.path}: not a number`);
+      if (role.unit === 'case') return v ? 'uppercase' : 'none';
+      return num(v) + (role.unit || '');
     default: {
       const s = sideOf(v, 'web');
       if (typeof s !== 'string') throw new Error(`${role.path}: not a string`);
@@ -170,13 +182,72 @@ const END = '/* vibes-css:end */';
 const bandRule = id => `:root[data-vibe="${id}"]::before { content: ''; position: fixed; top: 0; left: 0; right: 0; ` +
   'height: var(--safe-top); background: var(--band); pointer-events: none; z-index: 400; }';
 
+/* Engine v3's drawings a definition switches on. Like the strip, each exists
+   only under a vibe whose definition asks for it — v1, and every vibe that
+   leaves them out, gets none, and rack.css and auth.css keep v1's text — and
+   each is one line.
+   The caps tag (type.tag). The small caps outside the blocks that v1 sets in
+   full (size, tracking, case, width, weight) read --type-tag-* in rack.css
+   and auth.css, falling back to v1's literal. These are the sites that have
+   no literal to fall back to:
+     - [data-tag]: a string written in lower case that v1 shows in capitals
+       through a preset (the eyebrows under Fuel's and Steps' figures and the
+       rest the page modules mark, the plate strip's "bar only"). Without a
+       tag it keeps the vibe's own preset, which is no token, so the rule is
+       only here. (0,3,0), to beat a vibe's preset rule for the eyebrow; a
+       vibe's rule written for that one site still wins.
+     - .ai-cost and .cal-legend-item, the two caps sites v1 gives no width or
+       weight (theirs is inherited): the tag's width and weight.
+     - the plate chip's figures and the calendar's day numbers: the tag's size
+       as a floor, never below their own (10px, 12px). :where(), so a vibe's
+       own size for either still wins.
+   A key the preset leaves out is left out here too.
+   The side stripe (shape.stripe). 'side' is v1's drawing — the tour tip's 2px
+   and the Coach sheet's asking bubble's 3px accent stripe down the left — and
+   writes nothing. 'top' moves it to a rule across the top edge, 'keyline' to
+   an outline all round, each shape.keyline.width wide in the accent the
+   stripe was, as native TourOverlay and coach/sheets.jsx draw it from
+   T.shape.stripe. The tip's square corners follow the rule. */
+const TAG_DECLS = [
+  ['size', 'font-size', 'var(--type-tag-size)'],
+  ['ls', 'letter-spacing', 'var(--type-tag-ls)'],
+  ['upper', 'text-transform', 'var(--type-tag-upper)']
+];
+function tagRules(id, def) {
+  const tag = valueOf(def, 'type.tag');
+  if (tag === null || tag === undefined) return [];
+  if (typeof tag !== 'object') throw new Error('type.tag: not { size, wdth, wght, ls, upper }');
+  const S = `:root[data-vibe="${id}"]`, has = k => typeof tag[k] === 'number';
+  const axes = [has('wdth') ? `'wdth' var(--type-tag-wdth)` : null, has('wght') ? `'wght' var(--type-tag-wght)` : null].filter(Boolean);
+  const fvs = axes.length ? `font-variation-settings: ${axes.join(', ')};` : null;
+  const all = [...TAG_DECLS.filter(([k]) => has(k)).map(([, p, v]) => `${p}: ${v};`), fvs].filter(Boolean);
+  const out = [];
+  if (all.length) out.push(`${S} [data-tag] { ${all.join(' ')} }`);
+  if (fvs) out.push(`${S} :where(.ai-cost, .cal-legend-item) { ${fvs} }`);
+  if (has('size')) {
+    out.push(`${S} :where(.plate-chip) { font-size: max(10px, var(--type-tag-size)); }`);
+    out.push(`${S} :where(.cal-daynum) { font-size: max(12px, var(--type-tag-size)); }`);
+  }
+  return out;
+}
+function stripeRules(id, def) {
+  const s = at(def, 'shape.stripe');
+  if (s === undefined || s === 'side') return [];
+  const S = `:root[data-vibe="${id}"]`, both = `${S} .ob-tip, ${S} .coach-bub.ask`;
+  if (s === 'top') return [`${both} { border-left: 0; border-top: var(--shape-keyline-width) solid var(--accent); }`,
+    `${S} .ob-tip { border-radius: 0 0 var(--r-sm) var(--r-sm); }`];
+  if (s === 'keyline') return [`${both} { border: var(--shape-keyline-width) solid var(--accent); }`,
+    `${S} .ob-tip { border-radius: var(--r-sm); }`];
+  throw new Error(`shape.stripe: '${s}' is not 'side', 'top' or 'keyline'`);
+}
+
 function block(id, def) {
   const { out, missing } = tokensOf(def, { fixed: false });
   const lines = out.map(([k, v]) => `  ${k}: ${v};`);
   const cs = sideOf(at(def, 'chrome.colorScheme'), 'web');
   if (typeof cs === 'string') lines.push(`  color-scheme: ${cs};`);
   const band = valueOf(def, 'colors.band');
-  const extra = typeof band === 'string' ? [bandRule(id)] : [];
+  const extra = [...(typeof band === 'string' ? [bandRule(id)] : []), ...tagRules(id, def), ...stripeRules(id, def)];
   return { text: [BEGIN(id), `:root[data-vibe="${id}"] {`, ...lines, '}', ...extra, END].join('\n'), missing };
 }
 
@@ -416,6 +487,56 @@ section('E  every engine v2 site in rack.css spends its role\'s token');
     `all ${ENGINE2.length} engine v2 declarations spend their role's custom property: the W / F / D letters, "+ Drop"'s small blue words, the runway's hatching and edge, the rings round the calorie head and target and their guide swatches`);
 }
 
+/* ================= E3: the engine v3 sites ================= */
+// The caps tag's sites that v1 sets in full: each spends --type-tag-* with
+// v1's literal as the fallback (`var(--type-tag-size, 9px)`), so v1 and every
+// vibe without a tag draw what they drew. .ai-cost and .cal-legend-item set
+// no width or weight in v1 (their tag rule is generated: tagRules above). And
+// the page modules' hooks the contract names: the three lead cards
+// (.card[data-lead]), the three hero figures ([data-hero]) and the preset
+// sites that show a string written in lower case in capitals ([data-tag]).
+const TAG_PROPS = [['font-size', '--type-tag-size'], ['letter-spacing', '--type-tag-ls'], ['text-transform', '--type-tag-upper'],
+  ['font-variation-settings', '--type-tag-wdth'], ['font-variation-settings', '--type-tag-wght']];
+const TAG_SITES = [
+  ['rack.css', '.sync-pip'], ['rack.css', '.trial-bar'], ['rack.css', '.add-tile .tag'], ['rack.css', '.adm-flag'], ['rack.css', '.conf'],
+  ['rack.css', '.group-pill'], ['rack.css', '.mini-stat-l'], ['rack.css', '.chart-sub'], ['rack.css', '.you-since'],
+  ['auth.css', '.gate-sep'], ['auth.css', '.ob-kicker'], ['auth.css', '.ob-item-t'],
+  ['rack.css', '.ai-cost', 3], ['rack.css', '.cal-legend-item', 3]
+];
+function tagSites(sheets) {
+  const errs = [];
+  for (const [file, sel, n = 5] of TAG_SITES) for (const [prop, token] of TAG_PROPS.slice(0, n)) {
+    const decls = siteDecls(sheets[file], sel, prop);
+    if (!decls.length) errs.push(`type.tag: ${file} has no top-level ${sel} { ${prop} }`);
+    else if (!decls.every(v => v.includes(`var(${token}, `))) errs.push(`type.tag: ${file} ${sel} { ${prop}: ${decls.join(' / ')} } does not spend var(${token}, <v1's literal>)`);
+  }
+  return { errs };
+}
+const MARKS = [
+  ['food.js', /card\.dataset\.lead = 'fuelSummary'/, 'Fuel\'s summary is .card[data-lead="fuelSummary"]'],
+  ['steps.js', /card\.dataset\.lead = 'stepsToday'/, 'Steps\' today card is .card[data-lead="stepsToday"]'],
+  ['weight.js', /log\.dataset\.lead = 'weightLog'/, 'Weight\'s log card is .card[data-lead="weightLog"]'],
+  ['food.js', /const big = el\('div', 'load-num num'\);\n(?:.*\n){0,2}\s*big\.dataset\.hero = '';/, 'Fuel\'s summary figure is [data-hero]'],
+  ['steps.js', /const big = el\('div', 'load-num num',[^\n]*\n(?:.*\n){0,2}\s*big\.dataset\.hero = '';/, 'Steps\' today figure is [data-hero]'],
+  ['you.js', /'headline-v num', fmtRate\([^\n]*\)\)\.dataset\.hero = '';[\s\S]{0,300}'headline-v num', '–'\)\)\.dataset\.hero = '';/, 'the Goal\'s .headline-v is [data-hero], with a pace or without'],
+  ['food.js', /'kcal left today'\)\)\.dataset\.tag = '';/, '"kcal left today" / "kcal over target" is [data-tag]'],
+  ['food.js', /'kcal \/ day'\)\)\.dataset\.tag = '';/, 'the targets preview\'s "kcal / day" is [data-tag]'],
+  ['steps.js', /'to go'\)\)\.dataset\.tag = '';/, '"to go" / "goal met" is [data-tag]'],
+  ['weight.js', /' heavier by ' \+ hr\)\)\.dataset\.tag = '';/, '"lb heavier by …" is [data-tag]'],
+  ['weight.js', /' kcal'\)\)\.dataset\.tag = '';/, '"± … kcal" is [data-tag]'],
+  ['water.js', /fmtWater\(goal\)\)\)\.dataset\.tag = '';/, '"ml of …" is [data-tag]'],
+  ['workout.js', /'bar only'\)\)\.dataset\.tag = '';/, '"bar only" is [data-tag]']
+];
+section('E3 every engine v3 site spends its role, and the page modules carry its hooks');
+{
+  const { errs } = tagSites(SHEETS);
+  for (const e of errs) bad(e);
+  expect(!errs.length, `all ${TAG_SITES.length} caps-tag sites spend --type-tag-* with v1's literal as the fallback (${TAG_SITES.reduce((n, s) => n + (s[2] || 5), 0)} declarations)`);
+  for (const [file, re, what] of MARKS) expect(re.test(read(file)), `${file}: ${what}`);
+  const probe = JSON.parse(JSON.stringify(V1)); probe.id = 'probe';
+  expect(!/\[data-tag\]|\.ob-tip|max\(/.test(block('probe', probe).text), 'v1\'s values generate no tag rule and no stripe rule (its tag is null, its stripe side)');
+}
+
 /* ================= C: canaries ================= */
 section('C  canaries — the checks can fail');
 {
@@ -469,10 +590,51 @@ section('C  canaries — the checks can fail');
     /^:root\[data-vibe="probe2"\]::before \{ content: ''; position: fixed; top: 0;.*height: var\(--safe-top\); background: var\(--band\); pointer-events: none;/.test(bandRule('probe2')) &&
     !g.text.includes('::before'),
     'a vibe with a band gets the status strip — one scoped ::before, --safe-top tall, in --band, taking no touches — after its tokens; v1\'s values (no band) get none');
+  // engine v3: a vibe without a knob or a greeting ink takes its own steel and
+  // accent (`or`); one that sets the tag preset gets its five tokens, each
+  // spelled by its unit, and v1's null preset writes none
+  const v3 = JSON.parse(JSON.stringify(V1));
+  v3.id = 'probe3'; delete v3.colors.knob; delete v3.colors.greetName; v3.colors.steel = '#777777'; v3.colors.accent = '#aa5500';
+  v3.type.tag = { size: 11, wdth: 100, wght: 600, ls: 0.06, upper: 1 };
+  v3.shape = { cue: { ink: 'accent' }, chosen: { tick: true }, stripe: 'top' };
+  const g4 = new Map(block('probe3', v3).text.split('\n').slice(2, -2).map(l => { const m = /^ {2}(--[\w-]+): (.*);$/.exec(l); return m ? [m[1], m[2]] : [l, l]; }));
+  expect(g4.get('--knob') === '#777777' && g4.get('--greet-name') === '#aa5500' && g4.get('--type-tag-size') === '11px' && g4.get('--type-tag-ls') === '.06em' &&
+    g4.get('--type-tag-upper') === 'uppercase' && g4.get('--type-tag-wdth') === '100' && g4.get('--type-tag-wght') === '600' &&
+    g4.get('--shape-cue-ink') === '#aa5500' && g4.get('--shape-chosen-tick') === '1' && ![...g4.keys()].some(k => /stripe|slab/.test(k)) &&
+    ![...gen.keys()].some(k => /^--type-/.test(k)),
+    'a vibe without a knob or greeting ink takes its steel and accent; its tag preset writes --type-tag-size / ls / upper / wdth / wght (11px, .06em, uppercase, 100, 600); its cue and chosen params their tokens, its stripe none; v1 writes no --type-* token');
   const e2 = engineSites({ 'rack.css': RACK.replace(/(\.set-idx\.t-W \{[^}]*color: )var\(--tag-ink-w\)/, '$1var(--p-yellow)'), 'auth.css': AUTH });
   expect(e2.errs.length === 1 && /tagInk\.W: rack\.css \.set-idx\.t-W/.test(e2.errs[0]), 'a W badge letter back on --p-yellow fails E, on exactly that site' + (e2.errs.length === 1 ? '' : ' — got: ' + (e2.errs.join('; ') || 'nothing')));
   const e3 = engineSites({ 'rack.css': RACK.replace(/(\.cal-target \{[^}]*)box-shadow: var\(--shadow-cal-target\);\s*/, '$1'), 'auth.css': AUTH });
   expect(e3.errs.length === 1 && /shadow\.calTarget: rack\.css has no top-level \.cal-target \{ box-shadow \}/.test(e3.errs[0]), 'the target ring taken off .cal-target fails E' + (e3.errs.length === 1 ? '' : ' — got: ' + (e3.errs.join('; ') || 'nothing')));
+  // engine v3: a caps site back on its literal, or on the token with no
+  // fallback, fails E3 on exactly that site
+  const t1 = tagSites({ 'rack.css': RACK.replace(/(\.sync-pip \{[^}]*)font-size: var\(--type-tag-size, 9px\)/, '$1font-size: 9px'), 'auth.css': AUTH });
+  expect(t1.errs.length === 1 && /\.sync-pip \{ font-size: 9px \}/.test(t1.errs[0]), '.sync-pip back on a literal 9px fails E3, on exactly that site' + (t1.errs.length === 1 ? '' : ' — got: ' + (t1.errs.join('; ') || 'nothing')));
+  const t2a = tagSites({ 'rack.css': RACK, 'auth.css': AUTH.replace(/(\.ob-kicker \{[^}]*)var\(--type-tag-wght, 700\)/, '$1var(--type-tag-wght)') });
+  expect(t2a.errs.length === 1 && /auth\.css \.ob-kicker \{ font-variation-settings/.test(t2a.errs[0]), '.ob-kicker\'s weight on the token with no v1 fallback fails E3');
+  // the generated rules: a tag writes the four, each key it gives and no
+  // other; a top or keyline stripe writes its two; a stripe it cannot draw
+  // is refused
+  const tg = JSON.parse(JSON.stringify(V1)); tg.id = 'probe4';
+  tg.type.tag = { size: 11, wdth: 100, wght: 600, ls: 0.06, upper: 1 }; tg.shape = { stripe: 'top' };
+  const tl = block('probe4', tg).text.split('\n');
+  const S4 = ':root[data-vibe="probe4"]';
+  expect(tl.includes(`${S4} [data-tag] { font-size: var(--type-tag-size); letter-spacing: var(--type-tag-ls); text-transform: var(--type-tag-upper); font-variation-settings: 'wdth' var(--type-tag-wdth), 'wght' var(--type-tag-wght); }`) &&
+    tl.includes(`${S4} :where(.ai-cost, .cal-legend-item) { font-variation-settings: 'wdth' var(--type-tag-wdth), 'wght' var(--type-tag-wght); }`) &&
+    tl.includes(`${S4} :where(.plate-chip) { font-size: max(10px, var(--type-tag-size)); }`) &&
+    tl.includes(`${S4} :where(.cal-daynum) { font-size: max(12px, var(--type-tag-size)); }`) &&
+    tl.includes(`${S4} .ob-tip, ${S4} .coach-bub.ask { border-left: 0; border-top: var(--shape-keyline-width) solid var(--accent); }`) &&
+    tl[tl.length - 1] === END && tl.indexOf('}') < tl.findIndex(l => l.includes('[data-tag]')),
+    'a vibe with a tag gets the [data-tag], width-and-weight and two floor rules, and with a top stripe its rule across the top, after its tokens');
+  tg.type.tag = { size: 12 }; tg.shape = { stripe: 'keyline' };
+  const tk = block('probe4', tg).text;
+  expect(tk.includes(`${S4} [data-tag] { font-size: var(--type-tag-size); }`) && !tk.includes(':where(.ai-cost') &&
+    tk.includes(`${S4} .ob-tip, ${S4} .coach-bub.ask { border: var(--shape-keyline-width) solid var(--accent); }`) && tk.includes(`${S4} .ob-tip { border-radius: var(--r-sm); }`),
+    'a tag with a size alone spends the size alone; a keyline stripe is an outline all round');
+  tg.shape = { stripe: 'left' };
+  let threw = false; try { block('probe4', tg); } catch (e) { threw = /shape\.stripe/.test(e.message); }
+  expect(threw, 'a stripe other than side, top or keyline is refused');
 }
 
 console.log('\n' + (fails.length ? `${fails.length} of ${checks} checks failed.`

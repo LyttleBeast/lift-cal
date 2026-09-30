@@ -196,8 +196,23 @@ export function sideOf(value, side) {
    `ref: 'color'` marks a value that NAMES a colour role (tagInk, inkOf, the
    shape params' inks and fills): the web token is that role's colour in the
    same definition, and native build() resolves it the same way.
+   `unit` (engine v3, type.tag's web tokens) says how the generator spells a
+   number: 'px', 'em', '' (as it is), or 'case' (1 uppercase, 0 none).
    A list param (shape.rule.head / sub / total: line, gap, line) lands as one
    role per entry, '.0' '.1' '.2', each 0 when the list is shorter.
+
+   ENGINE v3 (the shared asks of the deep and experimental specs) adds more
+   the same way, each with v1's value today or a `dflt` of null — nothing
+   drawn, every site keeping its own v1 literal — so v1 does not move:
+     colors.knob       the toggle's off knob (or: colors.steel)
+     colors.greetName  the name in the You greeting (or: colors.accent)
+     type.hero         the hero figure (or: type.headline)
+     type.tag          the small caps / small-size preset (dflt null), with
+                       its web tokens type.tag.size / ls / upper / wdth / wght
+                       (`unit`: how the generator spells each number)
+     type.pill         the delta pill's figure and arrow (dflt null)
+   and the look params cue.ink, chosen.tick and rank.column as --shape-*
+   tokens, beside stripe and slab.lit, which have none (below).
 
    A path covers everything under it: 'groups' covers groups.chest. The
    `shape` object and the photo slots are carried whole by one role each and
@@ -317,17 +332,21 @@ const GROUP_ROLES = { chest: 'pRed', back: 'pBlue', legs: 'pYellow', shoulders: 
    key it leaves out takes vocab.js's default, which `dflt` repeats here —
    this file imports nothing — and the verifiers hold the two equal). A colour
    param names a colour role; a number is px; a list is its entries, 0 past
-   its end; lead.keyline is 1 or 0. rule.place picks which rule a look draws,
-   not a value a rule can spend, so it has no token: it reaches native through
-   T.shape with the rest. v1 names no look, so nothing spends any of these in
-   v1, and rack.css's :root holds the defaults. */
+   its end; a switch (lead.keyline, chosen.tick, rank.column) is 1 or 0.
+   rule.place, stripe and slab.lit each pick which drawing a site makes, not
+   a value a drawing can spend, so they have no token: they reach native
+   through T.shape with the rest, and a vibe's own stylesheet draws its
+   choice. v1 names no look, so nothing spends any of these in v1, and
+   rack.css's :root holds the defaults. */
 const SHAPE_PARAMS = [
   ['rule.ink', 'knurl'], ['rule.hair', 1], ['rule.head', [2]], ['rule.sub', [2]], ['rule.total', [2]],
   ['leader.ink', 'steel'], ['leader.dot', 1.5], ['leader.pitch', 4], ['leader.min', 16],
   ['band.fill', 'raised'], ['band.ink', 'chalk'], ['band.height', 30],
   ['gutter', 2],
   ['keyline.ink', 'chalk'], ['keyline.width', 1],
-  ['lead.keyline', false]
+  ['lead.keyline', false],
+  // engine v3
+  ['cue.ink', 'chalk'], ['chosen.tick', false], ['rank.column', false]
 ];
 const SHAPE_WEB = p => '--shape-' + p.split('.').map(s => s.replace(/[A-Z]/g, c => '-' + c.toLowerCase())).join('-');
 const SHAPE = SHAPE_PARAMS.flatMap(([p, d]) => Array.isArray(d)
@@ -371,6 +390,18 @@ export const ROLES = deepFreeze([
   // vibe keeps it dark. null is no strip — v1, and any dark vibe. Native
   // ignores it: its <StatusBar style> is chrome.statusBar.
   R('colors.band', 'color', '--band', null, { dflt: null }),
+  // Engine v3. The toggle's off knob (.tog::after; native Switch thumbColor
+  // when off) — steel in v1 and in any definition without one, which on a
+  // vibe's grip track may not reach 3:1. And the name in the You greeting
+  // (.you-greet-name; native Hero), the accent in v1 and in any definition
+  // without one, for a vibe that sets its headline in one ink. Each site
+  // spends its role's token at the base commits' split source (from).
+  R('colors.knob', 'color', '--knob', 'colors.knob', { or: 'colors.steel',
+    from: { web: '--steel', native: 'colors.steel' },
+    at: { web: ['rack.css', '.tog::after', 'background'], native: 'src/ui/coach/settings.jsx:128' } }),
+  R('colors.greetName', 'color', '--greet-name', 'colors.greetName', { or: 'colors.accent',
+    from: { web: '--p-yellow', native: 'colors.pYellow' },
+    at: { web: ['rack.css', '.you-greet-name', 'color'], native: 'src/ui/you/Hero.jsx:112' } }),
   // AiWarn's border and wash (native only; the web's .ai-warn is warn at the
   // same alphas) are alpha.yellow doing warn's job.
   ...['yellow', 'red', 'blue', 'green', 'ground', 'accent', 'danger', 'warn'].map(k => R('alpha.' + k, 'alpha', null, 'alpha.' + k,
@@ -388,6 +419,38 @@ export const ROLES = deepFreeze([
   // one preset a look can set it in. No v1 site spends it: v1 sets each at
   // its own literal. A definition without one takes its own note.
   R('type.meta', 'type', null, 'text.meta', { or: 'type.note' }),
+  // Engine v3. The hero figure: the one figure a tab's headline look (vocab
+  // headline · solo) sets alone at a site marked hero. No v1 site spends it,
+  // so v1's is headline's arguments, and a definition without one takes its
+  // own headline. The web sets it in the vibe's stylesheet (type is literal
+  // there, §5.1): no token.
+  R('type.hero', 'type', null, 'text.hero', { or: 'type.headline' }),
+  // The small caps and small sizes outside the blocks — the add tile's tag,
+  // the sync pip, the trial bar, the admin flags, the confidence and AI cost
+  // labels, the group pill, auth.css's caps, the mini-stat labels, the chart
+  // sub-heads, the member-since line, the plate chip's figures, the calendar's
+  // legend and day numbers — and the preset sites that show a string authored
+  // in lower case as caps ('to go', 'kcal left today', 'kcal / day', 'bar
+  // only'). null — v1, and any definition without one — is nothing: every
+  // site keeps its own v1 literal size, case, tracking, width and weight.
+  // A vibe that sets it gives { size, wdth, wght, ls, upper } and no colour
+  // (each site keeps its own ink). A caps site spends all five; a figure site
+  // (the plate chip, the day numbers) its size alone, never below its own.
+  // The web spends it as the five tokens below, each written only when the
+  // preset gives that key, at sites that read var(--type-tag-size, <v1's
+  // literal>) and so on; native reads T.text.tag ?? the site's literal.
+  R('type.tag', 'type', null, 'text.tag', { dflt: null }),
+  R('type.tag.size', 'type', '--type-tag-size', null, { dflt: null, unit: 'px' }),
+  R('type.tag.ls', 'type', '--type-tag-ls', null, { dflt: null, unit: 'em' }),
+  R('type.tag.upper', 'type', '--type-tag-upper', null, { dflt: null, unit: 'case' }),
+  R('type.tag.wdth', 'type', '--type-tag-wdth', null, { dflt: null, unit: '' }),
+  R('type.tag.wght', 'type', '--type-tag-wght', null, { dflt: null, unit: '' }),
+  // The delta pill's figure and arrow (rack.css .delta-pill .delta-v / .delta-a,
+  // literal 11.5 / 10px; native Kpi's delta), which kpi · word re-sets where
+  // it keeps its pills.
+  // null is the literal. The look is the vibe's stylesheet on the web: no
+  // token; native reads T.text.pill ?? the literal.
+  R('type.pill', 'type', null, 'text.pill', { dflt: null }),
   R('loadNum', 'type', null, 'loadNum'),
   R('face.family', 'face', null, 'face', { input: 'family' }),
   R('face.keys', 'face', null, 'face', { input: 'keys', note: 'the useFonts keys in app/_layout.jsx; face() returns one of them' }),

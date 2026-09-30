@@ -29,9 +29,10 @@
 //   dashed target (shadow.calHead / calTarget), the W badge's letter in `warn`
 //   (tagInk), the runway hatch and edge in `knurl` (tint.runway /
 //   runwayEdge), face.bands (native theme.js build() gives a width range its
-//   own family) and an empty `shape` (a simple vibe draws no deep look, so it
-//   reads no look param). The greeting's name in ink is still a request in
-//   the spec, not a key: the contract has no role for it.
+//   own family) and one look param, shape.cue.ink (calCell · open draws
+//   today's keyline in it, and Chalk's is the accent). The greeting's name in
+//   ink is still a request in the spec, not a key: the contract has no role
+//   for it.
 
 const deepFreeze = o => {
   if (o && typeof o === 'object' && !Object.isFrozen(o)) {
@@ -81,9 +82,12 @@ export default deepFreeze({
     addTile: 'flat',       // no washes, no border; the lit tag and icon well on `raised`
     sessionChrome: 'flat'  // no glass, no shadows
   },
-  // The look params (vocab.js `params`). Every look above is v1 or
-  // `shape`-grade, and none of those reads a param, so Chalk sets none.
-  shape: {},
+  // The look params (vocab.js `params`). One look above reads one:
+  // calCell · open draws today's keyline in shape.cue.ink, whose default is
+  // chalk (the ink). Chalk's today is mulberry — the accent's one job, as v1's
+  // today is its accent — so the param names the accent, the colour the
+  // keyline has always been drawn in here.
+  shape: { cue: { ink: 'accent' } },
 
   colors: {
     /* ---- native T.colors, key for key ---- */

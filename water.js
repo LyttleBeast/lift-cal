@@ -155,7 +155,7 @@ export function renderWater(editable = true) {
   big.style.color = frac >= 1 ? 'var(--good)' : 'var(--p-blue)';
   right.appendChild(big);
   right.appendChild(el('div', 'eyebrow',
-    (UNITS[settings.unit] || UNITS.ml).label + ' of ' + fmtWater(goal)));
+    (UNITS[settings.unit] || UNITS.ml).label + ' of ' + fmtWater(goal))).dataset.tag = '';
 
   const left = Math.max(0, goal - total);
   right.appendChild(el('div', 'water-left num',

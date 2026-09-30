@@ -390,7 +390,9 @@ const unquote = s => String(s == null ? '' : s).trim().replace(/^(['"])([\s\S]*)
    fuelSummary .card.fuel-sum, coachCard .coach-card (fixed 190 / 164: a band
    would push its words out), and — with no class of their own, which v1's
    DOM keeps — stepsToday #view-steps .cal-hd + .card and weightLog
-   #view-weight .cal-hd + .card; startWorkout is a button, not a box. */
+   #view-weight .cal-hd + .card; startWorkout is a button, not a box. Since
+   engine v3 the three lead cards also say which they are, as
+   .card[data-lead="fuelSummary" | "stepsToday" | "weightLog"]. */
 export function imageUrl(id, slot) {
   if (!own(DEFS, id) || !own(DEFS[id].images, slot)) return null;
   const v = DEFS[id].images[slot];

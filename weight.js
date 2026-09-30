@@ -90,6 +90,7 @@ export async function render() {
 
   // ---- log card ----
   const log = el('div', 'card');
+  log.dataset.lead = 'weightLog';       // the tab's lead card (a vibe's hook; VOCAB card)
   const row = el('div', 'qty-row');
   const inp = el('input');
   inp.type = 'number'; inp.inputMode = 'decimal'; inp.step = '0.1';
@@ -337,7 +338,7 @@ function renderTOD(u) {
     big.style.fontSize = '28px';
     big.style.color = 'var(--p-yellow)';
     card.appendChild(big);
-    card.appendChild(el('div', 'eyebrow', unitW(u) + ' heavier by ' + hr));
+    card.appendChild(el('div', 'eyebrow', unitW(u) + ' heavier by ' + hr)).dataset.tag = '';
 
     const parts = ['Every weigh-in is corrected by its own number before it counts toward the trend'];
     if (m.spread != null) parts.push('your readings span ' + labelW(m.spread, u) + ' within a day on average');
@@ -401,7 +402,7 @@ async function renderTDEE(s, u, t, m) {
   // noise; \u00b1 95 says plainly how much of this is measurement.
   if (m.se) {
     const ci = Math.round(1.96 * m.se / 5) * 5;
-    card.appendChild(el('div', 'eyebrow', '\u00b1 ' + ci.toLocaleString() + ' kcal'));
+    card.appendChild(el('div', 'eyebrow', '\u00b1 ' + ci.toLocaleString() + ' kcal')).dataset.tag = '';
   }
 
   card.appendChild(noteEl(

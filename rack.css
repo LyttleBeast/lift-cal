@@ -103,6 +103,19 @@
   --ink-of-p-chrome: #a8aeb8;
   --tint-runway: rgba(20,22,26,.55);
   --tint-runway-edge: rgba(20,22,26,.7);
+  /* Engine v3: the toggle's off knob and the name in the You greeting, each
+     the colour that drew it (steel, the accent). The type.tag tokens
+     (--type-tag-*) are not here on purpose: v1's preset is null, and every
+     site that reads one falls back to its own literal — the small caps
+     outside the blocks (.sync-pip, .trial-bar, .add-tile .tag, .adm-flag,
+     .conf, .ai-cost, .group-pill, .mini-stat-l, .chart-sub, .you-since,
+     .cal-legend-item; auth.css's .gate-sep, .ob-kicker, .ob-item-t). The
+     sites that have no v1 literal to fall back to — a preset site marked
+     [data-tag], a figure that takes the tag's size as a floor — get their
+     rule only in a vibe that sets the preset, generated after its tokens
+     (tools-check/vibes-css.mjs). */
+  --knob: #8d939f;
+  --greet-name: #f0be1e;
   /* The look params (vocab.js `params`) at their defaults. v1 names no look,
      so nothing in v1 reads them; a list is one token per entry. */
   --shape-rule-ink: #333844;
@@ -127,6 +140,9 @@
   --shape-keyline-ink: #f2f0eb;
   --shape-keyline-width: 1px;
   --shape-lead-keyline: 0;
+  --shape-cue-ink: #f2f0eb;
+  --shape-chosen-tick: 0;
+  --shape-rank-column: 0;
 
   /* Shadows and glass. Each token is the whole value, spelled as the rule
      that spends it spelled it, with its colour written out rather than a
@@ -812,9 +828,9 @@ body.peeking .view.active { padding-bottom: 65px; }
 /* ============ SYNC PIP ============ */
 .sync-pip {
   position: fixed; top: calc(8px + var(--safe-top)); right: 10px;
-  z-index: 80; font-size: 9px; letter-spacing: .1em; text-transform: uppercase;
+  z-index: 80; font-size: var(--type-tag-size, 9px); letter-spacing: var(--type-tag-ls, .1em); text-transform: var(--type-tag-upper, uppercase);
   color: var(--dim); display: flex; align-items: center; gap: 5px;
-  font-variation-settings: 'wdth' 88, 'wght' 700;
+  font-variation-settings: 'wdth' var(--type-tag-wdth, 88), 'wght' var(--type-tag-wght, 700);
 }
 .sync-pip i { width: 6px; height: 6px; border-radius: var(--r-round); background: var(--good); display: block; }
 .sync-pip.off i { background: var(--warn); }
@@ -831,8 +847,8 @@ body.peeking .view.active { padding-bottom: 65px; }
   background: rgba(var(--warn-rgb),.10);
   border: 1px solid rgba(var(--warn-rgb),.34);
   color: var(--warn);
-  font-size: 9px; letter-spacing: .1em; text-transform: uppercase;
-  font-variation-settings: 'wdth' 88, 'wght' 700;
+  font-size: var(--type-tag-size, 9px); letter-spacing: var(--type-tag-ls, .1em); text-transform: var(--type-tag-upper, uppercase);
+  font-variation-settings: 'wdth' var(--type-tag-wdth, 88), 'wght' var(--type-tag-wght, 700);
 }
 
 /* ============ DESKTOP ============ */
@@ -977,8 +993,8 @@ body.peeking .view.active { padding-bottom: 65px; }
 .cal-legend { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0 18px; }
 .cal-legend-item {
   display: flex; align-items: center; gap: 5px;
-  font-size: 10px; color: var(--dim);
-  letter-spacing: .06em; text-transform: uppercase;
+  font-size: var(--type-tag-size, 10px); color: var(--dim);
+  letter-spacing: var(--type-tag-ls, .06em); text-transform: var(--type-tag-upper, uppercase);
 }
 .cal-legend-item i { width: 12px; height: 3px; border-radius: var(--r-hair); display: block; }
 
@@ -1119,9 +1135,9 @@ body.peeking .view.active { padding-bottom: 65px; }
   display: inline-flex; align-items: center; gap: 6px;
   padding: 5px 11px; border-radius: var(--r-pill);
   background: var(--bar); border: 1px solid var(--collar);
-  font-size: 10px; color: var(--steel);
-  letter-spacing: .1em; text-transform: uppercase;
-  font-variation-settings: 'wdth' 88, 'wght' 700;
+  font-size: var(--type-tag-size, 10px); color: var(--steel);
+  letter-spacing: var(--type-tag-ls, .1em); text-transform: var(--type-tag-upper, uppercase);
+  font-variation-settings: 'wdth' var(--type-tag-wdth, 88), 'wght' var(--type-tag-wght, 700);
   margin-bottom: 14px;
 }
 .group-pill i { width: 7px; height: 7px; border-radius: var(--r-plate); }
@@ -1129,6 +1145,12 @@ body.peeking .view.active { padding-bottom: 65px; }
 /* ================================================================
    ============ CHARTS ============
    ================================================================ */
+/* The hooks chart · ink needs are already here, with nothing added to the
+   pinned analytics.js: the area wash under lineChart's line and a sparkline's
+   is the one unclassed path[fill^="url(#"] in its svg (a look with no area
+   sets fill: none on it); the caps are .chart-line / .spark-line /
+   .ring-fill / .donut-seg's stroke-linecap, which CSS beats as an attribute;
+   a legend key is .legend-item i, 9 × 9 here, 12 × 3 as a stroke. */
 .chart { width: 100%; height: auto; display: block; overflow: visible; }
 
 .chart-grid { stroke: var(--collar); stroke-width: 1; stroke-dasharray: 2 5; opacity: .7; }
@@ -1501,8 +1523,8 @@ body.peeking .view.active { padding-bottom: 65px; }
 .you-gear:active { background: var(--raised); color: var(--chalk); transform: scale(.92); }
 
 .you-since {
-  font-size: 10px; letter-spacing: .1em; text-transform: uppercase;
-  color: var(--dim); font-variation-settings: 'wdth' 88, 'wght' 700;
+  font-size: var(--type-tag-size, 10px); letter-spacing: var(--type-tag-ls, .1em); text-transform: var(--type-tag-upper, uppercase);
+  color: var(--dim); font-variation-settings: 'wdth' var(--type-tag-wdth, 88), 'wght' var(--type-tag-wght, 700);
   margin: 12px 0 16px;
 }
 
@@ -1587,8 +1609,8 @@ body.peeking .view.active { padding-bottom: 65px; }
   flex: none;
   padding: 2px 7px; border-radius: var(--r-pill);
   border: 1px solid var(--collar); color: var(--dim);
-  font-size: 9px; letter-spacing: .1em; text-transform: uppercase;
-  font-variation-settings: 'wdth' 88, 'wght' 700;
+  font-size: var(--type-tag-size, 9px); letter-spacing: var(--type-tag-ls, .1em); text-transform: var(--type-tag-upper, uppercase);
+  font-variation-settings: 'wdth' var(--type-tag-wdth, 88), 'wght' var(--type-tag-wght, 700);
 }
 .adm-flag.on  { border-color: rgba(var(--good-rgb),.45);  color: var(--good); }
 .adm-flag.off { border-color: rgba(var(--bad-rgb),.45);  color: var(--bad); }
@@ -1731,10 +1753,10 @@ body.peeking .view.active { padding-bottom: 65px; }
 .add-tile .d { font-size: 11px; color: var(--dim); line-height: 1.38; }
 .add-tile .tag {
   position: absolute; top: 11px; right: 11px;
-  font-size: 8.5px; letter-spacing: .14em; text-transform: uppercase;
+  font-size: var(--type-tag-size, 8.5px); letter-spacing: var(--type-tag-ls, .14em); text-transform: var(--type-tag-upper, uppercase);
   color: var(--knockout); background: var(--accent);
   padding: 2px 6px; border-radius: var(--r-pill);
-  font-variation-settings: 'wdth' 88, 'wght' 800;
+  font-variation-settings: 'wdth' var(--type-tag-wdth, 88), 'wght' var(--type-tag-wght, 800);
 }
 /* The photo tile is the reason this menu exists, so it gets the plate. */
 .add-tile.hero {
@@ -1810,8 +1832,8 @@ body.peeking .view.active { padding-bottom: 65px; }
   display: inline-flex; align-items: center; gap: 7px;
   margin-top: 10px; padding: 4px 11px 4px 9px;
   border-radius: var(--r-pill); border: 1px solid var(--collar);
-  font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase;
-  color: var(--steel); font-variation-settings: 'wdth' 88, 'wght' 700;
+  font-size: var(--type-tag-size, 10.5px); letter-spacing: var(--type-tag-ls, .1em); text-transform: var(--type-tag-upper, uppercase);
+  color: var(--steel); font-variation-settings: 'wdth' var(--type-tag-wdth, 88), 'wght' var(--type-tag-wght, 700);
 }
 .conf i { width: 7px; height: 7px; border-radius: var(--r-round); flex-shrink: 0; }
 
@@ -1852,8 +1874,8 @@ body.peeking .view.active { padding-bottom: 65px; }
 .ask-opt .ob-choice-t { overflow-wrap: anywhere; }
 
 .ai-cost {
-  font-size: 10px; color: var(--dim);
-  letter-spacing: .08em; text-transform: uppercase;
+  font-size: var(--type-tag-size, 10px); color: var(--dim);
+  letter-spacing: var(--type-tag-ls, .08em); text-transform: var(--type-tag-upper, uppercase);
   text-align: center; margin-top: 12px;
 }
 
@@ -1971,8 +1993,8 @@ body.peeking .view.active { padding-bottom: 65px; }
 
 /* a small heading inside a card, between two pictures */
 .chart-sub {
-  font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--dim);
-  margin: 14px 0 6px; font-variation-settings: 'wdth' 88, 'wght' 700;
+  font-size: var(--type-tag-size, 10px); letter-spacing: var(--type-tag-ls, .12em); text-transform: var(--type-tag-upper, uppercase); color: var(--dim);
+  margin: 14px 0 6px; font-variation-settings: 'wdth' var(--type-tag-wdth, 88), 'wght' var(--type-tag-wght, 700);
 }
 /* The third judgement, for the weight card's rate: the wrong way for the
    stated goal is a caution, not a failure — a pound up on a cut is a week to
@@ -2036,8 +2058,8 @@ body.peeking .view.active { padding-bottom: 65px; }
 .mini-stat { background: var(--well); border: 1px solid var(--collar); border-radius: var(--r-sm); padding: 7px 8px; min-width: 0; }
 .mini-stat-v { font-size: 14px; line-height: 1; font-variation-settings: 'wdth' 96, 'wght' 800;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mini-stat-l { font-size: 8.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--dim); margin-top: 4px;
-  font-variation-settings: 'wdth' 88, 'wght' 700; }
+.mini-stat-l { font-size: var(--type-tag-size, 8.5px); letter-spacing: var(--type-tag-ls, .1em); text-transform: var(--type-tag-upper, uppercase); color: var(--dim); margin-top: 4px;
+  font-variation-settings: 'wdth' var(--type-tag-wdth, 88), 'wght' var(--type-tag-wght, 700); }
 
 /* ---------- Fuel's calorie bar: a window, not a ruler from zero ----------
    The runway is the compressed stretch below the window, the dashed mark is
@@ -2079,6 +2101,9 @@ body.peeking .view.active { padding-bottom: 65px; }
 .delta-pill.up   { background: rgba(var(--good-rgb),.16); }
 .delta-pill.down { background: rgba(var(--bad-rgb),.16); }
 .delta-pill.warn { background: rgba(var(--warn-rgb),.16); }
+/* The pill's figure and arrow are type.pill's web site (engine v3). Its web
+   side is null, like the other type roles: v1 and a vibe without one keep
+   these literals, and a vibe that gives one sets both in its own sheet. */
 .delta-pill .delta-v { font-size: 11.5px; }
 .delta-pill .delta-a { font-size: 10px; }
 .kpi-prev { font-size: 10.5px; color: var(--dim); margin-top: 4px; letter-spacing: .02em; }
@@ -2191,7 +2216,7 @@ body.peeking .view.active { padding-bottom: 65px; }
   font-size: 27px; line-height: 1.05; letter-spacing: -.02em;
   font-variation-settings: 'wdth' 100, 'wght' 800;
 }
-.you-greet-name { color: var(--accent); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.you-greet-name { color: var(--greet-name); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .you-hero .you-sub { margin-top: 6px; }
 
 /* Hero alignment with the two-line greeting: avatar and gear sit level
@@ -2433,7 +2458,7 @@ body.peeking .view.active { padding-bottom: 65px; }
 .tog::after {
   content: ''; position: absolute; top: 3px; left: 3px;
   width: 20px; height: 20px; border-radius: var(--r-round);
-  background: var(--steel);
+  background: var(--knob);
   transition: transform var(--fast) var(--ease), background var(--fast) var(--ease);
 }
 .tog.on { background: rgba(var(--accent-rgb),.28); }

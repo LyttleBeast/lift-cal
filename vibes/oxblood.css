@@ -22,6 +22,9 @@
   --shape-keyline-ink: #f3ece2;
   --shape-keyline-width: 1px;
   --shape-lead-keyline: 0;
+  --shape-cue-ink: #f3ece2;
+  --shape-chosen-tick: 0;
+  --shape-rank-column: 0;
   --rack: #1a0f11;
   --bar: #241518;
   --collar: #352125;
@@ -55,6 +58,8 @@
   --track: #352125;
   --grip: #7c5d62;
   --faint: #9c8a85;
+  --knob: #f3ece2;
+  --greet-name: #a8d8ff;
   --tint-runway: rgba(26,15,17,.55);
   --tint-runway-edge: rgba(26,15,17,.7);
   --font: 'oxblood-schibsted', 'Archivo', system-ui, -apple-system, sans-serif;
@@ -370,13 +375,6 @@
 [data-vibe="oxblood"] .add-tile.lit .ic,
 [data-vibe="oxblood"] .add-tile.lit .tag { background: var(--raised); }
 [data-vibe="oxblood"] .add-tile .tag { border-radius: var(--r-chip); }
-
-/* A switch's off knob (rack.css .tog::after): chalk, not steel. grip has to
-   stay light enough for the sheet's grab handle (3.01 on bar), and steel on
-   that grip is 2.61; chalk is 4.97. :not(.on), so the rule never outranks
-   .tog.on::after and the on knob keeps its accent. Native draws the same knob
-   from src/state/vibe.js's oxblood entry (`toggle`). */
-[data-vibe="oxblood"] .tog:not(.on)::after { background: var(--chalk); }
 
 /* ---------- tints rack.css writes as literal alphas ---------- */
 

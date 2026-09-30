@@ -22,6 +22,9 @@
   --shape-keyline-ink: #f4f0e8;
   --shape-keyline-width: 1px;
   --shape-lead-keyline: 0;
+  --shape-cue-ink: #f4f0e8;
+  --shape-chosen-tick: 0;
+  --shape-rank-column: 0;
   --rack: #0a183b;
   --bar: #0f223f;
   --collar: #1d3463;
@@ -55,6 +58,8 @@
   --track: #1d3463;
   --grip: #6a80bb;
   --faint: #8f9eb9;
+  --knob: #b3bfd6;
+  --greet-name: #acdc9c;
   --tint-runway: rgba(10,24,59,.55);
   --tint-runway-edge: rgba(10,24,59,.7);
   --font: 'navy-overpass', 'Archivo', system-ui, -apple-system, sans-serif;
