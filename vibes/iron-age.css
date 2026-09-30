@@ -792,6 +792,10 @@
   font-feature-settings: 'tnum' 1;
 }
 [data-vibe="iron-age"] .feel-grid .coach-chip { padding-left: 0; padding-right: 0; }
+/* The five strengths fill one line, the long one given its share, rather
+   than wrapping four and one: the blanks a form has, all on one rule. */
+[data-vibe="iron-age"] .feel-steps { display: grid; grid-template-columns: minmax(0, 1.9fr) repeat(4, minmax(0, 1fr)); gap: 8px; }
+[data-vibe="iron-age"] .feel-steps .coach-chip { padding-left: 0; padding-right: 0; }
 [data-vibe="iron-age"] .feel-grid .coach-chip.on,
 [data-vibe="iron-age"] .feel-steps .coach-chip.on {
   background: var(--inverse);
