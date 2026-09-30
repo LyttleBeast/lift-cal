@@ -48,11 +48,13 @@ import NAVY from './vibes/defs/navy.js';
 import NAVY_ICONS from './vibes/icons/navy.js';
 import OXBLOOD from './vibes/defs/oxblood.js';
 import OXBLOOD_ICONS from './vibes/icons/oxblood.js';
+import LEDGER from './vibes/defs/ledger.js';
+import LEDGER_ICONS from './vibes/icons/ledger.js';
 
 /* Every vibe's definition and every icon set, by id. A new vibe adds its
    imports and its entries here, beside v1's. */
-const DEFS = { v1: V1, chalk: CHALK, navy: NAVY, oxblood: OXBLOOD };
-const ICON_SETS = { v1: V1_ICONS, chalk: CHALK_ICONS, navy: NAVY_ICONS, oxblood: OXBLOOD_ICONS };
+const DEFS = { v1: V1, chalk: CHALK, navy: NAVY, oxblood: OXBLOOD, ledger: LEDGER };
+const ICON_SETS = { v1: V1_ICONS, chalk: CHALK_ICONS, navy: NAVY_ICONS, oxblood: OXBLOOD_ICONS, ledger: LEDGER_ICONS };
 
 const KEY = 'rack:vibe';
 
