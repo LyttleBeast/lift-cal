@@ -586,6 +586,8 @@
   border-color: var(--knurl); border-radius: var(--r-plate);
 }
 [data-vibe="ledger"] ::placeholder { color: var(--dim); opacity: 1; }
+/* The search's sticky strip takes the ground it sticks over. */
+[data-vibe="ledger"] .picker-search { background: var(--ledger-ground, var(--rack)); }
 
 /* ---------- toast · strip ----------
    A cream slip the content's width, square, the words flush left in green
@@ -1096,6 +1098,18 @@
 [data-vibe="ledger"] .wpe-del { border-color: var(--knurl); border-radius: var(--r-sm); }
 [data-vibe="ledger"] .water-pct,
 [data-vibe="ledger"] .water-left { font-size: 13px; }
+
+/* ---------- targets at least v1's ----------
+   Manuale sets a few glyph and word buttons narrower than Archivo did; the
+   fit run (320 and 390) measured each against v1, and these hold v1's
+   width. The mini stat's figure gets its cell's right padding, so "48.5k"
+   is never cut at 320 (v1 cuts it there). */
+[data-vibe="ledger"] .wk-coach { min-width: 87px; justify-content: center; }
+[data-vibe="ledger"] .back-btn { min-width: 39px; }
+[data-vibe="ledger"] .install-x { min-width: 27px; }
+[data-vibe="ledger"] .ex-menu { min-width: 31px; }
+[data-vibe="ledger"] .card-why { min-width: 22px; }
+[data-vibe="ledger"] .mini-stat { padding-right: 0; }
 
 /* ---------- the trial bar, the owner's flags: square, as authored ---------- */
 [data-vibe="ledger"] .trial-bar { border-radius: var(--r-sm); }
