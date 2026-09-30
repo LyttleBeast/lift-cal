@@ -338,6 +338,9 @@
   font-size: var(--type-tag-size); letter-spacing: var(--type-tag-ls);
   font-variation-settings: 'wdth' 100, 'wght' var(--type-tag-wght);
 }
+/* A card straight after a note (the admin panel's lists) had the box's own
+   edge to part them; with no box, space does it. */
+[data-vibe="clear-sky"] .note + .card { margin-top: 20px; }
 /* Two cards shoulder to shoulder (You's steps and water): no bottom space in
    the pair, and the gutter wide enough that two rules read as two. */
 [data-vibe="clear-sky"] .you-pair { column-gap: 18px; }
@@ -374,7 +377,7 @@
 [data-vibe="clear-sky"] .stat,
 [data-vibe="clear-sky"] .mini-stat {
   background: transparent; border-color: transparent; border-radius: 0;
-  padding: 2px 0 2px 9px;
+  padding: 2px 0 10px 9px;   /* v1's 10 under the label, so a head below keeps its air */
 }
 [data-vibe="clear-sky"] .stat:first-child,
 [data-vibe="clear-sky"] .mini-stat:first-child { padding-left: 0; }
@@ -650,9 +653,13 @@
 [data-vibe="clear-sky"] .ring-fill,
 [data-vibe="clear-sky"] .donut-seg,
 [data-vibe="clear-sky"] .st-ring circle { stroke-linecap: square; }
-/* chart text re-set to 11 at least (v1 has 7.5, 9 and 10), untracked */
+/* Chart text, untracked and heavier than v1's. The spec asks for 11 at
+   least; at 11 a nine-week bar chart's dates and values ("Aug 16Aug 23")
+   run into each other in the pinned module's 36-unit slots, so the axis and
+   bar values are 10 at v1's narrow width (wdth 88), with room between every
+   label; the peak label, which stands alone, is 11. */
 [data-vibe="clear-sky"] .chart-axis,
-[data-vibe="clear-sky"] .chart-barval,
+[data-vibe="clear-sky"] .chart-barval { font-size: 10px; letter-spacing: 0; font-variation-settings: 'wdth' 88, 'wght' 600; }
 [data-vibe="clear-sky"] .chart-peak-lbl { font-size: 11px; letter-spacing: 0; font-variation-settings: 'wdth' 100, 'wght' 600; }
 [data-vibe="clear-sky"] .legend-item i { width: 12px; height: 3px; border-radius: 0; }
 [data-vibe="clear-sky"] .vol-track,
