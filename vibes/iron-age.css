@@ -999,6 +999,10 @@
 [data-vibe="iron-age"] .rt-go .glyph { width: 16px; height: 16px; vertical-align: -3px; }
 [data-vibe="iron-age"] .ex-del .glyph { width: 13px; height: 13px; vertical-align: -2px; }
 [data-vibe="iron-age"] .ex-menu .glyph { width: 18px; height: 18px; vertical-align: -3px; }
+/* The drawn ⋯ is shorter than the 18px text line it replaces, so the button
+   keeps v1's own height (4 + the line + 4, 33 tall) and never shrinks as a
+   target. A button centres what it holds. */
+[data-vibe="iron-age"] .ex-menu { min-height: 33px; }
 
 /* Swipe to delete. The rows lie on the page, so the front takes no ground,
    and the Indian-red panel is only there while a row is pulled aside. */
