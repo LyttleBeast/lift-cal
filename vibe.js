@@ -39,7 +39,7 @@
 // before anyone is signed in, and purgeDevice() and lsKey() never touch it.
 // v1 is its absence too. The account's own copy (settings/vibe) is store.js's.
 
-import { normVibe, ROLES, DEFAULT, valueOf } from './vibes/defs/index.js';
+import { normVibe, ROLES, DEFAULT, valueOf, arrange } from './vibes/defs/index.js';
 import V1 from './vibes/defs/v1.js';
 import V1_ICONS from './vibes/icons/v1.js';
 import IRON_AGE from './vibes/defs/iron-age.js';
@@ -268,6 +268,68 @@ export function tailpiece(screen) {
 export function tail(parent, screen) {
   const t = parent ? tailpiece(screen) : null;
   if (t) parent.appendChild(t);
+  return parent;
+}
+
+/* ---------- composition (V59 §12) ----------
+   A vibe that is experimental may re-arrange the top-level blocks of the ten
+   screens vocab.js `compose` names, and draw some of them together as one
+   board. Nothing here draws anything: a screen builds its blocks in v1's order
+   exactly as before, tags each with blk(), and ends with composeScreen(),
+   which moves the DOM nodes (never CSS order, so reading and focus order
+   follow what is seen) to the order index.js arrange() hands back.
+
+   With v1 — or any vibe whose compose is {}, or a screen written
+   { fallback: true } — blk() returns its node untouched and composeScreen()
+   returns at once: the same nodes, in the same order, with no attribute and
+   no wrapper added. Only a composed screen carries data-block, and a group's
+   wrapper is [data-group]. The dock, the tailpiece and whatever floats are not
+   blocks and are never passed. */
+function composeOf(screen) {
+  const c = def().compose;
+  const e = c && typeof c === 'object' && own(c, screen) ? c[screen] : null;
+  return e && e.fallback === false ? c : null;
+}
+
+export function blk(screen, name, node) {
+  if (node && node.dataset && composeOf(screen)) node.dataset.block = name;
+  return node;
+}
+
+export function composeScreen(screen, parent) {
+  const c = parent ? composeOf(screen) : null;
+  if (!c) return parent;
+  try {
+    const nodes = [...parent.children].filter(n => n.dataset && n.dataset.block);
+    if (nodes.length < 2) return parent;
+    const runs = new Map();
+    let prev = null;
+    for (const n of nodes) {
+      const k = n.dataset.block;
+      // a name's nodes are one run; a name met twice apart is a screen this
+      // cannot read, and it stays in v1's order
+      if (!runs.has(k)) runs.set(k, []);
+      else if (prev !== k) return parent;
+      runs.get(k).push(n);
+      prev = k;
+    }
+    const names = [...runs.keys()];
+    const { order, groups } = arrange(c, screen, names);
+    if (!groups.length && order.every((k, i) => k === names[i])) return parent;
+    const ref = nodes[nodes.length - 1].nextSibling;
+    const frag = document.createDocumentFragment();
+    const gid = new Map(groups.map(g => [g[0], g]));
+    const inGroup = new Set(groups.flat());
+    for (const k of order) {
+      if (gid.has(k)) {
+        const box = document.createElement('div');
+        box.dataset.group = gid.get(k).join(' ');
+        for (const m of gid.get(k)) box.append(...runs.get(m));
+        frag.appendChild(box);
+      } else if (!inGroup.has(k)) frag.append(...runs.get(k));
+    }
+    parent.insertBefore(frag, ref);
+  } catch {}
   return parent;
 }
 

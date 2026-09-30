@@ -149,7 +149,7 @@ function harness(o = {}) {
     normalizeBlocks: B.normalizeBlocks, blockOrder: B.blockOrder,
     wu: () => 'lb',
     el: UI.el, noteEl: UI.noteEl, fmtDateFull: UI.fmtDateFull, fmtDuration: UI.fmtDuration,
-    groupColor: A.groupColor, vibePaint: VB.paint, prDetail: A.prDetail, sessionReps: A.sessionReps, sameKindComparison: A.sameKindComparison,
+    groupColor: A.groupColor, vibePaint: VB.paint, blk: VB.blk, composeScreen: VB.composeScreen, prDetail: A.prDetail, sessionReps: A.sessionReps, sameKindComparison: A.sameKindComparison,
     normFeel: A.normFeel, FEEL_STRENGTH: A.FEEL_STRENGTH,
     // v55, on purpose: collectFrom and the fold keep each drop set whole
     // (keepSets), and the recap draws one as a group (setsText) — the real ones.

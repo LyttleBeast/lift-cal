@@ -89,7 +89,7 @@ const { recordGroups, collectFrom, computeVolume } = await load('workout.mjs');
 const { GROUPS, GROUP_ORDER } = await load('exercises.mjs');
 // v59: the calendar paints a group's colour through vibe.js — the real one,
 // imported where it lives (it reads the pure vibes/ contract beside it).
-const { paint, glyphed } = await import(pathToFileURL(SRC('vibe.js')).href);
+const { paint, glyphed, blk, composeScreen } = await import(pathToFileURL(SRC('vibe.js')).href);
 
 /* ---------- harness ---------- */
 let pass = 0, fail = 0;
@@ -266,7 +266,7 @@ section('D. the calendar — the real renderCalendar, and the plates each day ge
   };
   const STUBS = ['el', 'monthKey', 'todayKey', 'loadMonth', 'render', 'GROUPS', 'GROUP_ORDER', 'openDay', 'document',
                  'renderMonthStats', 'renderWeekVolume', 'coachCard', 'hasActiveSession', 'toast', 'startWorkout',
-                 'saveSessionAsRoutine', 'openPicker', 'openRoutines', 'openExerciseManager', 'openStats', 'vibePaint', 'glyphed'];
+                 'saveSessionAsRoutine', 'openPicker', 'openRoutines', 'openExerciseManager', 'openStats', 'vibePaint', 'glyphed', 'blk', 'composeScreen'];
   const stubs = {
     el: (t, c, txt) => node(t, c, txt),
     monthKey: d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'),
@@ -276,7 +276,7 @@ section('D. the calendar — the real renderCalendar, and the plates each day ge
     hasActiveSession: () => false, toast: () => {}, startWorkout: () => {}, saveSessionAsRoutine: () => {},
     openPicker: () => {}, openRoutines: () => {}, openExerciseManager: () => {}, openStats: async () => {},
     // engine v2: the month arrows are glyph sites, drawn through the vibe — the real vibe.js
-    glyphed
+    glyphed, blk, composeScreen
   };
   // A pre-v47 record: a warm-up-only session whose stored groups still say
   // chest. The calendar paints what is stored, so this day keeps its plate

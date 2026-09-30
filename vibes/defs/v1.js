@@ -77,6 +77,8 @@ export default deepFreeze({
      none; rack.css's :root carries the defaults as the --shape-* tokens, which
      nothing in v1 spends. */
   shape: {},
+  // Nothing is re-arranged: every screen in today's order, no group (vocab.js compose; index.js arrange()).
+  compose: {},
 
   colors: {
     /* ---- native T.colors, key for key (theme.js:14-43) ---- */

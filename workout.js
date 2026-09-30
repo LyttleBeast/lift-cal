@@ -33,7 +33,7 @@ import { wOut, wIn, fmtSetW, fmtSetLoad, fmtVol, volOut, unitW, limW } from './u
 // app copies verbatim; vibe.js's paint() makes it the token that paints it
 // (V59 §5.4). vibePaint in every file that uses it, because paint is the
 // app's usual name for a local repaint.
-import { paint as vibePaint, iconHtml, glyphed, tail } from './vibe.js';
+import { paint as vibePaint, iconHtml, glyphed, tail, blk, composeScreen } from './vibe.js';
 
 // Volume is a sum of stored pounds, so it converts like a weight. Round to a
 // whole number BEFORE the abbreviation, never after: "41.3k" is a string and
@@ -408,12 +408,12 @@ function renderCalendar() {
   next.onclick = async () => { viewMonth = new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 1); await loadMonth(monthKey(viewMonth)); render(); };
   nav.append(prev, next);
   hd.appendChild(nav);
-  wrap.appendChild(hd);
+  wrap.appendChild(blk('workout', 'head', hd));
 
   // day-of-week strip
   const dow = el('div', 'cal-dow');
   ['S','M','T','W','T','F','S'].forEach(d => dow.appendChild(el('span', null, d)));
-  wrap.appendChild(dow);
+  wrap.appendChild(blk('workout', 'dow', dow));
 
   // grid
   const grid = el('div', 'cal-grid');
@@ -454,7 +454,7 @@ function renderCalendar() {
     }
     grid.appendChild(cell);
   }
-  wrap.appendChild(grid);
+  wrap.appendChild(blk('workout', 'grid', grid));
 
   // legend
   const leg = el('div', 'cal-legend');
@@ -465,10 +465,10 @@ function renderCalendar() {
     it.append(sw, document.createTextNode(GROUPS[g].label));
     leg.appendChild(it);
   });
-  wrap.appendChild(leg);
+  wrap.appendChild(blk('workout', 'legend', leg));
 
-  wrap.appendChild(renderMonthStats(days));
-  wrap.appendChild(renderWeekVolume());
+  wrap.appendChild(blk('workout', 'monthStats', renderMonthStats(days)));
+  wrap.appendChild(blk('workout', 'weekVolume', renderWeekVolume()));
 
   /* Coach, directly above the primary button and in its tighter form — the You
      tab's card leads with a greeting and this one has no room for one, because
@@ -487,7 +487,7 @@ function renderCalendar() {
      workout is the only one that offers to build one. The builder never
      proposes during a live session; the guard here is for the race it cannot
      see, a session started elsewhere while the sheet was open. */
-  wrap.appendChild(coachCard({
+  wrap.appendChild(blk('workout', 'coach', coachCard({
     tight: true, live: hasActiveSession(),
     start: preset => {
       if (hasActiveSession()) { toast('Finish your workout first'); return; }
@@ -499,7 +499,7 @@ function renderCalendar() {
        pick. coach-ui.js cannot import picker.js's sheet any more than it can
        import this file, so the card hands it in beside start and save. */
     pick: (spec, done) => openPicker(done, { filter: spec.group, exclude: spec.exclude, single: true, title: spec.title })
-  }));
+  })));
 
   // While a session is parked the Resume bar above the dock is the way back in,
   // so a second button saying the same thing would just be noise.
@@ -507,7 +507,7 @@ function renderCalendar() {
   if (!parked) {
     const start = el('button', 'btn btn-primary btn-block btn-lg', 'Start workout');
     start.onclick = () => startWorkout();
-    wrap.appendChild(start);
+    wrap.appendChild(blk('workout', 'start', start));
   }
 
   /* Routines and the library, side by side. Both are doors into a list rather
@@ -531,7 +531,7 @@ function renderCalendar() {
   const exBtn = el('button', 'btn btn-ghost', 'Exercises');
   exBtn.onclick = () => openExerciseManager(() => render());
   pair.appendChild(exBtn);
-  wrap.appendChild(pair);
+  wrap.appendChild(blk('workout', 'split', pair));
 
   // Full width and quieter than the pair above it. It is the least frequent
   // thing on this screen and the most expensive — it reads the whole history.
@@ -541,9 +541,10 @@ function renderCalendar() {
     toast('Crunching your history…');
     await openStats(() => { render(); });
   };
-  wrap.appendChild(stats);
+  wrap.appendChild(blk('workout', 'statistics', stats));
 
-  return wrap;
+  // the vibe's arrangement of the blocks above, where it has one (none in v1)
+  return composeScreen('workout', wrap);
 }
 
 function renderMonthStats(days) {
@@ -995,15 +996,16 @@ function renderSession() {
   const nameIn = el('input', 'wk-name');
   nameIn.value = session.name;
   nameIn.oninput = e => { session.name = e.target.value; persistSession(); };
-  lt.appendChild(nameIn);
+  lt.appendChild(blk('sessionTitle', 'name', nameIn));
 
   if (editing) {
-    lt.appendChild(el('div', 'timer num', fmtDateFull(session._edit.dateKey) + ' · ' + fmtDuration(session._edit.durationSec)));
+    lt.appendChild(blk('sessionTitle', 'clock', el('div', 'timer num', fmtDateFull(session._edit.dateKey) + ' · ' + fmtDuration(session._edit.durationSec))));
   } else {
     const clock = el('div', 'timer num', '0:00');
     clock.id = 'wkClock';
-    lt.appendChild(clock);
+    lt.appendChild(blk('sessionTitle', 'clock', clock));
   }
+  composeScreen('sessionTitle', lt);   // the vibe's order for the name and the clock, where it has one (none in v1)
   bar.appendChild(lt);
 
   /* Coach, as a chip beside the calendar: tapped, it answers "what should I do
@@ -1221,21 +1223,21 @@ function renderExercise(ex, exIdx) {
     });
   };
   hd.appendChild(menu);
-  block.appendChild(hd);
+  block.appendChild(blk('exercise', 'head', hd));
 
   // previous performance — the single most useful thing on the screen. v55: a
   // drop set reads as one group, "185×8 → 135×6 → 95×5".
   const prev = lastEntry(ex.exId);
   if (prev) {
     const txt = setsText(prev.sets, s => `${fmtSetLoad(s.w, wu())}×${s.r}`, '  ');
-    block.appendChild(el('div', 'ex-prev', `Last · ${fmtDate(prev.date)}   ${txt}`));
+    block.appendChild(blk('exercise', 'prev', el('div', 'ex-prev', `Last · ${fmtDate(prev.date)}   ${txt}`)));
   } else {
-    block.appendChild(el('div', 'ex-prev', 'No previous record'));
+    block.appendChild(blk('exercise', 'prev', el('div', 'ex-prev', 'No previous record')));
   }
 
   const shd = el('div', 'set-hd');
   ['Set', unitW(wu()), 'Reps', 'e1RM', ''].forEach(t => shd.appendChild(el('span', null, t)));
-  block.appendChild(shd);
+  block.appendChild(blk('exercise', 'columns', shd));
 
   /* v55: a drop set's drops sit indented under the set he changed to a drop
      set, and "+ Drop" under its last one adds the next (Micah, 23 Sep). Two
@@ -1243,8 +1245,8 @@ function renderExercise(ex, exIdx) {
      each has its own "+ Drop". The grouping is analytics.js's (dropHeads). */
   const heads = dropHeads(ex.sets);
   ex.sets.forEach((s, i) => {
-    block.appendChild(renderSet(ex, exIdx, s, i, heads[i] != null && heads[i] !== i));
-    if (heads[i] != null && heads[i + 1] !== heads[i]) block.appendChild(dropAddRow(ex, i));
+    block.appendChild(blk('exercise', 'rows', renderSet(ex, exIdx, s, i, heads[i] != null && heads[i] !== i)));
+    if (heads[i] != null && heads[i + 1] !== heads[i]) block.appendChild(blk('exercise', 'rows', dropAddRow(ex, i)));
   });
 
   // While the coach mark is up the first exercise's hint line says what the
@@ -1266,25 +1268,26 @@ function renderExercise(ex, exIdx) {
     open: () => openLiveSheet(liveOpts(exIdx)),
     dismiss: () => { session._coach = dismissNudge(session._coach); persistSession(); render(); }
   });
-  if (nudge) block.appendChild(nudge);
-  else if (ex.sets.length) block.appendChild(el('div', 'swipe-hint',
+  if (nudge) block.appendChild(blk('exercise', 'hint', nudge));
+  else if (ex.sets.length) block.appendChild(blk('exercise', 'hint', el('div', 'swipe-hint',
     exIdx === coachExIdx(session) && showCoach(session, coachNone, coachTapped)
       ? 'Fill in the weight and reps, then tap the box on the right to log the set'
-      : 'Swipe a set left to delete it'));
+      : 'Swipe a set left to delete it')));
 
   // plate math for the heaviest entered load. s.w is stored pounds and so is
   // every plate below it, so this stays in pounds end to end and says so on
   // screen when the rest of the app is in kilos.
   const heaviest = Math.max(0, ...ex.sets.map(s => parseFloat(s.w) || 0));
-  if (heaviest >= 45 && ex.equipment === 'barbell') block.appendChild(renderPlates(heaviest, 45, wu()));
+  if (heaviest >= 45 && ex.equipment === 'barbell') block.appendChild(blk('exercise', 'plates', renderPlates(heaviest, 45, wu())));
 
   const acts = el('div', 'ex-actions');
   const addSet = el('button', 'btn btn-ghost', '+ Set');
   addSet.onclick = () => { addSetTo(ex); persistSession(); render(); };
   acts.appendChild(addSet);
-  block.appendChild(acts);
+  block.appendChild(blk('exercise', 'actions', acts));
 
-  return block;
+  // the vibe's order for the blocks above, where it has one (none in v1)
+  return composeScreen('exercise', block);
 }
 
 // "+ Drop", under a drop set's last set. The new drop's boxes start empty — a
@@ -2066,12 +2069,12 @@ function renderSummary() {
   if (fin.line) hero.appendChild(el('div', 'summary-line', fin.line));
   hero.appendChild(el('div', 'summary-date',
     (record.name || 'Workout') + '  ·  ' + fmtDateFull(todayKey(new Date(record.startedAt)))));
-  wrap.appendChild(hero);
+  wrap.appendChild(blk('recap', 'hero', hero));
 
   /* ---- how did that feel? ----
      Second, under the win: his own rating, while the session is fresh.
      Settings → Coach → "After a workout: how it felt" takes it away. */
-  if (!summary.feelSkipped && !isMuted(coachSettings(), 'feel')) wrap.appendChild(feelCard());
+  if (!summary.feelSkipped && !isMuted(coachSettings(), 'feel')) wrap.appendChild(blk('recap', 'feel', feelCard()));
 
   /* ---- PRs ---- */
   if (prs.length) {
@@ -2100,7 +2103,7 @@ function renderSummary() {
       r.appendChild(right);
       card.appendChild(r);
     });
-    wrap.appendChild(card);
+    wrap.appendChild(blk('recap', 'wins', card));
   }
 
   /* ---- session milestones ---- */
@@ -2118,7 +2121,7 @@ function renderSummary() {
       r.appendChild(el('div', 'pb-val num', m.value));
       card.appendChild(r);
     });
-    wrap.appendChild(card);
+    wrap.appendChild(blk('recap', 'wins', card));
   }
 
   /* ---- first time ---- */
@@ -2136,7 +2139,7 @@ function renderSummary() {
       r.appendChild(el('div', 'pb-val num', f.set ? fmtSetLoad(f.set.w, u) + ' × ' + f.set.r : ''));
       card.appendChild(r);
     });
-    wrap.appendChild(card);
+    wrap.appendChild(blk('recap', 'wins', card));
   }
 
   const workingSets = record.exercises.reduce((a, ex) => a + ex.sets.filter(isWorking).length, 0);
@@ -2151,7 +2154,7 @@ function renderSummary() {
     s.appendChild(el('div', 'stat-lbl', l));
     row.appendChild(s);
   });
-  wrap.appendChild(row);
+  wrap.appendChild(blk('recap', 'stats', row));
 
   /* ---- what you did ---- */
   const recap = el('div', 'card');
@@ -2171,7 +2174,7 @@ function renderSummary() {
     r.append(tag, body);
     recap.appendChild(r);
   });
-  wrap.appendChild(recap);
+  wrap.appendChild(blk('recap', 'did', recap));
 
   /* ---- compared with sessions like this ----
      Only against sessions of this one's kind (analytics.js
@@ -2193,17 +2196,17 @@ function renderSummary() {
     } else {
       card.appendChild(el('div', 'summary-like-row', 'Sets: ' + like.sets + ' today, against a usual ' + usual(like.usualSets) + on));
     }
-    wrap.appendChild(card);
+    wrap.appendChild(blk('recap', 'like', card));
   }
 
   const done = el('button', 'btn btn-primary btn-block btn-lg', 'Done');
   done.onclick = () => { summary = null; render(); };
-  wrap.appendChild(done);
+  wrap.appendChild(blk('recap', 'buttons', done));
 
   const asRt = el('button', 'btn btn-ghost btn-block', 'Save as routine');
   asRt.style.marginTop = '10px';
   asRt.onclick = () => saveSessionAsRoutine(record);
-  wrap.appendChild(asRt);
+  wrap.appendChild(blk('recap', 'buttons', asRt));
 
   const toStats = el('button', 'btn btn-ghost btn-block', 'See statistics');
   toStats.style.marginTop = '10px';
@@ -2212,9 +2215,10 @@ function renderSummary() {
     await refreshStats();
     await openStats(() => { render(); });
   };
-  wrap.appendChild(toStats);
+  wrap.appendChild(blk('recap', 'buttons', toStats));
 
-  return wrap;
+  // the vibe's arrangement of the blocks above, where it has one (none in v1)
+  return composeScreen('recap', wrap);
 }
 
 /* ================= EXPORTS ================= */

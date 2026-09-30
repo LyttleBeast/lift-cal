@@ -99,6 +99,40 @@ export function normVibe(x) {
   return validId(x) && IDS.includes(x) ? x : DEFAULT;
 }
 
+/* ---------- composition (V59 §12) ----------
+   The one reading both engines share, so one vibe can never draw a screen in
+   two orders. `compose` is a definition's own (vocab.js `compose` is the
+   grammar), `names` the blocks this render draws, in v1's order; it returns
+   { order, groups }, fresh arrays, and never throws.
+   v1, a vibe with {} , a fallback screen, or an entry it cannot read (an order
+   that names a block twice, or leaves out one that is drawn) is `names` as
+   given and no group: v1's order. A block not drawn in this render is skipped
+   where it stands. A group with fewer than two drawn members, not adjacent in
+   the order, or sharing a block with an earlier group is dropped. */
+export function arrange(compose, screen, names) {
+  const v1 = () => ({ order: Array.isArray(names) ? names.filter(n => typeof n === 'string') : [], groups: [] });
+  try {
+    const drawn = v1().order;
+    const e = compose && typeof compose === 'object' && Object.prototype.hasOwnProperty.call(compose, screen) ? compose[screen] : null;
+    if (!e || typeof e !== 'object' || e.fallback !== false || !Array.isArray(e.order)) return v1();
+    if (new Set(e.order).size !== e.order.length) return v1();
+    const want = new Set(drawn);
+    if (want.size !== drawn.length || !drawn.every(n => e.order.includes(n))) return v1();
+    const order = e.order.filter(n => want.has(n));
+    const groups = [], used = new Set();
+    for (const g of Array.isArray(e.groups) ? e.groups : []) {
+      if (!Array.isArray(g)) continue;
+      const m = g.filter(n => want.has(n));
+      if (m.length < 2 || m.some(n => used.has(n))) continue;
+      const i = order.indexOf(m[0]);
+      if (!m.every((n, k) => order[i + k] === n)) continue;
+      m.forEach(n => used.add(n));
+      groups.push(m);
+    }
+    return { order, groups };
+  } catch { return v1(); }
+}
+
 /* The registry's metadata, in order. Copies, so a caller that sorts or edits
    what it gets back cannot change what the next caller sees. */
 export function list() {
@@ -373,6 +407,7 @@ export const ROLES = deepFreeze([
   // registry facts and the vibe's own switches
   R('id', 'meta'), R('name', 'meta'), R('feel', 'meta'), R('experimental', 'meta'), R('scheme', 'meta'),
   R('icons', 'meta', null, null, { note: 'the icon set id: vibes/icons/<set>.js' }),
+  R('compose', 'meta', null, null, { note: 'the arrangement of the ten composable screens (vocab.js compose); v1 is {}; only an experimental vibe holds anything else' }),
   R('images', 'image', null, null, { note: 'slot -> file under vibes/<id>/, or { file, focal, scrim, band }; v1 has none' }),
   ...HERO.map(s => R(`images.${s}.band`, 'image', '--photo-band-' + s.replace(/[A-Z]/g, c => '-' + c.toLowerCase()), null,
     { dflt: null, note: 'band mode, pt/px; native reaches it through T.image(slot).band' })),

@@ -1339,8 +1339,8 @@ section('F  the component vocabulary (vocab.js): well-formed, and v1 names every
   const strs = (a, min = 0) => Array.isArray(a) && a.length >= min && a.every(str);
   const isObj = o => !!o && typeof o === 'object' && !Array.isArray(o);
   const WORD = /^[a-z][A-Za-z0-9]*$/;
-  expect(eq(Object.keys(VOC), ['version', 'grades', 'allowed', 'rules', 'params', 'blocks']) && VOC.version === 1,
-    'vocab.js is { version: 1, grades, allowed, rules, params, blocks }');
+  expect(eq(Object.keys(VOC), ['version', 'grades', 'allowed', 'rules', 'params', 'blocks', 'compose']) && VOC.version === 1,
+    'vocab.js is { version: 1, grades, allowed, rules, params, blocks, compose }');
   expect(isDeepFrozen(VOC), 'vocab.js is frozen all the way down');
   const GRADES = Object.keys(VOC.grades);
   expect(eq(GRADES, ['v1', 'shape', 'deep']) && Object.values(VOC.grades).every(str), 'its grades are v1, shape and deep, each described');

@@ -828,5 +828,36 @@ export default deepFreeze({
               'the face and type, and every line\'s numberOfLines and lineHeight', 'every word: COACH, the lines, the reason, COACH ME, the lead, the chevron; the lock and when it shows',
               'the whole card as one tap target; the caution line in warn', 'no photo unless its text stays legible at 190 / 164 (§11; research drops it, C27)']
     }
+  },
+
+  /* ---------- compose (V59 §12) ----------
+     The blocks of the ten screens an experimental vibe may re-arrange, named
+     once for both clients, and the grammar its `compose` role is held to
+     (tools-check/vibes-compose.mjs). A screen's `blocks` are its top-level
+     blocks in v1's order; nothing else on the screen is ever composed — not
+     the dock, not anything floating over it (Fuel's Log food button, the peek
+     bar, the rest pill), not the tailpiece, which stays last.
+       first   blocks that keep the top of the screen, in this order (the
+               heads hold the month and day arrows and the gears)
+       alone   blocks never drawn inside a group (the Coach card's box is
+               fixed, 190 / 164, and proven alone)
+       before  [a, b]: a stays above b in every order (a control above what it
+               controls; the set rows above what appears mid-entry)
+     web = the node each name is on the web, native = where it is there; the
+     wording is in cloud/design/COMPOSE.md. */
+  compose: {
+    grammar: 'compose is {} (every screen in v1\'s order, no group) or names every screen here, each { fallback: true } (that screen in v1\'s order, no group: same order, new shapes) or { fallback: false, order, groups }: order names every block of the screen exactly once; groups, if given, is a list of runs, each two or more blocks adjacent in order and in no other run, drawn together as one board. No other key. Only a vibe with experimental: true holds anything but {}. A block not drawn in a render is skipped where it stands; an entry index.js arrange() cannot read draws v1\'s order.',
+    screens: {
+      you:          { blocks: ['hero', 'coach', 'since', 'doing', 'goal', 'week', 'noticed', 'trends', 'review', 'app'], first: ['hero'], alone: ['coach'], before: [] },
+      workout:      { blocks: ['head', 'dow', 'grid', 'legend', 'monthStats', 'weekVolume', 'coach', 'start', 'split', 'statistics'], first: ['head'], alone: ['coach'], before: [] },
+      food:         { blocks: ['head', 'summary', 'meals', 'water', 'micros'], first: ['head'], alone: [], before: [] },
+      weight:       { blocks: ['head', 'log', 'stats', 'chart', 'tod', 'tdee', 'recent'], first: ['head'], alone: [], before: [] },
+      steps:        { blocks: ['head', 'today', 'trend', 'stats', 'streaks', 'consistency', 'weekdays', 'recent'], first: ['head'], alone: [], before: [['trend', 'stats']] },
+      recap:        { blocks: ['hero', 'feel', 'wins', 'stats', 'did', 'like', 'buttons'], first: [], alone: [], before: [] },
+      session:      { blocks: ['editMeta', 'empty', 'stack', 'add', 'discard'], first: [], alone: [], before: [] },
+      sessionBar:   { blocks: ['title', 'coachChip', 'calendar', 'finish'], first: [], alone: [], before: [] },
+      sessionTitle: { blocks: ['name', 'clock'], first: [], alone: [], before: [] },
+      exercise:     { blocks: ['head', 'prev', 'columns', 'rows', 'hint', 'plates', 'actions'], first: ['head'], alone: [], before: [['columns', 'rows'], ['rows', 'hint'], ['rows', 'plates'], ['rows', 'actions']] }
+    }
   }
 });

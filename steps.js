@@ -34,7 +34,7 @@ import { $, el, svgEl, sheet, toast, noteEl, confirmSheet, swipeToDelete,
          compact, parseKey, fmtDate, fmtDateFull, LIMITS, within } from './ui.js';
 // The gear, from the vibe's icon set (V59 §5.7). vibe.js is new in rack-v59
 // together with this import, so no browser holds this file without it.
-import { iconHtml, tail } from './vibe.js';
+import { iconHtml, tail, blk, composeScreen } from './vibe.js';
 
 const DAY = 864e5;
 const DEFAULTS = { goal: 10000 };
@@ -164,15 +164,16 @@ export function render() {
   gear.onclick = openStepSettings;
   nav.appendChild(gear);
   hd.appendChild(nav);
-  wrap.appendChild(hd);
+  wrap.appendChild(blk('steps', 'head', hd));
 
-  wrap.appendChild(renderToday());
-  wrap.appendChild(renderTrend());
-  wrap.appendChild(renderStats());
-  wrap.appendChild(renderStreaks());
-  wrap.appendChild(renderConsistency());
-  wrap.appendChild(renderWeekdays());
-  wrap.appendChild(renderRecent());
+  wrap.appendChild(blk('steps', 'today', renderToday()));
+  wrap.appendChild(blk('steps', 'trend', renderTrend()));
+  wrap.appendChild(blk('steps', 'stats', renderStats()));
+  wrap.appendChild(blk('steps', 'streaks', renderStreaks()));
+  wrap.appendChild(blk('steps', 'consistency', renderConsistency()));
+  wrap.appendChild(blk('steps', 'weekdays', renderWeekdays()));
+  wrap.appendChild(blk('steps', 'recent', renderRecent()));
+  composeScreen('steps', wrap);   // the vibe's arrangement, where it has one (none in v1)
 
   root.appendChild(tail(wrap, 'steps'));   // the vibe's tailpiece, where it has one (none in v1)
 }

@@ -1125,7 +1125,7 @@ section('G. in a live session: a chip when asked, one quiet line once, nothing f
         /if \(s\.done && !session\._edit\) session\._coach = noteLiveTick\(session, exIdx, i\);/.test(tick) &&
         tick.indexOf('noteLiveTick') < tick.indexOf('startRest()'), tick.slice(0, 80));
   check('the line takes the swipe hint’s place rather than adding a row',
-        /if \(nudge\) block\.appendChild\(nudge\);\n  else if \(ex\.sets\.length\) block\.appendChild\(el\('div', 'swipe-hint'/.test(WS));
+        /if \(nudge\) block\.appendChild\(blk\('exercise', 'hint', nudge\)\);\n  else if \(ex\.sets\.length\) block\.appendChild\(blk\('exercise', 'hint', el\('div', 'swipe-hint'/.test(WS));
   const gym = (UI_SRC.split('/* ================= IN THE GYM =================')[1] || '');
   const raise = (gym.split('export function noteLiveTick')[1] || '').split('\nexport function nudgeLine')[0];
   check('nothing that raises or draws the line opens a sheet or a toast — it is inline, and nothing pops up',

@@ -84,7 +84,7 @@ import { wOut, fmtW, fmtSetLoad, labelW, unitW, fmtRate, labelRate, fmtVol,
 // A group's hex (analytics.js groupColor) as the token that paints it, and the
 // gear from the vibe's icon set (V59 §5.4, §5.7). vibePaint, as in every file
 // that uses it: paint is the app's usual name for a local repaint.
-import { paint as vibePaint, iconHtml, glyphed, tail } from './vibe.js';
+import { paint as vibePaint, iconHtml, glyphed, tail, blk, composeScreen } from './vibe.js';
 
 const DAY = 864e5;
 // Exactly the two seven-day windows the week card compares, so the water reads
@@ -558,7 +558,7 @@ export function render() {
 function build() {
   const wrap = el('div', 'screen-pad');
 
-  wrap.appendChild(hero());
+  wrap.appendChild(blk('you', 'hero', hero()));
   /* Coach sits directly under the greeting and above everything else, because
      it is the only thing on this screen that answers "what should I do about
      it" rather than "what happened". Its own box is a fixed height whatever it
@@ -572,8 +572,8 @@ function build() {
      device. The card asks the device instead, which is right at any moment and
      in any order. Train passes its own answer in, because there it IS the
      authority. */
-  wrap.appendChild(coachCard({ go: goTab }));
-  wrap.appendChild(sinceLine());
+  wrap.appendChild(blk('you', 'coach', coachCard({ go: goTab })));
+  wrap.appendChild(blk('you', 'since', sinceLine()));
 
   // One maintenance estimate for the whole paint. Calling it per card would
   // walk food/daySummaries three times and, worse, invites the two cards that
@@ -594,20 +594,20 @@ function build() {
   const s1 = section('How you’re doing');
   s1.appendChild(assessCard(found, 'wins'));
   s1.appendChild(assessCard(found, 'improve'));
-  wrap.appendChild(s1);
+  wrap.appendChild(blk('you', 'doing', s1));
 
   const s2 = section('Goal');
   s2.appendChild(trajectoryCard(found, est, maint));
-  wrap.appendChild(s2);
+  wrap.appendChild(blk('you', 'goal', s2));
 
   const s3 = section('This week');
   s3.appendChild(weekCard(maint));
-  wrap.appendChild(s3);
+  wrap.appendChild(blk('you', 'week', s3));
 
   if (found && found.insights.length) {
     const s4 = section('Rack noticed');
     s4.appendChild(insightsCard(found));
-    wrap.appendChild(s4);
+    wrap.appendChild(blk('you', 'noticed', s4));
   }
 
   const s5 = section('Trends');
@@ -618,11 +618,11 @@ function build() {
   pair.appendChild(stepsCard());
   pair.appendChild(waterCard());
   s5.appendChild(pair);
-  wrap.appendChild(s5);
+  wrap.appendChild(blk('you', 'trends', s5));
 
   const s6 = section('Weekly review');
   s6.appendChild(reviewCard(found));
-  wrap.appendChild(s6);
+  wrap.appendChild(blk('you', 'review', s6));
 
   const showInstall = !isStandalone() && !LS.get('installDismissed', false);
   const owner = isOwner();
@@ -630,10 +630,11 @@ function build() {
     const s8 = section('App');
     if (showInstall) s8.appendChild(installCard());
     if (owner) s8.appendChild(adminRow());
-    wrap.appendChild(s8);
+    wrap.appendChild(blk('you', 'app', s8));
   }
 
-  return wrap;
+  // the vibe's arrangement of the blocks above, where it has one (none in v1)
+  return composeScreen('you', wrap);
 }
 
 /* ================= HERO ================= */

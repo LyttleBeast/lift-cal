@@ -119,7 +119,7 @@ const STUBS = {
   el: UI.el, noteEl: UI.noteEl, toast: () => {}, fmtDateFull: UI.fmtDateFull, fmtDuration: UI.fmtDuration,
   todayKey: d => { const p = n => String(n).padStart(2, '0'); return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()); },
   wu: () => state.u,
-  groupColor: A.groupColor, vibePaint: VB.paint, prDetail: A.prDetail, isWorking: A.isWorking, sessionReps: A.sessionReps,
+  groupColor: A.groupColor, vibePaint: VB.paint, blk: VB.blk, composeScreen: VB.composeScreen, prDetail: A.prDetail, isWorking: A.isWorking, sessionReps: A.sessionReps,
   sameKindComparison: A.sameKindComparison, normFeel: A.normFeel, FEEL_STRENGTH: A.FEEL_STRENGTH,
   // v55, on purpose: "What you did" draws a drop set as one group (setsText).
   setsText: A.setsText,
