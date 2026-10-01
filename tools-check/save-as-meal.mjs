@@ -74,6 +74,8 @@ globalThis.window = { addEventListener() {} };
 
 const UI = await import(real('ui.js'));
 const O  = await import(real('estimate-origin.js'));
+// v63: the line under the review (costLine) — the real one, pure like estimate-origin.js.
+const L  = await import(real('estimate-limits.js'));
 // engine v2: the meals list's › and ✕ and the review's ✕ are glyph sites,
 // drawn through the vibe — the real vibe.js (it imports only vibes/).
 const VB = await import(real('vibe.js'));
@@ -99,6 +101,8 @@ function harness(o = {}) {
     glyphed: VB.glyphed,
     segmented: UI.segmented, r1: UI.r1, trimNum: UI.trimNum, clamp: UI.clamp, within: UI.within, LIMITS: UI.LIMITS,
     estimateOrigin: O.estimateOrigin, originHeading: O.originHeading, EDITED: O.EDITED, mealName: O.mealName,
+    // v63: the cost line is the owner's; this account is not the owner.
+    costLine: L.costLine, uid: () => 'not-the-owner', OWNER_UID: 'the-owner',
     write: async (p, v) => { S.writes.push({ p, v: clone(v) }); S.db[p] = clone(v); },
     todayKey: () => '2026-09-25', isToday: () => true, bump: () => {},
     recallRemember: (q, list, kind) => { S.recalled.push({ q, list: clone(list), kind }); },

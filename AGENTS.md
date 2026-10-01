@@ -438,13 +438,25 @@ shape: each item is what `cleanIng` keeps (name, qty, the numbers, the micros),
 with no `src`. Re-logged, it is `src: 'meal'` like any saved meal, and spends
 no estimate.
 
-## `food/recall` → `{ key: { q, kind, items, n, last } }`
+## `food/recall` → `{ key: { q, kind, items, n, last, w } }`
 
 The lookup cache in front of the AI estimator, so the same sentence is never
 paid for twice. `key` is the question normalised (filler words dropped, number
 words digitised) then slugged — that IS the deduplication. **Numbers in the key
 are load-bearing**: "2 slices" and "3 slices" must never share a row. Capped at
 400 rows; least-used and oldest go first. No image is ever stored.
+
+**The key is only the first 150 characters of the slug**, so two long sentences
+can share one. Since v63 a row is written **whole or not at all**: `q` is the
+whole question (up to 600 characters, the describe limit), `items` the whole
+answer (up to 20 rows, the Worker's cap), and `w: 1` says so. A key hit counts as
+an exact match only when the row's own `q` is the same sentence (`recall.js`
+`whole()` / `lookup()`). A row without `w` was written by an older client, which
+cut `q` at 200 characters and `items` at 12; it is trusted only when neither cut
+can have happened (`q` under 190 characters, under 12 rows), and is otherwise a
+miss that the next estimate rewrites whole. No rules change: `food` validates no
+child. The phone writes the same node, so its `src/pure/recall.js` carries the
+same change.
 
 ## `weight/entries` → `{ id: { lb, t } }`
 

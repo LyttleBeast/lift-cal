@@ -14,6 +14,7 @@
 
 import { idToken, LS } from './store.js';
 import { AI_PROXY_URL } from './ai-config.js';
+import { MAX_DESCRIBE, describeLength, TOO_LONG, WAIT_MS, TIMED_OUT } from './estimate-limits.js';
 
 const MAX_EDGE   = 1024;     // long edge in px. ~1370 visual tokens, ~$0.003.
 const QUALITY    = 0.72;     // JPEG quality to start at
@@ -33,9 +34,19 @@ export function hasProxy() { return !!proxyUrl(); }
 
 /* ---------- errors ----------
    Every failure that reaches the UI carries a sentence a person can act on.
-   `code` is for us; `message` is what goes on screen. */
+   `code` is for us; `message` is what goes on screen.
+
+   rack-v63: an error keeps its reply's `usage` and `left` when the Worker sent
+   them, so the error sheet can say what a failed attempt still used
+   (estimate-limits.js costLine). Only those two keys are read off the reply --
+   nothing it carries can overwrite `code` or `message`. */
 export class AiError extends Error {
-  constructor(code, message) { super(message); this.code = code; }
+  constructor(code, message, reply) {
+    super(message);
+    this.code = code;
+    if (reply && reply.usage && typeof reply.usage === 'object') this.usage = reply.usage;
+    if (reply && reply.left && typeof reply.left === 'object') this.left = reply.left;
+  }
 }
 
 const NO_PROXY = () => new AiError('no_proxy',
@@ -101,14 +112,28 @@ async function call(path, init) {
   const tok = await idToken();
   if (!tok) throw new AiError('no_auth', 'Your session expired — sign in again.');
 
+  /* rack-v63: a request that never answers used to leave the busy sheet --
+     which cannot be dismissed, on purpose -- on screen for good. WAIT_MS is
+     longer than the Worker can take (estimate-limits.js says why and how it is
+     derived), so the Worker's own answer always wins the race and this only
+     ends a connection that has really gone. It says so in its own words: an
+     abort is not "check your connection". */
+  const ctl = typeof AbortController === 'function' ? new AbortController() : null;
+  let gaveUp = false;
+  const timer = ctl ? setTimeout(() => { gaveUp = true; ctl.abort(); }, WAIT_MS) : null;
+
   let r;
   try {
     r = await fetch(base + path, {
       ...init,
+      ...(ctl ? { signal: ctl.signal } : null),
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok, ...(init && init.headers) }
     });
   } catch {
-    throw new AiError('offline', 'Couldn’t reach the estimator — check your connection.');
+    throw gaveUp ? new AiError('timeout', TIMED_OUT)
+                 : new AiError('offline', 'Couldn’t reach the estimator — check your connection.');
+  } finally {
+    clearTimeout(timer);
   }
 
   let j = null;
@@ -119,21 +144,34 @@ async function call(path, init) {
     const msg  = (j && j.message) ||
       (r.status === 404 ? 'That Worker URL doesn’t answer — check it in ⚙ Settings.'
                         : 'The estimator failed (' + r.status + ').');
-    throw new AiError(code, msg);
+    throw new AiError(code, msg, j);
   }
   return j;
+}
+
+/* rack-v63: a description over MAX_DESCRIBE is REFUSED here, never cut. This
+   used to be `.slice(0, 600)` on both calls below, and the end of a long meal
+   simply never reached the estimator, with nothing on screen to say so (P7
+   CL-02). The describe and photo sheets refuse first, with the counter in
+   view; this is the backstop for every other caller. Trimmed, as the Worker
+   trims, and the trimmed text is what is sent. */
+function sendable(text) {
+  const t = String(text == null ? '' : text).trim();
+  if (describeLength(t) > MAX_DESCRIBE) throw new AiError('too_long', TOO_LONG);
+  return t;
 }
 
 /* Photo, with an optional sentence of context. The sentence is worth a lot —
    it is what turns "some kind of beef bowl" into the right cut and the right
    rice. */
-export function estimatePhoto(shot, text) {
+export async function estimatePhoto(shot, text) {
+  const note = sendable(text);
   return call('/estimate', {
     method: 'POST',
     body: JSON.stringify({
       mode: 'photo',
       image: { media_type: shot.media_type, data: shot.data },
-      text: (text || '').slice(0, 600)
+      text: note
     })
   });
 }
@@ -150,11 +188,12 @@ export function estimatePhoto(shot, text) {
    it, the Worker answers with the choices instead of paying the model. `{ ask:
    false }` is "None of these": today's request, byte for byte. An older
    Worker ignores the key. A photo never asks. */
-export function estimateText(text, opts) {
+export async function estimateText(text, opts) {
+  const words = sendable(text);
   const ask = !(opts && opts.ask === false);
   return call('/estimate', {
     method: 'POST',
-    body: JSON.stringify({ mode: 'text', text: (text || '').slice(0, 600), ...(ask ? { ask: 1 } : null) })
+    body: JSON.stringify({ mode: 'text', text: words, ...(ask ? { ask: 1 } : null) })
   });
 }
 

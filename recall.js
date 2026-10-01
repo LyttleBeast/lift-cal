@@ -19,6 +19,8 @@ import { read, watch, mergeUpdate, LS } from './store.js';
 
 const MAX_ROWS   = 400;   // beyond this the least-used, oldest rows go
 const MIN_SCORE  = 0.74;  // how close a near-miss has to be to count as a hit
+const MAX_Q      = 600;   // the describe limit: a question is kept whole or not at all
+const MAX_ITEMS  = 20;    // the Worker's row cap: an answer is kept whole or not at all
 
 let recall = {};
 let dirty  = null;
@@ -55,6 +57,41 @@ export function keyOf(text) {
   const n = normalize(text);
   if (!n) return '';
   return n.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 150);
+}
+
+/* keyOf() before its 150-character cut: the whole sentence, slugged the same
+   way. Beside keyOf rather than folded into it, because keyOf is copied byte
+   for byte into the phone and the Worker (foodkey.js) and the stored key must
+   not move. Two sentences with the same sentenceOf() are the same question in
+   exactly the sense the key has always meant -- "Two eggs, and toast." and
+   "2 eggs toast" -- just without the cut. */
+function sentenceOf(text) {
+  return normalize(text).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
+/* Can this row stand in for a question at all? Only if it holds ALL of the
+   question and ALL of its answer. Two silent cuts used to break that:
+
+     keyOf() keeps 150 characters, so every sentence sharing its first ~160
+     typed characters lands on one key, and the exact path handed back whatever
+     was stored there -- "exact match · this one cost nothing", with the longer
+     order's chips, queso and lemonade simply missing (P7 audit CL-01, measured:
+     tools-check/recall-whole.mjs).
+     cleanItems() kept 12 rows of an answer the Worker sends up to 20 of, so a
+     14-row plate came back as 12, still "exact match".
+
+   The key cannot change, so the row carries the proof instead. Since rack-v63
+   a row is written with `w: 1`, its whole question in `q` and its whole answer
+   in `items`, or it is not written at all (remember, below). A row without `w`
+   came from an older client -- including phone builds that do not have this
+   yet and go on writing the shared node -- which cut `q` at 200 characters and
+   `items` at 12. It is trusted only where neither cut can have happened. A row
+   that is not trusted is a miss: the sentence goes to the estimator and comes
+   back right, and remembering that answer rewrites the row whole. */
+function whole(r) {
+  if (!r || !r.q || !Array.isArray(r.items) || !r.items.length) return false;
+  if (r.w === 1) return true;
+  return String(r.q).length < 190 && r.items.length < 12;
 }
 
 function tokens(text) {
@@ -204,13 +241,18 @@ export function recallList() {
    to the same foods, both sentences must exclude the same things, and both must
    name the same foods in the first place. Each one rejects a pair that Dice
    scored high and got wrong; the score only ever ranks what all three let
-   through. */
+   through.
+
+   The exact path checks the whole sentence, not just the key: a key is only
+   the first 150 characters of one (whole(), above). A key hit on a different
+   sentence is not exact, and is left to the near-miss gates like any other
+   row. */
 export function lookup(text) {
   const key = keyOf(text);
   if (!key) return null;
 
   const exact = recall[key];
-  if (exact && exact.items && exact.items.length) return { key, ...exact, score: 1, exact: true };
+  if (whole(exact) && sentenceOf(exact.q) === sentenceOf(text)) return { key, ...exact, score: 1, exact: true };
 
   const mine = tokens(text);
   const myQty  = quantities(mine);
@@ -220,7 +262,7 @@ export function lookup(text) {
 
   let best = null;
   for (const [k, r] of Object.entries(recall)) {
-    if (!r || !r.q || !r.items || !r.items.length) continue;
+    if (!whole(r)) continue;   // a cut question or a cut answer is not a candidate either
     const theirs = tokens(r.q);
     // All three gates run BEFORE the similarity score, not after: Dice cannot
     // see any of the three problems, so no threshold on it would have caught
@@ -274,7 +316,7 @@ function prune() {
 function cleanItems(items) {
   return (items || [])
     .filter(x => x && x.name)
-    .slice(0, 12)
+    .slice(0, MAX_ITEMS)
     .map(x => {
       const o = {
         name: String(x.name).slice(0, 80),
@@ -288,20 +330,35 @@ function cleanItems(items) {
 }
 
 /* One question and the answer it got. `kind` is 'ai' for anything that came
-   back from the estimator, 'log' for a food that went in some other way. */
+   back from the estimator, 'log' for a food that went in some other way.
+
+   WHOLE OR NOT AT ALL (rack-v63, P7 CL-01). The question used to be cut to 200
+   characters and the answer to 12 rows, and the row then answered for both as
+   an exact match. Now a question longer than MAX_Q, or an answer with more
+   rows than MAX_ITEMS, is simply not remembered -- the next time costs one
+   estimate, which is the right price for a number that would otherwise be
+   short. `w: 1` is what tells lookup() this row was written whole (whole()).
+
+   `n` counts THIS sentence. A different sentence that shared the key (the
+   150-character cut) starts again at 1 instead of inheriting its count. */
 export function remember(question, items, kind) {
-  const key = keyOf(question);
-  if (!key) return;
-  const list = cleanItems(items);
+  const q = String(question == null ? '' : question).trim();
+  const key = keyOf(q);
+  if (!key || q.length > MAX_Q) return;
+  const named = (items || []).filter(x => x && x.name);
+  if (named.length > MAX_ITEMS) return;
+  const list = cleanItems(named);
   if (!list.length) return;
 
   const prev = recall[key];
+  const same = !!(prev && prev.q && sentenceOf(prev.q) === sentenceOf(q));
   stage(key, {
-    q: String(question).slice(0, 200).trim(),
+    q,
     kind: kind || (prev && prev.kind) || 'log',
     items: list,
-    n: (prev && prev.n || 0) + 1,
-    last: Date.now()
+    n: (same && prev.n || 0) + 1,
+    last: Date.now(),
+    w: 1
   });
 }
 

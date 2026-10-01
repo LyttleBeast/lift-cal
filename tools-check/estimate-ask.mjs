@@ -76,6 +76,7 @@ globalThis.window = { addEventListener() {} };
 const UI = await import(real('ui.js'));
 const O  = await import(real('estimate-origin.js'));
 const K  = await import(real('estimate-ask.js'));
+const L  = await import(real('estimate-limits.js'));   // v63, pure: ai.js and food.js both import it
 // engine v2: the review's ✕ is a glyph site, drawn through the vibe — the real
 // vibe.js, which imports only the pure vibes/ contract.
 const VB = await import(real('vibe.js'));
@@ -197,7 +198,9 @@ section('C. the request: `ask: 1` on a text estimate, and without it exactly tod
   const stage = (name, text) => {
     writeFileSync(join(dir, name), text
       .replace("from './store.js'", "from './store-stub.mjs'")
-      .replace("from './ai-config.js'", 'from ' + JSON.stringify(real('ai-config.js'))));
+      .replace("from './ai-config.js'", 'from ' + JSON.stringify(real('ai-config.js')))
+      // v63: ai.js imports the pure estimate-limits.js; the real one, by its real path.
+      .replace("from './estimate-limits.js'", 'from ' + JSON.stringify(real('estimate-limits.js'))));
     return import(pathToFileURL(join(dir, name)).href);
   };
   writeFileSync(join(dir, 'store-stub.mjs'), `
@@ -242,6 +245,9 @@ function harness(replies) {
     segmented: UI.segmented, r1: UI.r1, trimNum: UI.trimNum, clamp: UI.clamp, within: UI.within, LIMITS: UI.LIMITS,
     estimateOrigin: O.estimateOrigin, originHeading: O.originHeading, EDITED: O.EDITED, mealName: O.mealName,
     readAsk: K.readAsk, withPicks: K.withPicks, optionText: K.optionText, NONE_LABEL: K.NONE_LABEL, NONE_NOTE: K.NONE_NOTE,
+    // v63: the line under the review and the error sheet (costLine) — the real
+    // one; this account is not the owner.
+    costLine: L.costLine, uid: () => 'not-the-owner', OWNER_UID: 'the-owner',
     write: async () => {}, todayKey: () => '2026-09-25', isToday: () => true, bump: k => S.bumps.push(k),
     recallRemember: (q, list, kind) => { S.recalled.push({ q, list: clone(list), kind }); },
     kindForSrc: s => 'kind-of-' + s, rememberEntry: () => {}, saveDay: () => {}, render: () => {},

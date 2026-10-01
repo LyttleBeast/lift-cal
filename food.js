@@ -29,6 +29,7 @@ import { bump } from './usage.js';
 import { noteCoachFood } from './coach-data.js';
 import { estimateOrigin, originHeading, EDITED, mealName } from './estimate-origin.js';
 import { readAsk, withPicks, optionText, NONE_LABEL, NONE_NOTE } from './estimate-ask.js';
+import { describeCount, costLine } from './estimate-limits.js';
 import { goalDirection } from './insights.js';
 import { wIn, fmtW, labelW, unitW, rateIn, boxRate, perIn, boxPer,
          kcalPerUnit, limW, limRate, limPer, fmtRate, labelRate } from './units.js';
@@ -1927,6 +1928,7 @@ function openShotSheet(shot, mealId, prefill) {
   ta.placeholder = 'Optional — “6 oz sirloin, jasmine rice, cooked in butter”';
   ta.value = prefill || '';
   sh.appendChild(ta);
+  sh.appendChild(lengthCounter(ta));
   sh.appendChild(noteEl('Skip it and it guesses from the picture alone. One line about portions or how it was cooked is usually the difference between close and right.'));
 
   sh.appendChild(el('div', 'field-lbl', 'Meal'));
@@ -1935,6 +1937,7 @@ function openShotSheet(shot, mealId, prefill) {
   const go = el('button', 'btn btn-primary btn-block btn-lg', 'Estimate macros');
   go.style.marginTop = '12px';
   go.onclick = () => {
+    if (refuseTooLong(ta)) return;
     const note = ta.value.trim();
     close();
     runEstimate({
@@ -1966,6 +1969,34 @@ function openShotSheet(shot, mealId, prefill) {
   sh.appendChild(cancel);
 }
 
+/* rack-v63 (P7 CL-02): the counter under a describe box, and the refusal on
+   Estimate. Nothing over the limit is ever sent, and nothing is ever cut —
+   estimate-limits.js says why there is no maxlength on the box (a paste would
+   be truncated to fit, silently). The counter stays hidden until the limit is
+   near, then reads "540 / 600", then turns red and says to split it. The text
+   stays in the box either way, so he chooses where the split goes. */
+function lengthCounter(ta) {
+  const line = el('div', 'note num');
+  const paint = () => {
+    const c = describeCount(ta.value);
+    line.textContent = c.show ? c.line : '';
+    line.style.display = c.show ? '' : 'none';
+    line.style.color = c.over ? 'var(--bad)' : '';
+  };
+  ta.addEventListener('input', paint);
+  paint();
+  return line;
+}
+
+// True when the box is too long to send — and it has said so.
+function refuseTooLong(ta) {
+  const c = describeCount(ta.value);
+  if (!c.over) return false;
+  toast(c.line);
+  ta.focus();
+  return true;
+}
+
 /* Words only. Cheaper than a photo for anything you cooked yourself, and often
    the better answer for it too — a picture cannot see the oil that already went
    into the pan. Naming a chain or a brand is the dearer case, not the cheaper
@@ -1983,6 +2014,7 @@ function openDescribeFlow(mealId, prefill, onPick) {
   ta.placeholder = 'Two eggs fried in butter, three strips of bacon, a slice of sourdough';
   ta.value = prefill || '';
   sh.appendChild(ta);
+  sh.appendChild(lengthCounter(ta));
   sh.appendChild(noteEl('Portions help most — “a cup”, “two palms”, “half the box”. Weights beat guesses, but a guess beats not logging it.'));
 
   if (!onPick) {
@@ -1995,6 +2027,7 @@ function openDescribeFlow(mealId, prefill, onPick) {
   go.onclick = () => {
     const text = ta.value.trim();
     if (!text) { toast('Tell it what you ate'); ta.focus(); return; }
+    if (refuseTooLong(ta)) return;
     const ctx = {
       meal, onPick, mode: 'text',
       busy: 'Working out the macros…',
@@ -2137,6 +2170,13 @@ function openAiError(e, ctx) {
   cancel.style.marginTop = '8px';
   cancel.onclick = close;
   sh.appendChild(cancel);
+
+  /* rack-v63 (P7 F3-4): a failed attempt can still have used one of today's
+     estimates, and cost the owner something. When the Worker says so on the
+     error reply, the same line as under an answer says so here. An older
+     Worker sends neither, and nothing is drawn. */
+  const spent = costLine(e, uid() === OWNER_UID);
+  if (spent) sh.appendChild(el('div', 'ai-cost num', spent));
 }
 
 const CONF = {
@@ -2338,14 +2378,11 @@ function openAiReview(res, ctx) {
     cancel.onclick = close;
     body.appendChild(cancel);
 
-    if (res.usage) {
-      const bits = ['$' + Number(res.usage.usd || 0).toFixed(4) + ' of credit'];
-      if (res.left && res.left.day != null) {
-        const kind = res.left.kind === 'photo' ? 'photo' : 'describe';
-        bits.push(res.left.day + ' ' + kind + (res.left.day === 1 ? '' : 's') + ' left today');
-      }
-      body.appendChild(el('div', 'ai-cost num', bits.join('   ·   ')));
-    }
+    /* rack-v63 (P7 CL-06): what is left today, for everyone; the dollar
+       figure for the owner only, and never "$0.0000" for a reply that carried
+       no number (estimate-limits.js costLine). */
+    const spent = costLine(res, uid() === OWNER_UID);
+    if (spent) body.appendChild(el('div', 'ai-cost num', spent));
   }
 
   paint();
