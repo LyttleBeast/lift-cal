@@ -1,0 +1,775 @@
+/* vibes-css:begin — generated from vibes/defs/clear-sky.js by tools-check/vibes-css.mjs. Do not edit between the markers: change the definition, then run it with --write. */
+:root[data-vibe="clear-sky"] {
+  --shape-rule-ink: #526578;
+  --shape-rule-hair: 0;
+  --shape-rule-head-0: 1px;
+  --shape-rule-head-1: 0;
+  --shape-rule-head-2: 0;
+  --shape-rule-sub-0: 1px;
+  --shape-rule-sub-1: 0;
+  --shape-rule-sub-2: 0;
+  --shape-rule-total-0: 1px;
+  --shape-rule-total-1: 0;
+  --shape-rule-total-2: 0;
+  --shape-leader-ink: #2c3b48;
+  --shape-leader-dot: 1.5px;
+  --shape-leader-pitch: 4px;
+  --shape-leader-min: 16px;
+  --shape-band-fill: #d9e3ea;
+  --shape-band-ink: #0f1a24;
+  --shape-band-height: 30px;
+  --shape-gutter: 2px;
+  --shape-keyline-ink: #0f1a24;
+  --shape-keyline-width: 1px;
+  --shape-lead-keyline: 0;
+  --shape-cue-ink: #0f1a24;
+  --shape-chosen-tick: 0;
+  --shape-rank-column: 0;
+  --rack: #b1cfe5;
+  --bar: #f9fbfc;
+  --collar: #9bb8cf;
+  --knurl: #526578;
+  --chalk: #0f1a24;
+  --steel: #2c3b48;
+  --dim: #404d5b;
+  --p-red: #6e0005;
+  --p-blue: #02507b;
+  --p-yellow: #8c6900;
+  --p-green: #045d42;
+  --p-white: #25272b;
+  --p-chrome: #676d77;
+  --good: #03553c;
+  --warn: #634800;
+  --bad: #6e0005;
+  --ink-plate: #f9fbfc;
+  --accent: #083366;
+  --focus: #083366;
+  --accent-press: #00203e;
+  --ink: #ffffff;
+  --danger: #6e0005;
+  --on-danger: #ffffff;
+  --done: #045d42;
+  --ink-go: #ffffff;
+  --well: #b1cfe5;
+  --knockout: #f9fbfc;
+  --inverse: #0f1a24;
+  --cal-mark: #ffffff;
+  --raised: #d9e3ea;
+  --track: #d9e3ea;
+  --grip: #768ba0;
+  --faint: #404d5b;
+  --band: #0f1a24;
+  --knob: #2c3b48;
+  --greet-name: #0f1a24;
+  --tint-runway: rgba(82,101,120,.45);
+  --tint-runway-edge: rgba(82,101,120,1);
+  --type-tag-size: 11px;
+  --type-tag-ls: .06em;
+  --type-tag-upper: uppercase;
+  --type-tag-wdth: 100;
+  --type-tag-wght: 600;
+  --font: 'Archivo', system-ui, -apple-system, sans-serif;
+  --font-mono: ui-monospace, monospace;
+  --font-display: 'Archivo', system-ui, -apple-system, sans-serif;
+  --font-italic: 'Archivo', system-ui, -apple-system, sans-serif;
+  --font-num: 'Archivo', system-ui, -apple-system, sans-serif;
+  --r: 4px;
+  --r-sm: 4px;
+  --r-sheet: 18px;
+  --r-tile: 4px;
+  --r-pill: 999px;
+  --r-plate: 4px;
+  --r-chip: 4px;
+  --r-mark: 2px;
+  --r-idx: 4px;
+  --r-round: 50%;
+  --r-hair: 1px;
+  --r-bubble: 12px;
+  --r-badge: 4px;
+  --shadow-peek: none;
+  --shadow-rest: none;
+  --shadow-toast: none;
+  --shadow-fab: none;
+  --shadow-fab-pressed: none;
+  --shadow-tour-card: 0 12px 32px rgba(15,26,36,.22);
+  --shadow-cal-tick: 0 0 0 1px rgba(15,26,36,.9);
+  --shadow-flame: inset 0 0 0 1px rgba(8,51,102,.35);
+  --shadow-kpi-day: inset 0 0 0 1.2px #526578;
+  --shadow-kpi-day-on: none;
+  --shadow-kpi-today: 0 0 0 1.5px #b1cfe5, 0 0 0 2.5px #2c3b48;
+  --shadow-kpi-today-on: 0 0 0 1.5px #b1cfe5, 0 0 0 2.5px #0f1a24;
+  --shadow-guide-eaten: inset 0 0 0 1px #526578;
+  --shadow-traj-good: 0 0 0 4px rgba(3,85,60,.18);
+  --shadow-traj-warn: 0 0 0 4px rgba(99,72,0,.18);
+  --shadow-traj-bad: 0 0 0 4px rgba(110,0,5,.18);
+  --shadow-tour-lit: 0 0 0 2px #083366;
+  --shadow-cal-head: 0 0 0 1px rgba(15,26,36,.9);
+  --shadow-cal-target: 0 0 0 1px rgba(15,26,36,.9);
+  --blur-sheet: blur(3px);
+  --blur-dock: none;
+  --blur-wk-bar: none;
+  --scrim-tour: linear-gradient(to bottom, rgba(177,207,229,.55) 0%, rgba(177,207,229,.94) 42%);
+  --video-bg: #000000;
+  --rack-rgb: 177,207,229;
+  --shade-rgb: 15,26,36;
+  --lift-rgb: 249,251,252;
+  --accent-rgb: 8,51,102;
+  --p-yellow-rgb: 140,105,0;
+  --warn-rgb: 99,72,0;
+  --p-red-rgb: 110,0,5;
+  --bad-rgb: 110,0,5;
+  --danger-rgb: 110,0,5;
+  --p-blue-rgb: 2,80,123;
+  --p-green-rgb: 4,93,66;
+  --done-rgb: 4,93,66;
+  --good-rgb: 3,85,60;
+  --p-white-rgb: 37,39,43;
+  --steel-rgb: 44,59,72;
+  --tag-ink-w: #634800;
+  --tag-ink-f: #6e0005;
+  --tag-ink-d: #02507b;
+  --ink-of-p-red: #6e0005;
+  --ink-of-p-blue: #02507b;
+  --ink-of-p-yellow: #634800;
+  --ink-of-p-green: #045d42;
+  --ink-of-p-white: #25272b;
+  --ink-of-p-chrome: #404d5b;
+  color-scheme: light;
+}
+:root[data-vibe="clear-sky"]::before { content: ''; position: fixed; top: 0; left: 0; right: 0; height: var(--safe-top); background: var(--band); pointer-events: none; z-index: 400; }
+:root[data-vibe="clear-sky"] [data-tag] { font-size: var(--type-tag-size); letter-spacing: var(--type-tag-ls); text-transform: var(--type-tag-upper); font-variation-settings: 'wdth' var(--type-tag-wdth), 'wght' var(--type-tag-wght); }
+:root[data-vibe="clear-sky"] :where(.ai-cost, .cal-legend-item) { font-variation-settings: 'wdth' var(--type-tag-wdth), 'wght' var(--type-tag-wght); }
+:root[data-vibe="clear-sky"] :where(.plate-chip) { font-size: max(10px, var(--type-tag-size)); }
+:root[data-vibe="clear-sky"] :where(.cal-daynum) { font-size: max(12px, var(--type-tag-size)); }
+:root[data-vibe="clear-sky"] .ob-tip, :root[data-vibe="clear-sky"] .coach-bub.ask { border: var(--shape-keyline-width) solid var(--accent); }
+:root[data-vibe="clear-sky"] .ob-tip { border-radius: var(--r-sm); }
+/* vibes-css:end */
+
+/* ================= Clear sky, by hand =================
+   A pale sky page with one number standing in it. Each tab is a flat sky;
+   the one white slip on it is the thing you touch (the Coach card, Fuel's
+   summary); every other card lies on the sky with no box, its head sitting on
+   one 1px knurl line, and cards part by space. One huge Archivo Light figure
+   stands on the three screens that carry engine v3's hero mark (the Goal's
+   pace, Fuel's figure, Steps' today). The spec, with every number's source, is
+   ~/dev/vibes-night/design/clear-sky.md; the colours above are generated from
+   vibes/defs/clear-sky.js and are not restated here. No @font-face: the face
+   is v1's variable Archivo from rack.css line 1, and the hero's wght 300 is
+   inside the axis it already loads (0 extra bytes; spec §5.2).
+
+   A DEEP VIBE: v1's boxes in v1's order, new shapes. Below are
+     1. the type presets (natively a preset reaches every site that spends it;
+        on the web each is literal CSS, restated on its selectors). Weight only
+        through font-variation-settings, and always with 'wdth' 100;
+     2. the looks the definition names (design/VOCAB.md, vibes/defs/vocab.js
+        v3 — the look's wording there is what native draws too);
+     3. the tints rack.css writes as literal alphas, where Clear sky's differ;
+     4. the chart marks the pinned modules paint at fixed strings;
+     5. the doors (sign-in, the gates, onboarding) and the Vibes tile.
+
+   SPECIFICITY. A preset is `[data-vibe="clear-sky"] :where(.x)`: (0,1,0), the
+   same as rack.css's `.x`, which it beats by coming later, and below every
+   local resize rack.css writes as `.parent .x`, which keeps winning as it does
+   in v1. A look is written at the specificity of the rule it replaces, plus
+   the attribute.
+
+   THE PAGE AND THE SLIP. Under card · ruled a card has no ground, so what
+   sits in one sits on the sky: the rows that paint their own ground to cover
+   a swipe-to-delete panel (.swipe-front, .st-row) take the page's colour on
+   the page (#app) and keep the sheet's white in a sheet (sheets live in
+   <body>, outside #app). */
+
+/* ================= 1. type presets (clear-sky.js `type`) ================= */
+
+/* h1 the title, h2 the sheet title, h3 the section head: Archivo at its
+   normal width. The title is Regular (26 / 400), quiet beside the hero. */
+[data-vibe="clear-sky"] :where(h1, h2, h3) { letter-spacing: 0; font-variation-settings: 'wdth' 100, 'wght' 600; }
+[data-vibe="clear-sky"] :where(h1) { font-size: 26px; letter-spacing: -.01em; font-variation-settings: 'wdth' 100, 'wght' 400; }
+[data-vibe="clear-sky"] :where(h2, h3) { font-size: 17px; }
+
+/* eyebrow: card heads, screen and sheet eyebrows. 13 / 600 steel, sentence
+   case as authored. A string written in lower case keeps v1's capitals as the
+   caps tag ([data-tag], generated above, (0,3,0)). */
+[data-vibe="clear-sky"] :where(.eyebrow) {
+  font-size: 13px; letter-spacing: 0; text-transform: none; color: var(--steel);
+  font-variation-settings: 'wdth' 100, 'wght' 600;
+}
+
+/* btn / btnLg: 14 / 600 untracked; large 17 / 600 in sentence case. */
+[data-vibe="clear-sky"] :where(.btn) { font-size: 14px; letter-spacing: 0; font-variation-settings: 'wdth' 100, 'wght' 600; }
+[data-vibe="clear-sky"] :where(.btn-lg) { font-size: 17px; letter-spacing: 0; text-transform: none; }
+/* rack.css's own resizes on a .btn at (0,1,0), put back after the preset */
+[data-vibe="clear-sky"] :where(.drop-add, .wk-block-add, .btn-sm) { font-size: 12px; }
+[data-vibe="clear-sky"] :where(.wk-block-btn) { font-size: 11px; }
+
+/* dockLbl: 11 / 600 in sentence case, dim at rest and chalk when active
+   (v1's rule). (0,2,1) beats rack.css's two `.dock button` rules. */
+[data-vibe="clear-sky"] .dock button {
+  font-size: 11px; letter-spacing: 0; text-transform: none;
+  font-variation-settings: 'wdth' 100, 'wght' 600;
+}
+
+/* fieldLbl: 13 / 600 steel, sentence case */
+[data-vibe="clear-sky"] :where(.field-lbl),
+[data-vibe="clear-sky"] .field :where(label) {
+  font-size: 13px; letter-spacing: 0; text-transform: none; color: var(--steel);
+  font-variation-settings: 'wdth' 100, 'wght' 600;
+}
+
+/* note: 13 / 400 dim, lh 1.45 */
+[data-vibe="clear-sky"] :where(.note) { font-size: 13px; line-height: 1.45; }
+
+/* statVal 22 / 600; statLbl 13 / 600 steel, which native also sets the KPI
+   label, the set table's column heads ("Set lb Reps e1RM", as authored), the
+   calendar's weekday row and the plate strip's words in. */
+[data-vibe="clear-sky"] :where(.stat-val) { font-size: 22px; font-variation-settings: 'wdth' 100, 'wght' 600; }
+[data-vibe="clear-sky"] :where(.stat-lbl, .kpi-lbl, .set-hd),
+[data-vibe="clear-sky"] .cal-dow :where(span),
+[data-vibe="clear-sky"] .plate-strip :where(.lbl) {
+  font-size: 13px; letter-spacing: 0; text-transform: none; color: var(--steel);
+  font-variation-settings: 'wdth' 100, 'wght' 600;
+}
+
+/* timer, kpiVal: figures in rows at 22 / 600, tabular (rack.css .timer / .num) */
+[data-vibe="clear-sky"] :where(.timer) { letter-spacing: 0; font-variation-settings: 'wdth' 100, 'wght' 600; }
+[data-vibe="clear-sky"] :where(.kpi-val) { font-size: 22px; letter-spacing: 0; font-variation-settings: 'wdth' 100, 'wght' 600; }
+
+/* headline: every figure You sets at the title's size, Regular, tabular. */
+[data-vibe="clear-sky"] :where(.headline-v) {
+  font-size: 26px; letter-spacing: -.01em; line-height: 1;
+  font-variation-settings: 'wdth' 100, 'wght' 400;
+}
+/* loadNum: Regular at the call sites' own sizes (26-40, set inline); v1's
+   wide 800 stamped figure is v1's. */
+[data-vibe="clear-sky"] :where(.load-num) {
+  letter-spacing: -.01em; line-height: 1;
+  font-variation-settings: 'wdth' 100, 'wght' 400;
+}
+
+/* youGreet: You's title, 26 / 400; the name in one ink (--greet-name, R2) */
+[data-vibe="clear-sky"] :where(.you-greet) {
+  font-size: 26px; line-height: 1.1; letter-spacing: -.01em;
+  font-variation-settings: 'wdth' 100, 'wght' 400;
+}
+
+/* chip, segBtn: 13 / 600 steel, sentence case */
+[data-vibe="clear-sky"] :where(.chip) { font-size: 13px; font-variation-settings: 'wdth' 100, 'wght' 600; }
+[data-vibe="clear-sky"] :where(.seg-btn) {
+  font-size: 13px; letter-spacing: 0; text-transform: none;
+  font-variation-settings: 'wdth' 100, 'wght' 600;
+}
+
+/* setInput: 600 at normal width. The size stays the 16px every web input has
+   (rack.css `input`): under 16 iOS Safari zooms the page on focus, which v1's
+   set boxes never do, and a vibe changes how Rack looks, not what it does. */
+[data-vibe="clear-sky"] .ex-block .set-row :where(input),
+[data-vibe="clear-sky"] .rt-sets .set-row :where(input) { font-variation-settings: 'wdth' 100, 'wght' 600; }
+
+/* mono: the paste box at 13 (v1 12) */
+[data-vibe="clear-sky"] :where(.paste-box) { font-size: 13px; }
+
+/* ================= 2. the looks (clear-sky.js `variants`) ================= */
+
+/* ---------- headline · solo: the hero figure ----------
+   At a figure carrying engine v3's hero mark (food.js Fuel's summary figure,
+   steps.js Steps' today figure, you.js the Goal's pace) the figure is
+   type.hero: 76 / 300, -.02em, tabular — 64 under 360px, where "15,000" on
+   Fuel's slip and "300,000" on Steps still fit (spec §5.6). font-size is
+   !important only to beat the inline sizes it replaces (V59 §5.9):
+   food.js:590 big.style.fontSize = '40px' and steps.js:196
+   big.style.fontSize = '26px'. Colour stays the caller's (the zone colour,
+   good past the step goal). */
+[data-vibe="clear-sky"] [data-hero] {
+  font-size: 76px !important;   /* beats food.js:590 and steps.js:196's inline fontSize */
+  /* type.hero's lh 1, floored at the face's minLh (878 + 210 on 1000) as
+     native floors every Text: the Light's ink never spills its line box */
+  line-height: 1.088; letter-spacing: -.02em;
+  font-variation-settings: 'wdth' 100, 'wght' 300;
+}
+@media (max-width: 359.98px) {
+  [data-vibe="clear-sky"] [data-hero] { font-size: 64px !important; }   /* the same two inline sizes */
+}
+/* Where the row cannot hold the figure, it stacks in its own order: Fuel's
+   figure, then "kcal left today" and the eaten line under it; Steps' ring,
+   then its words and figure under it. */
+[data-vibe="clear-sky"] .card.fuel-sum .fuel-top { flex-direction: column; align-items: flex-start; gap: 6px; }
+[data-vibe="clear-sky"] #view-steps .st-hero { flex-direction: column; align-items: flex-start; gap: 14px; }
+/* Every headline unit on the figure's baseline, in steel, as the caps tag:
+   all of You's units are written in lower case ('kcal / day', 'lb',
+   'lb / week down'), so they keep v1's capitals at the tag's 11 / 600. */
+[data-vibe="clear-sky"] .headline-u {
+  font-size: var(--type-tag-size); letter-spacing: var(--type-tag-ls); text-transform: var(--type-tag-upper);
+  color: var(--steel); font-variation-settings: 'wdth' 100, 'wght' var(--type-tag-wght);
+}
+
+/* ---------- card · ruled / youCard · ruled ----------
+   No ground, no border, no radius: the card sits on the sky, its head (title
+   left, meta and ⋯ right) on its article rule (shape.rule.sub, 1px knurl,
+   place 'below'), drawn full width, the content to the rule's width. Cards
+   part by space. The admin panel borrows #view-you, so its cards follow. */
+[data-vibe="clear-sky"] .card {
+  background: transparent; border: 0; border-radius: 0;
+  padding: 0; margin-bottom: 26px;
+}
+[data-vibe="clear-sky"] .card > .card-hd {
+  padding-bottom: 8px; margin-bottom: 12px;
+  border-bottom: var(--shape-rule-sub-0) solid var(--shape-rule-ink);
+}
+/* A card with no head row sits under the rule instead (the open lead's head
+   rule, shape.rule.head): Steps' today and Weight's log — the hero-slot
+   cards, which Clear sky gives no photo, so each is the open lead (vocab.js
+   card · ruled) — and the few headless cards (the targets preview, the
+   install card, the admin's boxes). */
+[data-vibe="clear-sky"] .card:not(:has(> .card-hd)) {
+  padding-top: 14px;
+  border-top: var(--shape-rule-head-0) solid var(--shape-rule-ink);
+}
+/* The tab's lead card keeps its box: Fuel's summary is the white slip —
+   bar ground, radius.r, no border (shape.lead.keyline false; 1.56:1 off the
+   sky by value). */
+[data-vibe="clear-sky"] .card[data-lead="fuelSummary"] {
+  background: var(--bar); border: 0; border-radius: var(--r);
+  padding: 14px;
+}
+/* Fuel's empty meal card stays one line: its head, on its rule. */
+[data-vibe="clear-sky"] .card.meal-blank > .card-hd { padding-bottom: 8px; }
+/* "nothing yet": written in lower case, v1's capitals as the caps tag, in faint */
+[data-vibe="clear-sky"] .meal-blank .meal-kcal {
+  font-size: var(--type-tag-size); letter-spacing: var(--type-tag-ls);
+  font-variation-settings: 'wdth' 100, 'wght' var(--type-tag-wght);
+}
+/* A card straight after a note (the admin panel's lists) had the box's own
+   edge to part them; with no box, space does it. */
+[data-vibe="clear-sky"] .note + .card { margin-top: 20px; }
+/* Two cards shoulder to shoulder (You's steps and water): no bottom space in
+   the pair, and the gutter wide enough that two rules read as two. */
+[data-vibe="clear-sky"] .you-pair { column-gap: 18px; }
+[data-vibe="clear-sky"] .you-pair .card { padding: 0; margin-bottom: 0; }
+/* youCard · ruled: Wins and Improve lose their 3px side stripe (the card's
+   border is gone) and colour their head rule instead — good and warn, the
+   only coloured lines in the vibe; the titles still say which is which. */
+[data-vibe="clear-sky"] #view-you .card.card-wins > .card-hd { border-bottom-color: var(--good); }
+[data-vibe="clear-sky"] #view-you .card.card-improve > .card-hd { border-bottom-color: var(--warn); }
+/* The weekly review's verdict ("A solid week"), v1's literal 24 / 800 wide:
+   re-set as a head at normal width and 600, so the one heavy wide word on
+   You is not louder than the Goal's figure. Size and line as v1's. */
+[data-vibe="clear-sky"] .review-verdict { letter-spacing: -.01em; font-variation-settings: 'wdth' 100, 'wght' 600; }
+/* What paints its own ground to cover a swipe panel takes the ground it sits
+   on: the sky on the page, the sheet's white in a sheet (v1's). */
+[data-vibe="clear-sky"] #app .swipe-front { background: var(--rack); }
+[data-vibe="clear-sky"] #app .st-row { background: transparent; }
+
+/* ---------- sectionHeader · plain ----------
+   The title alone, set as a real head in type.h3 (17 / 600 ink, as authored);
+   no trailing hairline. You, Settings and the admin panel. */
+[data-vibe="clear-sky"] .you-sec-t {
+  font-size: 17px; letter-spacing: 0; text-transform: none; color: var(--chalk);
+  font-variation-settings: 'wdth' 100, 'wght' 600;
+}
+[data-vibe="clear-sky"] .you-sec-t::after { content: ''; display: none; }
+
+/* ---------- statRow · line ----------
+   A box-score line on the sky: no ground and no outer border; the values on
+   one baseline with a 1px collar rule between the columns, the labels under
+   them. The first column starts on the content's edge, so a line under a
+   ruled head starts where the head does. Borders stay 1px (transparent), so
+   no column changes width by a border. Mini stats take the same look. */
+[data-vibe="clear-sky"] .stat,
+[data-vibe="clear-sky"] .mini-stat {
+  background: transparent; border-color: transparent; border-radius: 0;
+  padding: 2px 0 10px 9px;   /* v1's 10 under the label, so a head below keeps its air */
+}
+[data-vibe="clear-sky"] .stat:first-child,
+[data-vibe="clear-sky"] .mini-stat:first-child { padding-left: 0; }
+[data-vibe="clear-sky"] .stat + .stat,
+[data-vibe="clear-sky"] .mini-stat + .mini-stat { border-left-color: var(--collar); }
+
+/* ---------- kpi · word ----------
+   No tile and no corner tint; the 2 × 2 grid in its order. The delta is bare
+   signed text with its arrow (every tint.pill* is 0), in the pill's literal
+   11.5 / 10 (no type.pill). The sparkline is word-sized in its own place:
+   72 × 22 (its 150 × 46 drawing, scaled), a 1.5 stroke, no area, no glow, a
+   3.5 end dot. "last week …" at 13, tabular. */
+[data-vibe="clear-sky"] .kpi-grid { gap: 22px 18px; }
+[data-vibe="clear-sky"] .kpi {
+  background: transparent; border-color: transparent; border-radius: 0;
+  padding: 0; overflow: visible;
+}
+[data-vibe="clear-sky"] .delta-pill,
+[data-vibe="clear-sky"] .delta-pill.up,
+[data-vibe="clear-sky"] .delta-pill.down,
+[data-vibe="clear-sky"] .delta-pill.warn { background: transparent; padding: 0; }
+[data-vibe="clear-sky"] .kpi-unit {
+  font-size: 13px; letter-spacing: 0; color: var(--steel);
+  font-variation-settings: 'wdth' 100, 'wght' 400;
+}
+[data-vibe="clear-sky"] .kpi-prev { font-size: 13px; letter-spacing: 0; }
+[data-vibe="clear-sky"] .kpi .chart-spark { width: 72px; height: auto; margin-top: 8px; }
+
+/* ---------- youHero · stacked ----------
+   The avatar above the greeting, left; the gear stays top right, level with
+   the avatar. Same three children in the same order, placed on a grid. */
+[data-vibe="clear-sky"] .you-hero { grid-template-columns: 1fr auto; row-gap: 12px; align-items: start; }
+[data-vibe="clear-sky"] .you-hero > .you-avatar { grid-column: 1; grid-row: 1; margin-top: 0; }
+[data-vibe="clear-sky"] .you-hero > :nth-child(2) { grid-column: 1 / -1; grid-row: 2; }
+[data-vibe="clear-sky"] .you-hero > .you-gear { grid-column: 2; grid-row: 1; margin-top: 0; }
+[data-vibe="clear-sky"] .you-avatar { font-size: 17px; font-variation-settings: 'wdth' 100, 'wght' 600; }
+[data-vibe="clear-sky"] .you-hero .you-sub { font-size: 13px; color: var(--steel); }
+
+/* ---------- coachCard · flat ----------
+   The white slip on You and Train: its 1px border drawn in its own ground so
+   no edge shows; 190 / 164, padding 14 and v1's type and metrics unchanged.
+   Pressed still shows knurl (rack.css .coach-card:active outranks this). */
+[data-vibe="clear-sky"] :where(.coach-card) { border-color: var(--bar); }
+
+/* ---------- chip · tag ----------
+   A filled tag: raised ground, no border, radius.chip; chosen is inked in
+   (inverse ground, knockout words). The chips that are 44 tall stay 44
+   (Movement, the feel chips, the goal chips, the effort chips). Borders stay
+   1px, transparent, so no chip changes size. */
+[data-vibe="clear-sky"] .chip,
+[data-vibe="clear-sky"] .move-opt,
+[data-vibe="clear-sky"] .coach-goal-opt,
+[data-vibe="clear-sky"] .coach-chip {
+  background: var(--raised); border-color: transparent; border-radius: var(--r-chip);
+}
+[data-vibe="clear-sky"] .chip.on,
+[data-vibe="clear-sky"] .move-opt.on,
+[data-vibe="clear-sky"] .coach-goal-opt.on,
+[data-vibe="clear-sky"] .feel-card .coach-chip.on,
+[data-vibe="clear-sky"] .coach-effort.on {
+  background: var(--inverse); border-color: var(--inverse); color: var(--knockout);
+}
+
+/* ---------- segmented · tabs ----------
+   No track: the options as words at equal widths, the chosen one in chalk
+   over a 2px underline in shape.cue.ink — the underline is the cue. Drawn as
+   an inset shadow, so the control keeps v1's height to the pixel. */
+[data-vibe="clear-sky"] .seg { background: transparent; border-color: transparent; border-radius: 0; }
+[data-vibe="clear-sky"] .seg-btn { border-radius: 0; }
+[data-vibe="clear-sky"] .seg-btn.on {
+  background: transparent; color: var(--chalk);
+  box-shadow: inset 0 -2px 0 var(--shape-cue-ink);
+}
+
+/* ---------- field · square ----------
+   radius.plate and a 1px knurl border, a 3:1 control edge on the sky (3.70)
+   and on white (5.79); grounds as v1's (white fields, the sky well in a white
+   box). Focus still turns it prussian: rack.css's :focus rules outrank these. */
+[data-vibe="clear-sky"] .field :where(input, select, textarea),
+[data-vibe="clear-sky"] .qty-row :where(input),
+[data-vibe="clear-sky"] .picker-search :where(input),
+[data-vibe="clear-sky"] .wpe-row :where(input),
+[data-vibe="clear-sky"] :where(.paste-box, .ob-num) {
+  border-color: var(--knurl); border-radius: var(--r-plate);
+}
+/* Placeholders in dim, as native draws them (Field.jsx placeholderTextColor
+   T.colors.dim); rack.css sets one only on the set rows. */
+[data-vibe="clear-sky"] ::placeholder { color: var(--dim); }
+
+/* ---------- listRow · plain ----------
+   No rule between rows — separators come only where a group ends (the
+   card's own head rule) — and rows on a 44 pitch at least. The borders stay
+   1px, transparent, so nothing moves by a border. */
+[data-vibe="clear-sky"] .food-entry,
+[data-vibe="clear-sky"] .pb-row,
+[data-vibe="clear-sky"] .pr-hit,
+[data-vibe="clear-sky"] .pr-row,
+[data-vibe="clear-sky"] .rank-row,
+[data-vibe="clear-sky"] .sess-row,
+[data-vibe="clear-sky"] .find-row,
+[data-vibe="clear-sky"] .review-row,
+[data-vibe="clear-sky"] .rt-pv-row,
+[data-vibe="clear-sky"] .day-ex,
+[data-vibe="clear-sky"] .st-row,
+[data-vibe="clear-sky"] .guide-row,
+[data-vibe="clear-sky"] .water-entry,
+[data-vibe="clear-sky"] .adm-r { border-top-color: transparent; min-height: 44px; }
+[data-vibe="clear-sky"] .ex-item { border-bottom-color: transparent; min-height: 44px; }
+
+/* ---------- setTable · ruled ----------
+   No card: the group tag, the name (17 / 600) and ⋯ on the article rule
+   (shape.rule.sub); "Last …" at 13 in steel; the column heads over a 1px
+   rule; v1's column widths (rack.css .set-hd / .set-row, untouched). A
+   lifting block is a rule-framed group — a rule above and below, no wash
+   (tint.block 0), no keyline round it. */
+[data-vibe="clear-sky"] .ex-block {
+  background: transparent; border: 0; border-radius: 0; margin-bottom: 26px;
+}
+[data-vibe="clear-sky"] .ex-hd { border-bottom: var(--shape-rule-sub-0) solid var(--shape-rule-ink); }
+[data-vibe="clear-sky"] .ex-name { font-size: 17px; font-variation-settings: 'wdth' 100, 'wght' 600; }
+[data-vibe="clear-sky"] .ex-prev { font-size: 13px; color: var(--steel); padding-top: 8px; }
+[data-vibe="clear-sky"] .ex-block .set-hd,
+[data-vibe="clear-sky"] .rt-sets .set-hd { border-bottom: 1px solid var(--shape-rule-ink); }
+[data-vibe="clear-sky"] .wk-block,
+[data-vibe="clear-sky"] .rt-pv-block {
+  background: transparent; border-radius: 0;
+  border-color: var(--shape-rule-ink) transparent;
+}
+
+/* ---------- setRow · ruled ----------
+   Rows parted by space alone (shape.rule.hair 0: the collar rule between rows
+   is drawn transparent, 1px kept). The badge is a bare figure at 13 / 600 —
+   numbers steel, W / F / D in tagInk (rack.css .set-idx.t-*) — with no
+   wash. The inputs lose their ground and sit on a 1px knurl underline (3.70
+   on the sky, 4.56 on a done row); focus thickens it to 2px prussian, the
+   second pixel an inset shadow so nothing moves. The e1RM 13 dim, tabular.
+   Done = the filled green check with its ✓, and the row clears toward white
+   (tint.setDone, below). Drops keep ↳, their indent and the rail. */
+[data-vibe="clear-sky"] .ex-block .set-row,
+[data-vibe="clear-sky"] .rt-sets .set-row { border-top-color: transparent; }
+[data-vibe="clear-sky"] .ex-block .set-idx,
+[data-vibe="clear-sky"] .rt-sets .set-idx {
+  background: transparent; font-size: 13px;
+  font-variation-settings: 'wdth' 100, 'wght' 600;
+}
+[data-vibe="clear-sky"] .ex-block .set-row input,
+[data-vibe="clear-sky"] .rt-sets .set-row input {
+  background: transparent; border-color: transparent; border-bottom-color: var(--knurl); border-radius: 0;
+}
+[data-vibe="clear-sky"] .ex-block .set-row input:focus,
+[data-vibe="clear-sky"] .rt-sets .set-row input:focus {
+  border-color: transparent; border-bottom-color: var(--focus);
+  box-shadow: inset 0 -1px 0 var(--focus);
+}
+[data-vibe="clear-sky"] .set-e1rm { font-size: 13px; }
+
+/* ---------- calCell · ruled ----------
+   A printed calendar: no cell grounds and, at shape.rule.hair 0, no lines —
+   cells parted by v1's 4px of space. Today is boxed by a 2px keyline in
+   shape.cue.ink (ink), drawn inset so the cell keeps its size, and keeps
+   v1's accent 800 number. Day numbers re-set at 13: 400 dim untrained, 600
+   ink trained. */
+[data-vibe="clear-sky"] .cal-day,
+[data-vibe="clear-sky"] .cal-day.has-work { background: transparent; }
+[data-vibe="clear-sky"] .cal-day.today { border-color: transparent; box-shadow: inset 0 0 0 2px var(--shape-cue-ink); }
+[data-vibe="clear-sky"] .cal-daynum { font-size: 13px; font-variation-settings: 'wdth' 100, 'wght' 400; }
+[data-vibe="clear-sky"] .cal-day.has-work .cal-daynum { font-variation-settings: 'wdth' 100, 'wght' 600; }
+[data-vibe="clear-sky"] .cal-day.today .cal-daynum { font-variation-settings: 'wdth' 100, 'wght' 800; }
+
+/* ---------- dock · solid ----------
+   An opaque white bar, no blur, v1's collar top rule, cells and 26 × 2
+   prussian mark. */
+[data-vibe="clear-sky"] .dock { background: var(--bar); backdrop-filter: none; -webkit-backdrop-filter: none; }
+
+/* ---------- fab · square ----------
+   A prussian slab, radius.plate, no shadow (the tokens); its + and v1's
+   literal "Log food" caps unchanged. */
+[data-vibe="clear-sky"] .fuel-fab { border-radius: var(--r-plate); }
+
+/* ---------- addTile · flat ----------
+   No washes and no border: every tile on the well (the sky, on the white
+   sheet). The Photo tile is marked by its prussian icon well alone; the lit
+   tiles' icon well and tag sit on raised, not grip (steel 8.83 there). Tags
+   square. A press still shows knurl; an off tile stays at v1's .42. */
+[data-vibe="clear-sky"] .add-tile,
+[data-vibe="clear-sky"] .add-tile.hero,
+[data-vibe="clear-sky"] .add-tile.lit { background: var(--well); border-color: transparent; }
+[data-vibe="clear-sky"] .add-tile:not(:disabled):active { border-color: var(--knurl); }
+[data-vibe="clear-sky"] .add-tile.lit .ic,
+[data-vibe="clear-sky"] .add-tile.lit .tag { background: var(--raised); }
+[data-vibe="clear-sky"] .add-tile .tag { border-radius: var(--r-chip); }
+
+/* ---------- sessionChrome · flat ----------
+   The top bar opaque white under its collar rule — the dark band above it is
+   the generated strip — and the rest pill and peek bar with no shadow (the
+   tokens). */
+[data-vibe="clear-sky"] .wk-bar { background: var(--bar); backdrop-filter: none; -webkit-backdrop-filter: none; }
+
+/* ---------- the Coach sheet ----------
+   Your answers are inked in (inverse ground, knockout words), as a chosen
+   tag is. The asking bubble's outline is the generated stripe rule. */
+[data-vibe="clear-sky"] .coach-bub.you { background: var(--inverse); border-color: var(--inverse); }
+[data-vibe="clear-sky"] .coach-bub.you .coach-bub-t { color: var(--knockout); }
+
+/* ================= 3. tints rack.css writes as literal alphas =================
+   ROLES gives tint.* no custom property, so each is rack.css's literal alpha
+   restated for Clear sky's value (clear-sky.js `tint`). Every other tint is
+   v1's alpha on a channel that already follows the role. */
+
+/* the sheet backdrop: the ink at .40, not v1's black .60 (R3.3) */
+[data-vibe="clear-sky"] .sheet-backdrop { background: rgba(var(--shade-rgb), .4); }
+
+/* A done row clears toward white (lift .45 over the sky = #d1e3ef): the
+   filled check carries "done". A tick flashes white (lift .90) and settles
+   into it: every ink on the row stays 7.91 or better at the peak. */
+[data-vibe="clear-sky"] .ex-block .set-row.done,
+[data-vibe="clear-sky"] .rt-sets .set-row.done { background: rgba(var(--lift-rgb), .45); }
+[data-vibe="clear-sky"] .ex-block .set-row.flash,
+[data-vibe="clear-sky"] .rt-sets .set-row.flash { animation-name: clear-sky-setFlash; }
+@keyframes clear-sky-setFlash {
+  0%   { background: rgba(var(--lift-rgb), .9); }
+  100% { background: rgba(var(--lift-rgb), .45); }
+}
+/* the drop rail, a 3:1 graphic on the sky (4.03) and on a done row (4.76);
+   + Drop's edge at .45 */
+[data-vibe="clear-sky"] .ex-block .set-row.drop::before,
+[data-vibe="clear-sky"] .rt-sets .set-row.drop::before { content: ''; background: rgba(var(--p-blue-rgb), .85); }
+[data-vibe="clear-sky"] .drop-add { border-color: rgba(var(--p-blue-rgb), .45); }
+
+/* a settings row pressed lifts to raised: lighter than the sky, darker than
+   the white sheet (dim 6.63 on it) */
+[data-vibe="clear-sky"] .set-list .set-row-nav:active { background: var(--raised); }
+
+/* The callout: the Weekly review's "Next week" is a paler band of sky (lift
+   .55 = #d9e7f2) with no border — no container here has both a fill and an
+   edge. */
+[data-vibe="clear-sky"] .review-take { background: rgba(var(--lift-rgb), .55); border-color: transparent; }
+
+/* The calorie bands over the track: pale blue, khaki and rose (tint.zone*),
+   1.46-1.71 off the track, so "Blue — cut", "Yellow — hold" and "Red — gain"
+   stay true on a light page. */
+[data-vibe="clear-sky"] .cal-zone.cut  { background: rgba(var(--p-blue-rgb), .24); }
+[data-vibe="clear-sky"] .cal-zone.hold { background: rgba(var(--p-yellow-rgb), .4); }
+[data-vibe="clear-sky"] .cal-zone.gain { background: rgba(var(--p-red-rgb), .26); }
+
+/* ================= 4. chart · ink over the pinned modules =================
+   Single-ink strokes: 1.5 lines with square caps, no area and no glow, flat
+   square-topped bars on their shared origin, rings with square caps, solid
+   collar hairline grids, meters as square-ended bars on the track, legend
+   keys as 12 × 3 strokes. analytics.js is pinned, so this restyles what it
+   draws and adds no geometry; SVG presentation attributes lose to any author
+   rule. Native's half is src/state/vibe.js VIBE_DEFS['clear-sky'].chart
+   (theme.js T.chart). */
+
+/* the area washes under lineChart's line and a sparkline's: the one unclassed
+   path[fill^="url(#"] in each svg (engine v3's hook) */
+[data-vibe="clear-sky"] .chart path[fill^="url(#"] { fill: none; }
+[data-vibe="clear-sky"] .spark-glow { display: none; }
+[data-vibe="clear-sky"] .chart-line,
+[data-vibe="clear-sky"] .chart-line2,
+[data-vibe="clear-sky"] .spark-line,
+[data-vibe="clear-sky"] .spark-line-dim,
+[data-vibe="clear-sky"] .wc-avg { stroke-width: 1.5; stroke-linecap: square; }
+/* the sparkline's end dot to 3.5 across at the word size (2.8 × 72/150 × 1.3),
+   scaled about its own centre */
+[data-vibe="clear-sky"] .spark-end { transform: scale(1.3); transform-box: fill-box; transform-origin: center; }
+[data-vibe="clear-sky"] .chart-peak-ring { stroke-width: 1.5; }
+[data-vibe="clear-sky"] .chart-grid { stroke-dasharray: none; opacity: 1; }
+[data-vibe="clear-sky"] .chart-bar,
+[data-vibe="clear-sky"] .chart-bar-bg,
+[data-vibe="clear-sky"] .spark-bar,
+[data-vibe="clear-sky"] .chart clipPath rect { rx: 0; }
+[data-vibe="clear-sky"] .ring-fill,
+[data-vibe="clear-sky"] .donut-seg,
+[data-vibe="clear-sky"] .st-ring circle { stroke-linecap: square; }
+/* Chart text, untracked and heavier than v1's. The spec asks for 11 at
+   least; at 11 a nine-week bar chart's dates and values ("Aug 16Aug 23")
+   run into each other in the pinned module's 36-unit slots, so the axis and
+   bar values are 10 at v1's narrow width (wdth 88), with room between every
+   label; the peak label, which stands alone, is 11. */
+[data-vibe="clear-sky"] .chart-axis,
+[data-vibe="clear-sky"] .chart-barval { font-size: 10px; letter-spacing: 0; font-variation-settings: 'wdth' 88, 'wght' 600; }
+[data-vibe="clear-sky"] .chart-peak-lbl { font-size: 11px; letter-spacing: 0; font-variation-settings: 'wdth' 100, 'wght' 600; }
+[data-vibe="clear-sky"] .legend-item i { width: 12px; height: 3px; border-radius: 0; }
+[data-vibe="clear-sky"] .vol-track,
+[data-vibe="clear-sky"] .vol-fill,
+[data-vibe="clear-sky"] .traj-bar,
+[data-vibe="clear-sky"] .traj-fill,
+[data-vibe="clear-sky"] .pb-track,
+[data-vibe="clear-sky"] .pb-fill,
+[data-vibe="clear-sky"] .cal-track,
+[data-vibe="clear-sky"] .cal-fill,
+[data-vibe="clear-sky"] .split-bar,
+[data-vibe="clear-sky"] .import-bar,
+[data-vibe="clear-sky"] .tod-col i { border-radius: 0; }
+
+/* the calorie band words (food.js 'cut', 'hold', 'gain', 'target', written
+   in lower case): v1's capitals as the caps tag, in steel */
+[data-vibe="clear-sky"] .cal-band-lab {
+  font-size: var(--type-tag-size); letter-spacing: var(--type-tag-ls); color: var(--steel);
+  font-variation-settings: 'wdth' 100, 'wght' var(--type-tag-wght);
+}
+/* The guide's tick swatch takes the bar's own tick ring (shadow.calTick): a
+   white sliver on the light track is 1.0:1 alone. */
+[data-vibe="clear-sky"] .guide-sw.tick::after { content: ''; box-shadow: var(--shadow-cal-tick); }
+
+/* The day that is not over (.chart-bar-dim, v1 .38): .66 on the sky keeps it
+   plainly lighter than a finished day while the colours it carries clear
+   v1's own (spec §4.3; the carb segment is the one left to Micah). */
+[data-vibe="clear-sky"] .chart-bar-dim { opacity: .66; }
+
+/* The heat strip (analytics.js heatStrip, steps.js heatMap): untrained days
+   on the track, not the pinned collar (1.06 against a faint cell here), and a
+   trained cell's opacity a below .80 lifted by .10·(.80 − a)/.52, rounded to
+   hundredths — monotonic, none at .80 — exactly native theme.js's
+   T.chart.heat.lift. Faint against untrained is 1.88 (v1 1.68); Steps' green
+   grid takes the same two rules (2.13, v1 1.34). */
+[data-vibe="clear-sky"] .heat rect[fill="var(--collar)"] { fill: var(--track); }
+[data-vibe="clear-sky"] .heat rect[fill-opacity="0.28"] { fill-opacity: .38; }
+[data-vibe="clear-sky"] .heat rect[fill-opacity="0.29"] { fill-opacity: .39; }
+[data-vibe="clear-sky"] .heat rect[fill-opacity="0.30"],
+[data-vibe="clear-sky"] .heat rect[fill-opacity="0.31"] { fill-opacity: .40; }
+[data-vibe="clear-sky"] .heat rect[fill-opacity="0.32"] { fill-opacity: .41; }
+[data-vibe="clear-sky"] .heat rect[fill-opacity="0.33"] { fill-opacity: .42; }
+[data-vibe="clear-sky"] .heat rect[fill-opacity="0.34"] { fill-opacity: .43; }
+[data-vibe="clear-sky"] .heat rect[fill-opacity="0.35"],
+[data-vibe="clear-sky"] .heat rect[fill-opacity="0.36"] { fill-opacity: .44; }
+[data-vibe="clear-sky"] .heat rect[fill-opacity="0.37"] { fill-opacity: .45; }
+[data-vibe="clear-sky"] .heat rect[fill-opacity="0.38"] { fill-opacity: .46; }
+[data-vibe="clear-sky"] .heat rect[fill-opacity="0.39"] { fill-opacity: .47; }
+[data-vibe="clear-sky"] .heat rect[fill-opacity="0.40"] { fill-opacity: .48; }
+[data-vibe="clear-sky"] .heat rect[fill-opacity="0.41"],
+[data-vibe="clear-sky"] .heat rect[fill-opacity="0.42"] { fill-opacity: .49; }
+[data-vibe="clear-sky"] .heat rect[fill-opacity="0.43"] { fill-opacity: .50; }
+[data-vibe="clear-sky"] .heat rect[fill-opacity="0.44"] { fill-opacity: .51; }
+[data-vibe="clear-sky"] .heat rect[fill-opacity="0.45"] { fill-opacity: .52; }
+[data-vibe="clear-sky"] .heat rect[fill-opacity="0.46"],
+[data-vibe="clear-sky"] .heat rect[fill-opacity="0.47"] { fill-opacity: .53; }
+[data-vibe="clear-sky"] .heat rect[fill-opacity="0.48"] { fill-opacity: .54; }
+[data-vibe="clear-sky"] .heat rect[fill-opacity="0.49"] { fill-opacity: .55; }
+[data-vibe="clear-sky"] .heat rect[fill-opacity="0.50"] { fill-opacity: .56; }
+[data-vibe="clear-sky"] .heat rect[fill-opacity="0.51"],
+[data-vibe="clear-sky"] .heat rect[fill-opacity="0.52"] { fill-opacity: .57; }
+[data-vibe="clear-sky"] .heat rect[fill-opacity="0.53"] { fill-opacity: .58; }
+[data-vibe="clear-sky"] .heat rect[fill-opacity="0.54"] { fill-opacity: .59; }
+[data-vibe="clear-sky"] .heat rect[fill-opacity="0.55"] { fill-opacity: .60; }
+[data-vibe="clear-sky"] .heat rect[fill-opacity="0.56"],
+[data-vibe="clear-sky"] .heat rect[fill-opacity="0.57"] { fill-opacity: .61; }
+[data-vibe="clear-sky"] .heat rect[fill-opacity="0.58"] { fill-opacity: .62; }
+[data-vibe="clear-sky"] .heat rect[fill-opacity="0.59"] { fill-opacity: .63; }
+[data-vibe="clear-sky"] .heat rect[fill-opacity="0.60"] { fill-opacity: .64; }
+[data-vibe="clear-sky"] .heat rect[fill-opacity="0.61"],
+[data-vibe="clear-sky"] .heat rect[fill-opacity="0.62"] { fill-opacity: .65; }
+[data-vibe="clear-sky"] .heat rect[fill-opacity="0.63"] { fill-opacity: .66; }
+[data-vibe="clear-sky"] .heat rect[fill-opacity="0.64"] { fill-opacity: .67; }
+[data-vibe="clear-sky"] .heat rect[fill-opacity="0.65"] { fill-opacity: .68; }
+[data-vibe="clear-sky"] .heat rect[fill-opacity="0.66"] { fill-opacity: .69; }
+[data-vibe="clear-sky"] .heat rect[fill-opacity="0.67"],
+[data-vibe="clear-sky"] .heat rect[fill-opacity="0.68"] { fill-opacity: .70; }
+[data-vibe="clear-sky"] .heat rect[fill-opacity="0.69"] { fill-opacity: .71; }
+[data-vibe="clear-sky"] .heat rect[fill-opacity="0.70"] { fill-opacity: .72; }
+[data-vibe="clear-sky"] .heat rect[fill-opacity="0.71"] { fill-opacity: .73; }
+[data-vibe="clear-sky"] .heat rect[fill-opacity="0.72"],
+[data-vibe="clear-sky"] .heat rect[fill-opacity="0.73"] { fill-opacity: .74; }
+[data-vibe="clear-sky"] .heat rect[fill-opacity="0.74"] { fill-opacity: .75; }
+[data-vibe="clear-sky"] .heat rect[fill-opacity="0.75"] { fill-opacity: .76; }
+[data-vibe="clear-sky"] .heat rect[fill-opacity="0.76"] { fill-opacity: .77; }
+[data-vibe="clear-sky"] .heat rect[fill-opacity="0.77"] { fill-opacity: .78; }
+
+/* ================= 5. the doors, and the Vibes tile ================= */
+
+/* Sign-in, the waiting screen and onboarding (web; native keeps sign-in
+   v1): their titles as the vibe's h1, 26 / 400. The page is the sky under
+   the dark status strip; fields, the primary and the notes are the tokens
+   and the looks above. */
+[data-vibe="clear-sky"] .auth-title,
+[data-vibe="clear-sky"] .gate-title,
+[data-vibe="clear-sky"] .ob-title {
+  font-size: 26px; letter-spacing: -.01em; line-height: 1.15;
+  font-variation-settings: 'wdth' 100, 'wght' 400;
+}
+/* Onboarding's choice cards: v1 tells the chosen one by its border colour
+   alone. Here it is a 2px ink keyline (the second pixel inset, so the card
+   keeps its size) and its label steps up from 400 to 600 — a thickness and
+   a weight, never a colour alone. */
+[data-vibe="clear-sky"] .ob-choice-t { font-variation-settings: 'wdth' 100, 'wght' 400; }
+[data-vibe="clear-sky"] .ob-choice.on { border-color: var(--chalk); box-shadow: inset 0 0 0 1px var(--chalk); }
+[data-vibe="clear-sky"] .ob-choice.on .ob-choice-t { font-variation-settings: 'wdth' 100, 'wght' 600; }
+
+/* The Vibes sheet: Clear sky's own tile. Scoped to the tile itself — a worn
+   vibe's [data-vibe] rules would otherwise reach every tile. The sample card
+   white with no edge; the figure is the hero's face, Archivo Light at normal
+   width (native pickerFace reads text.hero), at v1's 35px and baseline. */
+[data-vibe="clear-sky"].vibe-in .vibe-sample { border-color: var(--bar); }
+[data-vibe="clear-sky"].vibe-in .vibe-num { letter-spacing: -.02em; font-variation-settings: 'wdth' 100, 'wght' 300; }
