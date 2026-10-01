@@ -50,13 +50,15 @@ import NAVY from './vibes/defs/navy.js';
 import NAVY_ICONS from './vibes/icons/navy.js';
 import OXBLOOD from './vibes/defs/oxblood.js';
 import OXBLOOD_ICONS from './vibes/icons/oxblood.js';
+import LEDGER from './vibes/defs/ledger.js';
+import LEDGER_ICONS from './vibes/icons/ledger.js';
 import MEET_DAY from './vibes/defs/meet-day.js';
 import MEET_DAY_ICONS from './vibes/icons/meet-day.js';
 
 /* Every vibe's definition and every icon set, by id. A new vibe adds its
    imports and its entries here, beside v1's. */
-const DEFS = { v1: V1, 'iron-age': IRON_AGE, chalk: CHALK, navy: NAVY, oxblood: OXBLOOD, 'meet-day': MEET_DAY };
-const ICON_SETS = { v1: V1_ICONS, 'iron-age': IRON_AGE_ICONS, chalk: CHALK_ICONS, navy: NAVY_ICONS, oxblood: OXBLOOD_ICONS, 'meet-day': MEET_DAY_ICONS };
+const DEFS = { v1: V1, 'iron-age': IRON_AGE, chalk: CHALK, navy: NAVY, oxblood: OXBLOOD, ledger: LEDGER, 'meet-day': MEET_DAY };
+const ICON_SETS = { v1: V1_ICONS, 'iron-age': IRON_AGE_ICONS, chalk: CHALK_ICONS, navy: NAVY_ICONS, oxblood: OXBLOOD_ICONS, ledger: LEDGER_ICONS, 'meet-day': MEET_DAY_ICONS };
 
 const KEY = 'rack:vibe';
 

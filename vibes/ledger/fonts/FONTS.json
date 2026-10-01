@@ -1,0 +1,220 @@
+{
+  "vibe": "ledger",
+  "families": [
+    {
+      "family": "Manuale",
+      "designer": "Omnibus-Type",
+      "googleFontsDir": "ofl/manuale",
+      "role": "text, labels, buttons and every figure"
+    },
+    {
+      "family": "Archivo (Condensed, wdth 75)",
+      "designer": "Omnibus-Type",
+      "googleFontsDir": "ofl/archivo",
+      "role": "heads (h1, h2, h3, youGreet); v1's Archivo already sets the Coach card"
+    }
+  ],
+  "version": "Manuale Version 1.002 (css2 v31); Archivo Version 2.001 (css2 v25)",
+  "upstream": [
+    {
+      "family": "Manuale",
+      "repository": "https://github.com/Omnibus-Type/Manuale",
+      "commit": "20a5ab6a0da1c8cb56916d843e50db0ad6b6dfd3",
+      "per": "google/fonts ofl/manuale/METADATA.pb source.commit"
+    },
+    {
+      "family": "Archivo",
+      "repository": "https://github.com/Omnibus-Type/Archivo",
+      "commit": "b5d63988ce19d044d3e10362de730af00526b672",
+      "per": "google/fonts ofl/archivo/METADATA.pb source.commit"
+    }
+  ],
+  "licence": "OFL-1.1",
+  "licenceConfirmedFrom": [
+    {
+      "file": "https://raw.githubusercontent.com/google/fonts/main/ofl/manuale/OFL.txt",
+      "sha256": "6f5869d0892d8c06cabcccce3726cacc849bd0a96b83bef5850402ab2b9fce71",
+      "says": "This Font Software is licensed under the SIL Open Font License, Version 1.1."
+    },
+    {
+      "file": "https://raw.githubusercontent.com/google/fonts/main/ofl/manuale/METADATA.pb",
+      "sha256": "1b3cf239b9493ed51ac7649d27bef5792f3d99efcf342f092d4f4e3d1d53208c",
+      "says": "license: \"OFL\""
+    },
+    {
+      "file": "https://raw.githubusercontent.com/google/fonts/main/ofl/archivo/OFL.txt",
+      "sha256": "108b4e57c9c796d3d38d0428ca7ee39de47ad93187302718d9b2d8864b9b716b",
+      "says": "This Font Software is licensed under the SIL Open Font License, Version 1.1."
+    },
+    {
+      "file": "https://raw.githubusercontent.com/google/fonts/main/ofl/archivo/METADATA.pb",
+      "sha256": "a2e8f63ffa4f9dfe43a65c349b4742e9cd85298802aed890a6315152f2ae231d",
+      "says": "license: \"OFL\""
+    }
+  ],
+  "copyright": {
+    "Manuale": "Copyright 2019 The Manuale Project Authors (https://github.com/Omnibus-Type/Manuale)",
+    "Archivo": "Copyright 2020 The Archivo Project Authors (https://github.com/Omnibus-Type/Archivo)"
+  },
+  "reservedFontName": "none (neither OFL.txt header names a Reserved Font Name, so a subset may keep the name); name ID 7 (trademark) absent in every shipped file",
+  "licenceFiles": {
+    "web": {
+      "vibes/ledger/fonts/OFL.txt": "Manuale",
+      "vibes/ledger/fonts/OFL-Archivo.txt": "Archivo"
+    },
+    "native": {
+      "assets/fonts/Manuale/OFL.txt": "Manuale",
+      "assets/fonts/ArchivoCondensed/OFL.txt": "Archivo"
+    }
+  },
+  "subset": {
+    "tool": "subset-font 2.4.0 (harfbuzz hb-subset wasm; layout features: all kept; name IDs: harfbuzz default); woff2 by fontverter 2.0.0 / wawoff2 2.0.1",
+    "alsoUsed": "opentype.js 1.3.4 for names, tables and coverage; harfbuzzjs 0.4.15 for tnum and parity",
+    "script": "~/dev/vibes-night/tools/ledger-fonts-d1/build.mjs",
+    "unicodeRange": "U+0020-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2190-2193, U+2212, U+2215, U+2248, U+2264-2265, U+FEFF, U+FFFD",
+    "rangeNote": "Chalk's range (Navy and Oxblood use it too): Google's latin plus ← ↑ → ↓ − ∕ ≈ ≤ ≥, so every vibe covers the same text. The spec's prepared cut (design/ledger/final/fonts/out/) used Google's latin plus → ≈ and kept every name ID; this re-cut takes the house range instead. ArchivoCondensed_700 alone is cut by Meet Day's recipe (tools/mdA-subset.mjs: its range below, preserveNameIds 0-6, 13, 14, 16, 17) so the shared key is one byte-identical file whichever vibe lands first.",
+    "archivoCondensedRange": "U+0020-007E, U+00A0-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2190-2193, U+2212, U+2215, U+2248, U+2264-2265"
+  },
+  "retrieved": "2026-09-29",
+  "checks": {
+    "tnum": "Manuale's default digits are tabular: Manuale_400 502, Manuale_600 507, Manuale_700 510; web ledger-manuale 400 502 / 600 507 / 700 510 / 800 513 (per 1000). No feature needed. Archivo Condensed tnum 482 (heads never set a figure).",
+    "lineMetrics": "Manuale UPM 1000; hhea 980 / -236 / 221, so minLh 1.216 (lineGap 221 is why every native preset sets an explicit lineHeight). Archivo Condensed hhea 878 / -210 / 0, minLh 1.088.",
+    "falls back (not in the font; Archivo lacks them too)": "U+2699 ⚙ U+2715 ✕ U+22EF ⋯ U+2713 ✓ U+21B3 ↳ (and ⚠ ✎ ▾ ▴, outside the range and absent upstream as in Archivo); the spec draws these through the icon set's glyph keys at glyph-only sites (§4.5, §9); in prose they fall back as in v1",
+    "text people type": "Latin-ext letters (e.g. Ł ő ş) in food, exercise and routine names are outside the cut and fall back glyph by glyph: on the web to the next family in the stack, on iOS to the system face, as Chalk's and Oxblood's do",
+    "present": "U+2019 ’ U+2014 — U+00B7 · U+2013 – U+2026 … U+00D7 × U+201C “ U+201D ” U+2192 → U+203A › U+2212 − U+2039 ‹ U+2191 ↑ U+2193 ↓ U+00F7 ÷ U+00B1 ± U+2248 ≈ U+2190 ← U+2264 ≤ U+2265 ≥ U+00B0 ° U+00BD ½ U+00A0  ",
+    "parity": "harfbuzz advances of the web variable at 400 / 600 / 700 against Manuale_400 / _600 / _700: identical advances on 21 strings; identical advances on 21 strings; identical advances on 21 strings. ledger-heads at wght 700 against ArchivoCondensed_700: 10 of 15 head strings differ, by at most 0.002 em over the whole string (instancing rounding). ledger-num at 700 draws 0-9 in 5100/1000, as ledger-manuale and Manuale_700 do.",
+    "verticalCentre": "Arithmetic on the metrics, not a render: Manuale's cap centre (611 / 2) is 0.0665 em below the centre of its ascent/descent box (980 / -236); Archivo's (686 / 2, box 878 / -210) is 0.009 em above its own. So where a box centres the line, Manuale caps sit about 0.075 em lower than Archivo caps would (1.2 pt at 16, 1.7 pt at 22), and figures (lining, about 0.63 em tall per the spec) about the same. Manuale's hhea, typo and win metrics agree, so web and native share it. A render check belongs to the native fit pass.",
+    "sharedAsset": "ArchivoCondensed_700.ttf is byte-identical to the file Meet Day's spec records (design/meet-day.md §5.2: 36380 B, 69416d482f54068e037c512a0a15ec32817868abb59ae911013e6c2ef90dcfae)",
+    "fsType": "every shipped file 0 (installable)"
+  },
+  "web": [
+    {
+      "file": "vibes/ledger/fonts/ledger-manuale.woff2",
+      "family": "Manuale",
+      "cssFamily": "ledger-manuale",
+      "axes": "wght 400–800",
+      "unicodeRange": "U+0020-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2190-2193, U+2212, U+2215, U+2248, U+2264-2265, U+FEFF, U+FFFD",
+      "bytes": 39124,
+      "sha256": "c440aa2c3397ee94c259a7015ba4bae2238a3f74c929f37b02d36c000fea5217",
+      "source": {
+        "url": "https://raw.githubusercontent.com/google/fonts/main/ofl/manuale/Manuale%5Bwght%5D.ttf",
+        "bytes": 185992,
+        "sha256": "19ea09ad2fbf321cf8f94ac3f66547bc9b2bdf3723a2f073615eaa02fe17ded6",
+        "version": "Version 1.002"
+      }
+    },
+    {
+      "file": "vibes/ledger/fonts/ledger-num.woff2",
+      "family": "Manuale",
+      "cssFamily": "ledger-num",
+      "role": "picker digits (the Vibes card figure; the spec sets it at 700, the tile's CSS default is 800)",
+      "axes": "wght 400–800",
+      "unicodeRange": "U+0030-0039",
+      "bytes": 6812,
+      "sha256": "6a2a71eb7ec497df266d18e9380ef50f5695472de7115b1cd60d9ad6a839886d",
+      "source": {
+        "url": "https://raw.githubusercontent.com/google/fonts/main/ofl/manuale/Manuale%5Bwght%5D.ttf",
+        "bytes": 185992,
+        "sha256": "19ea09ad2fbf321cf8f94ac3f66547bc9b2bdf3723a2f073615eaa02fe17ded6",
+        "version": "Version 1.002"
+      }
+    },
+    {
+      "file": "vibes/ledger/fonts/ledger-heads.woff2",
+      "family": "Archivo",
+      "cssFamily": "ledger-heads",
+      "axes": "wght 600–800 (wdth pinned at 75)",
+      "unicodeRange": "U+0020-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2190-2193, U+2212, U+2215, U+2248, U+2264-2265, U+FEFF, U+FFFD",
+      "bytes": 25540,
+      "sha256": "0f5938c4e2f257d798b9401daa13b76bf1f6c6edd2f32c9fe7aa4b37eb9576cd",
+      "source": {
+        "url": "https://raw.githubusercontent.com/google/fonts/main/ofl/archivo/Archivo%5Bwdth,wght%5D.ttf",
+        "bytes": 658596,
+        "sha256": "0e094a7d3c7c4c25cf1310c4b30014f1dae9332220b1c2c88f4fa996f0b05053",
+        "version": "Version 2.001"
+      }
+    }
+  ],
+  "native": [
+    {
+      "key": "Manuale_400",
+      "file": "assets/fonts/Manuale/Manuale_400.ttf",
+      "family": "Manuale",
+      "ps": "Manuale-Regular",
+      "usWeightClass": 400,
+      "version": "Version 1.002",
+      "unicodeRange": "U+0020-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2190-2193, U+2212, U+2215, U+2248, U+2264-2265, U+FEFF, U+FFFD",
+      "bytes": 33156,
+      "sha256": "c1bb8579ba07c6f5c39ca04ce0946a3a521e286825fa8576228ed4e11d18291d",
+      "source": {
+        "url": "https://fonts.gstatic.com/s/manuale/v31/f0Xp0eas_8Z-TFZdHv3mMxFaSqASeeHke7wD.ttf",
+        "via": "https://fonts.googleapis.com/css2?family=Manuale:wght@400;600;700 (user-agent \"node\")",
+        "bytes": 74808,
+        "sha256": "90d045230ca8f8cc314a649b3e87f48ba27297f395d6bfe38f1e4780c210f90e"
+      }
+    },
+    {
+      "key": "Manuale_600",
+      "file": "assets/fonts/Manuale/Manuale_600.ttf",
+      "family": "Manuale",
+      "ps": "Manuale-SemiBold",
+      "usWeightClass": 600,
+      "version": "Version 1.002",
+      "unicodeRange": "U+0020-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2190-2193, U+2212, U+2215, U+2248, U+2264-2265, U+FEFF, U+FFFD",
+      "bytes": 33700,
+      "sha256": "78e726b19826a42717a67b5073e9c2e3d6d178b60d294ed841f1cd8bd4e899f9",
+      "source": {
+        "url": "https://fonts.gstatic.com/s/manuale/v31/f0Xp0eas_8Z-TFZdHv3mMxFaSqASeeE6fLwD.ttf",
+        "via": "https://fonts.googleapis.com/css2?family=Manuale:wght@400;600;700 (user-agent \"node\")",
+        "bytes": 75556,
+        "sha256": "ec3c1826a6e4341514281524c086c2af6481b7c2b2213957adb7776d6af5dd04"
+      }
+    },
+    {
+      "key": "Manuale_700",
+      "file": "assets/fonts/Manuale/Manuale_700.ttf",
+      "family": "Manuale",
+      "role": "also the picker face (the Vibes card figure)",
+      "ps": "Manuale-Bold",
+      "usWeightClass": 700,
+      "version": "Version 1.002",
+      "unicodeRange": "U+0020-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2190-2193, U+2212, U+2215, U+2248, U+2264-2265, U+FEFF, U+FFFD",
+      "bytes": 33600,
+      "sha256": "c1d817d90199fd1071fda020a133c6fb03f1a68e2d3c5da8c01642f56c87eebe",
+      "source": {
+        "url": "https://fonts.gstatic.com/s/manuale/v31/f0Xp0eas_8Z-TFZdHv3mMxFaSqASeeEDfLwD.ttf",
+        "via": "https://fonts.googleapis.com/css2?family=Manuale:wght@400;600;700 (user-agent \"node\")",
+        "bytes": 75400,
+        "sha256": "c76c4bb2a8e92ec97c72c92a8e937f62262e4b7ad2c8f829adc49c966997e639"
+      }
+    },
+    {
+      "key": "ArchivoCondensed_700",
+      "file": "assets/fonts/ArchivoCondensed/ArchivoCondensed_700.ttf",
+      "family": "ArchivoCondensed",
+      "role": "heads; byte-identical to the file Meet Day's spec records under the same key (Meet Day is not built yet)",
+      "ps": "ArchivoCondensed-Bold",
+      "usWeightClass": 700,
+      "version": "Version 2.001",
+      "unicodeRange": "U+0020-007E, U+00A0-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2190-2193, U+2212, U+2215, U+2248, U+2264-2265",
+      "bytes": 36380,
+      "sha256": "69416d482f54068e037c512a0a15ec32817868abb59ae911013e6c2ef90dcfae",
+      "source": {
+        "url": "https://fonts.gstatic.com/s/archivo/v25/k3k6o8UDI-1M0wlSV9XAw6lQkqWY8Q9osJaRE-NWIDdgffTT0zRp8A.ttf",
+        "via": "https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75,700 (user-agent \"node\")",
+        "bytes": 111532,
+        "sha256": "02c3400ee16a2bc7b2fc7ac7e8df156d9a2da7d836f4c0b6600d821f87c82d1d"
+      }
+    }
+  ],
+  "totals": {
+    "webBytesPerFamily": {
+      "ledger-manuale": 39124,
+      "ledger-num": 6812,
+      "ledger-heads": 25540
+    },
+    "webBytes": 71476,
+    "nativeBytes": 136836,
+    "nativeFiles": 4
+  }
+}

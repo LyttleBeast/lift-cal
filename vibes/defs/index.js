@@ -72,6 +72,7 @@ export const VIBES = deepFreeze([
   { id: 'chalk', name: 'Chalk', feel: 'Chalk-white page, dark ink.', experimental: false, scheme: 'light' },
   { id: 'navy', name: 'Navy', feel: 'Deep navy ground, pale ink.', experimental: false, scheme: 'dark' },
   { id: 'oxblood', name: 'Oxblood', feel: 'Oxblood and ice blue.', experimental: false, scheme: 'dark' },
+  { id: 'ledger', name: 'Ledger', feel: 'Ruled columns on club green.', experimental: false, scheme: 'dark' },
   { id: 'meet-day', name: 'Meet Day', feel: 'The platform on meet day.', experimental: true, scheme: 'dark' }
 ]);
 
