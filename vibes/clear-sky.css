@@ -223,6 +223,16 @@
    label, the set table's column heads ("Set lb Reps e1RM", as authored), the
    calendar's weekday row and the plate strip's words in. */
 [data-vibe="clear-sky"] :where(.stat-val) { font-size: 22px; font-variation-settings: 'wdth' 100, 'wght' 600; }
+/* A figure's colour is set inline by its caller (stats.js statRow: 'Best e1RM',
+   'var(--p-yellow)'). A graphic-only plate is 3.13 as small text on the sky, so
+   the value re-inks the var() through inkOf: amber as warn (5.25), chrome as
+   steel. Redefining the plate on the value needs no !important. */
+[data-vibe="clear-sky"] .stat-val {
+  --p-yellow: var(--ink-of-p-yellow);
+  --p-chrome: var(--ink-of-p-chrome);
+}
+/* v1 fades the hint to .65 of dim: 2.71 on the sky. Full dim holds. */
+[data-vibe="clear-sky"] .swipe-hint { opacity: 1; }
 [data-vibe="clear-sky"] :where(.stat-lbl, .kpi-lbl, .set-hd),
 [data-vibe="clear-sky"] .cal-dow :where(span),
 [data-vibe="clear-sky"] .plate-strip :where(.lbl) {
@@ -644,7 +654,9 @@
 /* the sparkline's end dot to 3.5 across at the word size (2.8 × 72/150 × 1.3),
    scaled about its own centre */
 [data-vibe="clear-sky"] .spark-end { transform: scale(1.3); transform-box: fill-box; transform-origin: center; }
-[data-vibe="clear-sky"] .chart-peak-ring { stroke-width: 1.5; }
+/* v1 draws the ring at .95; amber on the sky is 3.13 at full strength and
+   2.95 at .95, under the 3:1 a mark needs. */
+[data-vibe="clear-sky"] .chart-peak-ring { stroke-width: 1.5; opacity: 1; }
 [data-vibe="clear-sky"] .chart-grid { stroke-dasharray: none; opacity: 1; }
 [data-vibe="clear-sky"] .chart-bar,
 [data-vibe="clear-sky"] .chart-bar-bg,
@@ -661,6 +673,10 @@
 [data-vibe="clear-sky"] .chart-axis,
 [data-vibe="clear-sky"] .chart-barval { font-size: 10px; letter-spacing: 0; font-variation-settings: 'wdth' 88, 'wght' 600; }
 [data-vibe="clear-sky"] .chart-peak-lbl { font-size: 11px; letter-spacing: 0; font-variation-settings: 'wdth' 100, 'wght' 600; }
+/* The peak's figure takes the line's colour through a pinned module's fill
+   attribute: small text, so a graphic-only plate is inked as warn and steel. */
+[data-vibe="clear-sky"] .chart-peak-lbl[fill="var(--p-yellow)"] { fill: var(--warn); }
+[data-vibe="clear-sky"] .chart-peak-lbl[fill="var(--p-chrome)"] { fill: var(--steel); }
 [data-vibe="clear-sky"] .legend-item i { width: 12px; height: 3px; border-radius: 0; }
 [data-vibe="clear-sky"] .vol-track,
 [data-vibe="clear-sky"] .vol-fill,
