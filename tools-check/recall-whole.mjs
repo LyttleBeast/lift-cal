@@ -172,6 +172,38 @@ hit = recall.lookup('Two eggs, and toast.');
 if (hit && hit.exact) ok('a new short row answers its sentence, re-phrased: ' + desc(hit));
 else bad('a new short row no longer answers its own sentence re-phrased: ' + desc(hit));
 
+/* ---------- 4. sentences that differ only in what normalize() throws away ----------
+   normalize() keeps [a-z0-9.] and spaces and nothing else, so "1-2" and "1/2",
+   "+guac" and "-guac", and every word in another script or an emoji, vanish
+   from the key AND from the sentence compare. Measured on rack-v61: "2 банана"
+   was answered with the stored "2 яйца" as an exact match (both key "2").
+   The sentences below are each a different meal from the one stored. */
+console.log('\n4  different meals that differ only in characters normalize() drops');
+const DIFFER = [
+  ['1-2 tbsp peanut butter', '1/2 tbsp peanut butter'],
+  ['chipotle bowl -guac +rice', 'chipotle bowl +guac -rice'],
+  ['2-3 slices pepperoni pizza', '2/3 slices pepperoni pizza'],
+  ['big mac +cheese', 'big mac -cheese'],
+  ['2 яйца', '2 банана'],
+  ['2 🍕', '2 🌮'],
+  ['ラーメン 1杯', 'カレー 1杯']
+];
+for (const [stored, typed] of DIFFER) {
+  await fresh();
+  recall.remember(stored, [{ name: stored, qty: '1', cal: 500, p: 1, c: 1, f: 1 }], 'ai');   // SYNTHETIC
+  hit = recall.lookup(typed);
+  if (hit) bad('"' + typed + '" is answered with the stored "' + stored + '": ' + desc(hit));
+  else ok('"' + typed + '" is not answered with "' + stored + '"');
+}
+const SAME = [['two eggs and toast', '2 eggs, toast.'], ['café latte', 'cafe latte'], ["mcdonald's big mac", 'McDonald’s Big Mac!']];
+for (const [stored, typed] of SAME) {
+  await fresh();
+  recall.remember(stored, [{ name: stored, qty: '1', cal: 300, p: 1, c: 1, f: 1 }], 'ai');
+  hit = recall.lookup(typed);
+  if (hit && hit.exact) ok('"' + typed + '" still finds "' + stored + '" (same meal): ' + desc(hit));
+  else bad('"' + typed + '" no longer finds "' + stored + '", the same meal: ' + desc(hit));
+}
+
 console.log('');
 if (fail.length) console.log(fail.length + ' of ' + checks + ' check(s) failed.');
 else console.log('All ' + checks + ' checks passed: food memory answers only with the whole question\'s whole answer.');

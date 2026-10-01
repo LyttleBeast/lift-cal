@@ -451,7 +451,9 @@ can share one. Since v63 a row is written **whole or not at all**: `q` is the
 whole question (up to 600 characters, the describe limit), `items` the whole
 answer (up to 20 rows, the Worker's cap), and `w: 1` says so. A key hit counts as
 an exact match only when the row's own `q` is the same sentence (`recall.js`
-`whole()` / `lookup()`). A row without `w` was written by an older client, which
+`whole()` / `lookup()`) **and** carries the same characters the key throws away —
+signs, slashes, `%`, any word in another script, any emoji (`marks()`): the key
+alone cannot tell "1-2 tbsp" from "1/2 tbsp", or "2 яйца" from "2 банана". A row without `w` was written by an older client, which
 cut `q` at 200 characters and `items` at 12; it is trusted only when neither cut
 can have happened (`q` under 190 characters, under 12 rows), and is otherwise a
 miss that the next estimate rewrites whole. No rules change: `food` validates no

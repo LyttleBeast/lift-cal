@@ -69,6 +69,29 @@ function sentenceOf(text) {
   return normalize(text).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 }
 
+/* What normalize() throws away that can change the meal, in the order it was
+   typed. normalize() keeps [a-z0-9.] and spaces and turns everything else into
+   a space -- so "1-2 tbsp" and "1/2 tbsp", "-guac +rice" and "+guac -rice",
+   and every word in another script or an emoji ("2 яйца" and "2 банана" both
+   key to "2") were the same sentence to the key AND to every gate, and the
+   stored one came back "exact match" (P7 audit CLX-N1, measured on rack-v61:
+   tools-check/recall-whole.mjs section 4). The key cannot change, so this is a
+   fourth thing two sentences must share, compared exactly like the other three.
+
+   Kept out: the punctuation that never changes what was eaten -- , . ' ’ " ! ?
+   ; : ( ) -- so "2 eggs, toast." still finds "two eggs and toast". Accents
+   are stripped first, exactly as normalize() strips them, so "café" is still
+   "cafe". Everything else counts, by code point and in order: a sign, a slash,
+   a percent, a letter normalize() could not keep, an emoji. The cost runs the
+   safe way -- "chick-fil-a" no longer finds "chick fil a" and goes to the
+   estimator once -- which is the direction this file always errs in. */
+function marks(text) {
+  const s = String(text || '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '');
+  let out = '';
+  for (const ch of s) if (!/[a-z0-9\s.,'’"!?;:()]/.test(ch)) out += ch;
+  return out;
+}
+
 /* Can this row stand in for a question at all? Only if it holds ALL of the
    question and ALL of its answer. Two silent cuts used to break that:
 
@@ -251,8 +274,11 @@ export function lookup(text) {
   const key = keyOf(text);
   if (!key) return null;
 
+  const myMarks = marks(text);
   const exact = recall[key];
-  if (whole(exact) && sentenceOf(exact.q) === sentenceOf(text)) return { key, ...exact, score: 1, exact: true };
+  if (whole(exact) && sentenceOf(exact.q) === sentenceOf(text) && marks(exact.q) === myMarks) {
+    return { key, ...exact, score: 1, exact: true };
+  }
 
   const mine = tokens(text);
   const myQty  = quantities(mine);
@@ -263,6 +289,7 @@ export function lookup(text) {
   let best = null;
   for (const [k, r] of Object.entries(recall)) {
     if (!whole(r)) continue;   // a cut question or a cut answer is not a candidate either
+    if (marks(r.q) !== myMarks) continue;   // nor one that differs in what normalize() drops
     const theirs = tokens(r.q);
     // All three gates run BEFORE the similarity score, not after: Dice cannot
     // see any of the three problems, so no threshold on it would have caught
