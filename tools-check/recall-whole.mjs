@@ -204,6 +204,46 @@ for (const [stored, typed] of SAME) {
   else bad('"' + typed + '" no longer finds "' + stored + '", the same meal: ' + desc(hit));
 }
 
+/* ---------- 5. what whole means on the way IN (added by the P7C build run) ----------
+   The sections above prove nothing is served shortened -- but a memory that
+   refuses to remember anything would pass them too. Mutation checks (MAX_ITEMS
+   back to 12; the 190-character legacy test removed; the 600-character write
+   limit removed; `n` inheriting across sentences) all survived until these. */
+console.log('\n5  a whole answer IS remembered whole; a cut one is not; a row counts only its own sentence');
+
+for (const n of [13, 14, 20]) {
+  await fresh();
+  const Q = 'whole plate of ' + n + ' things for the memory test';
+  recall.remember(Q, rows(n, 100), 'ai');
+  hit = recall.lookup(Q);
+  if (hit && hit.exact && hit.items.length === n && sum(hit.items) === n * 100) ok('a ' + n + '-row answer is remembered whole and answers exactly: ' + desc(hit));
+  else bad('a ' + n + '-row answer is not remembered whole (' + n * 100 + ' kcal expected): ' + desc(hit));
+}
+
+// A cut question: a legacy row's q was cut to 200 characters, so a person who
+// types exactly those 200 characters must NOT be told "exact match".
+await fresh({ [recall.keyOf(B)]: { q: B.slice(0, 200).trim(), kind: 'ai', items: bowlRows, n: 3, last: 1 } });
+hit = recall.lookup(B.slice(0, 200).trim());
+if (hit) bad('a legacy row whose question was cut at 200 characters answers the same 200 characters: ' + desc(hit));
+else ok('a legacy row whose question was cut at 200 characters is not trusted, even for its own cut text: no hit');
+
+// A question over the 600-character describe limit is not remembered at all.
+const OVER = ('a very long day of eating, ').repeat(25).trim();   // 649 characters
+await fresh();
+recall.remember(OVER, rows(3, 100), 'ai');
+hit = recall.lookup(OVER);
+if (OVER.length > 600 && !hit) ok('a ' + OVER.length + '-character question is not remembered (cut or whole, it never is): no hit');
+else bad('a ' + OVER.length + '-character question was remembered: ' + desc(hit));
+
+// n counts THIS sentence: B replaces A on their shared key and starts at 1.
+await fresh();
+recall.remember(A, bowlRows, 'ai');
+recall.remember(A, bowlRows, 'ai');
+recall.remember(B, bowlRows.concat(rows(2, 100)), 'ai');
+hit = recall.lookup(B);
+if (hit && hit.exact && hit.n === 1) ok('a different sentence on the same key starts its own count at 1');
+else bad('a different sentence on the same key inherits the other\'s count: n = ' + (hit && hit.n));
+
 console.log('');
 if (fail.length) console.log(fail.length + ' of ' + checks + ' check(s) failed.');
 else console.log('All ' + checks + ' checks passed: food memory answers only with the whole question\'s whole answer.');
