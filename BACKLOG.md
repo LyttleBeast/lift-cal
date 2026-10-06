@@ -223,6 +223,47 @@ Carried from `NEXT-NATIVE.md` §7 so it survives that file. Do not "fix" these:
 
 ---
 
+## What v63 left open in its own work
+
+v63 is **the estimator tells the truth about long meals and long waits**: food
+memory answers only with the whole meal, nothing is cut at 600 characters, the
+app waits 150 s and says when it stopped waiting, the dollar figure is the
+owner's, and "too long" is one contract with the Worker. The port note is
+`NEXT-NATIVE-V63.md`. The build numbered itself `rack-v62` in its brief; live
+web was already `rack-v62` (vibes), so it ships as v63.
+
+- **T1 (needs a device, Micah).** Does iOS cut a silent request at 60 s whatever
+  `WAIT_MS` says? Delay the staging mock upstream 90 s on one describe; Build 61
+  should show the answer at about 90 s. If it fails at about 60 s with "check
+  your connection", move native `call()` to `XMLHttpRequest` with
+  `xhr.timeout = WAIT_MS`, or choose D23 (b).
+- **T2 (needs a device, both apps).** Paste about 700 characters into Describe.
+  The whole text stays; the counter reads red "700 / 600 — 100 over. Split it
+  into two."; Estimate says it and sends nothing. About 460 characters reads
+  "460 / 600".
+- **O2, not built, on purpose.** Show what the Worker dropped ("no rice"). The
+  Worker still counts a dropped bun (P7-015, open), so "Left out, as you said:
+  bun" beside a number that includes it would be untrue. Build it after that fix.
+- **P7-046 / P7-080, not built.** The edit multiplier is rounded to one decimal
+  (a quarter of 400 kcal is saved as 120) and labels read "0.3 lb" for 1/4 lb.
+  Each is a possible wrong number, but PLAUSIBLE, so it needs its own verify-first
+  run (web `food.js` to native `src/state/food.js` / `common.jsx`).
+- **The cost of D24, accepted.** Hyphen and "&" spellings stop matching from
+  memory ("chick-fil-a" vs "chick fil a"): one extra estimate, never a different
+  meal called exact. Pinned in `tools-check/recall-whole.mjs`.
+- **Build 60 keeps the food-memory bug** for its own lookups until Build 61 is
+  installed; they share `food/recall`. Build 60 ignores `w` and drops it on a
+  rewrite; the worst cost is one extra estimate.
+- **The abort timer covers the headers, not the body.** `ai.js` clears its
+  timer when `fetch` resolves; a Worker that sent headers and then stalled
+  mid-body is not timed out. The Worker answers in one piece, so this has not
+  been seen; noted, not changed.
+- **Worker words (O4).** Owner-only wording ("Raise it in the Worker settings",
+  "Rack's $10 AI budget") reaches strangers. The fix is the Worker's words; the
+  apps show `message` as sent. Nothing to build here.
+
+---
+
 ## What v58 left open in its own work
 
 v58 is **the rows line up and the bulk reads as a bulk**: an estimate row's

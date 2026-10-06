@@ -218,7 +218,8 @@ else {
    so "longer when it has to look a brand up" would be an untrue sentence. */
 console.log('\n6  the busy sheet says nothing about a lookup');
 const foodSrc = readFileSync(join(ROOT, 'food.js'), 'utf8');
-if (/look a brand up|looks? (it|a brand) up/i.test(foodSrc)) bad('food.js still says it may have to look a brand up');
+const foodSrcCode = foodSrc.replace(/\/\*[\s\S]*?\*\//g, ' ');   // the words on screen, not the comments about them
+if (/look(s|ed)? (a brand|it) up/i.test(foodSrcCode.replace(/\s+/g, ' '))) bad('food.js still says it may have to look a brand up');
 else ok('food.js does not promise a lookup');
 if (foodSrc.includes("'Usually a few seconds. A long order can take a minute or two.'")) ok('the busy sheet says "Usually a few seconds. A long order can take a minute or two."');
 else bad('the busy sheet does not carry the agreed words');
