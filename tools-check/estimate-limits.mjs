@@ -213,6 +213,16 @@ else {
   if (costLine({}, true) === '' && costLine(null, true) === '') ok('no usage, no line'); else bad('a reply with no usage still draws a line');
 }
 
+/* ---------- 6. the busy sheet's words (O1, D19 (4)) ----------
+   The Worker no longer looks anything up on the web (D1 = B, live search off),
+   so "longer when it has to look a brand up" would be an untrue sentence. */
+console.log('\n6  the busy sheet says nothing about a lookup');
+const foodSrc = readFileSync(join(ROOT, 'food.js'), 'utf8');
+if (/look a brand up|looks? (it|a brand) up/i.test(foodSrc)) bad('food.js still says it may have to look a brand up');
+else ok('food.js does not promise a lookup');
+if (foodSrc.includes("'Usually a few seconds. A long order can take a minute or two.'")) ok('the busy sheet says "Usually a few seconds. A long order can take a minute or two."');
+else bad('the busy sheet does not carry the agreed words');
+
 console.log('');
 if (fail.length) console.log(fail.length + ' of ' + checks + ' check(s) failed.');
 else console.log('All ' + checks + ' checks passed: nothing is cut, nothing hangs, and the cost line is the owner\'s.');

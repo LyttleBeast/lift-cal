@@ -2136,7 +2136,11 @@ function openEstimating(label) {
   row.appendChild(el('div', 'ai-spin'));
   const txt = el('div');
   txt.appendChild(el('div', 'ai-busy-t', label));
-  txt.appendChild(el('div', 'note', 'A few seconds — longer when it has to look a brand up.'));
+  /* rack-v63 (P7 CL-08 / D19 (4)): the Worker no longer looks anything up on
+     the web (D1 = B, live search off), so "longer when it has to look a brand
+     up" was untrue. A long order can still take a minute or two (two calls of
+     up to 60 s each). Native estimator.jsx says the same words. */
+  txt.appendChild(el('div', 'note', 'Usually a few seconds. A long order can take a minute or two.'));
   row.appendChild(txt);
   sh.appendChild(row);
   return close;
