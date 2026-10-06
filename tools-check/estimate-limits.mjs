@@ -124,6 +124,23 @@ for (const status of [413, 400]) {
   if (r.err && r.err.code === 'too_long' && r.err.message === 'From the Worker: too long.') ok('the Worker\'s own too_long (' + status + ') reaches the screen in its words');
   else bad('the Worker\'s too_long (' + status + ') arrives as ' + (r.err ? r.err.code + ' "' + r.err.message + '"' : 'a result'));
 }
+
+// The Worker has a SECOND too_long: a text UNDER 600 characters that cannot fit
+// one request's cost ceiling (400 with `max` once the Worker's W2 lands, 413 on
+// the guard branch). The app must show the Worker's sentence for it -- never its
+// own "longer than 600 characters", which would be untrue of a short text.
+// (C5 pin, added by the P7C build run; RED is not expected, it guards a future
+// special case.)
+const SHORT_TEXT = 'a short description, well under the limit, ' + 'of a meal that is still too big for one estimate. '.repeat(2);
+const WORKER_WORDS = 'That is more than one estimate can hold. Split it into two descriptions.';
+for (const status of [400, 413]) {
+  reply = () => new Response(JSON.stringify({ error: 'too_long', max: 600, message: WORKER_WORDS }), { status });
+  r = await attempt(() => ai.estimateText(SHORT_TEXT));
+  if (SHORT_TEXT.length >= 600) { bad('the short-text fixture is not short'); break; }
+  if (r.sent.length === 1 && r.err && r.err.code === 'too_long' && r.err.message === WORKER_WORDS && !/longer than 600/.test(r.err.message))
+    ok('a Worker too_long on a ' + SHORT_TEXT.length + '-character text (' + status + ', with max) shows the Worker\'s words, not the app\'s own "longer than 600"');
+  else bad('a Worker too_long on a short text (' + status + ') shows ' + (r.err ? r.err.code + ' "' + r.err.message + '"' : 'a result') + ' after ' + r.sent.length + ' request(s)');
+}
 reply = () => new Response(JSON.stringify({ ok: true, items: [{ name: 'x', cal: 1 }] }), { status: 200 });
 
 /* ---------- 2. the counter under the box ---------- */
