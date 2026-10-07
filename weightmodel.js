@@ -460,6 +460,7 @@ export function maintenanceFromModel(daySummaries) {
     rateSeWk: model.rateSeWk,
     coef: model.coef,
     trendDays: model.trendDays,
+    trendSpan: model.trendSpan,
     need: []
   };
 }

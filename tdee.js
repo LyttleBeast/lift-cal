@@ -83,11 +83,61 @@ export const TDEE_MIN_DAYS = 7;
 
    When it can't answer (too few weigh-ins, no food logged, a cold start) this
    falls back to the original arithmetic rather than refusing. Degrading to the
-   old answer is fine. A confident wrong answer is not. */
+   old answer is fine. A confident wrong answer is not.
+
+   rack-v64 (P5 A1): a model answer that has not earned its place yet is held
+   back, not shown: { ...m, tdee: null, held: <the number>, need: [...] }.
+   Every screen prints `need` as "Needs …" and effectiveMaint keeps setup (or
+   nothing) in force. A held model answer never falls back to the legacy
+   arithmetic, which has no gate at all. */
 export function maintenance(weightEntries, daySummaries) {
   const m = maintenanceFromModel(daySummaries);
-  if (m && m.tdee != null) return { ...m, model: true };
+  if (m && m.tdee != null) {
+    const need = measuredNeeds(m);
+    return need.length ? { ...m, tdee: null, held: m.tdee, need, model: true } : { ...m, model: true };
+  }
   return { ...legacyMaintenance(weightEntries, daySummaries), model: false };
+}
+
+/* ---------- when a measured number has earned its place ----------
+   The model can answer from 4 day-points and 7 logged days. Simulated (P5 VA),
+   that first answer lands on day 7 and is worse than the setup guess for about
+   four people in five: a week's slope times 3,500 carries the glycogen water a
+   diet starts with, the first un-normalised weigh-in and plain scale noise.
+   One sentence above says it: a confident wrong answer is not fine. So the
+   measured number waits until the points cover two weeks and the value is
+   one a living adult can have. The point and logged-day counts stay at the
+   model's own 4 and 7: higher bars hid numbers from every-5th-day weighers
+   and 3-4-day-a-week loggers that were as accurate as the ones kept, and
+   made them blink (P5 XR R3/R4). No SE bound: the slope SE swings across any
+   threshold from one morning to the next (P5 VA: an SE<=250 gate blinked a
+   mature number off and on ~5 times per REALISTIC person), and a number that
+   comes and goes is its own kind of wrong. The 1,000 lower bound is P5
+   DECISION D-c's default (DECISIONS-FOR-MICAH #9); each constant is a named
+   export so it can move later. Pure: reads only the estimate it is handed. */
+export const MEASURED_MIN_SPAN   = 14;    // days between the oldest and newest day-point in the fit
+export const MEASURED_MIN_POINTS = 4;     // day-points in the fit (the model's own minimum; P5 XR R4)
+export const MEASURED_MIN_LOGGED = 7;     // logged days under the intake average (the model's own minimum; P5 XR R3)
+export const MEASURED_RANGE      = [1000, 6000];
+
+export function measuredNeeds(m) {
+  const need = [];
+  // Rounded: day-points sit at local noon, so a DST week is 13.96 or 14.04 days.
+  const span = Math.round(Number(m.trendSpan) || 0);
+  if (span < MEASURED_MIN_SPAN) {
+    const n = Math.ceil(MEASURED_MIN_SPAN - span);
+    need.push(n + ' more day' + (n === 1 ? '' : 's') + ' of weigh-ins');
+  } else if ((Number(m.trendDays) || 0) < MEASURED_MIN_POINTS) {
+    need.push('a few more weigh-ins');
+  }
+  if ((Number(m.days) || 0) < MEASURED_MIN_LOGGED) {
+    const n = MEASURED_MIN_LOGGED - (Number(m.days) || 0);
+    need.push(n + ' more day' + (n === 1 ? '' : 's') + ' of food logging');
+  }
+  if (!need.length && !(m.tdee >= MEASURED_RANGE[0] && m.tdee <= MEASURED_RANGE[1])) {
+    need.push('a look at recent weigh-ins and food entries');
+  }
+  return need;
 }
 
 /* The weekly rate to show the user: the model's when it has one, because it is
