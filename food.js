@@ -12,7 +12,7 @@
 // owner-only (see seedItems): they are one person's reference values for a
 // specific job's pizza dough, not a food database.
 
-import { read, write, watch, LS, todayKey, uid, wu } from './store.js';
+import { read, readExact, write, watch, LS, todayKey, uid, wu } from './store.js';
 import { maintenance, effectiveMaint, calorieZones, zoneOf, refreshModel,
          autoTargets, trendWeight, MIN_CARB_G, safeFloor, whoOf, plannedRate } from './tdee.js';
 import { initWater, loadWaterDay, renderWater, openWaterSettings } from './water.js';
@@ -969,6 +969,64 @@ function renderCalMeter(cal) {
     wrap.appendChild(noteEl('Set your maintenance calories in ⚙ Settings — or log a week of food alongside your weigh-ins — to mark the cut / maintain / gain lines on this bar.'));
   }
   return wrap;
+}
+
+/* ---------- one-time questions under the bar (the v40 pattern) ----------
+   rack-v64 (P5) asks two questions about a stored target instead of
+   rewriting it: the safety-floor card (DECISION floorOk) and the "Still
+   maintaining?" card (DECISION D-VEb). Each lives in its own commit so either
+   can be dropped; this is the part they share, so that dropping one does not
+   touch the other. With both dropped it is used by nothing.
+
+   The pattern (weight.js maintAskEl is the model): a card shows only while
+   its condition holds, each answer breaks the condition for good, and
+   dismissing (leaving the screen) writes nothing, so the card returns.
+
+   askCardEl(card, buttons): the eyebrow, the note, and one button per answer
+   ({ label, primary, answer }), all disabled while an answer is being
+   written and put back if it did not land. */
+function askCardEl(card, buttons) {
+  const box = el('div');
+  box.style.marginTop = '14px';
+  box.style.paddingTop = '12px';
+  box.style.borderTop = '1px solid var(--collar)';
+  box.appendChild(el('div', 'eyebrow', card.eyebrow));
+  box.appendChild(noteEl(card.note));
+  const btns = buttons.map((b, i) => {
+    const n = el('button', 'btn btn-block ' + (b.primary ? 'btn-primary' : 'btn-ghost'), b.label);
+    n.style.marginTop = i ? '8px' : '10px';
+    return n;
+  });
+  buttons.forEach((b, i) => {
+    btns[i].onclick = async () => {
+      btns.forEach(n => { n.disabled = true; });
+      if ((await b.answer()) === false) btns.forEach(n => { n.disabled = false; });
+    };
+  });
+  box.append(...btns);
+  return box;
+}
+
+/* An answer's write. Re-reads with readExact rather than reusing the copy
+   read() gave the render (a whole-node PUT of that copy is how a pair of
+   buttons erases a target), refuses when the re-read is missing or has no
+   calories, and hands the FRESH node to `build`, which returns the node to
+   write, or null when the question no longer applies to it (answered on
+   another device). Returns false when nothing could be written, null when
+   there was nothing to write, and the written node otherwise. */
+async function rewriteTargets(build) {
+  let cur = null;
+  try { cur = await readExact('food/targets'); } catch { cur = null; }
+  if (!cur || !(Number(cur.cal) > 0)) {
+    toast('Couldn\u2019t reach your targets \u2014 try again in a moment.');
+    return false;
+  }
+  const next = build(cur);
+  if (!next) { render(); return null; }
+  try { await write('food/targets', next); } catch { return false; }
+  targets = next;
+  render();
+  return next;
 }
 
 /* A meal card is a read-out, nothing more. The per-meal "+ Add food" button
