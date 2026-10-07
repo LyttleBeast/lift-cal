@@ -412,6 +412,11 @@ export async function refreshModel(entries) {
     trendSpan: fitTrend ? fitPts[fitPts.length - 1].x - fitPts[0].x : 0,
     trendLastX: fitTrend ? fitPts[fitPts.length - 1].x : null,
     trendLastKey: fitTrend ? fitPts[fitPts.length - 1].d : null,
+    // The newest day-point in the window BEFORE the screen. After a trip the
+    // screen can leave this morning's return weigh-ins out as off the line;
+    // the stale sentence must not then say "the last one was 12 days ago"
+    // (P5 A7, XR R5). Wording only: nothing is computed from it.
+    trendRawLastKey: pts.length ? pts[pts.length - 1].d : null,
     // The same span in whole days, for Coach. trendDays counts points, which
     // is not how long the trend has been watched: three weigh-ins a week for
     // three weeks is 9 points over 18-20 days. Coach's energy read asks for
@@ -496,6 +501,7 @@ export function maintenanceFromModel(daySummaries) {
     // and read on Friday is four days staler than it was (F22). Whole days,
     // today's key minus the newest fitted day's key (keyDaysBetween).
     trendAge: model.trendLastKey ? keyDaysBetween(model.trendLastKey, today) : null,
+    trendRawAge: model.trendRawLastKey ? keyDaysBetween(model.trendRawLastKey, today) : null,
     need: []
   };
 }

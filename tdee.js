@@ -100,8 +100,13 @@ export function maintenance(weightEntries, daySummaries) {
     // A slope whose newest point is days old is being read off the line past
     // the data, against an intake average that kept moving. When weighing
     // stops the number is "not yet" again (P5 A2).
+    // When the newest RAW reading is recent and only the screened trend is
+    // old, the weigh-ins exist and sit far off the line (after a trip, say):
+    // "N days ago" would be untrue, so it says what is actually missing (A7).
     if (m.trendAge != null && m.trendAge > STALE_DAYS) {
-      need.unshift('a weigh-in (the last one was ' + m.trendAge + ' days ago)');
+      need.unshift(m.trendRawAge != null && m.trendRawAge <= STALE_DAYS
+        ? 'a few more weigh-ins (the latest ones are far off the trend)'
+        : 'a weigh-in (the last one was ' + m.trendAge + ' days ago)');
     }
     // `held` is the number the gate kept back, or null when there was none.
     return need.length ? { ...m, tdee: null, held: m.tdee != null ? m.tdee : null, need, model: true } : { ...m, model: true };

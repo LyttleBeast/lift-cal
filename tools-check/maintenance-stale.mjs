@@ -18,7 +18,10 @@
 //   - the same over the 1 Nov DST change: one per date;
 //   - keyDaysBetween('2026-10-31', '2026-11-02') === 2;
 //   - trendWeight ten days after the last weigh-in is within |slope| x 4 days
-//     of the line's value at the newest point.
+//     of the line's value at the newest point;
+//   - A7: after a trip, when the screen leaves this morning's return
+//     weigh-ins out of the fit, the need does not say "N days ago" (it says
+//     the latest weigh-ins are far off the trend).
 
 import { stage, harness, setNow, at, dailyWeighIns, summariesBefore, J, RealDate } from './lib/stage.mjs';
 
@@ -70,6 +73,33 @@ section('The trend weight is not run on past the data');
   const slack = Math.abs(m.ratePerDay) * 4 + 0.01;
   check('ten days after the last weigh-in, trendWeight is within |slope| x 4 days of the line at the newest point',
     Math.abs(tw - lastLb) <= slack, J({ tw, lastLb, slack }));
+}
+
+section('After a trip: the return weigh-ins are far off the trend (A7)');
+{
+  // 30 daily readings at 135, a 12-day gap, then readings at 143: the screen
+  // leaves the return readings out of the fit (they are 6 % off its line), so
+  // the fitted trend is days old while the newest reading is from this
+  // morning. "The last one was N days ago" would be untrue.
+  const Y = 2026, M = 10, D = 6;
+  const trip = upto => { const o = {};
+    for (let ago = 43; ago >= 14; ago--) o['a' + ago] = { lb: 135, t: new RealDate(Y, M - 1, D - ago, 7).getTime() };
+    for (let ago = 1; ago >= upto; ago--) o['b' + ago] = { lb: 143, t: new RealDate(Y, M - 1, D - ago, 7).getTime() };
+    return o; };
+  for (const [upto, when] of [[1, 'the morning of the first return weigh-in'], [0, 'the morning of the second']]) {
+    const nowMs = at(Y, M, D - upto, 9);
+    setNow(nowMs);
+    const s = stage(REAL); cleanups.push(s.cleanup);
+    const T = await s.load('tdee.js'), tk = (await s.load('store.js')).todayKey;
+    const w = trip(upto);
+    const sums = summariesBefore(tk, Y, M, D - upto, 21, 1900);
+    await T.refreshModel(w);
+    const r = T.maintenance(w, sums);
+    check(when + ': still no number', r.tdee == null, J({ tdee: r.tdee, held: r.held }));
+    check(when + ': the need never says "days ago"', Array.isArray(r.need) && r.need.length > 0 && !r.need.some(n => /days ago/.test(n)), J(r.need));
+    check(when + ': it says the latest weigh-ins are far off the trend',
+      r.need.includes('a few more weigh-ins (the latest ones are far off the trend)'), J(r.need));
+  }
 }
 
 done(...cleanups);
