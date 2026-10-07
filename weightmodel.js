@@ -241,6 +241,29 @@ function robustSlope(pts) {
   return { slope, inter, se, n };
 }
 
+/* ================= OUTLIER SCREEN =================
+   Huber (below) down-weights a bad day in the middle of the window, but not
+   one at either end: there the least-squares start bends the line to meet it,
+   so its residual looks small and it keeps its weight. A typo as today's
+   reading moves maintenance by hundreds on entry, and the same reading moves
+   it the other way three weeks later as it leaves (F19). So each day is first
+   judged against a line it cannot bend: the repeated median (Siegel), which
+   only moves once half the days are wrong. A day that far off that line is a
+   typo or a scale glitch, not body weight, and is left out of the slope. It
+   stays in the chart. Fewer than 5 days, or a screen that would leave fewer
+   than 4, and nothing is dropped: there is too little to judge against. */
+// Off the line by more than 5 % of bodyweight: no real day moves that far.
+function screenOutliers(pts) {
+  const n = pts.length;
+  if (n < 5) return pts;
+  const med = a => { const s = [...a].sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+  const slope = med(pts.map((p, i) => med(pts.filter((_, j) => j !== i).map(q => (q.y - p.y) / (q.x - p.x)))));
+  const inter = med(pts.map(p => p.y - slope * p.x));
+  const res = pts.map(p => p.y - (inter + slope * p.x));
+  const keep = pts.filter((p, i) => Math.abs(res[i]) <= 0.05 * Math.abs(inter + slope * p.x));
+  return keep.length >= 4 ? keep : pts;
+}
+
 /* ================= BUILD ================= */
 
 export async function refreshModel(entries) {
@@ -328,8 +351,12 @@ export async function refreshModel(entries) {
   const cutTrend = Date.now() - TREND_DAYS * DAY;
   const pts = daily
     .filter(p => parseKey(p.d).getTime() >= cutTrend)
-    .map(p => ({ x: parseKey(p.d).getTime() / DAY, y: p.lb, w: p.w }));
-  const fitTrend = robustSlope(pts);
+    .map(p => ({ x: parseKey(p.d).getTime() / DAY, y: p.lb, w: p.w, d: p.d }));
+  // The points the slope is fitted to: the window less any day the outlier
+  // screen left out. The span, the staleness and the trendLb clamp all read
+  // these, so a typo'd day neither stretches the span nor freshens the edge.
+  const fitPts = screenOutliers(pts);
+  const fitTrend = robustSlope(fitPts);
 
   // Observed diurnal shape, straight off the corrections the model applied.
   const hours = {};
@@ -365,6 +392,17 @@ export async function refreshModel(entries) {
     rateWk: fitTrend ? fitTrend.slope * 7 : null,
     rateSeWk: fitTrend && fitTrend.se != null ? fitTrend.se * 7 : null,
     trendDays: fitTrend ? fitTrend.n : 0,
+    // How many days the fitted points cover, and where the newest one sits
+    // (in days, local noon). Four points can sit inside one week, and a slope
+    // over a week is mostly water; tdee.js gates on these, not on the count.
+    trendSpan: fitTrend ? fitPts[fitPts.length - 1].x - fitPts[0].x : 0,
+    trendLastX: fitTrend ? fitPts[fitPts.length - 1].x : null,
+    trendLastKey: fitTrend ? fitPts[fitPts.length - 1].d : null,
+    // The same span in whole days, for Coach. trendDays counts points, which
+    // is not how long the trend has been watched: three weigh-ins a week for
+    // three weeks is 9 points over 18-20 days. Coach's energy read asks for
+    // two weeks of trend, which is this, not the count (P5 F28).
+    trendSpanDays: fitTrend ? Math.round(fitPts[fitPts.length - 1].x - fitPts[0].x) : 0,
     hourly,
     anchorDays,
     spread: intraDaySpread(days)
