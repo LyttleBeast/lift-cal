@@ -21,9 +21,14 @@ export { refreshModel, modelState, adjustedDays, peakOffset, trendWeight, PRIOR 
 
 /* ---------- weight trend ---------- */
 
+// lb is coerced and a reading that is not a finite number above 0 is left
+// out: a string "200" used to concatenate into a daily mean of 90,090.5, and a
+// 0 or a -5 dragged avg7 to 154 (P5 A9, F39). No writer makes one today; an
+// importer one day might. Stored entries are untouched.
 export function sortedEntries(entries) {
   return Object.entries(entries || {})
-    .map(([id, e]) => ({ id, ...e }))
+    .map(([id, e]) => ({ id, ...e, lb: Number(e && e.lb) }))
+    .filter(e => Number.isFinite(e.lb) && e.lb > 0)
     .sort((a, b) => a.t - b.t);
 }
 
