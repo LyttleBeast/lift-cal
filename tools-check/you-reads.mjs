@@ -225,6 +225,31 @@ section('D. the mechanism — one change feed in store.js, and You reads only wh
         Y.includes('const back = () => render();') && /refreshSessions\(\);\s*\n\}/.test(Y));
 }
 
+/* ================= E. "AS YOU LOG IT" (rack-v64, P5 C6, F25) =================
+   The measured maintenance is measured in the log's own terms: under-log by
+   20 % and it reads 20 % low. The Weight card and You's "Where this is
+   heading" now say so, and only where the number IS the measured one: the
+   Weight card's sentence sits past its "Needs …" return (so only a card with
+   a number says it), and You's sits in the measured branch, not in the setup
+   or pinned ones. Read off the source, as section D does. */
+section('E. "as you log it" — said of the measured number, and only of it');
+{
+  const WT = readFileSync(join(ROOT, 'weight.js'), 'utf8'), YOU = readFileSync(join(ROOT, 'you.js'), 'utf8');
+  const card = WT.indexOf("'kcal/day to hold steady, as you log it \\u2014 from '");
+  check('the Weight card: "kcal/day to hold steady, as you log it — from …", and the old wording is gone',
+        card > 0 && !WT.includes("'kcal/day to hold steady \\u2014 from '"));
+  check('and it is said past the card\'s "Needs …" return, so only a card with a number says it',
+        card > WT.indexOf("if (m.tdee == null) {") && WT.indexOf("if (m.tdee == null) {") > 0);
+  const LOG = 'It is measured in your log\\u2019s terms';   // as the source spells it
+  const at = YOU.indexOf(LOG), measured = YOU.indexOf("why.body.push('Nobody typed your maintenance."),
+        setupAt = YOU.indexOf("why.body.push('Maintenance is still the "), pinnedAt = YOU.indexOf("why.body.push('Maintenance is fixed at "),
+        unknownAt = YOU.indexOf("why.body.push('Maintenance is not known yet.");
+  check('You\'s "Where this is heading": the sentence is in the measured branch (after "Nobody typed your maintenance", before "Maintenance is not known yet")',
+        at > 0 && YOU.split(LOG).length === 2 && at > measured && measured > 0 && at < unknownAt, String(at));
+  check('and absent from the setup and pinned branches', setupAt > 0 && pinnedAt > 0 && setupAt < measured && pinnedAt < measured &&
+        !YOU.slice(setupAt, measured).includes(LOG));
+}
+
 console.log('\nthe You tab reads once per open, and after that only what changed\n');
 console.log(results.join('\n'));
 console.log('\n' + pass + ' passed, ' + fail + ' failed\n');

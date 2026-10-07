@@ -420,7 +420,8 @@ async function renderTDEE(s, u, t, m) {
   }
 
   card.appendChild(noteEl(
-    'kcal/day to hold steady \u2014 from ' + Math.round(m.avgIntake).toLocaleString() + ' avg intake over ' + m.days +
+    // "as you log it": the number is measured in the log's own currency (P5 F25).
+    'kcal/day to hold steady, as you log it \u2014 from ' + Math.round(m.avgIntake).toLocaleString() + ' avg intake over ' + m.days +
     ' logged days and a ' + (m.rateWk > 0 ? '+' : '') + fmtRate(m.rateWk, u) + ' ' + unitW(u) + '/week trend' +
     (m.trendDays ? ' measured over ' + m.trendDays + ' days' : '') +
     // Past the early return there is an estimate, so effectiveMaint() can only

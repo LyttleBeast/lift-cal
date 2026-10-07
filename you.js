@@ -1505,7 +1505,9 @@ function trajectoryCard(found, est, maint) {
       why.body.push('Nobody typed your maintenance. You averaged ' + fmtInt(avg) + ' kcal a day over ' + (est.days || 0) + ' logged days; the scale ' +
         (rate == null || Math.abs(rate) < 0.05 ? 'held steady, so that is about what you spend' :
          'went ' + (rate < 0 ? 'down' : 'up') + ' ' + labelRate(Math.abs(rate), gu) + ' a week, which at roughly ' + kcalPerUnit(gu).toLocaleString() + ' kcal a ' + (gu === 'kg' ? 'kilo' : 'pound') + ' is ' + fmtInt(shift) + ' a day ' + (rate < 0 ? 'more' : 'less') + ' than you ate') +
-        ' — so maintenance is ' + fmtInt(maint.cal) + ' kcal' + (est && est.se ? ', give or take ' + fmtInt(Math.round(1.96 * est.se / 5) * 5) : '') + '.');
+        ' — so maintenance is ' + fmtInt(maint.cal) + ' kcal' + (est && est.se ? ', give or take ' + fmtInt(Math.round(1.96 * est.se / 5) * 5) : '') + '.' +
+        // P5 F25: the number is in the log's terms, not a metabolism claim.
+        ' It is measured in your log\u2019s terms: if entries run light, it runs light by the same share, and targets built on it still land as long as you keep logging the same way. A sudden drop is as likely a change in logging as a change in you.');
     }
   } else {
     why.body.push('Maintenance is not known yet. It needs ' + (est && est.need && est.need.length ? est.need.join(' and ') : 'a couple of weeks of food and weigh-ins') + ', and it arrives on its own.');
