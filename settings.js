@@ -687,9 +687,15 @@ export function openGoal(onEdit) {
         ', sits away from your maintenance of ' + p.maint.toLocaleString() + '. Save to move it to ' + p.cal.toLocaleString() + ' a day.';
       return;
     }
+    // The difference printed is the one between the two numbers printed (D14),
+    // not the goal's 500: a floor can hold a cut at 1,258 against 1,480 (P5 C2).
+    const gap = p.maint ? p.cal - p.maint : 0;
     note.textContent = p.maint
-      ? (p.changed ? 'Calories will move to ' + p.cal.toLocaleString() + ' a day — maintenance ' + p.maint.toLocaleString() +
-                     (p.rate ? (p.rate < 0 ? ' minus ' : ' plus ') + Math.abs(p.rate * 500).toLocaleString() : '') + '. Protein and fat stay where they are.'
+      ? (p.changed ? 'Calories will move to ' + p.cal.toLocaleString() + ' a day — ' +
+                     (gap === 0 ? 'your maintenance' : 'maintenance ' + p.maint.toLocaleString() + (gap < 0 ? ' minus ' : ' plus ') + Math.abs(gap).toLocaleString()) +
+                     (p.minorHeld ? ': under 18, Rack does not plan a deficit'
+                       : p.rate < 0 && p.floored ? ', the lowest the floors allow' : '') + '.' +
+                     (p.autoOn ? ' Protein and fat follow your weight.' : ' Protein and fat stay where they are.')
                    : 'Your calorie target already fits that goal, so it stays at ' + p.cal.toLocaleString() + '.')
       : 'Calories stay where they are until Rack knows your maintenance — a week of food and weigh-ins, or a number under Daily targets.';
   };

@@ -25,7 +25,7 @@
 // follows the account to a new phone instead of greeting them again.
 
 import { read, write, uid, todayKey, setUnits } from './store.js';
-import { autoTargets, whoOf } from './tdee.js';
+import { autoTargets, whoOf, plannedRate } from './tdee.js';
 import { el, noteEl, segmented, sheet, r1, toast, LIMITS, within } from './ui.js';
 import { isStandalone, platform } from './usage.js';
 import { wIn, fmtW, unitW, fmtRate, fmtPer, hIn as inchesFrom, fmtH, unitH,
@@ -550,8 +550,12 @@ export function runSetup(user) {
         if (sub) c.appendChild(el('div', 'ob-num-s', sub));
         return c;
       };
+      // The rate under the number is what the NUMBER plans against this
+      // maintenance, not the goal's: a cut the protein floor held at 1,550
+      // against 1,480 used to read "−1 lb/wk" (P5 C2).
+      const pr = plannedRate(a.cal, maint);
       grid.appendChild(cell('kcal a day', a.cal.toLocaleString(),
-        rate === 0 ? 'maintenance' : (rate < 0 ? '−' : '+') + fmtRate(Math.abs(rate), a.units) + ' ' + unitW(a.units) + '/wk'));
+        !pr ? 'maintenance' : (pr < 0 ? '−' : '+') + fmtRate(Math.abs(pr), a.units) + ' ' + unitW(a.units) + '/wk'));
       // Setup always writes 1 g of protein per POUND. That is 2.2 g per kilo,
       // and printing the per-pound figure inside a kilos app is exactly the
       // half-finished thing this is meant to prevent.

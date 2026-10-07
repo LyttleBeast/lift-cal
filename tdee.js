@@ -371,6 +371,8 @@ export function autoTargets(goal, maint, lb, who) {
     // something to work around.
     safe: safe.kcal,
     safeHeld: cal > wanted && cal === safe.kcal && safe.kcal > hard,
+    // The person's own "Never go below" number held it, not the maths (P5 XC X3).
+    userHeld: cal > wanted && goal.floor > 0 && cal === goal.floor && goal.floor > Math.max(hard, safe.kcal),
     minor: safe.minor,
     // A minor asked for a cut and got maintenance (or more): the deficit was
     // dropped whether or not the Dietary Guidelines line also held it (XC X7).
@@ -378,4 +380,16 @@ export function autoTargets(goal, maint, lb, who) {
     lb: Math.round(lb * 10) / 10,
     maint
   };
+}
+
+/* ---------- the rate a target plans ----------
+   Every label used to quote the GOAL rate ("−1 lb/wk") whatever was written,
+   so a floored cut read −1 lb/wk while the number planned −0.2, or a gain.
+   This reads it back off the two numbers on screen instead (3,500 kcal a
+   pound, so 500 a day is a pound a week), to the nearest 0.05 lb. Within a
+   twentieth of a pound either way it is maintenance (P5 C2). */
+export function plannedRate(cal, maint) {
+  if (!(cal > 0) || !(maint > 0)) return null;
+  const r = Math.round((cal - maint) / 500 * 20) / 20;
+  return r === 0 ? 0 : r;    // no "−0"
 }

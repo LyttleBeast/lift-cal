@@ -14,7 +14,7 @@
 
 import { read, write, watch, LS, todayKey, uid, wu } from './store.js';
 import { maintenance, effectiveMaint, calorieZones, zoneOf, refreshModel,
-         autoTargets, trendWeight, MIN_CARB_G, safeFloor, whoOf } from './tdee.js';
+         autoTargets, trendWeight, MIN_CARB_G, safeFloor, whoOf, plannedRate } from './tdee.js';
 import { initWater, loadWaterDay, renderWater, openWaterSettings } from './water.js';
 import { OWNER_UID } from './firebase-config.js';
 import { $, el, sheet, toast, noteEl, confirmSheet, copyText, readClipboard,
@@ -3394,12 +3394,10 @@ export function openTargets(onSaved) {
       (mi.source === 'measured' ? ' (estimated)' : mi.source === 'setup' ? ' (from setup)' : ' (pinned)') +
       ' at a trend weight of ' + labelW(n.lb, u) + '.'));
 
-    if (n.floored) {
-      preview.appendChild(glyphed(noteEl(
-        '\u26a0 That rate would put you at ' + n.wanted.toLocaleString() +
-        ', below the ' + n.floor.toLocaleString() + ' floor, so it holds at the floor instead. ' +
-        'Ease the rate off, or drop the fat grams if you want to go lower honestly.'), 'warn', { lead: true }));
-    }
+    // Which floor held it and what the number plans; never the unfloored
+    // number (it went negative) and never which box to empty (P5 C2).
+    const fl = floorNote(n, u);
+    if (fl) preview.appendChild(glyphed(noteEl('\u26a0 ' + fl), 'warn', { lead: true }));
     preview.appendChild(noteEl(
       'Re-checked when you weigh in, moves at most once a week and never more than ' +
       AUTO_MAX_STEP + ' kcal at a time, except straight up to a floor.'));
@@ -3789,12 +3787,14 @@ function goalNext(id) {
   const rate = (id === 'cut' && cur < 0) || (id === 'gain' && cur > 0) ? cur : GOAL_RATE[id];
   const a = { ...AUTO_DEFAULTS, ...(targets.auto || {}), rateWk: rate };
   let next = { ...targets, auto: a };
+  let minorHeld = false, floored = false;
   const mi = maintInfo();
   if (mi) {
     if (a.on) {
       const lb = trendWeight();
       const n = lb > 0 ? autoTargets(a, mi.cal, lb, who) : null;
       if (n) next = { ...next, cal: n.cal, p: n.p, f: n.f, auto: { ...a, lastAdj: Date.now() } };
+      if (n) { minorHeld = n.minorHeld; floored = n.floored; }
     } else {
       const floor = (targets.p || 0) * 4 + (targets.f || 0) * 9 + MIN_CARB_G * 4;
       // The same safety floor as the auto maths (P5 B1); the macro floor stays
@@ -3802,18 +3802,26 @@ function goalNext(id) {
       // Under 18 no deficit (P5 B2), as autoTargets.
       const safe = safeFloor(who);
       const r = safe.minor ? Math.max(0, rate) : rate;
-      next.cal = Math.max(floor, safe.kcal, Math.round((mi.cal + r * 500) / 10) * 10);
+      const wanted = Math.round((mi.cal + r * 500) / 10) * 10;
+      next.cal = Math.max(floor, safe.kcal, wanted);
+      minorHeld = safe.minor && rate < 0;
+      floored = next.cal > wanted;
     }
     // A computed target meets the same bound a typed one does. One typo
     // weigh-in on a young account made this 45,860 (P5 C1).
     next.cal = clamp(next.cal, LIMITS.cal);
   }
-  return { next, maint: mi ? mi.cal : null, rate };
+  return { next, maint: mi ? mi.cal : null, rate, minorHeld, floored };
 }
 
 export function previewGoal(id) {
-  const { next, maint, rate } = goalNext(id);
-  return { cal: next.cal, maint, rate, changed: next.cal !== targets.cal };
+  const { next, maint, rate, minorHeld, floored } = goalNext(id);
+  // autoOn: with auto targets on, protein and fat move with the goal too, and
+  // the goal sheet's "stay where they are" would be false. minorHeld: an
+  // under-18 cut that plans no deficit, so the sheet gives that reason.
+  // floored: a floor (the macros, the safety line or his own) holds it.
+  return { cal: next.cal, maint, rate, changed: next.cal !== targets.cal,
+           autoOn: !!(next.auto && next.auto.on), minorHeld, floored };
 }
 
 export async function setGoal(id) {
@@ -3838,6 +3846,28 @@ export function goalFits(id = goalId()) {
 /* v57: the bar's note for a cut or a gain that does not fit, in its own words
    (targetNote), for the goal sheet to say too. Null for a hold, or when it
    fits, or with no maintenance to measure against. */
+/* The note under a target a floor held. It used to print the rate's wanted
+   number, which goes negative past about 3 lb a week ("would put you at
+   −960"), and then said which box to empty to get under the floor. A floor
+   that is there for safety is not something to coach around, so this names
+   the number, what holds it there, and the rate it actually plans: never a
+   number under the floor, and no doctor wording (that waits for Micah's own
+   words, P5 F16). Null when nothing held it. Pure (P5 C2). */
+export function floorNote(n, u) {
+  if (!n || !(n.floored || n.minorHeld)) return null;
+  const r = plannedRate(n.cal, n.maint);
+  const plans = ' That works out to ' + (r === 0 ? 'about maintenance.'
+    : 'about ' + labelRate(Math.abs(r), u) + ' a week ' + (r < 0 ? 'down.' : 'up.'));
+  const at = 'Held at ' + n.cal.toLocaleString();
+  // Under 18 the cut is dropped first; the Dietary Guidelines line may then
+  // hold the number too, or maintenance may already be above it (XC X7).
+  if (n.minor && n.safeHeld) return at + '. Under 18, Rack does not plan a deficit; this is the least the Dietary Guidelines give for your age.' + plans;
+  if (n.minorHeld && !n.floored) return 'Set at ' + n.cal.toLocaleString() + ', your maintenance: under 18, Rack does not plan a deficit.';
+  if (n.safeHeld) return at + ', the lowest daily target Rack sets.' + plans;
+  if (n.userHeld) return at + ', the floor you set under Daily targets.' + plans;
+  return at + ': your protein and fat plus 100 g of carbs need that much.' + plans;
+}
+
 export function misfitNote(id = goalId()) {
   const mi = maintInfo();
   if (!mi) return null;

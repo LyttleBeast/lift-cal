@@ -562,7 +562,9 @@ const GOAL = { on: true, rateWk: -1, pPerLb: 1, fPerLb: 0.35, floor: 0, lastAdj:
   // autoTargets meets (tdee.js safeFloor(who)), with no deficit under 18 (the
   // rate r >= 0 for a minor). Updated on purpose, FIX-PROMPT P5 §6.
   check('and the Goal sheet’s by-hand target is the same arithmetic as autoTargets’: maintenance + rate × 500 (rate ≥ 0 under 18), to the nearest ten, never under the macro floor or the safety floor',
-    FOOD.includes('next.cal = Math.max(floor, safe.kcal, Math.round((mi.cal + r * 500) / 10) * 10);') &&
+    // (C2 names the rate's number `wanted` so the sheet can tell a floored cut.)
+    FOOD.includes('const wanted = Math.round((mi.cal + r * 500) / 10) * 10;') &&
+    FOOD.includes('next.cal = Math.max(floor, safe.kcal, wanted);') &&
     FOOD.includes('const r = safe.minor ? Math.max(0, rate) : rate;') &&
     FOOD.includes('const safe = safeFloor(who);'));
 
