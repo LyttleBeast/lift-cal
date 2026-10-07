@@ -156,6 +156,38 @@ export function estimateMaintenance({ sex, heightIn, birthYear, lb, activity }) 
   return Math.round(bmr * mult / 10) * 10;
 }
 
+/* ---------- Setup's numbers (P5 C5) ----------
+   The numbers screen used to fill its boxes once, on the first visit, so
+   going Back to fix a weight typo (285 for 185) and forward again kept the
+   typo's numbers. setupNumbers() is the arithmetic, from the answers as they
+   are now; applySetupNumbers() is what each visit does with it: the setup
+   maintenance always follows the answers (it is setup's estimate, never
+   typed), and calories, protein and fat follow too until a box is edited.
+   A setup maintenance outside LIMITS.cal (50 lb, 36 in, age 100 gives ~420)
+   is no maintenance at all: null, and Rack waits for a measurement. */
+export function setupNumbers(a, year) {
+  const est = estimateMaintenance(a);
+  const rate = (GOALS.find(g => g[0] === a.goal) || GOALS[1])[2];
+  // Sex and age for the safety floors, by the same rule Fuel reads the
+  // profile with (tdee.js whoOf).
+  const t = autoTargets({ rateWk: rate, pPerLb: 1, fPerLb: 0.35, floor: 0 }, est, a.lb,
+                        whoOf({ sex: a.sex, birthYear: a.birthYear }, year))
+         || { cal: est, p: Math.round(a.lb), f: Math.round(a.lb * 0.35), c: 0 };
+  return { maint: within(est, LIMITS.cal) ? est : null, cal: t.cal, p: t.p, f: t.f };
+}
+export function applySetupNumbers(a, year) {
+  const n = setupNumbers(a, year);
+  a.maint = n.maint;
+  if (!a.edited) { a.cal = n.cal; a.p = n.p; a.f = n.f; }
+  return n;
+}
+// A box holds what it shows: empty or not a number is NaN, which the
+// screen's Next check (within LIMITS) refuses, rather than the old value.
+export function boxNumber(v) {
+  const n = parseInt(v, 10);
+  return Number.isFinite(n) ? n : NaN;
+}
+
 export function waterGoalFor(lb) {
   // Half a fluid ounce per pound — the same rule the water settings screen
   // suggests, so the two never disagree.
@@ -528,15 +560,8 @@ export function runSetup(user) {
 
     /* ---- 6. the numbers ---- */
     function numbers() {
-      const maint = estimateMaintenance(a);
-      const rate  = (GOALS.find(g => g[0] === a.goal) || GOALS[1])[2];
-      // Sex and age for the safety floors, by the same rule Fuel reads the
-      // profile with (tdee.js whoOf).
-      const t = autoTargets({ rateWk: rate, pPerLb: 1, fPerLb: 0.35, floor: 0 }, maint, a.lb,
-                            whoOf({ sex: a.sex, birthYear: a.birthYear }, new Date().getFullYear()))
-             || { cal: maint, p: Math.round(a.lb), f: Math.round(a.lb * 0.35), c: 0 };
-
-      if (!a.cal) { a.maint = maint; a.cal = t.cal; a.p = t.p; a.f = t.f; }
+      const n = applySetupNumbers(a, new Date().getFullYear());
+      const maint = n.maint;
 
       body.appendChild(el('div', 'ob-kicker', 'Your start'));
       body.appendChild(el('h1', 'ob-title', 'Here’s where to begin'));
@@ -554,13 +579,14 @@ export function runSetup(user) {
       // maintenance, not the goal's: a cut the protein floor held at 1,550
       // against 1,480 used to read "−1 lb/wk" (P5 C2).
       const pr = plannedRate(a.cal, maint);
-      grid.appendChild(cell('kcal a day', a.cal.toLocaleString(),
-        !pr ? 'maintenance' : (pr < 0 ? '−' : '+') + fmtRate(Math.abs(pr), a.units) + ' ' + unitW(a.units) + '/wk'));
+      // With no setup maintenance (null: out of range) there is no rate to state.
+      grid.appendChild(cell('kcal a day', Number.isFinite(a.cal) ? a.cal.toLocaleString() : '\u2013',
+        pr == null ? null : !pr ? 'maintenance' : (pr < 0 ? '−' : '+') + fmtRate(Math.abs(pr), a.units) + ' ' + unitW(a.units) + '/wk'));
       // Setup always writes 1 g of protein per POUND. That is 2.2 g per kilo,
       // and printing the per-pound figure inside a kilos app is exactly the
       // half-finished thing this is meant to prevent.
-      grid.appendChild(cell('g protein', String(a.p), fmtPer(1, a.units) + ' g per ' + unitW(a.units)));
-      grid.appendChild(cell('g fat', String(a.f), 'carbs are the rest'));
+      grid.appendChild(cell('g protein', Number.isFinite(a.p) ? String(a.p) : '\u2013', fmtPer(1, a.units) + ' g per ' + unitW(a.units)));
+      grid.appendChild(cell('g fat', Number.isFinite(a.f) ? String(a.f) : '\u2013', 'carbs are the rest'));
       body.appendChild(grid);
 
       const adj = el('details', 'ob-adjust');
@@ -568,9 +594,11 @@ export function runSetup(user) {
       const cIn = numInput(a.cal, { min: LIMITS.cal[0], max: LIMITS.cal[1] });
       const pIn = numInput(a.p,   { min: LIMITS.targetG[0], max: LIMITS.targetG[1] });
       const fIn = numInput(a.f,   { min: LIMITS.targetG[0], max: LIMITS.targetG[1] });
-      cIn.oninput = e => a.cal = parseInt(e.target.value) || a.cal;
-      pIn.oninput = e => a.p   = parseInt(e.target.value) || a.p;
-      fIn.oninput = e => a.f   = parseInt(e.target.value) || a.f;
+      // Typing marks the numbers his own (they stop following the answers),
+      // and a box stores what it holds: emptied is NaN, which Next refuses.
+      cIn.oninput = e => { a.edited = true; a.cal = boxNumber(e.target.value); };
+      pIn.oninput = e => { a.edited = true; a.p = boxNumber(e.target.value); };
+      fIn.oninput = e => { a.edited = true; a.f = boxNumber(e.target.value); };
       adj.append(field('Calories', cIn), field('Protein (g)', pIn), field('Fat (g)', fIn));
       body.appendChild(adj);
 
