@@ -41,12 +41,59 @@ globalThis.localStorage = {
   key: i => Array.from(cells.keys())[i] ?? null,
   get length() { return cells.size; }
 };
-globalThis.window = globalThis.window || { addEventListener() {}, matchMedia: () => ({ matches: false, addEventListener() {} }) };
-globalThis.document = globalThis.document || {
-  body: null, getElementById: () => null, querySelector: () => null, querySelectorAll: () => [],
-  createElement: () => ({ style: {}, setAttribute() {}, appendChild() {}, addEventListener() {}, classList: { add() {}, remove() {}, toggle() {} } }),
-  addEventListener() {}, documentElement: { style: {}, setAttribute() {}, dataset: {} }
+/* A DOM just big enough for el() / sheet() / toast(): elements are plain
+   objects that keep their children, so a verifier can find what a function
+   drew (a toast, a sheet's buttons) by walking document.body. Nothing is laid
+   out and no CSS applies. */
+const TOASTS = [];
+function mkEl(tag) {
+  const n = {
+    tagName: String(tag || 'div').toUpperCase(), className: '', id: '', textContent: '', value: '',
+    children: [], style: {}, dataset: {}, attrs: {}, parent: null, disabled: false,
+    classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
+    setAttribute(k, v) { this.attrs[k] = v; }, getAttribute(k) { return this.attrs[k]; },
+    addEventListener() {}, removeEventListener() {}, focus() {}, select() {}, blur() {},
+    appendChild(c) {
+      if (c && typeof c === 'object') { c.parent = this; this.children.push(c); if (c.className === 'toast') TOASTS.push(c.textContent); }
+      return c;
+    },
+    append(...cs) { cs.forEach(c => this.appendChild(typeof c === 'string' ? Object.assign(mkEl('#text'), { textContent: c }) : c)); },
+    prepend(c) { if (c) { c.parent = this; this.children.unshift(c); } },
+    insertBefore(c) { return this.appendChild(c); },
+    replaceChildren(...cs) { this.children = []; this.append(...cs); },
+    remove() { if (this.parent) { const i = this.parent.children.indexOf(this); if (i >= 0) this.parent.children.splice(i, 1); this.parent = null; } },
+    querySelector(sel) { return find(this, sel)[0] || null; },
+    querySelectorAll(sel) { return find(this, sel); },
+    set innerHTML(v) { this.children = []; this._html = v; }, get innerHTML() { return this._html || ''; },
+    get firstChild() { return this.children[0] || null; },
+    get text() { return [this.textContent, ...this.children.map(c => c.text)].filter(Boolean).join(' '); }
+  };
+  return n;
+}
+function find(root, sel) {
+  const out = [], m = /^([.#])?([\w-]+)$/.exec(String(sel).trim());
+  if (!m) return out;
+  const hit = n => m[1] === '.' ? String(n.className).split(/\s+/).includes(m[2]) : m[1] === '#' ? n.id === m[2] : n.tagName === m[2].toUpperCase();
+  const walk = n => n.children.forEach(c => { if (hit(c)) out.push(c); walk(c); });
+  walk(root);
+  return out;
+}
+export { mkEl };
+globalThis.window = globalThis.window || { addEventListener() {}, removeEventListener() {}, matchMedia: () => ({ matches: false, addEventListener() {} }), history: { replaceState() {} }, isSecureContext: false };
+globalThis.location = globalThis.location || { hash: '', pathname: '/', search: '' };
+globalThis.history = globalThis.history || { replaceState() {} };
+const BODY = mkEl('body');
+globalThis.document = {
+  body: BODY, documentElement: mkEl('html'),
+  getElementById: id => find(BODY, '#' + id)[0] || null,
+  querySelector: s => find(BODY, s)[0] || null, querySelectorAll: s => find(BODY, s),
+  createElement: t => mkEl(t), createElementNS: (ns, t) => mkEl(t), createTextNode: t => Object.assign(mkEl('#text'), { textContent: t }),
+  addEventListener() {}, removeEventListener() {}
 };
+// Every toast shown, in order (ui.js toast() puts a .toast on the body).
+export const toasts = () => TOASTS.slice();
+export const clearToasts = () => { TOASTS.length = 0; };
+export function clearBody() { BODY.children = []; }
 try {
   Object.defineProperty(globalThis, 'navigator', { value: { onLine: true, userAgent: 'node' }, configurable: true, writable: true });
 } catch { /* Node may own it */ }

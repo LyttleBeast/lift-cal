@@ -25,7 +25,7 @@
 // follows the account to a new phone instead of greeting them again.
 
 import { read, write, uid, todayKey, setUnits } from './store.js';
-import { autoTargets } from './tdee.js';
+import { autoTargets, whoOf } from './tdee.js';
 import { el, noteEl, segmented, sheet, r1, toast, LIMITS, within } from './ui.js';
 import { isStandalone, platform } from './usage.js';
 import { wIn, fmtW, unitW, fmtRate, fmtPer, hIn as inchesFrom, fmtH, unitH,
@@ -509,7 +509,10 @@ export function runSetup(user) {
     function numbers() {
       const maint = estimateMaintenance(a);
       const rate  = (GOALS.find(g => g[0] === a.goal) || GOALS[1])[2];
-      const t = autoTargets({ rateWk: rate, pPerLb: 1, fPerLb: 0.35, floor: 0 }, maint, a.lb)
+      // Sex and age for the safety floors, by the same rule Fuel reads the
+      // profile with (tdee.js whoOf).
+      const t = autoTargets({ rateWk: rate, pPerLb: 1, fPerLb: 0.35, floor: 0 }, maint, a.lb,
+                            whoOf({ sex: a.sex, birthYear: a.birthYear }, new Date().getFullYear()))
              || { cal: maint, p: Math.round(a.lb), f: Math.round(a.lb * 0.35), c: 0 };
 
       if (!a.cal) { a.maint = maint; a.cal = t.cal; a.p = t.p; a.f = t.f; }

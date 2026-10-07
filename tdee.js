@@ -303,15 +303,49 @@ export function zoneOf(cal, z) {
 
 export const MIN_CARB_G = 100;
 
-export function autoTargets(goal, maint, lb) {
+/* ---------- safety floors ----------
+   The floor above keeps the macros possible. It says nothing about whether a
+   number is safe to eat, and with the per-pound boxes at 0 it was 400 kcal,
+   which Rack wrote and toasted. Below 800 a day is a very-low-calorie diet,
+   which NIDDK, AHA/ACC/TOS 2013 and the NHS all put under medical supervision,
+   so nothing Rack computes goes under it, whatever the boxes say.
+
+   `who` is { sex, age } off the profile (whoOf, below), or null for an
+   account that never wrote one (a skipped setup, or one older than
+   onboarding). Unknown reads as the lower floor: a floor set too high costs a
+   slower cut, one set too low is not a call to make for somebody who did not
+   say. A target somebody TYPES is theirs and is not floored here. */
+export const SAFE_MIN_KCAL = 800;
+/* Above 800, the usual line for dieting without supervision is 1,200 a day for
+   women and 1,500 for men (AHA/ACC/TOS 2013 typical prescriptions, not
+   physiological minimums). 'x' takes the lower one. The men's 1,500 is P5
+   DECISION XR-D1's default (DECISIONS-FOR-MICAH #1); it is a named export so
+   it can move. */
+export const SEX_MIN_KCAL = { f: 1200, x: 1200, m: 1500 };
+
+export function safeFloor(who) {
+  const sex = who && (who.sex === 'f' || who.sex === 'm') ? who.sex : 'x';
+  const kcal = SEX_MIN_KCAL[sex];
+  return { kcal: Math.max(SAFE_MIN_KCAL, kcal), minor: false };
+}
+
+/* The one rule for building `who` off the profile node, so every screen (and
+   native) reads sex and age the same way: age is this calendar year minus the
+   birth year, the way setup's estimate takes it. No profile is null. */
+export function whoOf(profile, year) {
+  return profile ? { sex: profile.sex, age: profile.birthYear > 0 ? year - profile.birthYear : null } : null;
+}
+
+export function autoTargets(goal, maint, lb, who) {
   if (!goal || !(maint > 0) || !(lb > 0)) return null;
+  const safe = safeFloor(who);
 
   const p = Math.max(0, Math.round(lb * (goal.pPerLb || 0)));
   const f = Math.max(0, Math.round(lb * (goal.fPerLb || 0)));
 
   const wanted = Math.round((maint + (goal.rateWk || 0) * 500) / 10) * 10;
   const hard = Math.ceil((p * 4 + f * 9 + MIN_CARB_G * 4) / 10) * 10;
-  const floor = Math.max(goal.floor > 0 ? goal.floor : 0, hard);
+  const floor = Math.max(goal.floor > 0 ? goal.floor : 0, hard, safe.kcal);
 
   const cal = Math.max(wanted, floor);
   return {
@@ -319,6 +353,10 @@ export function autoTargets(goal, maint, lb) {
     c: Math.max(0, Math.round((cal - p * 4 - f * 9) / 4)),
     wanted, floor, hard,
     floored: cal > wanted,
+    // Which floor held it, so the note can say which: the safety one is never
+    // something to work around.
+    safe: safe.kcal,
+    safeHeld: cal > wanted && cal === safe.kcal && safe.kcal > hard,
     lb: Math.round(lb * 10) / 10,
     maint
   };

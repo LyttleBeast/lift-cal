@@ -14,7 +14,7 @@
 
 import { read, write, watch, LS, todayKey, uid, wu } from './store.js';
 import { maintenance, effectiveMaint, calorieZones, zoneOf, refreshModel,
-         autoTargets, trendWeight, MIN_CARB_G } from './tdee.js';
+         autoTargets, trendWeight, MIN_CARB_G, safeFloor, whoOf } from './tdee.js';
 import { initWater, loadWaterDay, renderWater, openWaterSettings } from './water.js';
 import { OWNER_UID } from './firebase-config.js';
 import { $, el, sheet, toast, noteEl, confirmSheet, copyText, readClipboard,
@@ -65,6 +65,7 @@ const AUTO_EVERY_DAYS = 7;    // how often it may move at all
 const AUTO_MAX_STEP   = 100;  // biggest single calorie change
 let weighIns = {};      // weight/entries — only for the maintenance estimate
 let summaries = {};     // food/daySummaries — ditto
+let who = null;         // { sex, age } off the profile, for the safety floors (tdee.js whoOf)
 let unwatchDay = null;  // live listener on the day being viewed
 
 /* ================= INIT ================= */
@@ -131,6 +132,18 @@ function watchDay() {
 async function loadMaintInputs() {
   weighIns  = (await read('weight/entries',     null)) || {};
   summaries = (await read('food/daySummaries',  null)) || {};
+  // Sex and age for the safety floors (tdee.js safeFloor), off the profile by
+  // the one rule (whoOf). No profile (a skipped setup, or an account older
+  // than onboarding) is null, which the floors read as the lower line. Watched,
+  // so a birth year or sex changed in Settings reaches the floors without a
+  // reload (P5 B1).
+  who = whoOf(await read('profile', null), new Date().getFullYear());
+  watch('profile', async val => {
+    const next = whoOf(val || null, new Date().getFullYear());
+    if (JSON.stringify(next) === JSON.stringify(who)) return;
+    who = next;
+    if (!(await applyAuto())) render();
+  });
   // Stay subscribed. This used to be read once at boot, so a weigh-in logged
   // on the Weight tab left Fuel drawing its cut / maintain / gain marks off a
   // stale maintenance number until the app was reloaded.
@@ -162,12 +175,12 @@ async function loadMaintInputs() {
    still in the path — tools-check/maintenance.mjs drives this one.
 
    Returns the new numbers, or null for "leave the targets alone". */
-export function autoPlan(targets, maintCal, lb, now) {
+export function autoPlan(targets, maintCal, lb, now, who) {
   const a = targets && targets.auto;
   if (!a || !a.on) return null;
   if (!(maintCal > 0) || !(lb > 0)) return null;
 
-  const next = autoTargets(a, maintCal, lb);
+  const next = autoTargets(a, maintCal, lb, who);
   if (!next) return null;
 
   const moved = Math.abs(next.cal - targets.cal) >= 25 ||
@@ -184,7 +197,7 @@ export function autoPlan(targets, maintCal, lb, now) {
 /* Returns true if it wrote (and re-rendered). */
 async function applyAuto() {
   const mi = maintInfo();
-  const plan = autoPlan(targets, mi ? mi.cal : 0, trendWeight(), Date.now());
+  const plan = autoPlan(targets, mi ? mi.cal : 0, trendWeight(), Date.now(), who);
   if (!plan) return false;
 
   // Assigned after the write resolves, not before. lastAdj is the weekly gate:
@@ -3293,7 +3306,7 @@ export function openTargets(onSaved) {
             : 'Needs enough weigh-ins to fit a trend. Your bodyweight has to come off the trend line, not the last reading \u2014 that one swings by ' + (u === 'kg' ? 'most of a kilo' : 'pounds') + ' depending on the time of day.'));
       return;
     }
-    const n = autoTargets(readAuto(), mi.cal, lb);
+    const n = autoTargets(readAuto(), mi.cal, lb, who);
     if (!n) { preview.appendChild(noteEl('Not enough to compute yet.')); return; }
 
     const big = el('div', 'load-num num', n.cal.toLocaleString());
@@ -3415,7 +3428,7 @@ export function openTargets(onSaved) {
       // asked for these numbers.
       const m2 = maintInfo();
       const lb = trendWeight();
-      const n  = m2 && lb > 0 ? autoTargets(a, m2.cal, lb) : null;
+      const n  = m2 && lb > 0 ? autoTargets(a, m2.cal, lb, who) : null;
       if (n) {
         targets = { ...targets, cal: n.cal, p: n.p, f: n.f,
                     auto: { ...a, lastAdj: Date.now() } };
@@ -3713,11 +3726,14 @@ function goalNext(id) {
   if (mi) {
     if (a.on) {
       const lb = trendWeight();
-      const n = lb > 0 ? autoTargets(a, mi.cal, lb) : null;
+      const n = lb > 0 ? autoTargets(a, mi.cal, lb, who) : null;
       if (n) next = { ...next, cal: n.cal, p: n.p, f: n.f, auto: { ...a, lastAdj: Date.now() } };
     } else {
       const floor = (targets.p || 0) * 4 + (targets.f || 0) * 9 + MIN_CARB_G * 4;
-      next.cal = Math.max(floor, Math.round((mi.cal + rate * 500) / 10) * 10);
+      // The same safety floor as the auto maths (P5 B1); the macro floor stays
+      // unrounded here (D22).
+      const safe = safeFloor(who);
+      next.cal = Math.max(floor, safe.kcal, Math.round((mi.cal + rate * 500) / 10) * 10);
     }
   }
   return { next, maint: mi ? mi.cal : null, rate };
