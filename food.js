@@ -14,7 +14,7 @@
 
 import { read, readExact, write, watch, LS, todayKey, uid, wu } from './store.js';
 import { maintenance, effectiveMaint, calorieZones, zoneOf, refreshModel,
-         autoTargets, trendWeight, MIN_CARB_G, safeFloor, whoOf, plannedRate } from './tdee.js';
+         autoTargets, trendWeight, MIN_CARB_G, safeFloor, whoOf, plannedRate, SAFE_MIN_KCAL } from './tdee.js';
 import { initWater, loadWaterDay, renderWater, openWaterSettings } from './water.js';
 import { OWNER_UID } from './firebase-config.js';
 import { $, el, sheet, toast, noteEl, confirmSheet, copyText, readClipboard,
@@ -968,7 +968,61 @@ function renderCalMeter(cal) {
   } else {
     wrap.appendChild(noteEl('Set your maintenance calories in ⚙ Settings — or log a week of food alongside your weigh-ins — to mark the cut / maintain / gain lines on this bar.'));
   }
+  // rack-v64 (P5 B5, DECISION floorOk): a target typed under the safety
+  // floor, asked about once.
+  const fc = floorCard(targets, who);
+  if (fc) wrap.appendChild(askCardEl(fc, [
+    { label: 'Move to ' + fc.move.toLocaleString(), primary: true, answer: () => answerFloorCard('move') },
+    ...(fc.keep != null ? [{ label: 'Keep ' + fc.keep.toLocaleString(), answer: () => answerFloorCard('keep') }] : [])
+  ]));
   return wrap;
+}
+
+/* ---------- below the safety floor: the one-time card (P5 B5, DECISION floorOk) ----------
+   Auto targets never compute a number under the safety floor (tdee.js
+   safeFloor), and an auto-on target under it is lifted at once (autoPlan).
+   A target somebody TYPED with auto off is theirs, and nothing stored is
+   rewritten for them, so the app owes it one plain question instead (the
+   v40 pattern, askCardEl / rewriteTargets below).
+
+   "Keep N" stores `floorOk: N`, the number kept, so the card returns only if
+   the target later changes to another number under the floor. It is offered
+   to adults only, and only from 800 up: under 800 is a very-low-calorie diet,
+   which needs medical supervision, so there it is "Move" or nothing. No
+   doctor wording: that line waits for Micah's own words (P5 F16).
+
+   Pure: the card, or null. Anything unexpected shows no card. */
+export function floorCard(t, who) {
+  if (!t || !t.auto || t.auto.on !== false) return null;
+  const n = Number(t.cal);
+  if (typeof t.cal !== 'number' || !(n > 0)) return null;
+  const safe = safeFloor(who);
+  if (!(n < safe.kcal) || Number(t.floorOk) === n) return null;
+  const N = n.toLocaleString(), F = safe.kcal.toLocaleString();
+  return {
+    eyebrow: 'Below the safety floor',
+    note: 'Your daily target is ' + N + ' kcal. ' + (safe.minor
+      ? 'Under 18, Rack does not plan a deficit; the least the Dietary Guidelines give for your age is ' + F + '.'
+      : 'The lowest daily target Rack sets is ' + F + '.'),
+    move: safe.kcal,
+    keep: !safe.minor && n >= SAFE_MIN_KCAL ? n : null
+  };
+}
+
+/* The buttons' write: the card's condition is asked again of the FRESH node
+   (rewriteTargets), and "Move" writes { ...cur, cal: F }, "Keep" writes
+   { ...cur, floorOk: N }. False when nothing could be written. */
+export async function answerFloorCard(kind) {
+  const r = await rewriteTargets(cur => {
+    const fc = floorCard(cur, who);
+    return !fc ? null
+      : kind === 'move' ? { ...cur, cal: fc.move }
+      : kind === 'keep' && fc.keep != null ? { ...cur, floorOk: fc.keep }
+      : null;
+  });
+  if (r) toast(kind === 'move' ? 'Target is now ' + r.cal.toLocaleString() + ' kcal a day'
+                               : 'Keeping ' + r.cal.toLocaleString() + ' kcal a day.');
+  return r !== false;
 }
 
 /* ---------- one-time questions under the bar (the v40 pattern) ----------

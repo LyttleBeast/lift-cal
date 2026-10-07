@@ -406,6 +406,18 @@ floor is load-bearing — carbs are the remainder and `carbsTarget()` clamps at
 zero, so calories below `p×4 + f×9` would silently produce a zero-carb target
 rather than an error.
 
+`floorOk` (number, optional; rack-v64, P5 B5 — **DECISION floorOk**, Micah's
+OK pending). Nothing Rack computes goes under the safety floor (`tdee.js`
+`safeFloor`: 800 absolute, 1,200 women and unknown, 1,500 men, the Dietary
+Guidelines line under 18). A target somebody typed with auto **off** is
+theirs and is never rewritten; Fuel asks once, under the calorie bar, while
+`auto.on === false && cal > 0 && cal < floor && floorOk !== cal`. "Move to F"
+writes `cal: F`; "Keep N" (adults only, and only for N ≥ 800) writes
+`floorOk: N`, the number kept, so the card returns only if the target later
+changes to another number under the floor. The published rules have no
+validation block under `food/targets`, so the key lands with
+`database.rules.json` untouched.
+
 ## `food/items` → `{ itemId: item }` — the saved-food library
 
 ```json
