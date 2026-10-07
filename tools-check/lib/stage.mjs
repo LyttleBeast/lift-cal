@@ -117,7 +117,9 @@ export function onChange() { return () => {}; }
 export const online = { value: true };
 `;
 
-const IMPORT_RE = /\bfrom\s+(['"])([^'"]+)\1/g;
+// Only the `from '...'` of an import or export STATEMENT: a sentence in a
+// string ("up from ' + n + ' last week") is not an import.
+const IMPORT_RE = /^(\s*(?:import|export)\b[^;'"]*?\bfrom\s+)(['"])([^'"]+)\2/gm;
 const NAMED_RE  = /\bimport\s*\{([^}]*)\}\s*from\s+(['"])([^'"]+)\2/g;
 const DECLARED_RE = /export\s+(?:async\s+)?(?:function\*?|const|let|var|class)\s+([A-Za-z_$][\w$]*)/g;
 
@@ -147,10 +149,10 @@ export function stage(real) {
     const extra = [...fromStore].filter(n => !have.has(n)).map(n => `export function ${n}() {}`).join('\n');
     writeFileSync(join(dir, 'store.mjs'), FAKE_STORE_BODY + '\n' + TODAYKEY + '\n' + extra + '\n');
   }
-  const repoint = text => text.replace(IMPORT_RE, (whole, q, spec) => {
+  const repoint = text => text.replace(IMPORT_RE, (whole, head, q, spec) => {
     const base = spec.startsWith('./') ? spec.slice(2) : null;
-    if (base && (REAL.includes(base) || base === 'store.js')) return `from './${base.replace(/\.js$/, '.mjs')}'`;
-    return `from './stub.mjs'`;
+    if (base && (REAL.includes(base) || base === 'store.js')) return head + `'./${base.replace(/\.js$/, '.mjs')}'`;
+    return head + `'./stub.mjs'`;
   });
   for (const [file, text] of sources) writeFileSync(join(dir, file.replace(/\.js$/, '.mjs')), repoint(text));
   return {
@@ -167,10 +169,10 @@ export function stageAt(rev, real, fromRev) {
   for (const f of fromRev) {
     const text = execFileSync('git', ['show', rev + ':' + f], { cwd: SRC('.'), encoding: 'utf8', maxBuffer: 1 << 26 });
     writeFileSync(join(s.dir, f.replace(/\.js$/, '.mjs')),
-      text.replace(IMPORT_RE, (whole, q, spec) => {
+      text.replace(IMPORT_RE, (whole, head, q, spec) => {
         const base = spec.startsWith('./') ? spec.slice(2) : null;
-        if (base && (real.includes(base) || base === 'store.js')) return `from './${base.replace(/\.js$/, '.mjs')}'`;
-        return `from './stub.mjs'`;
+        if (base && (real.includes(base) || base === 'store.js')) return head + `'./${base.replace(/\.js$/, '.mjs')}'`;
+        return head + `'./stub.mjs'`;
       }));
   }
   return s;

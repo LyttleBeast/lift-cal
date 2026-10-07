@@ -75,6 +75,24 @@ section('A. energyContext — every bar, on the bar and either side of it');
         E(-2.2, 180, null) === 'deep' && E(-2.2, 180, undefined) === 'deep');
   check('rateDays that is not a number does not read', E(-2.2, 180, NaN) === null && E(-2.2, 180, '21') === null);
 
+  /* rack-v64 (P5 A10, F28): "two weeks of weigh-ins" is a SPAN of trend, and a
+     trend whose newest weigh-in is days old is silent. A caller that passes
+     the span (rateSpanDays) needs ENERGY_MIN_POINTS points and a 14-day span;
+     one that passes the age (rateAgeDays) is silent past ENERGY_MAX_AGE_DAYS.
+     An older caller with neither keeps the count rule above. */
+  const EX = o => G.energyContext({ rateWk: -1.01, latestLb: 200, rateDays: 12, ...o });
+  check('A10: 12 points over a 20-day span, newest 5 days old: silent (the trend is stale)',
+        EX({ rateSpanDays: 20, rateAgeDays: 5 }) === null, String(EX({ rateSpanDays: 20, rateAgeDays: 5 })));
+  check('A10: the same with the newest 4 days old: a deficit (3x-a-week weighers get a read)',
+        EX({ rateSpanDays: 20, rateAgeDays: 4 }) === 'deficit', String(EX({ rateSpanDays: 20, rateAgeDays: 4 })));
+  check('A10: a 10-day span is not two weeks: silent', EX({ rateSpanDays: 10, rateAgeDays: 0 }) === null);
+  check('A10: fewer than ENERGY_MIN_POINTS (' + G.ENERGY_MIN_POINTS + ') points over a long span: silent',
+        G.energyContext({ rateWk: -1.01, latestLb: 200, rateDays: G.ENERGY_MIN_POINTS - 1, rateSpanDays: 20, rateAgeDays: 0 }) === null);
+  check('A10: no span and no age (an older caller): today\'s count rule, 12 silent and 14 read',
+        EX({}) === null && EX({ rateDays: 14 }) === 'deficit');
+  check('A10: the constants are named exports: ENERGY_MIN_POINTS 8, ENERGY_MAX_AGE_DAYS 4, ENERGY_MIN_DAYS still 14',
+        G.ENERGY_MIN_POINTS === 8 && G.ENERGY_MAX_AGE_DAYS === 4 && G.ENERGY_MIN_DAYS === 14);
+
   const nulls = [
     ['no rate', E(null, 180, 21)], ['NaN rate', E(NaN, 180, 21)], ['a rate as a string', E('-1', 180, 21)],
     ['no bodyweight', E(-1, null, 21)], ['zero bodyweight', E(-1, 0, 21)], ['negative bodyweight', E(-1, -180, 21)],

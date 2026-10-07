@@ -173,7 +173,7 @@ export function measuredNeeds(m) {
 export function trendRate(weightEntries) {
   const m = modelState();
   if (m && m.rateWk != null) {
-    return { rateWk: m.rateWk, seWk: m.rateSeWk, days: m.trendDays,
+    return { rateWk: m.rateWk, seWk: m.rateSeWk, days: m.trendDays, spanDays: m.trendSpanDays,
              // Whole days since the newest day-point in the fit, today's key minus
              // its key (as maintenanceFromModel's trendAge). Coach's energy read uses it.
              ageDays: m.trendLastKey ? keyDaysBetween(m.trendLastKey, todayKey()) : null, model: true };

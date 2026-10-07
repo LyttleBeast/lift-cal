@@ -407,6 +407,13 @@ export function coachInput(extra) {
       // returns and this used to drop — the goal answer's range is read off it.
       rateSeWk: Number.isFinite(rate.seWk) ? rate.seWk : null,
       rateDays: Number.isFinite(rate.days) ? rate.days : null,
+      // P5 F28: how many days the trend's points span; energyContext's two-week
+      // rule reads it. P5 F44: the legacy weekly difference (read before the
+      // model is fitted) is not a trend energy may be read off, so it goes on
+      // as a span of 0 and energyContext stays silent.
+      rateSpanDays: !rate.model ? 0 : Number.isFinite(rate.spanDays) ? rate.spanDays : null,
+      // P5 CMB: how stale the trend's newest weigh-in is; energyContext withholds past 4 days.
+      rateAgeDays: Number.isFinite(rate.ageDays) ? rate.ageDays : null,
       // The maintenance NUMBER: goalDirection compares it to targets.cal, and
       // handed effectiveMaint's whole object every account without an auto
       // goal read no direction at all (tools-check/coach-boot.mjs F).

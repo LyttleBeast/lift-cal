@@ -81,11 +81,31 @@ export const ENERGY_EPS = 1e-9;
    which by construction spans two weeks already. */
 export function energyContext(w) {
   const o = w && typeof w === 'object' ? w : {};
-  const { rateWk, latestLb, rateDays } = o;
+  const { rateWk, latestLb, rateDays, rateSpanDays, rateAgeDays } = o;
   if (!Number.isFinite(rateWk)) return null;
   if (!Number.isFinite(latestLb) || latestLb <= 0) return null;
-  if (rateDays != null && !(Number.isFinite(rateDays) && rateDays >= ENERGY_MIN_DAYS)) return null;
+  if (rateDays != null && !(Number.isFinite(rateDays) && rateDays >= minDaysFor(rateSpanDays))) return null;
+  if (rateSpanDays != null && !(Number.isFinite(rateSpanDays) && rateSpanDays >= ENERGY_MIN_DAYS)) return null;
+  if (rateAgeDays != null && !(Number.isFinite(rateAgeDays) && rateAgeDays <= ENERGY_MAX_AGE_DAYS)) return null;
   return energyBand(rateWk / latestLb * 100);
+}
+
+/* "Two weeks of weigh-ins" is a span, and ENERGY_MIN_DAYS keeps meaning that.
+   It used to be compared with the COUNT of weigh-in days in the fit, which
+   needs 14 of the last 21 days: someone weighing three or four mornings a week
+   never got a read at all, however long they kept at it (P5 F28). When the
+   span is known it is the two-week test and the count only has to be enough
+   points for a line; without one (an older caller) the count stays the test,
+   as before. */
+export const ENERGY_MIN_POINTS = 8;
+/* A trend whose newest weigh-in is days old describes the weeks before the
+   gap, not this one: during a 3-week weighing gap 57 % of such reads had the
+   wrong sign (P5 CMB). Same line as the measured maintenance's stale rule
+   (weightmodel.js STALE_DAYS, which this pure file does not import). Without
+   an age (an older caller) nothing changes. */
+export const ENERGY_MAX_AGE_DAYS = 4;
+function minDaysFor(span) {
+  return span != null && Number.isFinite(span) ? ENERGY_MIN_POINTS : ENERGY_MIN_DAYS;
 }
 
 /* The four words for a weekly change in % of bodyweight — the one place the
