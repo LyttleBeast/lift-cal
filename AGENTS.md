@@ -406,7 +406,12 @@ holdKept`; rack-v64, DECISION D-VEb).
 
 `auto.on` means the app recomputes `cal` / `p` / `f` itself: protein and fat as
 grams per pound of **trend** weight, calories as maintenance shifted by
-`rateWk × 500`. At most once every 7 days, at most 100 kcal at a time.
+`rateWk × 500`. At most once every 7 days, at most 100 kcal and 10 g of
+protein or fat at a time, except straight up to a floor (the safety floor,
+`floor`, or protein and fat plus 100 g of carbs), which binds at once
+(rack-v64). Nothing computed goes under the safety floor (`tdee.js
+safeFloor`), and nothing is planned while the measured maintenance is held
+by the gate (`tdee.js maintenance`).
 
 `floor` of 0 means "work it out": protein and fat plus 100 g of carbs. That
 floor is load-bearing — carbs are the remainder and `carbsTarget()` clamps at

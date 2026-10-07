@@ -223,6 +223,73 @@ Carried from `NEXT-NATIVE.md` §7 so it survives that file. Do not "fix" these:
 
 ---
 
+## What v64 left open in its own work
+
+v64 is **the maintenance number earns its place, and no target goes under a
+safety floor** (P5 audit run `P5-20261002-0129`, built from its FIX-PROMPT on
+top of live rack-v63). The port note is `NEXT-NATIVE-V64.md`. The brief named
+it rack-v63; live web was already v63 (the estimator fixes), so it ships as
+v64.
+
+**What shipped.** The measured maintenance waits for a 14-day screened span,
+4 day-points, 7 logged days and a value in [1,000, 6,000] (A1), is held once
+the newest weigh-in is more than 4 whole days old (A2, A7), ignores a typo
+day (A3) and minute-apart pairs (A4), averages finished days only, plain
+mean (A5), says what it needs in the words of the path that answered (A6),
+refits on a new day or an edited weigh-in (A8), reads `lb` as a number (A9),
+and Coach's energy read wants two weeks of fresh trend (A10). Nothing Rack
+computes goes under the safety floor (800; 1,200 women and unknown; 1,500
+men; the Dietary Guidelines line under 18, with no deficit) (B1, B2); the
+lift goes first and says why (B3, B4); Setup takes birth years up to this
+year - 14. Steps are bounded but floors bind at once (C1); labels and notes
+state what the written number plans (C2); a stated hold stays hold (C3);
+a far-off weigh-in asks once (C4); Setup follows its answers (C5); "as you
+log it" (C6); D1-D6.
+
+**The DECISIONS, and which way each was built** (`DECISIONS-FOR-MICAH.md`
+numbers):
+
+- #1 men's 1,500 floor: built as recommended (A). Its sub-choice, "refuse a
+  typed target under 800, warn under the floor", is NOT built (the brief
+  builds only B5's card for typed targets).
+- #2 no deficit under 18: built (A).
+- #3 birth year `<= thisYear - 14`, reworded, applied only to a changed year:
+  built. Existing under-13 accounts: not blocked — **Micah decides** (count
+  them first; COPPA is his call).
+- #4 `floorOk` key and card: built in its own commit, `DECISION floorOk:`.
+- #5 D-e floor first: built (own commit, B3).
+- #9 measured range lower bound 1,000: built (A1).
+- #10 intake cap: NOT built (plain mean pinned by maintenance-intake.mjs).
+  The food-entry confirm: not built (threshold unmeasured).
+- #11 weigh-in confirm R2: built (C4).
+- #12 D-VEb: key-free option A built in its own commit, `DECISION D-VEb:`.
+  Reverting it leaves option C.
+- #13 gate 4 / 7: built; the va-abc blend: not built.
+- ENERGY_MIN_DAYS counted as a span + ENERGY_MIN_POINTS 8: built (A10); this
+  changes what decided D3's 14 means.
+- #6, #7, #8, #14-#21: not built (each changes a decided number or needs
+  Micah's words).
+
+**Listed, not fixed:** F21 (backdated-entry stamp), F42 (locale formatter),
+F49 (g/kg box drift), F51 (one AUTO_DEFAULTS), F33, F34 (D21, not a bug),
+F35 (rejected), CMB2 OPEN 6-9 (person-tied range bound, the upper-quartile
+cap's battery, XR D1/D2 clinical calls, the weekly weigher's blink).
+
+**Left open in v64's own work:**
+
+- **Not simulated:** A6-A8, C1's floor clause, C3's write side and card, D2,
+  and both cards' UI. They rest on verifiers, not the P5 battery.
+- **Small, older and teen accounts** may see their measured number come and
+  go around 1,000 (D-c's cost, 3.1 flips a person in the sim).
+- **The floor card asks only accounts whose targets carry `auto.on ===
+  false`.** A node with no `auto` at all (never opened the auto pane) is not
+  asked about a typed target under the floor. Needs Micah: ask those too?
+- **One card at a time:** the hold card does not ask about a target under the
+  safety floor (the floor card does). If `DECISION floorOk` is dropped, such a
+  "Maintaining" account with a typed cut under the floor is asked nothing.
+
+---
+
 ## What v63 left open in its own work
 
 v63 is **the estimator tells the truth about long meals and long waits**: food
