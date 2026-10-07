@@ -476,11 +476,14 @@ export function maintenanceFromModel(daySummaries) {
   const cal = Object.entries(daySummaries || {})
     .filter(([d, v]) => d < today && v && v.cal > 0)
     .filter(([d]) => parseKey(d).getTime() > Date.now() - (TREND_DAYS + 1) * DAY);
-  if (cal.length < 7) return null;
-
-  const avgIntake = cal.reduce((s, [, v]) => s + v.cal, 0) / cal.length;
-  const tdee = Math.round((avgIntake - model.ratePerDay * KCAL_PER_LB) / 10) * 10;
-  const se = model.rateSeWk != null ? Math.round(model.rateSeWk / 7 * KCAL_PER_LB) : null;
+  // Short of logged days the model still answers, with no number: its own
+  // fields and tdee null, so tdee.js maintenance() prints the MODEL's need and
+  // never falls to the legacy arithmetic's sentence, which can say "two weeks
+  // of weigh-ins" to somebody with a fitted trend (P5 A6, F45).
+  const short = cal.length < 7;
+  const avgIntake = short ? null : cal.reduce((s, [, v]) => s + v.cal, 0) / cal.length;
+  const tdee = short ? null : Math.round((avgIntake - model.ratePerDay * KCAL_PER_LB) / 10) * 10;
+  const se = !short && model.rateSeWk != null ? Math.round(model.rateSeWk / 7 * KCAL_PER_LB) : null;
   return {
     tdee, avgIntake, se,
     days: cal.length,

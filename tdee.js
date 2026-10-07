@@ -93,7 +93,9 @@ export const TDEE_MIN_DAYS = 7;
    arithmetic, which has no gate at all. */
 export function maintenance(weightEntries, daySummaries) {
   const m = maintenanceFromModel(daySummaries);
-  if (m && m.tdee != null) {
+  // Any model answer, with a number or without one (short of logged days),
+  // says what it needs in its own words (P5 A6).
+  if (m) {
     const need = measuredNeeds(m);
     // A slope whose newest point is days old is being read off the line past
     // the data, against an intake average that kept moving. When weighing
@@ -101,9 +103,17 @@ export function maintenance(weightEntries, daySummaries) {
     if (m.trendAge != null && m.trendAge > STALE_DAYS) {
       need.unshift('a weigh-in (the last one was ' + m.trendAge + ' days ago)');
     }
-    return need.length ? { ...m, tdee: null, held: m.tdee, need, model: true } : { ...m, model: true };
+    // `held` is the number the gate kept back, or null when there was none.
+    return need.length ? { ...m, tdee: null, held: m.tdee != null ? m.tdee : null, need, model: true } : { ...m, model: true };
   }
-  return { ...legacyMaintenance(weightEntries, daySummaries), model: false };
+  // The legacy arithmetic is still reached before the first fit. It meets the
+  // same range check: a 450 or a 9,000 from it is no more a maintenance
+  // number than one from the model.
+  const l = legacyMaintenance(weightEntries, daySummaries);
+  if (l.tdee != null && !(l.tdee >= MEASURED_RANGE[0] && l.tdee <= MEASURED_RANGE[1])) {
+    return { ...l, tdee: null, held: l.tdee, need: ['a look at recent weigh-ins and food entries'], model: false };
+  }
+  return { ...l, model: false };
 }
 
 /* ---------- when a measured number has earned its place ----------
