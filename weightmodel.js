@@ -469,8 +469,12 @@ export function keyDaysBetween(a, b) {
 export function maintenanceFromModel(daySummaries) {
   if (!model || model.rateWk == null) return null;
   const today = todayKey();
+  // Finished days only. Today is half-eaten, and a day AFTER today exists
+  // only because another device (or a trip) filed food under its own date.
+  // Y-M-D keys compare as strings. The average stays the plain mean: a cap on
+  // big days is DECISION D-F12 (P5), default "no cap".
   const cal = Object.entries(daySummaries || {})
-    .filter(([d, v]) => d !== today && v && v.cal > 0)
+    .filter(([d, v]) => d < today && v && v.cal > 0)
     .filter(([d]) => parseKey(d).getTime() > Date.now() - (TREND_DAYS + 1) * DAY);
   if (cal.length < 7) return null;
 

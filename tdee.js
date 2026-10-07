@@ -165,8 +165,9 @@ export function trendRate(weightEntries) {
 function legacyMaintenance(weightEntries, daySummaries) {
   const s = weightStats(weightEntries);
   const today = todayKey();
+  // finished days only: see weightmodel.js maintenanceFromModel
   const calDays = Object.entries(daySummaries || {})
-    .filter(([d, v]) => d !== today && v && v.cal > 0)
+    .filter(([d, v]) => d < today && v && v.cal > 0)
     .filter(([d]) => parseKey(d).getTime() > Date.now() - 15 * 864e5);
 
   const out = {
