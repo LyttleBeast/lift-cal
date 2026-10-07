@@ -100,6 +100,21 @@ export function weighTime(typed, now) {
   return { t: Math.round(t), reason: '' };
 }
 
+/* ---------- a weigh-in far off both the trend and the last reading ----------
+   185 typed as 85, as 158, or as 83.9 (kilos in a pounds account) used to be
+   accepted silently, and every typo-driven wrong number in the P5 audit began
+   there. The Weight tab asks once before it writes when this is true: the
+   reading is more than max(5 lb, 3 % of the reference) from the trend AND
+   from the last reading (P5 VB rule R2: 164 of 164 simulated typos asked, 1
+   genuine reading in 485). Either alone nags: an evening reading is often 3 %
+   off the morning trend, and a real step after a trip is far from the trend
+   but near the reading before it. The first weigh-in never asks. Pure. */
+export function needsConfirm(typedLb, trendLb, lastLb) {
+  const far = ref => ref > 0 && Math.abs(typedLb - ref) > Math.max(5, 0.03 * ref);
+  if (!(trendLb > 0) && !(lastLb > 0)) return false;          // first weigh-in: nothing to compare with
+  return (trendLb > 0 ? far(trendLb) : true) && (lastLb > 0 ? far(lastLb) : true);
+}
+
 /* ================= DATA ================= */
 
 // Past days never change, so they cache forever. Today is always refetched.

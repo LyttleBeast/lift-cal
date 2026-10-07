@@ -9,7 +9,7 @@ import { weightStats, dailyMeans as meansOf, movingAvg, maintenance, effectiveMa
 // byte-for-byte by the native port (tools/verify-tdee-verbatim.mjs); adding a
 // name to its re-export line would cost that tree a re-copy and a moved sha for
 // a line of plumbing. The rule belongs beside the model that reads `t` anyway.
-import { weighTime, WEIGH_SKEW_MS, WEIGH_BACK_MS } from './weightmodel.js';
+import { weighTime, WEIGH_SKEW_MS, WEIGH_BACK_MS, needsConfirm, trendWeight } from './weightmodel.js';
 import { lineChart } from './analytics.js';
 import { goalDirection, rateVerdict } from './insights.js';
 import { bump } from './usage.js';
@@ -132,7 +132,8 @@ export async function render() {
   };
   whenWrap.appendChild(whenBtn);
 
-  btn.onclick = async () => {
+  btn.onclick = () => logIt(false);
+  async function logIt(confirmed) {
     // Convert, then clamp. Checking the typed number against a pound bound
     // would let a kilos account log 690 kg and refuse 20.
     const lb = wIn(parseFloat(inp.value), u);
@@ -148,6 +149,19 @@ export async function render() {
     const w = weighTime(when ? Date.parse(when.value) : null, Date.now());
     if (w.reason === 'future') { toast('That time hasn\u2019t happened yet.'); return; }
     if (w.reason === 'old') { toast('A weigh-in can be backdated 14 days, no further.'); return; }
+    /* Far from the trend AND from the last reading: ask once before writing
+       (P5 C4, weightmodel.js needsConfirm). "Fix it" writes nothing and leaves
+       the number in the box. */
+    const tw = trendWeight(), last = s.latest ? s.latest.lb : null;
+    if (!confirmed && needsConfirm(lb, tw, last)) {
+      confirmSheet({
+        title: labelW(r1(lb), u) + '?',
+        body: tw > 0 ? 'Your trend is ' + fmtW(tw, u) + '.' : 'Your last weigh-in was ' + fmtW(last, u) + '.',
+        confirmLabel: 'Log it', cancelLabel: 'Fix it',
+        onConfirm: () => logIt(true)
+      });
+      return;
+    }
     const id = 'wt' + Date.now().toString(36);
     // Built and written before `entries` is changed, so a refusal leaves the
     // screen showing what the database actually holds rather than a weigh-in
@@ -164,7 +178,7 @@ export async function render() {
     toast('Logged ' + labelW(r1(lb), u) +
       (w.reason === '' ? ' \u00b7 ' + fmtWhen(new Date(w.t)) : ''));
     render();
-  };
+  }
   row.append(inp, btn);
   log.appendChild(row);
   log.appendChild(whenWrap);
