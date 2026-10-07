@@ -15,7 +15,7 @@
 //   - 15 clean daily readings: the span is 14 days and the newest point is
 //     today;
 //   - a typo on the NEWEST day: the span is the genuine days' 13 and the
-//     newest fitted point is yesterday;
+//     newest fitted point is yesterday, and trendAge counts from there;
 //   - a typo on the OLDEST day: the span is the genuine days' 13 and the
 //     newest point is still today.
 
@@ -48,11 +48,15 @@ section('Clean readings');
 
 section('A typo on the newest day (85 for 185)');
 {
-  const { m, tk } = await fit(series(l => { l[14].lb = 85; }));
+  const { m, tk, W } = await fit(series(l => { l[14].lb = 85; }));
   check('the span is the genuine days\', 13', m && Math.round(m.trendSpan) === 13 && m.trendSpanDays === 13, J(m && { trendSpan: m.trendSpan, trendSpanDays: m.trendSpanDays }));
   check('the newest fitted point is yesterday', m && m.trendLastKey === tk(new RealDate(Y, M - 1, D - 1, 12)), J(m && m.trendLastKey));
   check('and trendLastX sits on that same day', m && m.trendLastX != null && Math.abs(m.trendLastX * 864e5 - new RealDate(Y, M - 1, D - 1, 12).getTime()) < 1, J(m && m.trendLastX));
   check('the typo still counts as a reading on the chart (adjustedDays keeps it)', m && m.daily.length === 15, J(m && m.daily.length));
+  // A2: the age is measured to the newest GENUINE day, so a typo cannot freshen it.
+  const sums = {}; for (let i = 1; i <= 10; i++) sums[tk(new RealDate(Y, M - 1, D - i, 12))] = { cal: 2400 };
+  const r = W.maintenanceFromModel(sums);
+  check('trendAge is measured to that newest genuine day: 1', r && r.trendAge === 1, J(r && r.trendAge));
 }
 
 section('A typo on the oldest day');

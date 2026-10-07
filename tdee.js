@@ -10,8 +10,9 @@
 
 import { todayKey } from './store.js';
 import { parseKey } from './ui.js';
-import { refreshModel, modelState, maintenanceFromModel,
-         adjustedDays, peakOffset, trendWeight, PRIOR } from './weightmodel.js';
+import { refreshModel, modelState, maintenanceFromModel, STALE_DAYS,
+         adjustedDays, peakOffset, trendWeight, PRIOR,
+         keyDaysBetween } from './weightmodel.js';
 
 // Re-exported so callers only ever import from one place. weightmodel.js owns
 // the normalisation; this file stays the public face of "what does the scale
@@ -94,6 +95,12 @@ export function maintenance(weightEntries, daySummaries) {
   const m = maintenanceFromModel(daySummaries);
   if (m && m.tdee != null) {
     const need = measuredNeeds(m);
+    // A slope whose newest point is days old is being read off the line past
+    // the data, against an intake average that kept moving. When weighing
+    // stops the number is "not yet" again (P5 A2).
+    if (m.trendAge != null && m.trendAge > STALE_DAYS) {
+      need.unshift('a weigh-in (the last one was ' + m.trendAge + ' days ago)');
+    }
     return need.length ? { ...m, tdee: null, held: m.tdee, need, model: true } : { ...m, model: true };
   }
   return { ...legacyMaintenance(weightEntries, daySummaries), model: false };
@@ -146,7 +153,10 @@ export function measuredNeeds(m) {
 export function trendRate(weightEntries) {
   const m = modelState();
   if (m && m.rateWk != null) {
-    return { rateWk: m.rateWk, seWk: m.rateSeWk, days: m.trendDays, model: true };
+    return { rateWk: m.rateWk, seWk: m.rateSeWk, days: m.trendDays,
+             // Whole days since the newest day-point in the fit, today's key minus
+             // its key (as maintenanceFromModel's trendAge). Coach's energy read uses it.
+             ageDays: m.trendLastKey ? keyDaysBetween(m.trendLastKey, todayKey()) : null, model: true };
   }
   const s = weightStats(weightEntries);
   return { rateWk: s.rateWk, seWk: null, days: null, model: false };

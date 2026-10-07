@@ -45,6 +45,9 @@ const TREND_DAYS    = 21;   // window the slope is measured over
 const MIN_PAIRS     = 30;   // below this, the coefficients stay at the priors
 const MIN_PAIR_DAYS = 14;
 const KCAL_PER_LB   = 3500;
+// Days past the newest weigh-in day that the slope is still read (tdee.js
+// shows no measured number beyond it; trendLb is not run on past it).
+export const STALE_DAYS = 4;
 
 const DAY = 864e5, HOUR = 36e5;
 
@@ -379,8 +382,11 @@ export async function refreshModel(entries) {
   // that scales with bodyweight — the raw latest weigh-in swings by pounds
   // depending on what time he stood on the scale, which is the whole reason
   // this file exists.
+  // Never more than STALE_DAYS past the newest point: when weighing stops, a
+  // 4-point slope run on to today invents pounds, and protein is grams per
+  // pound of this.
   const trendLb = fitTrend
-    ? fitTrend.inter + fitTrend.slope * (Date.now() / DAY)
+    ? fitTrend.inter + fitTrend.slope * Math.min(Date.now() / DAY, fitPts[fitPts.length - 1].x + STALE_DAYS)
     : (daily.length ? daily[daily.length - 1].lb : null);
 
   model = {
@@ -442,6 +448,16 @@ export function peakOffset() {
   return best;
 }
 
+/* Whole calendar days from Y-M-D key a to key b. The stale rule counts in
+   these, not in hours: "4 days ago" passes all day on the 4th day and fails
+   from the 5th morning, instead of flipping at local noon (P5 XC X6). Built
+   from the keys' own numbers in UTC, so a 23- or 25-hour DST day is one day.
+   Pure; native copies it verbatim. */
+export function keyDaysBetween(a, b) {
+  const u = k => { const [y, m, d] = String(k).split('-').map(Number); return Date.UTC(y, m - 1, d); };
+  return Math.round((u(b) - u(a)) / DAY);
+}
+
 export function maintenanceFromModel(daySummaries) {
   if (!model || model.rateWk == null) return null;
   const today = todayKey();
@@ -461,6 +477,10 @@ export function maintenanceFromModel(daySummaries) {
     coef: model.coef,
     trendDays: model.trendDays,
     trendSpan: model.trendSpan,
+    // Read against today's date, not at fit time: a model fitted on Monday
+    // and read on Friday is four days staler than it was (F22). Whole days,
+    // today's key minus the newest fitted day's key (keyDaysBetween).
+    trendAge: model.trendLastKey ? keyDaysBetween(model.trendLastKey, today) : null,
     need: []
   };
 }
