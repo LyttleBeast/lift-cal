@@ -122,6 +122,28 @@ const GOALS = [
                                                 : 'Build muscle — about half a pound a week up']
 ];
 
+/* ---------- the birth-year line ----------
+   Rack is for people 13 and over (COPPA). It asks for a birth YEAR only, so
+   the line is "born this year - 14 or earlier": that guarantees 13 by birth
+   year, at the price of refusing 13-year-olds whose birthday has passed, and
+   the message says so rather than claiming they are under 13 (P5 B2, XC X11;
+   DECISIONS #3, -14 as recommended). Shared with Settings → Your details. */
+export const TOO_YOUNG = 'Rack is for people 13 and over. It goes by birth year, so you can join from January of the year you turn 14.';
+export function birthYearProblem(year, thisYear) {
+  if (year >= 1920 && year <= thisYear - 14) return null;
+  if (year > thisYear - 14 && year <= thisYear) return TOO_YOUNG;
+  return 'Check the birth year.';
+}
+/* Settings applies the line only when the year was CHANGED. An existing
+   account's unchanged year saves exactly as it did before this line moved
+   (1920 .. this year - 12), so somebody born in 2013 can still fix their name.
+   Existing under-13 accounts are not blocked here; that is Micah's call
+   (DECISIONS #3), and the minors' floors reach them through their age. */
+export function profileYearProblem(year, stored, thisYear) {
+  if (stored > 0 && year === stored) return year >= 1920 && year <= thisYear - 12 ? null : 'Check the birth year.';
+  return birthYearProblem(year, thisYear);
+}
+
 export function estimateMaintenance({ sex, heightIn, birthYear, lb, activity }) {
   const kg  = lb * 0.45359237;
   const cm  = heightIn * 2.54;
@@ -399,7 +421,7 @@ export function runSetup(user) {
         body.appendChild(hrow);
       }
 
-      const yr = numInput(a.birthYear, { min: 1920, max: new Date().getFullYear() - 12 });
+      const yr = numInput(a.birthYear, { min: 1920, max: new Date().getFullYear() - 14 });
       yr.oninput = e => a.birthYear = parseInt(e.target.value) || 0;
       body.appendChild(field('Birth year', yr));
 
@@ -408,8 +430,7 @@ export function runSetup(user) {
           if (!a.name.trim()) return 'What should the app call you?';
           if (!(a.heightIn >= 36 && a.heightIn <= 96)) return 'That height doesn’t look right.';
           const y = new Date().getFullYear();
-          if (!(a.birthYear >= 1920 && a.birthYear <= y - 12)) return 'Check the birth year.';
-          return true;
+          return birthYearProblem(a.birthYear, y) || true;
         }
       });
     }

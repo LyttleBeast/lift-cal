@@ -558,10 +558,12 @@ const GOAL = { on: true, rateWk: -1, pPerLb: 1, fPerLb: 0.35, floor: 0, lastAdj:
   check('Bulking is +0.5 lb a week (food.js GOAL_RATE) — 250 kcal a day at 3,500 a pound — and at his maintenance its own target is 3,470: rack-v57’s top edge exactly, 50 past rack-v58’s',
     /const GOAL_RATE = \{ cut: -1, hold: 0, gain: 0\.5 \};/.test(FOOD) && autoTargets(BULK, 3220, 200).cal === 3470 &&
     3470 === z57.gainFrom && 3470 - z.gainFrom === 50);
-  // rack-v64 (P5 B1): and never under the safety floor, the same one autoTargets
-  // meets (tdee.js safeFloor(who)). Updated on purpose, FIX-PROMPT P5 §6.
-  check('and the Goal sheet’s by-hand target is the same arithmetic as autoTargets’: maintenance + rate × 500, to the nearest ten, never under the macro floor or the safety floor',
-    FOOD.includes('next.cal = Math.max(floor, safe.kcal, Math.round((mi.cal + rate * 500) / 10) * 10);') &&
+  // rack-v64 (P5 B1, B2): and never under the safety floor, the same one
+  // autoTargets meets (tdee.js safeFloor(who)), with no deficit under 18 (the
+  // rate r >= 0 for a minor). Updated on purpose, FIX-PROMPT P5 §6.
+  check('and the Goal sheet’s by-hand target is the same arithmetic as autoTargets’: maintenance + rate × 500 (rate ≥ 0 under 18), to the nearest ten, never under the macro floor or the safety floor',
+    FOOD.includes('next.cal = Math.max(floor, safe.kcal, Math.round((mi.cal + r * 500) / 10) * 10);') &&
+    FOOD.includes('const r = safe.minor ? Math.max(0, rate) : rate;') &&
     FOOD.includes('const safe = safeFloor(who);'));
 
   /* Rack's three preset targets — Cutting, Maintaining and Bulking, food.js

@@ -3732,8 +3732,10 @@ function goalNext(id) {
       const floor = (targets.p || 0) * 4 + (targets.f || 0) * 9 + MIN_CARB_G * 4;
       // The same safety floor as the auto maths (P5 B1); the macro floor stays
       // unrounded here (D22).
+      // Under 18 no deficit (P5 B2), as autoTargets.
       const safe = safeFloor(who);
-      next.cal = Math.max(floor, safe.kcal, Math.round((mi.cal + rate * 500) / 10) * 10);
+      const r = safe.minor ? Math.max(0, rate) : rate;
+      next.cal = Math.max(floor, safe.kcal, Math.round((mi.cal + r * 500) / 10) * 10);
     }
   }
   return { next, maint: mi ? mi.cal : null, rate };

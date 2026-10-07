@@ -322,11 +322,23 @@ export const SAFE_MIN_KCAL = 800;
    DECISION XR-D1's default (DECISIONS-FOR-MICAH #1); it is a named export so
    it can move. */
 export const SEX_MIN_KCAL = { f: 1200, x: 1200, m: 1500 };
+/* Under 18 nothing here plans a deficit. A teenager is still growing, the
+   adult equations underestimate what one burns (setup already clamps age at
+   14 for that reason), and a "cut" for a 14-year-old girl landed at 1,190
+   against the 1,800 the Dietary Guidelines give a sedentary girl that age
+   (DGA 2010 Appendix 6: girls 1,600 at 12-13, 1,800 at 14-17; boys 1,800 /
+   2,000; 'x' takes the girls' row). So the goal rate cannot go below zero and
+   the floor is that number. P5 DECISION XR-D2's default (DECISIONS #2). */
+export const ADULT_AGE = 18;
+const DGA_MIN_KCAL = { f: [1600, 1800], x: [1600, 1800], m: [1800, 2000] };   // [12-13, 14-17]
 
 export function safeFloor(who) {
   const sex = who && (who.sex === 'f' || who.sex === 'm') ? who.sex : 'x';
-  const kcal = SEX_MIN_KCAL[sex];
-  return { kcal: Math.max(SAFE_MIN_KCAL, kcal), minor: false };
+  const age = who && Number.isFinite(who.age) ? who.age : null;
+  let kcal = SEX_MIN_KCAL[sex];
+  const minor = age != null && age < ADULT_AGE;
+  if (minor) kcal = Math.max(kcal, DGA_MIN_KCAL[sex][age <= 13 ? 0 : 1]);
+  return { kcal: Math.max(SAFE_MIN_KCAL, kcal), minor };
 }
 
 /* The one rule for building `who` off the profile node, so every screen (and
@@ -343,7 +355,9 @@ export function autoTargets(goal, maint, lb, who) {
   const p = Math.max(0, Math.round(lb * (goal.pPerLb || 0)));
   const f = Math.max(0, Math.round(lb * (goal.fPerLb || 0)));
 
-  const wanted = Math.round((maint + (goal.rateWk || 0) * 500) / 10) * 10;
+  let rate = goal.rateWk || 0;
+  if (safe.minor) rate = Math.max(0, rate);
+  const wanted = Math.round((maint + rate * 500) / 10) * 10;
   const hard = Math.ceil((p * 4 + f * 9 + MIN_CARB_G * 4) / 10) * 10;
   const floor = Math.max(goal.floor > 0 ? goal.floor : 0, hard, safe.kcal);
 
@@ -357,6 +371,10 @@ export function autoTargets(goal, maint, lb, who) {
     // something to work around.
     safe: safe.kcal,
     safeHeld: cal > wanted && cal === safe.kcal && safe.kcal > hard,
+    minor: safe.minor,
+    // A minor asked for a cut and got maintenance (or more): the deficit was
+    // dropped whether or not the Dietary Guidelines line also held it (XC X7).
+    minorHeld: safe.minor && (goal.rateWk || 0) < 0,
     lb: Math.round(lb * 10) / 10,
     maint
   };

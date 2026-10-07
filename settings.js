@@ -27,7 +27,7 @@ import { openExerciseManager } from './picker.js';
 import { hasProxy } from './ai.js';
 import { canUseAi } from './access.js';
 import { hasActiveSession } from './workout.js';
-import { openInstallGuide } from './onboarding.js';
+import { openInstallGuide, profileYearProblem } from './onboarding.js';
 import { coachToggleRows, coachAnswerRows, openCoachSheet } from './coach-ui.js';
 import { openVibes, vibeName } from './vibes-sheet.js';
 import { glyphed } from './vibe.js';
@@ -511,7 +511,9 @@ function openProfile(onEdit) {
       const year = parseInt(yr.value, 10);
       if (!name) { toast('What should the app call you?'); return; }
       if (!(inches >= 36 && inches <= 96)) { toast('That height doesn’t look right.'); return; }
-      if (!(year >= 1920 && year <= thisYear - 12)) { toast('Check the birth year.'); return; }
+      // The 13-and-over line applies only to a CHANGED year (P5 B2, XC X11).
+      const yearWhy = profileYearProblem(year, p.birthYear > 0 ? p.birthYear : null, thisYear);
+      if (yearWhy) { toast(yearWhy); return; }
 
       // Whole inches from the ft + in pair, the way onboarding writes it — the
       // two decimals a typed "5.5 ft" would produce mean nothing to any of the
