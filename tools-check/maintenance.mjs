@@ -623,7 +623,7 @@ const GOAL = { on: true, rateWk: -1, pPerLb: 1, fPerLb: 0.35, floor: 0, lastAdj:
   const INS58 = readFileSync(SRC('insights.js'), 'utf8');
   // rack-v64 (P5 C3, D2, D5) edits insights.js on purpose (FIX-PROMPT P5 §6):
   // the pin moves from rack-v57's bytes to these, by sha256.
-  const INS64 = 'ef0f4efdbfbaab5ef0f48ec507c7c305d95c4f6c617493f0b56f2e5e4a8dafee';
+  const INS64 = '9a130057f97760f8ec04add18a0e2faaf82678d65dfbe36ee7ee9efe23fb1245';
   check('the Weight tab and the You tab do not move: weight.js, you.js and insights.js name neither calorieZones nor zoneOf, insights.js is rack-v64’s byte for byte (sha256 ' + INS64.slice(0, 12) + '…), and HOLD_RATE_LB is still 0.5',
     ['weight.js', 'you.js', 'insights.js'].every(f => !/calorieZones|zoneOf/.test(readFileSync(SRC(f), 'utf8'))) &&
     createHash('sha256').update(INS58).digest('hex') === INS64 &&

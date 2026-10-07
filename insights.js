@@ -311,7 +311,7 @@ export function assess(ctx) {
       if (ratio >= 1.6 && Math.abs(rateWk) >= 1.4 && dir < 0) {
         note({ id: 'pace-fast', subject: 'weight', score: 80,
           title: 'Losing faster than planned',
-          detail: abs + ' ' + W + ' a week against a plan of ' + plan + '. Past about ' + fmtRate(1.5, u) + ' a week more of it is muscle.',
+          detail: abs + ' ' + W + ' a week against a plan of ' + plan + '. Past about ' + labelRate(1.5, u) + ' a week more of it is muscle.',
           why: 'Trend slope at least 1.6 times the planned rate and above ' + labelRate(1.4, u) + ' a week.' });
       } else if (ratio <= 0.4 && Math.abs(planned) >= 0.5 && (thisWk.weighDays + lastWk.weighDays) >= 8) {
         note({ id: 'pace-slow', subject: 'weight', score: 72,
@@ -515,7 +515,8 @@ export function weeklyReview(ctx) {
     const diff = cur.kcal - targets.cal, share = diff / targets.cal;
     const bad = (dir < 0 && share >= 0.1) || (dir > 0 && share <= -0.1) || (dir === 0 && Math.abs(share) >= 0.1);
     item('fuel', 'Calories', Math.abs(share) <= 0.06 ? true : bad ? false : null,
-      fmtInt(cur.kcal) + ' a day, ' + fmtInt(Math.abs(diff)) + ' ' + (diff >= 0 ? 'over' : 'under') + ' target' +
+      // A week at the target is "on target", not "0 over target" (P5 D5, F46 c).
+      fmtInt(cur.kcal) + ' a day, ' + (Math.round(diff) === 0 ? 'on target' : fmtInt(Math.abs(diff)) + ' ' + (diff >= 0 ? 'over' : 'under') + ' target') +
       (prev.kcal != null && prev.logged >= 3 ? ' (' + fmtInt(prev.kcal) + ' the week before)' : '') + '.',
       fmtInt(cur.kcal) + ' kcal');
   }
@@ -610,8 +611,14 @@ export function trajectory(ctx, rateWk, planned, tw) {
     // number the account has for "where I began", and it is labelled as such.
     out.start = days[0].lb;
     out.startDate = days[0].d;
-    if (tw != null && Math.abs(out.start - goalLb) > 0.5) {
-      out.progress = Math.max(0, Math.min(1, (out.start - tw) / (out.start - goalLb)));
+    // Progress is measured in ONE series: the trend weight is normalised, so
+    // with the model in use the start of the line is the first normalised
+    // day, not the first raw daily mean. Mixing the two read a flat 200 lb as
+    // 4 % of the way to 180 for a morning weigher and 12 % for an evening one
+    // (P5 D2, F29). The printed start (out.start) is unchanged.
+    const base = out.model && ctx.adjDays && ctx.adjDays.length ? ctx.adjDays[0].lb : out.start;
+    if (tw != null && Math.abs(base - goalLb) > 0.5) {
+      out.progress = Math.max(0, Math.min(1, (base - tw) / (base - goalLb)));
     }
   }
 

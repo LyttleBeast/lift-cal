@@ -71,7 +71,12 @@ let unwatchDay = null;  // live listener on the day being viewed
 
 /* ================= INIT ================= */
 export async function initFood() {
-  targets = (await read('food/targets', null)) || targets;
+  // A node without a finite cal > 0 and a finite p (hand-edited, half
+  // written) is no targets, not targets: spread over the defaults it showed
+  // carbs NaN (P5 D4, F41). Nothing writes the defaults back; the person sets
+  // their own.
+  const t0 = await read('food/targets', null);
+  if (t0 && Number.isFinite(t0.cal) && t0.cal > 0 && Number.isFinite(t0.p)) targets = t0;
   items   = (await read('food/items',   null)) || {};
   meals   = (await read('food/meals',   null)) || {};
   await initWater(() => render());
@@ -153,6 +158,15 @@ async function loadMaintInputs() {
     if (JSON.stringify(next) === JSON.stringify(weighIns)) return;
     weighIns = next;
     try { await refreshModel(weighIns); } catch {}
+    if (!(await applyAuto())) render();
+  });
+  // And the day summaries the same way: a Fuel left open used to keep the
+  // summaries it booted with, so its maintenance stayed on setup (or nothing)
+  // while Weight and You moved on (P5 D1, F13).
+  watch('food/daySummaries', async val => {
+    const next = val || {};
+    if (JSON.stringify(next) === JSON.stringify(summaries)) return;
+    summaries = next;
     if (!(await applyAuto())) render();
   });
   // The normalised model is async (it reads back the food and water logs to
@@ -719,9 +733,9 @@ function zoneColor(zone) {
    allowed to answer on its own. It is cheap — the model's answer is a filter
    over three weeks of day keys, and the legacy fallback is only reached by
    accounts too new to have many weigh-ins to walk. */
-function maintInfo() {
+function maintInfo(t = targets) {
   const est = maintenance(weighIns, summaries);
-  const e = effectiveMaint(targets, est);
+  const e = effectiveMaint(t, est);
   // held: the model has a number but it has not earned its place yet (tdee.js
   // measuredNeeds, or the last weigh-in is stale), so a setup number is
   // standing in. applyAuto does not plan from a stand-in. A pinned number is
@@ -3469,7 +3483,8 @@ export function openTargets(onSaved) {
   /* ---------- save ---------- */
   const save = el('button', 'btn btn-primary btn-block', 'Save');
   save.style.marginTop = '14px';
-  save.onclick = async () => {
+  save.onclick = () => saveIt(false);
+  async function saveIt(overflowOk) {
     const mp = maintPatch(mi.value, maintWas, targets);
     const maint = mp.maint;
     const maintSrc = mp.maintSrc;
@@ -3486,19 +3501,22 @@ export function openTargets(onSaved) {
 
     if (mode === 'auto') {
       const a = readAuto();
-      targets = { ...targets, maint, maintSrc, goalLb, auto: a };
+      // Built as `next`, written, then assigned (P5 D3): maintInfo reads the
+      // patched object, not the module's.
+      let next = { ...targets, maint, maintSrc, goalLb, auto: a };
       // Apply straight away rather than waiting out the weekly gate — he just
       // asked for these numbers.
-      const m2 = maintInfo();
+      const m2 = maintInfo(next);
       const lb = trendWeight();
       const n  = m2 && lb > 0 ? autoTargets(a, m2.cal, lb, who) : null;
       // Not step-limited: he asked for these numbers. But bounded like a typed one.
       if (n) n.cal = clamp(n.cal, LIMITS.cal);
       if (n) {
-        targets = { ...targets, cal: n.cal, p: n.p, f: n.f,
-                    auto: { ...a, lastAdj: Date.now() } };
+        next = { ...next, cal: n.cal, p: n.p, f: n.f,
+                 auto: { ...a, lastAdj: Date.now() } };
       }
-      await write('food/targets', targets);
+      await write('food/targets', next);
+      targets = next;
       close(); render();
       if (onSaved) onSaved();
       toast(n ? 'Following your weight \u2014 ' + n.cal.toLocaleString() + ' kcal, ' + n.p + 'g protein'
@@ -3517,16 +3535,30 @@ export function openTargets(onSaved) {
       toast('Protein and fat can’t be more than ' + LIMITS.targetG[1].toLocaleString() + ' g');
       return;
     }
-    targets = {
+    // Carbs are the remainder and clamp at 0, so protein and fat over the
+    // calories silently gave a 0 g carb target. Asked once (P5 D6, F48).
+    if (tP * 4 + tF * 9 > tCal && !overflowOk) {
+      confirmSheet({
+        title: 'Carbs at 0 g',
+        body: 'Protein and fat alone come to ' + (tP * 4 + tF * 9).toLocaleString() + ' kcal, more than your ' +
+              tCal.toLocaleString() + ' target, so carbs will show 0 g. Save anyway?',
+        confirmLabel: 'Save anyway', cancelLabel: 'Change them',
+        onConfirm: () => saveIt(true)
+      });
+      return;
+    }
+    const next = {
       ...targets,
       cal: tCal, p: tP, f: tF,
       maint, maintSrc, goalLb,
       auto: { ...auto, on: false }
     };
-    await write('food/targets', targets);
+    // Written, then assigned (P5 D3).
+    await write('food/targets', next);
+    targets = next;
     close(); render(); toast('Targets saved');
     if (onSaved) onSaved();
-  };
+  }
   sh.appendChild(save);
 
   const cancel = el('button', 'btn btn-ghost btn-block', 'Cancel');
@@ -3827,8 +3859,10 @@ export function previewGoal(id) {
 
 export async function setGoal(id) {
   const { next } = goalNext(id);
+  // Written, then assigned (native's order): a refused write must not leave
+  // the screen painting a target the database never took (P5 D3, F40).
+  await write('food/targets', next);
   targets = next;
-  await write('food/targets', targets);
   render();
   return targets.cal;
 }

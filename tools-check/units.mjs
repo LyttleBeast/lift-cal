@@ -481,7 +481,13 @@ export function todayKey(d = new Date()) {
         o.assess.wins = all.filter(f => f.id !== 'pace-good').slice(0, 3);
         return JSON.stringify(o);
       };
-      const before = v47(runAll(oldI, ctx));
+      // rack-v64 (P5 D5, F46 a, c), on purpose: the faster-than-planned note's
+      // rate now carries its unit ("Past about 1.5 lb a week"), and a week at
+      // exactly the target says "on target", not "0 over target". Applied to
+      // the baseline's own output like v47's; everything else byte for byte.
+      const v64 = json => json.split('Past about 1.5 a week').join('Past about 1.5 lb a week')
+                              .split(' a day, 0 over target').join(' a day, on target');
+      const before = v64(v47(runAll(oldI, ctx)));
       const absent = runAll(newI, ctx);                       // no `u` at all
       const explicit = runAll(newI, { ...ctx, u: 'lb' });      // and an explicit one
       check('insights on ' + label + ': identical to ' + BASE + ' with units absent',

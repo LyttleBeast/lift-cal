@@ -1426,7 +1426,10 @@ function safeAssess(est, maint) {
       rate: tr && Number.isFinite(tr.rateWk) ? tr : null,
       tw: tw != null && Number.isFinite(tw) ? tw : null,
       sessions, stepDays, stepGoal: stepGoal(), waterDays, waterGoal: waterGoal(),
-      est, days: s.days || [], u: wu()
+      est, days: s.days || [], u: wu(),
+      // The model's normalised days, so goal progress is measured in the same
+      // series as the trend weight (P5 D2).
+      adjDays: adjustedDays()
     });
   } catch {
     return null;
