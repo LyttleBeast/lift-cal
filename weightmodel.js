@@ -54,6 +54,7 @@ const DAY = 864e5, HOUR = 36e5;
 
 let model = null;      // last computed model, or null
 let fingerprint = '';  // cheap guard so repeat renders don't refit
+let fitGen = 0;        // bumped as each fit starts; a fit overtaken by a newer one is dropped
 
 export function modelState() { return model; }
 
@@ -283,8 +284,23 @@ export async function refreshModel(entries) {
     .filter(e => e.lb > 0 && e.t > 0)
     .sort((a, b) => a.t - b.t);
 
-  const fp = list.length + ':' + (list.length ? list[list.length - 1].t : 0);
+  // What a fit depends on: every weigh-in (an edited OLD one has the same
+  // count and the same newest time, and was never refitted, F38) and today's
+  // date (the trend window and the intake average move with it, so a PWA left
+  // open for days kept a model fitted days ago, F22). The hash is plain
+  // arithmetic over every (lb x 10, t), not a string of the whole list.
+  let h = 0;
+  for (const e of list) {
+    h = (h * 31 + Math.round(e.lb * 10)) % 2147483647;
+    h = (h * 31 + (e.t % 2147483647)) % 2147483647;
+  }
+  const fp = list.length + ':' + (list.length ? list[list.length - 1].t : 0) + ':' + todayKey() + ':' + h;
   if (fp === fingerprint && model) return model;
+
+  // A fit that started earlier never lands after a newer one: a slow boot fit
+  // (cold intake reads) used to resolve after the fit for a weigh-in logged
+  // meanwhile, and put the older model back (P5 A8, fixture t14).
+  const gen = ++fitGen;
 
   if (list.length < 4) { model = null; fingerprint = fp; return null; }
 
@@ -310,6 +326,7 @@ export async function refreshModel(entries) {
   [...pairDays, ...trendDays].forEach(k => { want.add(k); want.add(prevKey(k)); });
 
   const intake = await loadIntake([...want]);
+  if (gen !== fitGen) return model;
 
   const mealsFor = k => (intake[k] && intake[k].meals) || [];
   const drinksFor = k => (intake[k] && intake[k].drinks) || [];
