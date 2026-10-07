@@ -65,11 +65,18 @@ const pct = (a, b) => Math.round((a - b) / b * 100);
    null is NOT zero. Zero means "holding", which is a goal and has a right
    answer; null means nobody knows, and a screen that colours a number by
    direction has to be able to tell those apart. food.js's goalSign folded them
-   together and keeps folding them, in one line, at its own call site. */
+   together and keeps folding them, in one line, at its own call site.
+
+   A stated 0 is that answer too, and it is final. It used to fall through to
+   the target-vs-maintenance test, which is harmless while maintenance is the
+   setup guess the target was built from; once maintenance is MEASURED it is
+   intake minus the scale's rate, so a hold account eating to target sits
+   rate x 500 away from it, and a drift of half a pound a week turned "holding"
+   into a cut or a bulk and was coloured as the right way (P5 F07). */
 export function goalDirection(targets, maintCal) {
   const t = targets || {};
   const a = t.auto;
-  if (a && Number.isFinite(a.rateWk) && a.rateWk !== 0) return a.rateWk < 0 ? -1 : 1;
+  if (a && Number.isFinite(a.rateWk)) return a.rateWk < 0 ? -1 : a.rateWk > 0 ? 1 : 0;
   if (maintCal > 0 && t.cal > 0) {
     if (t.cal < maintCal - 100) return -1;
     if (t.cal > maintCal + 100) return 1;

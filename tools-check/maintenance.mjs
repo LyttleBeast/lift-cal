@@ -37,6 +37,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 
 const HERE = fileURLToPath(new URL('.', import.meta.url));
 const SRC  = p => join(HERE, '..', p);
@@ -409,9 +410,13 @@ const GOAL = { on: true, rateWk: -1, pPerLb: 1, fPerLb: 0.35, floor: 0, lastAdj:
   // Fuel's `targets` is an object from the first line of the module and is
   // never null, which is why v40's goalSign could read targets.auto unguarded.
   // You's IS null on a skipped-onboarding account, so only that grid carries it.
-  const signBad = grid.filter(([t, mc]) => oldSign(t, mc) !== newSign(t, mc, goalDirection));
-  check('Fuel: goalSign answers exactly what it answered at v40, on all ' + grid.length + ' cases',
-    signBad.length === 0, shape(signBad.slice(0, 2)));
+  // rack-v64 (P5 C3, F07): a STATED rate of 0 is a hold, 0, and final — on
+  // purpose, FIX-PROMPT P5 §6. Those cases answer 0; every other case answers
+  // exactly what it answered at v40.
+  const statedHold = t => !!(t && t.auto && Number.isFinite(t.auto.rateWk) && t.auto.rateWk === 0);
+  const signBad = grid.filter(([t, mc]) => statedHold(t) ? newSign(t, mc, goalDirection) !== 0 : oldSign(t, mc) !== newSign(t, mc, goalDirection));
+  check('Fuel: goalSign answers exactly what it answered at v40 on all ' + grid.length + ' cases, except a stated rate of 0, which is now 0 (hold)',
+    signBad.length === 0 && grid.some(([t]) => statedHold(t)), shape(signBad.slice(0, 2)));
   check('and the rule is now safe on a null targets, which v40’s Fuel copy threw on',
     goalDirection(null, 2500) === null &&
     (() => { try { oldSign(null, 2500); return false; } catch { return true; } })());
@@ -420,8 +425,8 @@ const GOAL = { on: true, rateWk: -1, pPerLb: 1, fPerLb: 0.35, floor: 0, lastAdj:
   // way that screen really calls it.
   const asInfo = mc => (mc == null ? null : { cal: mc, pinned: false, source: 'pinned' });
   const youGrid = grid.concat([[null, 2500], [undefined, 2500], [null, null]]);
-  const dirBad = youGrid.filter(([t, mc]) => oldDir(t, asInfo(mc)) !== newDir(t, asInfo(mc), goalDirection));
-  check('You: goalDir answers exactly what it answered at v40, on all ' + youGrid.length + ' cases',
+  const dirBad = youGrid.filter(([t, mc]) => statedHold(t) ? newDir(t, asInfo(mc), goalDirection) !== 0 : oldDir(t, asInfo(mc)) !== newDir(t, asInfo(mc), goalDirection));
+  check('You: goalDir answers exactly what it answered at v40 on all ' + youGrid.length + ' cases, except a stated rate of 0, which is now 0 (hold)',
     dirBad.length === 0, shape(dirBad.slice(0, 2)));
 
   check('the two screens now read one rule — neither restates it',
@@ -616,10 +621,13 @@ const GOAL = { on: true, rateWk: -1, pPerLb: 1, fPerLb: 0.35, floor: 0, lastAdj:
      band: they read insights.js HOLD_RATE_LB, 0.5 lb a week, and RATE_BAND_LB,
      a separate pair (rate-band.mjs). Moving the band moves neither. */
   const INS58 = readFileSync(SRC('insights.js'), 'utf8');
-  check('the Weight tab and the You tab do not move: weight.js, you.js and insights.js name neither calorieZones nor zoneOf, insights.js is rack-v57’s byte for byte, and HOLD_RATE_LB is still 0.5',
+  // rack-v64 (P5 C3, D2, D5) edits insights.js on purpose (FIX-PROMPT P5 §6):
+  // the pin moves from rack-v57's bytes to these, by sha256.
+  const INS64 = 'ef0f4efdbfbaab5ef0f48ec507c7c305d95c4f6c617493f0b56f2e5e4a8dafee';
+  check('the Weight tab and the You tab do not move: weight.js, you.js and insights.js name neither calorieZones nor zoneOf, insights.js is rack-v64’s byte for byte (sha256 ' + INS64.slice(0, 12) + '…), and HOLD_RATE_LB is still 0.5',
     ['weight.js', 'you.js', 'insights.js'].every(f => !/calorieZones|zoneOf/.test(readFileSync(SRC(f), 'utf8'))) &&
-    INS58 === execFileSync('git', ['show', V57 + ':insights.js'], { cwd: SRC('.'), encoding: 'utf8', maxBuffer: 1 << 26 }) &&
-    /export const HOLD_RATE_LB = 0\.5;/.test(INS58));
+    createHash('sha256').update(INS58).digest('hex') === INS64 &&
+    /export const HOLD_RATE_LB = 0\.5;/.test(INS58), createHash('sha256').update(INS58).digest('hex'));
   const bandReaders = readdirSync(SRC('.')).filter(f => f.endsWith('.js') && f !== 'tdee.js' && /calorieZones\(/.test(readFileSync(SRC(f), 'utf8')));
   check('and the band has one reader, food.js — the bar, its note, Reading the bar and Settings → Goal (goalFits, misfitNote) — so they move together: ' + bandReaders.join(', '),
     shape(bandReaders) === shape(['food.js']) && /goalFits\(goal0\)/.test(SET) && /misfitNote\(goal\)/.test(SET) &&

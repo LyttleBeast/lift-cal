@@ -3771,7 +3771,8 @@ const GOAL_RATE = { cut: -1, hold: 0, gain: 0.5 };
 
 export function goalId() {
   const a = targets.auto;
-  if (a && Number.isFinite(a.rateWk) && a.rateWk !== 0) return a.rateWk < 0 ? 'cut' : 'gain';
+  // A stated 0 is "hold" and stays hold: see insights.js goalDirection (P5 F07).
+  if (a && Number.isFinite(a.rateWk)) return a.rateWk < 0 ? 'cut' : a.rateWk > 0 ? 'gain' : 'hold';
   const mi = maintInfo();
   if (mi && targets.cal > 0) {
     if (targets.cal < mi.cal - 100) return 'cut';
