@@ -174,10 +174,30 @@ async function loadMaintInputs() {
    gate is what stops that, and a gate is only as good as the proof that it is
    still in the path — tools-check/maintenance.mjs drives this one.
 
-   Returns the new numbers, or null for "leave the targets alone". */
-export function autoPlan(targets, maintCal, lb, now, who) {
+   Returns the new numbers, or null for "leave the targets alone".
+
+   rack-v64 (P5 B3, DECISION D-e "floor first"): before any other gate, a
+   target under the safety floor (tdee.js safeFloor) is lifted to it. The
+   floor does not depend on maintenance, so neither a held estimate, nor no
+   maintenance at all, nor the weekly clock may keep a 400 kcal target on
+   screen. Only the calories move; protein, fat and the weekly clock stay
+   (lastAdj: null). `lifted` says a floor did the moving ('safe', or 'minor'
+   for the under-18 line) so the toast can say so.
+
+   `held`: the measured maintenance has a number the gate (tdee.js
+   maintenance) has not let through yet, so a setup guess is standing in.
+   Then there is no plan: the next weigh-in would undo a move toward it. */
+export function autoPlan(targets, maintCal, lb, now, who, held) {
   const a = targets && targets.auto;
   if (!a || !a.on) return null;
+  // A node without a calorie number is not a target to move (it gave cal: NaN).
+  if (!Number.isFinite(targets.cal)) return null;
+  const safe = safeFloor(who);
+  if (targets.cal > 0 && targets.cal < safe.kcal && Number.isFinite(targets.p) && Number.isFinite(targets.f)) {
+    return { cal: clamp(safe.kcal, LIMITS.cal), p: targets.p, f: targets.f, lastAdj: null,
+             lifted: safe.minor ? 'minor' : 'safe' };
+  }
+  if (held) return null;
   if (!(maintCal > 0) || !(lb > 0)) return null;
 
   const next = autoTargets(a, maintCal, lb, who);
@@ -197,14 +217,17 @@ export function autoPlan(targets, maintCal, lb, now, who) {
 /* Returns true if it wrote (and re-rendered). */
 async function applyAuto() {
   const mi = maintInfo();
-  const plan = autoPlan(targets, mi ? mi.cal : 0, trendWeight(), Date.now(), who);
+  // While the measured number is held (too young, stale, or out of range) the
+  // number in force is a stand-in, and autoPlan plans nothing from it; the
+  // safety-floor lift does not wait (P5 B3).
+  const plan = autoPlan(targets, mi ? mi.cal : 0, trendWeight(), Date.now(), who, !!(mi && mi.held));
   if (!plan) return false;
 
   // Assigned after the write resolves, not before. lastAdj is the weekly gate:
   // module state holding a stamp the database refused would close the gate for
-  // a week on an adjustment that never happened.
+  // a week on an adjustment that never happened. A floor lift leaves it alone.
   const next = { ...targets, cal: plan.cal, p: plan.p, f: plan.f,
-                 auto: { ...targets.auto, lastAdj: plan.lastAdj } };
+                 auto: plan.lastAdj != null ? { ...targets.auto, lastAdj: plan.lastAdj } : targets.auto };
   try { await write('food/targets', next); } catch { return false; }
   targets = next;
   render();
@@ -665,8 +688,14 @@ function zoneColor(zone) {
    over three weeks of day keys, and the legacy fallback is only reached by
    accounts too new to have many weigh-ins to walk. */
 function maintInfo() {
-  const e = effectiveMaint(targets, maintenance(weighIns, summaries));
-  return e ? { cal: e.cal, auto: e.auto, source: e.source } : null;
+  const est = maintenance(weighIns, summaries);
+  const e = effectiveMaint(targets, est);
+  // held: the model has a number but it has not earned its place yet (tdee.js
+  // measuredNeeds, or the last weigh-in is stale), so a setup number is
+  // standing in. applyAuto does not plan from a stand-in. A pinned number is
+  // the person's own and is never "held" (P5 B3).
+  return e ? { cal: e.cal, auto: e.auto, source: e.source,
+               held: e.source !== 'pinned' && !!est && est.held != null } : null;
 }
 
 /* What Save does to the two stored maintenance keys, from what is in the box
