@@ -63,6 +63,7 @@ let targets  = { cal: 2700, p: 215, f: 80, maint: null, auto: null };
 const AUTO_DEFAULTS = { on: false, rateWk: -1, pPerLb: 1, fPerLb: 0.35, floor: 0, lastAdj: 0 };
 const AUTO_EVERY_DAYS = 7;    // how often it may move at all
 const AUTO_MAX_STEP   = 100;  // biggest single calorie change
+const AUTO_MAX_GRAMS  = 10;   // biggest single protein or fat change (P5 C1)
 let weighIns = {};      // weight/entries — only for the maintenance estimate
 let summaries = {};     // food/daySummaries — ditto
 let who = null;         // { sex, age } off the profile, for the safety floors (tdee.js whoOf)
@@ -210,8 +211,27 @@ export function autoPlan(targets, maintCal, lb, now, who, held) {
   if (a.lastAdj && now - a.lastAdj < AUTO_EVERY_DAYS * 864e5) return null;
 
   const step = Math.max(-AUTO_MAX_STEP, Math.min(AUTO_MAX_STEP, next.cal - targets.cal));
-  return { cal: Math.max(next.floor, targets.cal + step),
-           p: next.p, f: next.f, lastAdj: now };
+  // The grams move at the same pace as the calories: a trend pulled 60 lb by
+  // one typo used to lift the protein 112 g in one move (P5 C1, F17). Grams
+  // that were never stored (a hand-made node) are taken as they come.
+  const gStep = (to, from) => Number.isFinite(from) && from >= 0
+    ? from + Math.max(-AUTO_MAX_GRAMS, Math.min(AUTO_MAX_GRAMS, to - from)) : to;
+  const p = gStep(next.p, targets.p), f = gStep(next.f, targets.f);
+  // The floors are not moves to rate-limit: the safety floor, his own "Never
+  // go below" and the macro floor of the grams just set (protein x 4 + fat x 9
+  // + 100 g of carbs, to the next 10) all bind at once (CMB2 OPEN 1), so
+  // carbs are never squeezed under 100 g for a week. LIMITS.cal is the bound a
+  // typed target meets.
+  const stepped = targets.cal + step;
+  const user = a.floor > 0 ? a.floor : 0;
+  const macro = Math.ceil((p * 4 + f * 9 + MIN_CARB_G * 4) / 10) * 10;
+  const cal = clamp(Math.max(next.safe, user, macro, stepped), LIMITS.cal);
+  // A jump UP past the step says which floor did it, so the toast can
+  // (autoToast). A cut a floor merely stopped short is not "raised".
+  const lifted = cal > stepped && cal > targets.cal
+    ? (cal === next.safe ? (next.minor ? 'minor' : 'safe') : cal === user ? 'user' : 'macro')
+    : null;
+  return { cal, p, f, lastAdj: now, lifted };
 }
 
 /* What the toast says after applyAuto wrote. A lift to a floor is not the
@@ -221,6 +241,8 @@ export function autoToast(plan) {
   const n = plan.cal.toLocaleString();
   if (plan.lifted === 'minor') return 'Raised to ' + n + ' kcal \u2014 under 18, Rack doesn\u2019t plan a deficit';
   if (plan.lifted === 'safe') return 'Raised to your safety floor: ' + n + ' kcal';
+  if (plan.lifted === 'user') return 'Raised to the floor you set: ' + n + ' kcal';
+  if (plan.lifted === 'macro') return 'Raised to ' + n + ' kcal: your protein and fat plus 100 g of carbs need that much';
   return 'Targets moved with your trend \u2014 ' + n + ' kcal, ' + plan.p + 'g protein';
 }
 
@@ -3347,6 +3369,10 @@ export function openTargets(onSaved) {
     }
     const n = autoTargets(readAuto(), mi.cal, lb, who);
     if (!n) { preview.appendChild(noteEl('Not enough to compute yet.')); return; }
+    // Bounded like a typed target, and the carbs shown are the carbs of the
+    // number shown (P5 C1, XC X9).
+    n.cal = clamp(n.cal, LIMITS.cal);
+    n.c = Math.max(0, Math.round((n.cal - n.p * 4 - n.f * 9) / 4));
 
     const big = el('div', 'load-num num', n.cal.toLocaleString());
     big.style.fontSize = '30px';
@@ -3376,7 +3402,7 @@ export function openTargets(onSaved) {
     }
     preview.appendChild(noteEl(
       'Re-checked when you weigh in, moves at most once a week and never more than ' +
-      AUTO_MAX_STEP + ' kcal at a time.'));
+      AUTO_MAX_STEP + ' kcal at a time, except straight up to a floor.'));
   }
   [ra, pl, fl, fo].forEach(w => w.input.oninput = paintAuto);
   sh.appendChild(autoPane);
@@ -3468,6 +3494,8 @@ export function openTargets(onSaved) {
       const m2 = maintInfo();
       const lb = trendWeight();
       const n  = m2 && lb > 0 ? autoTargets(a, m2.cal, lb, who) : null;
+      // Not step-limited: he asked for these numbers. But bounded like a typed one.
+      if (n) n.cal = clamp(n.cal, LIMITS.cal);
       if (n) {
         targets = { ...targets, cal: n.cal, p: n.p, f: n.f,
                     auto: { ...a, lastAdj: Date.now() } };
@@ -3776,6 +3804,9 @@ function goalNext(id) {
       const r = safe.minor ? Math.max(0, rate) : rate;
       next.cal = Math.max(floor, safe.kcal, Math.round((mi.cal + r * 500) / 10) * 10);
     }
+    // A computed target meets the same bound a typed one does. One typo
+    // weigh-in on a young account made this 45,860 (P5 C1).
+    next.cal = clamp(next.cal, LIMITS.cal);
   }
   return { next, maint: mi ? mi.cal : null, rate };
 }
