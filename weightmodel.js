@@ -44,6 +44,7 @@ const MAX_FIT_DAYS  = 40;   // cap on days actually fetched, most recent first
 const TREND_DAYS    = 21;   // window the slope is measured over
 const MIN_PAIRS     = 30;   // below this, the coefficients stay at the priors
 const MIN_PAIR_DAYS = 14;
+const MIN_PAIR_GAP  = 30 * 60000;   // ms; readings closer than this are one reading twice
 const KCAL_PER_LB   = 3500;
 // Days past the newest weigh-in day that the slope is still read (tdee.js
 // shows no measured number beyond it; trendLb is not run on past it).
@@ -161,9 +162,15 @@ function fitCoefficients(rows) {
   Object.keys(byDay).forEach(d => {
     const v = byDay[d].slice().sort((a, b) => a.t - b.t);
     if (v.length < 2) return;
-    pairDays++;
+    // A pair only says something about gut content if time passed between the
+    // two readings. Two readings a minute apart (stepping off and back on to
+    // check) differ by scale noise alone; thirty such pairs pass the learned
+    // gate and pin bK/bW at a clamp (F37).
+    let used = 0;
     for (let i = 0; i < v.length; i++) {
       for (let j = i + 1; j < v.length; j++) {
+        if (v[j].t - v[i].t < MIN_PAIR_GAP) continue;
+        used++;
         const dk = v[j].xK - v[i].xK;
         const dw = v[j].xW - v[i].xW;
         const dy = v[j].lb - v[i].lb;
@@ -172,6 +179,7 @@ function fitCoefficients(rows) {
         pairs++;
       }
     }
+    if (used) pairDays++;
   });
 
   const learned = pairs >= MIN_PAIRS && pairDays >= MIN_PAIR_DAYS;
