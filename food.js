@@ -214,6 +214,16 @@ export function autoPlan(targets, maintCal, lb, now, who, held) {
            p: next.p, f: next.f, lastAdj: now };
 }
 
+/* What the toast says after applyAuto wrote. A lift to a floor is not the
+   trend moving the target, and it can be far more than the 100 a week the
+   sheet promises, so it says which line did it (P5 B4, XC X1). Pure. */
+export function autoToast(plan) {
+  const n = plan.cal.toLocaleString();
+  if (plan.lifted === 'minor') return 'Raised to ' + n + ' kcal \u2014 under 18, Rack doesn\u2019t plan a deficit';
+  if (plan.lifted === 'safe') return 'Raised to your safety floor: ' + n + ' kcal';
+  return 'Targets moved with your trend \u2014 ' + n + ' kcal, ' + plan.p + 'g protein';
+}
+
 /* Returns true if it wrote (and re-rendered). */
 async function applyAuto() {
   const mi = maintInfo();
@@ -231,7 +241,7 @@ async function applyAuto() {
   try { await write('food/targets', next); } catch { return false; }
   targets = next;
   render();
-  toast('Targets moved with your trend \u2014 ' + plan.cal.toLocaleString() + ' kcal, ' + plan.p + 'g protein');
+  toast(autoToast(plan));
   return true;
 }
 

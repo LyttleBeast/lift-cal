@@ -20,13 +20,13 @@
 // fake database:
 //   - held estimate, auto on, target above the floor: nothing is written;
 //   - held + a 400 target (a man): cal 1,500 is written, p / f and lastAdj
-//     unchanged;
+//     unchanged, and the toast says "Raised to your safety floor" (B4);
 //   - the weekly gate closed + 400: lifted; no maintenance at all + 400:
 //     lifted;
 //   - a pinned account with the same held estimate still plans;
 //   - autoPlan on a node with no calories is null, not NaN.
 
-import { stage, harness, setNow, at, J, resetDb, fake, RealDate, summariesBefore, readSrc } from './lib/stage.mjs';
+import { stage, harness, setNow, at, J, resetDb, fake, RealDate, summariesBefore, readSrc, toasts, clearToasts } from './lib/stage.mjs';
 
 const { check, section, done } = harness('auto-freeze — the floor lift goes first; a held estimate plans nothing');
 const cleanups = [];
@@ -49,7 +49,7 @@ async function boot(db) {
   const s = stage(REAL); cleanups.push(s.cleanup);
   const tk = (await s.load('store.js')).todayKey;
   const F = await s.load('food.js');
-  return { F, tk, run: async () => { await F.initFood(); return fake.writes.filter(w => w.path === 'food/targets').map(w => w.value); } };
+  return { F, tk, run: async () => { clearToasts(); await F.initFood(); return fake.writes.filter(w => w.path === 'food/targets').map(w => w.value); } };
 }
 const tkOf = async () => { const s = stage(['ui.js']); cleanups.push(s.cleanup); return (await s.load('store.js')).todayKey; };
 const tk = await tkOf();
@@ -68,6 +68,8 @@ section('A held estimate');
   check('auto on, target 400 (a man): one write, cal 1,500', w.length === 1 && w[0].cal === 1500, J(w));
   check('protein and fat stay where they were', w.length === 1 && w[0].p === 185 && w[0].f === 65, J(w));
   check('and the weekly clock is not touched (lastAdj unchanged)', w.length === 1 && w[0].auto.lastAdj === NOW - 30 * DAY, J(w[0] && w[0].auto));
+  // B4: the toast says why.
+  check('the toast says "Raised to your safety floor: 1,500 kcal"', toasts().includes('Raised to your safety floor: 1,500 kcal'), J(toasts()));
 }
 
 section('Nothing else holds the floor lift back');
