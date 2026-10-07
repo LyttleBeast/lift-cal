@@ -965,6 +965,13 @@ function renderCalMeter(cal) {
         wrap.appendChild(fixBtn);
       }
     }
+    // rack-v64 (P5 C3, DECISION D-VEb): a "Maintaining" target typed off the
+    // hold plan, asked about once.
+    const hc = holdCard(targets, who);
+    if (hc) wrap.appendChild(askCardEl(hc, [
+      { label: hc.dir === 'cut' ? 'I\u2019m cutting' : 'I\u2019m bulking', primary: true, answer: () => answerHoldCard('goal') },
+      { label: 'Move target to ' + hc.plan.toLocaleString(), answer: () => answerHoldCard('move') }
+    ]));
   } else {
     wrap.appendChild(noteEl('Set your maintenance calories in ⚙ Settings — or log a week of food alongside your weigh-ins — to mark the cut / maintain / gain lines on this bar.'));
   }
@@ -3659,11 +3666,21 @@ export function openTargets(onSaved) {
       });
       return;
     }
+    // DECISION D-VEb (P5 C3, write side): a "Maintaining" account that types
+    // a target off the hold plan has stopped holding, so the stated 0 is
+    // dropped (null: stored as absent, "no stated rate") and the target is
+    // read against maintenance again. Only when the calories CHANGED, and
+    // against the STORED maintenance being saved, never the measured one in
+    // force (that drifts; CMB2 measured that rule firing on 21-26 of 30
+    // hold-off people). A Save at the plan, or one that leaves the calories
+    // alone, keeps the 0.
+    const typedOff = auto.rateWk === 0 && tCal !== Number(targets.cal) &&
+                     !holdKept({ cal: tCal, p: tP, f: tF }, maint, who);
     const next = {
       ...targets,
       cal: tCal, p: tP, f: tF,
       maint, maintSrc, goalLb,
-      auto: { ...auto, on: false }
+      auto: { ...auto, on: false, ...(typedOff ? { rateWk: null } : {}) }
     };
     // Written, then assigned (P5 D3).
     await write('food/targets', next);
@@ -4013,6 +4030,70 @@ export function floorNote(n, u) {
   if (n.safeHeld) return at + ', the lowest daily target Rack sets.' + plans;
   if (n.userHeld) return at + ', the floor you set under Daily targets.' + plans;
   return at + ': your protein and fat plus 100 g of carbs need that much.' + plans;
+}
+
+/* ---------- "Still maintaining?": the one-time card (P5 C3, DECISION D-VEb) ----------
+   A stated goal rate of 0 is final (insights.js goalDirection). Somebody who
+   chose Maintaining and later TYPED a cut would then be told they are off
+   goal while on plan, so the manual Save drops the stated 0 when a typed
+   target leaves the hold plan (openTargets), and accounts that did it before
+   this shipped are asked once, under the calorie bar. Key-free: each answer
+   breaks the condition ("I'm cutting" / "I'm bulking" writes the goal's rate;
+   "Move target to M" writes M), and dismissing writes nothing, so the card
+   returns.
+
+   holdKept: the target is within 100 of the hold PLAN — goalNext('hold')'s
+   by-hand number, max(protein x 4 + fat x 9 + 400 (unrounded, D22), the
+   safety floor, maintenance to the nearest ten), bounded by LIMITS.cal — or
+   there is no stored maintenance or no target to compare. The plan, not the
+   raw maintenance: a heavy person's macro floor lifts her hold target above
+   maintenance, and reading that as "bulking" was the measured defect of the
+   read-side alternative (P5 ORCH-D-VEb-CHECK). Pure. */
+export function holdKept(t, maintCal, who) {
+  if (!t || !(Number(maintCal) > 0) || !(Number(t.cal) > 0)) return true;
+  return Math.abs(Number(t.cal) - holdPlan(t, maintCal, who)) <= 100;
+}
+function holdPlan(t, maintCal, who) {
+  const floor = (t.p || 0) * 4 + (t.f || 0) * 9 + MIN_CARB_G * 4;
+  return clamp(Math.max(floor, safeFloor(who).kcal, Math.round(Number(maintCal) / 10) * 10), LIMITS.cal);
+}
+
+/* The card, or null. Anything unexpected shows no card. A target under the
+   safety floor is not asked here: that is the safety-floor question, and one
+   question at a time. Pure. */
+export function holdCard(t, who) {
+  if (!t || !t.auto || t.auto.on !== false || t.auto.rateWk !== 0) return null;
+  const maint = Number(t.maint), cal = Number(t.cal);
+  if (!(maint > 0) || !(cal > 0) || typeof t.cal !== 'number') return null;
+  if (cal < safeFloor(who).kcal || holdKept(t, maint, who)) return null;
+  const plan = holdPlan(t, maint, who);
+  const d = Math.round(cal - plan);
+  return {
+    eyebrow: 'Still maintaining?',
+    // M is the plan, which a floor can lift above maintenance, so it is
+    // never called "the number that holds your weight".
+    note: 'Your goal says Maintaining, but your target of ' + cal.toLocaleString() + ' is ' + Math.abs(d).toLocaleString() +
+      ' kcal ' + (d < 0 ? 'under ' : 'over ') + plan.toLocaleString() + ', the target Rack plans for maintaining. Which is it?',
+    dir: d < 0 ? 'cut' : 'gain',
+    plan
+  };
+}
+
+/* The buttons' write (rewriteTargets: readExact, refuse on a missing re-read,
+   the condition asked again of the fresh node, the fresh node spread). */
+export async function answerHoldCard(kind) {
+  let dir = null;
+  const r = await rewriteTargets(cur => {
+    const hc = holdCard(cur, who);
+    if (hc) dir = hc.dir;
+    return !hc ? null
+      : kind === 'goal' ? { ...cur, auto: { ...cur.auto, rateWk: GOAL_RATE[hc.dir] } }
+      : kind === 'move' ? { ...cur, cal: hc.plan }
+      : null;
+  });
+  if (r) toast(kind === 'move' ? 'Target is now ' + r.cal.toLocaleString() + ' kcal a day'
+                               : 'Goal set to ' + (dir === 'cut' ? 'Cutting' : 'Bulking'));
+  return r !== false;
 }
 
 export function misfitNote(id = goalId()) {

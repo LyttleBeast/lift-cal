@@ -391,6 +391,13 @@ speed — already does, and a goal is one thing. Nothing on Fuel reads it.
 `profile` ends in `$other: false`; this node has no validation block, so the
 key needed no rules change.
 
+`auto.rateWk` of exactly `0` is a stated hold, and final (rack-v64,
+`insights.js goalDirection`). `auto.rateWk` **absent** (or `null`) means "no
+stated rate": the goal is read from the target against maintenance. A
+manual Save writes `rateWk: null` (stored as absent) when a "Maintaining"
+account types a target more than 100 off the hold plan (`food.js
+holdKept`; rack-v64, DECISION D-VEb).
+
 ```json
 { "cal": 2300, "p": 210, "f": 74, "maint": null,
   "auto": { "on": true, "rateWk": -1, "pPerLb": 1.0, "fPerLb": 0.35,
