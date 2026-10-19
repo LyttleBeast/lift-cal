@@ -160,3 +160,73 @@ export function sessionLayout(exercises, blocks) {
   });
   return rows;
 }
+
+/* ---------- reordering (v65) ----------
+   The order of `exercises` IS the order on screen, and a block's members sit
+   together in it, so reordering is a permutation of the same exercise objects
+   and nothing else. Nothing is rebuilt or copied: each moved exercise comes out
+   as the very object it went in as, with its sets, targets, notes, ratings,
+   drop sets and warm-ups, and its `block` number is only ever changed by
+   normalizeBlocks renumbering 1..N by position, as on every other change.
+
+   The rule is by ROW, the rows sessionLayout draws:
+     - an exercise inside a block moves among that block's own exercises and
+       stops at the block's first / last. It never leaves its block, so a move
+       can neither split a block nor change which block an exercise is in;
+     - an ungrouped exercise moves one row: past the neighbouring ungrouped
+       exercise, or past a WHOLE block as one piece, never into the middle of it;
+     - a block moves one row as a whole, past a neighbouring exercise or block.
+   An empty block has no position in the array, so it has nothing to move. */
+
+// Rows that exist in the array, in order: ungrouped exercises and non-empty blocks.
+const placedRows = s => sessionLayout(s.exercises, sessionBlocks(s)).filter(r => r.kind === 'ex' || r.items.length);
+
+const flattenRows = rows => rows.reduce((a, r) => a.concat(r.kind === 'ex' ? [r.index] : r.items), []);
+
+function applyOrder(s, order) {
+  const blocks = sessionBlocks(s);
+  return normalizeBlocks(order.map(i => s.exercises[i]), blocks);
+}
+
+const unchanged = s => ({ exercises: s.exercises, blocks: sessionBlocks(s) });
+
+// dir: -1 up, +1 down. Returns the next { exercises, blocks }, or the same pair
+// untouched when the move is not available.
+export function moveExercise(s, index, dir) {
+  const ex = (s.exercises || [])[index];
+  if (!ex || (dir !== -1 && dir !== 1)) return unchanged(s);
+  const rows = placedRows(s);
+  const at = rows.findIndex(r => r.kind === 'ex' ? r.index === index : r.items.indexOf(index) !== -1);
+  if (at === -1) return unchanged(s);
+  const row = rows[at];
+  if (row.kind === 'block') {
+    const p = row.items.indexOf(index), q = p + dir;
+    if (q < 0 || q >= row.items.length) return unchanged(s);
+    const items = row.items.slice();
+    [items[p], items[q]] = [items[q], items[p]];
+    rows[at] = { ...row, items };
+  } else {
+    const q = at + dir;
+    if (q < 0 || q >= rows.length) return unchanged(s);
+    [rows[at], rows[q]] = [rows[q], rows[at]];
+  }
+  return applyOrder(s, flattenRows(rows));
+}
+
+export function canMoveExercise(s, index, dir) {
+  return moveExercise(s, index, dir).exercises !== s.exercises;
+}
+
+export function moveBlock(s, n, dir) {
+  if (dir !== -1 && dir !== 1) return unchanged(s);
+  const rows = placedRows(s);
+  const at = rows.findIndex(r => r.kind === 'block' && r.block === n);
+  const q = at + dir;
+  if (at === -1 || q < 0 || q >= rows.length) return unchanged(s);
+  [rows[at], rows[q]] = [rows[q], rows[at]];
+  return applyOrder(s, flattenRows(rows));
+}
+
+export function canMoveBlock(s, n, dir) {
+  return moveBlock(s, n, dir).exercises !== s.exercises;
+}
