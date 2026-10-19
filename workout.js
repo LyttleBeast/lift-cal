@@ -2,12 +2,13 @@ import { GROUPS, GROUP_ORDER } from './exercises.js';
 // The pure block model, shared verbatim with the routine editor.
 import {
   blockOrder, sessionBlocks, normalizeBlocks, addBlock, addToBlock,
-  duplicateBlock, deleteBlock, sessionLayout
+  duplicateBlock, deleteBlock, sessionLayout,
+  moveExercise, canMoveExercise, moveBlock, canMoveBlock
 } from './blocks.js';
 import { read, readExact, write, watch, LS, todayKey, monthKey, wu } from './store.js';
 import {
   $, el, sheet, toast, noteEl, confirmSheet, swipeToDelete,
-  fmtDate, fmtDateFull, fmtDuration, parseKey, clamp, setNum, LIMITS
+  fmtDate, fmtDateFull, fmtDuration, parseKey, clamp, setNum, LIMITS, moveButtons
 } from './ui.js';
 import {
   allSessions, invalidate, detectPRs, sessionMilestones, sameKindComparison,
@@ -1140,6 +1141,9 @@ function renderBlock(row, editing) {
   hd.appendChild(el('div', 'wk-block-title', 'Block ' + n));
 
   const acts = el('div', 'wk-block-acts');
+  acts.appendChild(moveButtons('Block ' + n,
+    dir => canMoveBlock(session, n, dir),
+    dir => commitBlocks(moveBlock(session, n, dir))));
 
   // The block's own check box. This training style fills a whole block in and
   // then ticks it off, so ticking each row by hand is the one bit of friction
@@ -1212,6 +1216,11 @@ function renderExercise(ex, exIdx) {
   const tag = el('i', 'ex-tag'); tag.style.background = color;
   hd.appendChild(tag);
   hd.appendChild(el('div', 'ex-name', ex.name));
+  // v65: move up / down, blocks.js moveExercise. Not in a past session's edit
+  // either way: the order is just the array order, saved with the record.
+  hd.appendChild(moveButtons(ex.name,
+    dir => canMoveExercise(session, exIdx, dir),
+    dir => commitBlocks(moveExercise(session, exIdx, dir))));
   const menu = el('button', 'ex-menu', '⋯'); glyphed(menu, 'more');
   menu.setAttribute('aria-label', 'Remove ' + ex.name);
   menu.onclick = () => {

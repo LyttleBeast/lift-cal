@@ -22,7 +22,8 @@ import { read, write, watch, wu } from './store.js';
 import { GROUPS, GROUP_ORDER } from './exercises.js';
 import {
   blockOrder, sessionBlocks, normalizeBlocks, addBlock, addToBlock,
-  duplicateBlock, deleteBlock, sessionLayout
+  duplicateBlock, deleteBlock, sessionLayout,
+  moveExercise, canMoveExercise, moveBlock, canMoveBlock
 } from './blocks.js';
 import { openPicker } from './picker.js';
 // v55: a drop set's grouping — the rule, and the edits the editor makes. v56:
@@ -31,7 +32,7 @@ import { openPicker } from './picker.js';
 // says one as a group (setsText).
 import { retypeSet, removeSet, dropHeads, addDrop, repeatOf, setsText } from './analytics.js';
 import { bump } from './usage.js';
-import { el, sheet, toast, noteEl, confirmSheet, swipeToDelete, fmtDate, setNum, LIMITS } from './ui.js';
+import { el, sheet, toast, noteEl, confirmSheet, swipeToDelete, fmtDate, setNum, LIMITS, moveButtons } from './ui.js';
 import { wIn, fmtSetW, unitW, limW } from './units.js';
 // A group's hex (exercises.js) as the token that paints it (V59 §5.4). Named
 // vibePaint here because the routine editor's repaint is its own paint().
@@ -340,6 +341,9 @@ function openEditor(draft, isNew, onStart) {
     hd.appendChild(el('div', 'wk-block-title', 'Block ' + n));
 
     const acts = el('div', 'wk-block-acts');
+    acts.appendChild(moveButtons('Block ' + n,
+      dir => canMoveBlock(draft, n, dir),
+      dir => commit(moveBlock(draft, n, dir))));
 
     const dup = el('button', 'btn btn-ghost wk-block-btn', 'Duplicate');
     // Nothing to repeat until the block holds an exercise, and a button that
@@ -388,6 +392,10 @@ function openEditor(draft, isNew, onStart) {
     tag.style.background = vibePaint((GROUPS[ex.group] || {}).color || 'var(--dim)');
     hd.appendChild(tag);
     hd.appendChild(el('div', 'ex-name', ex.name));
+    // v65: move up / down (blocks.js). The array order is the saved order.
+    hd.appendChild(moveButtons(ex.name,
+      dir => canMoveExercise(draft, xi, dir),
+      dir => commit(moveExercise(draft, xi, dir))));
     const menu = el('button', 'ex-menu', '⋯'); glyphed(menu, 'more');
     menu.setAttribute('aria-label', 'Remove ' + ex.name);
     menu.onclick = () => confirmSheet({

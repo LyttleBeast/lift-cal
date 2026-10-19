@@ -745,6 +745,15 @@ body.peeking .view.active { padding-bottom: 65px; }
 .wk-block-body { padding: 0 8px 8px; }
 .wk-block-add { padding: 9px; font-size: 12px; }
 
+/* v65: move up / move down on an exercise or block header. Each is a 44px
+   square (the Apple minimum); a disabled one is the first or last place. */
+.mv-btns { display: flex; flex-shrink: 0; }
+.mv-btn { width: 44px; min-width: 44px; height: 44px; min-height: 44px; padding: 0; font-size: 14px; line-height: 1; color: var(--dim); display: inline-flex; align-items: center; justify-content: center; }
+.mv-btn:active:not(:disabled) { color: var(--accent); }
+.mv-btn:disabled { opacity: .25; }
+.ex-hd .mv-btns { margin: -8px 0; }
+.wk-block-acts .mv-btns { margin: -10px 0; }
+
 /* Add exercise and Add Lifting Block, half the width each. */
 .add-row { display: flex; gap: 8px; }
 .add-row .btn { flex: 1; min-width: 0; padding: 12px 6px; font-size: 12px; letter-spacing: 0; }

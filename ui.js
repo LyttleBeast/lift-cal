@@ -281,3 +281,20 @@ export function swipeToDelete(row, { onDelete, label = 'Delete', width = 88 }) {
 
   return wrap;
 }
+
+/* v65: the move up / move down pair on an exercise or block header. Plain text
+   arrows (no icon set involved), each a 44px-square target, disabled at the
+   first / last place so a button that cannot act says so. `can(dir)` and
+   `move(dir)` are the caller's, from blocks.js. */
+export function moveButtons(what, can, move) {
+  const box = el('div', 'mv-btns');
+  [[-1, '▲', 'up'], [1, '▼', 'down']].forEach(([dir, ch, word]) => {
+    const b = el('button', 'mv-btn', ch);
+    b.type = 'button';
+    b.setAttribute('aria-label', 'Move ' + what + ' ' + word);
+    b.disabled = !can(dir);
+    b.onclick = e => { e.stopPropagation(); move(dir); };
+    box.appendChild(b);
+  });
+  return box;
+}
