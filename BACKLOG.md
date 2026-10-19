@@ -1185,13 +1185,13 @@ says "in seven days" now.)
   list — so the two ways out are to pin later (and pay that cost) or to give the
   late-gated lines a cheap log-only sibling. Neither was in scope. Until then,
   a generic line on a cold start is not evidence the rotation is broken.
-- **ZXing has never been cached by the service worker, and the README said it
+- ~~**ZXing has never been cached by the service worker, and the README said it
   was until v44.** `food.js` loads it with a `<script>` tag, so the request is
   no-cors, the response is opaque with `status === 0`, and the handler's
   `r.status===200` guard never writes it. Barcode scanning therefore does not
   work offline on an iPhone, where it is the only scanner there is. Fixable by
   adding `crossorigin` to the script tag — jsDelivr does send the header — but
-  that is a change to the food path and wants testing on a real phone.
+  that is a change to the food path and wants testing on a real phone.~~ **Fixed in v47**: `food.js` `loadZXing()` sets `s.crossOrigin = 'anonymous'`, so the response is a cacheable 200 (`tools-check/scanner-offline.mjs`; README *Barcode scan*). A real-phone airplane-mode check is still the only proof on WebKit.
 - **An account where only one data-aware greeting line passes its gates still
   opens with a generic line roughly seven opens in eight.** That is not a bug —
   one line cannot rotate against itself, and saying it twice running is the
@@ -1209,12 +1209,12 @@ v43 is the Coach fix run — the rotation, the boot path, the tier gate, the
 sheet's surface, the stall's voice and the short-finding gap. Two things it
 found and deliberately did not touch, plus one it could not check.
 
-- **`.btn` renders 41px tall against a 44px touch-target minimum.** Routines,
+- ~~**`.btn` renders 41px tall against a 44px touch-target minimum.** Routines,
   Exercises and Statistics on Train are therefore 3px under. It is real and it
   is small, and `.btn` is used on every screen in the app — changing its padding
   for this moves every button in Rack, which is a far bigger blast radius than
   the defect. It wants a deliberate pass over the whole button scale, not a
-  patch from a Coach run.
+  patch from a Coach run.~~ **Fixed in v47**: `.btn` has `min-height: 44px` (`rack.css`), fenced by `tools-check/touch-target.mjs`; measured in `report/btn-44.md`.
 - **The sheet's `max-height: calc(92dvh - var(--safe-top))` has never been seen
   against real phone browser chrome.** Nothing in this tree can check it: there
   is no device and no layout engine in any verifier. It is not known to be
