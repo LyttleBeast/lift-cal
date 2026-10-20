@@ -73,7 +73,6 @@ import { allSessions, exerciseIndex, filterByRange, groupSplit, topBy, weeklyVol
          groupColor } from './analytics.js';
 import { weightStats, maintenance, effectiveMaint, trendRate, refreshModel, trendWeight, adjustedDays } from './tdee.js';
 import { fmtWater } from './water.js';
-import { openSetSteps } from './steps.js';
 import { openSettings, openGoal, openDailyTargets, pickProfilePhoto } from './settings.js';
 import { isAdminOpen } from './admin.js';
 import { coachCard } from './coach-ui.js';
@@ -521,12 +520,6 @@ function kpi({ label, now, prev, fmt, dfmt, unit, judge, series, color, rgb, ref
     t.appendChild(row);
   }
   return t;
-}
-
-function actBtn(label, fn) {
-  const b = el('button', 'btn btn-ghost btn-block', label);
-  b.onclick = fn;
-  return b;
 }
 
 function goBtn(label, view) {
@@ -1456,7 +1449,7 @@ function goalCard(title, o) {
   }
   if (!o.logged.length) {
     c.appendChild(noteEl(o.none));
-    const b = o.act ? actBtn(o.goLabel, o.act) : goBtn(o.goLabel, o.view);
+    const b = goBtn(o.goLabel, o.view);
     b.style.marginTop = '8px';
     c.appendChild(b);
     return c;
@@ -1494,7 +1487,6 @@ function goalCard(title, o) {
     });
     c.appendChild(row);
   }
-  if (o.act) { const b = actBtn(o.goLabel, o.act); b.style.marginTop = '10px'; c.appendChild(b); }
   return c;
 }
 
@@ -1516,7 +1508,7 @@ function stepsCard() {
       [compact(logged.reduce((s, k) => s + stepDays[k].steps, 0)), 'this week']
     ] : null,
     none: 'Nothing this week. Your goal is ' + g.toLocaleString() + ' a day.',
-    goLabel: 'Log today’s steps', act: () => openSetSteps(todayKey())
+    goLabel: 'Open Steps', view: 'steps'
   });
 }
 

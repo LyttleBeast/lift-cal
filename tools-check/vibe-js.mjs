@@ -71,17 +71,8 @@ const CONTRACT = ['vibes/defs', 'vibes/icons'].flatMap(d => readdirSync(join(ROO
 // whatever real vibes follow it, so the rest of each literal stands.
 const A_DEFS = 'const DEFS = { v1: V1', A_SETS = 'const ICON_SETS = { v1: V1_ICONS';
 const shown = new Map();
-// October 2026: the Steps tab is gone, so rack-v58's index.html is compared
-// WITHOUT the tab's two pieces — its view section and its dock button — and
-// nothing else. Every other byte is still rack-v58's.
-const noStepsTab = html => html
-  .replace('  <section class="view" id="view-steps"></section>\n', '')
-  .replace(/  <button data-view="steps"[\s\S]*?<\/button>\n/, '');
 const base = f => {
-  if (!shown.has(f)) {
-    const t = execFileSync('git', ['-C', ROOT, 'show', `${BASE}:${f}`], { encoding: 'utf8', maxBuffer: 1 << 26 });
-    shown.set(f, f === 'index.html' ? noStepsTab(t) : t);
-  }
+  if (!shown.has(f)) shown.set(f, execFileSync('git', ['-C', ROOT, 'show', `${BASE}:${f}`], { encoding: 'utf8', maxBuffer: 1 << 26 }));
   return shown.get(f);
 };
 const url = f => pathToFileURL(join(ROOT, f)).href;
@@ -267,7 +258,7 @@ const innerAt = (text, lhs) => {
   return text.slice(i + (lhs + '.innerHTML =').length, text.indexOf(';\n', i)).trim();
 };
 {
-  for (const [file, lhs] of [['food.js', 'gear'], ['you.js', 'gear'], ['workout.js', 'cal']]) {
+  for (const [file, lhs] of [['food.js', 'gear'], ['steps.js', 'gear'], ['you.js', 'gear'], ['workout.js', 'cal']]) {
     const was = Function('return (' + innerAt(base(file), lhs) + ')')();
     const expr = innerAt(read(file), lhs);
     const now = expr && /^iconHtml\(/.test(expr) ? Function('iconHtml', 'return (' + expr + ')')(VB.iconHtml) : null;
@@ -676,7 +667,7 @@ section('H  engine v2: glyphs, the vessel, tailpieces and hatch patterns');
     expect(VB.tail(p, 'you') === p && ser(p) === before && VB.tail(null, 'you') === null, 'tail() adds nothing to a screen in v1');
   }
   // Each screen, and the recap, ends in tail() by its own name.
-  const TAILS = [['you.js', 'you'], ['workout.js', 'workout'], ['workout.js', 'recap'], ['food.js', 'food'], ['weight.js', 'weight']];   // steps.js left with the Steps tab, Oct 2026
+  const TAILS = [['you.js', 'you'], ['workout.js', 'workout'], ['workout.js', 'recap'], ['food.js', 'food'], ['weight.js', 'weight'], ['steps.js', 'steps']];
   const noTail = TAILS.filter(([f, s]) => !new RegExp("tail\\([^;]*, '" + s + "'\\)").test(read(f)));
   expect(!noTail.length && IDX && true, 'every tab and the recap hand their screen to tail() under their own name: ' + TAILS.map(([f, s]) => f + ' ' + s).join(', ') + (noTail.length ? ' — missing: ' + noTail.map(x => x.join(' ')).join(', ') : ''));
 

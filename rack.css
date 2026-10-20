@@ -1439,8 +1439,10 @@ body.peeking .view.active { padding-bottom: 65px; }
 /* ============================================================
    STEPS
    ============================================================ */
-/* Four dock slots (the Steps tab went in October 2026; its room is Friends',
-   later). The tracking stays as it was — wider slots only give it more room. */
+/* Five dock slots now, not three — tighten the tracking so the longest label
+   still fits on a small phone. At 320px that is a 64px slot against WEIGHT,
+   which sets about 39px at 10px in this face; the icon is 22px. Nothing
+   collides, so nothing else here has to change. */
 .dock button { letter-spacing: .07em; }
 
 .st-hero { display: flex; align-items: center; gap: 18px; margin-top: 4px; }

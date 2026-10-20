@@ -19,23 +19,29 @@
 // still open to anyone who wants it — it is Firebase's, not ours — but the app
 // no longer hands out the instructions.
 //
-// There is no Steps tab any more (October 2026): the day's number lives on You
-// (a tile, and the Habits card behind Trends) and what is left here is the
-// data — the init that keeps the node subscribed, the goal, and the two sheets
-// that write: set a day's total, and the goal. Nothing in this file draws a
-// page. The tab's room goes to Friends, later.
-//
-// Imports store.js, ui.js and usage.js. Nothing imports back.
+// Imports store.js, ui.js, analytics.js, usage.js and vibe.js. Nothing
+// imports back.
 
 import { read, write, watch, todayKey } from './store.js';
+// Only long-standing exports are imported from analytics.js. A brand-new
+// module must never depend on a brand-new export in an OLD shared file: if a
+// browser is holding even one stale file, the import fails and this whole tab
+// renders blank with no error the user can see. That is exactly what happened
+// on the first deploy of this tab. The heat map below is therefore local.
+import { barChart, emptyChart } from './analytics.js';
 import { bump } from './usage.js';
-import { el, sheet, toast, noteEl, compact, fmtDate, fmtDateFull, LIMITS, within } from './ui.js';
+import { $, el, svgEl, sheet, toast, noteEl, confirmSheet, swipeToDelete,
+         compact, parseKey, fmtDate, fmtDateFull, LIMITS, within } from './ui.js';
+// The gear, from the vibe's icon set (V59 §5.7). vibe.js is new in rack-v59
+// together with this import, so no browser holds this file without it.
+import { iconHtml, tail, blk, composeScreen } from './vibe.js';
 
 const DAY = 864e5;
 const DEFAULTS = { goal: 10000 };
 
 let settings = { ...DEFAULTS };
 let days     = {};      // dateKey -> { steps, mi, t, src }
+let range    = 30;      // 7 | 30 | 365
 let unwatch  = null;
 
 /* ================= INIT ================= */
@@ -50,9 +56,46 @@ export async function initSteps() {
     const next = val || {};
     if (JSON.stringify(next) === JSON.stringify(days)) return;
     days = next;
+    render();
   });
+  render();
 }
 
+/* ---------- heat map ----------
+   Same grid as the training one in analytics.js, over any {dateKey: number}.
+   Deliberately duplicated rather than shared — see the import note above. */
+function heatMap(byDay, opts = {}) {
+  const { days = 91, color = 'var(--p-green)' } = opts;
+  const max = Math.max(1, ...Object.values(byDay));
+  const cols = Math.ceil(days / 7);
+  const CELL = 9, GAP = 2.5;
+  const W = cols * (CELL + GAP), H = 7 * (CELL + GAP);
+  const svg = svgEl('svg', { viewBox: '0 0 ' + W + ' ' + H, class: 'chart heat' });
+
+  const start = new Date();
+  start.setHours(12, 0, 0, 0);
+  start.setDate(start.getDate() - (days - 1));
+  start.setDate(start.getDate() - start.getDay());   // align to a Sunday
+
+  for (let c = 0; c < cols; c++) {
+    for (let row = 0; row < 7; row++) {
+      const d = new Date(start);
+      d.setDate(d.getDate() + c * 7 + row);
+      if (d.getTime() > Date.now() + DAY) continue;
+      const v = byDay[todayKey(d)] || 0;
+      const op = v ? (0.28 + 0.72 * Math.min(1, v / max)) : 0;
+      svg.appendChild(svgEl('rect', {
+        x: (c * (CELL + GAP)).toFixed(1), y: (row * (CELL + GAP)).toFixed(1),
+        width: CELL, height: CELL, rx: 2.5,
+        fill: v ? color : 'var(--collar)',
+        'fill-opacity': v ? op.toFixed(2) : '1'
+      }));
+    }
+  }
+  return svg;
+}
+
+/* ================= HELPERS ================= */
 function stepsOn(k) { const d = days[k]; return d && d.steps > 0 ? d.steps : 0; }
 function goal() { return settings.goal > 0 ? settings.goal : DEFAULTS.goal; }
 
@@ -60,17 +103,387 @@ function goal() { return settings.goal > 0 ? settings.goal : DEFAULTS.goal; }
 // with, so the two can never quote different goals.
 export function stepGoal() { return goal(); }
 
+function keysBack(n, from = new Date()) {
+  const out = [];
+  for (let i = n - 1; i >= 0; i--) out.push(todayKey(new Date(from.getTime() - i * DAY)));
+  return out;
+}
+
+function loggedKeys() {
+  return Object.keys(days).filter(k => stepsOn(k) > 0).sort();
+}
+
+function mean(xs) { return xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : 0; }
+
+/* Consecutive days meeting the goal, counted back from today. A day that
+   hasn't happened yet shouldn't break a streak, so if today is short we start
+   from yesterday and let today be the one still in play. */
+function currentStreak() {
+  const g = goal();
+  let d = new Date();
+  if (stepsOn(todayKey(d)) < g) d = new Date(d.getTime() - DAY);
+  let n = 0;
+  for (;;) {
+    if (stepsOn(todayKey(d)) < g) break;
+    n++;
+    d = new Date(d.getTime() - DAY);
+  }
+  return n;
+}
+
+function longestStreak() {
+  const g = goal();
+  const ks = loggedKeys().filter(k => days[k].steps >= g);
+  let best = 0, run = 0, prev = null;
+  ks.forEach(k => {
+    const t = parseKey(k).getTime();
+    run = (prev != null && Math.round((t - prev) / DAY) === 1) ? run + 1 : 1;
+    prev = t;
+    if (run > best) best = run;
+  });
+  return best;
+}
+
+/* ================= RENDER ================= */
+export function render() {
+  const root = $('#view-steps');
+  if (!root) return;
+  root.innerHTML = '';
+  const wrap = el('div', 'screen-pad');
+
+  const hd = el('div', 'cal-hd');
+  const left = el('div');
+  left.appendChild(el('div', 'eyebrow', 'Movement'));
+  left.appendChild(el('h1', null, 'Steps'));
+  hd.appendChild(left);
+
+  const nav = el('div', 'cal-nav');
+  const gear = el('button', 'gear-btn');
+  gear.setAttribute('aria-label', 'Step settings');
+  gear.innerHTML = iconHtml('gear');
+  gear.onclick = openStepSettings;
+  nav.appendChild(gear);
+  hd.appendChild(nav);
+  wrap.appendChild(blk('steps', 'head', hd));
+
+  wrap.appendChild(blk('steps', 'today', renderToday()));
+  wrap.appendChild(blk('steps', 'trend', renderTrend()));
+  wrap.appendChild(blk('steps', 'stats', renderStats()));
+  wrap.appendChild(blk('steps', 'streaks', renderStreaks()));
+  wrap.appendChild(blk('steps', 'consistency', renderConsistency()));
+  wrap.appendChild(blk('steps', 'weekdays', renderWeekdays()));
+  wrap.appendChild(blk('steps', 'recent', renderRecent()));
+  composeScreen('steps', wrap);   // the vibe's arrangement, where it has one (none in v1)
+
+  root.appendChild(tail(wrap, 'steps'));   // the vibe's tailpiece, where it has one (none in v1)
+}
+
+/* ---------- today ---------- */
+function renderToday() {
+  const k = todayKey();
+  const n = stepsOn(k);
+  const g = goal();
+  const card = el('div', 'card');
+  card.dataset.lead = 'stepsToday';     // the tab's lead card (a vibe's hook; VOCAB card)
+
+  const row = el('div', 'st-hero');
+  row.appendChild(ring(n / g, n, g));
+
+  const side = el('div', 'st-hero-side');
+  const left = Math.max(0, g - n);
+  // [data-tag]: written in lower case, shown in caps by the preset (type.tag)
+  side.appendChild(el('div', 'eyebrow', n >= g ? 'goal met' : 'to go')).dataset.tag = '';
+  const big = el('div', 'load-num num', (n >= g ? n - g : left).toLocaleString());
+  big.style.fontSize = '26px';
+  big.dataset.hero = '';                // the tab's hero figure (VOCAB headline)
+  big.style.color = n >= g ? 'var(--good)' : 'var(--chalk)';
+  side.appendChild(big);
+  side.appendChild(el('div', 'st-side-lbl', n >= g ? 'steps past goal' : 'steps'));
+
+  const d = days[k];
+  side.appendChild(el('div', 'st-src', !d ? 'nothing logged yet'
+    : d.src === 'manual' ? 'entered by hand'
+    : 'from your phone' + (d.t ? ' · ' + new Date(d.t).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '')));
+  row.appendChild(side);
+  card.appendChild(row);
+
+  const ctl = el('div', 'st-ctl');
+  [500, 1000, 2500].forEach(inc => {
+    const b = el('button', 'btn btn-ghost st-inc', '+' + compact(inc));
+    b.onclick = () => addSteps(k, inc);
+    ctl.appendChild(b);
+  });
+  const set = el('button', 'btn btn-primary st-set', 'Set total');
+  set.onclick = () => openSetSteps(k);
+  ctl.appendChild(set);
+  card.appendChild(ctl);
+  return card;
+}
+
+/* ---------- the ring ----------
+   Third distinct shape in the app on purpose: Fuel is a bar, Water is a
+   filling vessel, this is an arc. You should know which screen you're on from
+   across the room. */
+function ring(frac, n, g) {
+  const S = 132, R = 54, C = 2 * Math.PI * R, mid = S / 2;
+  const svg = svgEl('svg', { viewBox: `0 0 ${S} ${S}`, class: 'st-ring' });
+
+  svg.appendChild(svgEl('circle', {
+    cx: mid, cy: mid, r: R, fill: 'none',
+    stroke: 'var(--track)', 'stroke-width': 11
+  }));
+
+  const over = frac > 1;
+  const shown = Math.max(0, Math.min(1, frac));
+  if (shown > 0) {
+    svg.appendChild(svgEl('circle', {
+      cx: mid, cy: mid, r: R, fill: 'none',
+      stroke: over ? 'var(--good)' : 'var(--p-green)',
+      'stroke-width': 11, 'stroke-linecap': 'round',
+      'stroke-dasharray': `${(C * shown).toFixed(1)} ${C.toFixed(1)}`,
+      transform: `rotate(-90 ${mid} ${mid})`
+    }));
+  }
+  // A second, brighter arc for the part past the goal.
+  if (over) {
+    const extra = Math.min(1, frac - 1);
+    svg.appendChild(svgEl('circle', {
+      cx: mid, cy: mid, r: R, fill: 'none',
+      stroke: 'var(--p-yellow)', 'stroke-width': 11, 'stroke-linecap': 'round',
+      'stroke-dasharray': `${(C * extra).toFixed(1)} ${C.toFixed(1)}`,
+      transform: `rotate(-90 ${mid} ${mid})`
+    }));
+  }
+
+  const t1 = svgEl('text', { x: mid, y: mid - 2, class: 'st-ring-n', 'text-anchor': 'middle' });
+  t1.textContent = n.toLocaleString();
+  svg.appendChild(t1);
+  const t2 = svgEl('text', { x: mid, y: mid + 16, class: 'st-ring-s', 'text-anchor': 'middle' });
+  t2.textContent = Math.round(frac * 100) + '% of ' + compact(g);
+  svg.appendChild(t2);
+  return svg;
+}
+
+/* ---------- trend ---------- */
+function renderTrend() {
+  const card = el('div', 'card');
+  const hd = el('div', 'card-hd');
+  hd.appendChild(el('div', 'eyebrow', 'Trend'));
+  const chips = el('div', 'chip-row');
+  [[7, '7d'], [30, '30d'], [365, '1y']].forEach(([n, label]) => {
+    const c = el('button', 'chip' + (range === n ? ' on' : ''), label);
+    c.onclick = () => { range = n; render(); };
+    chips.appendChild(c);
+  });
+  hd.appendChild(chips);
+  card.appendChild(hd);
+
+  if (!loggedKeys().length) {
+    card.appendChild(noteEl('Log a day and this fills in. Tap Set total above, or set your phone up to push it — ⚙ has the walkthrough.'));
+    return card;
+  }
+
+  let bars;
+  if (range === 365) {
+    // A year of daily bars is 365 slivers. Months are the honest unit here.
+    const now = new Date();
+    bars = [];
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const pre = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const vals = Object.keys(days).filter(k => k.startsWith(pre)).map(stepsOn).filter(v => v > 0);
+      bars.push({
+        label: d.toLocaleDateString('en-US', { month: 'narrow' }),
+        v: Math.round(mean(vals)),
+        color: mean(vals) >= goal() ? 'var(--good)' : 'var(--p-green)'
+      });
+    }
+  } else {
+    bars = keysBack(range).map(k => ({
+      label: range <= 7 ? parseKey(k).toLocaleDateString('en-US', { weekday: 'narrow' }) : '',
+      v: stepsOn(k),
+      color: stepsOn(k) >= goal() ? 'var(--good)' : 'var(--p-green)'
+    }));
+  }
+  card.appendChild(barChart(bars, { height: 170, color: 'var(--p-green)', showValues: range <= 7 }));
+
+  const foot = el('div', 'chart-foot');
+  foot.appendChild(el('span', 'num', range === 365 ? 'monthly average' : 'daily'));
+  foot.appendChild(el('span', null, 'green = goal met'));
+  card.appendChild(foot);
+  return card;
+}
+
+/* ---------- headline stats ---------- */
+function renderStats() {
+  const card = el('div', 'card');
+  const hd = el('div', 'card-hd');
+  hd.appendChild(el('div', 'eyebrow', range === 7 ? 'This week' : range === 30 ? 'Last 30 days' : 'Last year'));
+  card.appendChild(hd);
+
+  const ks = range === 365 ? loggedKeys() : keysBack(range);
+  const vals = ks.map(stepsOn).filter(v => v > 0);
+  const hit = ks.filter(k => stepsOn(k) >= goal()).length;
+
+  const cell = (v, l, color) => {
+    const c = el('div', 'stat');
+    const val = el('div', 'stat-val num', v);
+    if (color) val.style.color = color;
+    c.appendChild(val);
+    c.appendChild(el('div', 'stat-lbl', l));
+    return c;
+  };
+
+  const r1 = el('div', 'stat-row');
+  r1.append(
+    cell(vals.length ? compact(Math.round(mean(vals))) : '–', 'Daily avg'),
+    cell(vals.length ? compact(vals.reduce((s, x) => s + x, 0)) : '–', 'Total'),
+    cell(String(hit), 'Goal days', hit ? 'var(--good)' : null)
+  );
+  card.appendChild(r1);
+
+  // All-time best, and how this week compares with last.
+  const all = loggedKeys();
+  const bestK = all.reduce((b, k) => (!b || stepsOn(k) > stepsOn(b)) ? k : b, null);
+  const thisWk = mean(keysBack(7).map(stepsOn).filter(v => v > 0));
+  const lastWk = mean(keysBack(7, new Date(Date.now() - 7 * DAY)).map(stepsOn).filter(v => v > 0));
+  const delta = lastWk > 0 ? (thisWk - lastWk) / lastWk * 100 : null;
+
+  const r2 = el('div', 'stat-row');
+  r2.style.marginTop = '10px';
+  r2.append(
+    cell(bestK ? compact(stepsOn(bestK)) : '–', bestK ? 'Best · ' + fmtDate(bestK) : 'Best day'),
+    cell(all.length ? compact(Math.round(mean(all.map(stepsOn)))) : '–', 'All-time avg'),
+    cell(delta == null ? '–' : (delta > 0 ? '+' : '') + Math.round(delta) + '%', 'vs last week',
+         delta == null ? null : delta >= 0 ? 'var(--good)' : 'var(--warn)')
+  );
+  card.appendChild(r2);
+  return card;
+}
+
+/* ---------- streaks ---------- */
+function renderStreaks() {
+  const card = el('div', 'card');
+  const hd = el('div', 'card-hd');
+  hd.appendChild(el('div', 'eyebrow', 'Streak'));
+  card.appendChild(hd);
+
+  const cur = currentStreak(), best = longestStreak();
+  const row = el('div', 'st-streak');
+  const flame = el('div', 'st-flame' + (cur > 0 ? ' on' : ''));
+  flame.textContent = cur > 0 ? String(cur) : '0';
+  row.appendChild(flame);
+
+  const side = el('div');
+  side.appendChild(el('div', 'st-streak-t',
+    cur === 0 ? 'No streak going' : cur === 1 ? '1 day at goal' : cur + ' days at goal'));
+  side.appendChild(el('div', 'st-streak-s',
+    best > 0 ? 'Best run: ' + best + (best === 1 ? ' day' : ' days') : 'Hit your goal to start one'));
+  row.appendChild(side);
+  card.appendChild(row);
+
+  const k = todayKey();
+  if (stepsOn(k) < goal()) {
+    const need = goal() - stepsOn(k);
+    card.appendChild(noteEl(cur > 0
+      ? need.toLocaleString() + ' more today keeps the run alive.'
+      : need.toLocaleString() + ' more today starts one.'));
+  }
+  return card;
+}
+
+/* ---------- consistency ---------- */
+function renderConsistency() {
+  const card = el('div', 'card');
+  const hd = el('div', 'card-hd');
+  hd.appendChild(el('div', 'eyebrow', 'Consistency'));
+  card.appendChild(hd);
+  const byDay = {};
+  loggedKeys().forEach(k => { byDay[k] = stepsOn(k); });
+  if (!Object.keys(byDay).length) {
+    card.appendChild(noteEl('Thirteen weeks of days, darker where you walked more.'));
+    return card;
+  }
+  card.appendChild(heatMap(byDay, { days: 91, color: 'var(--p-green)' }));
+  card.appendChild(noteEl('Thirteen weeks — darker is more. Same grid as your training heat map, so the two read the same way.'));
+  return card;
+}
+
+/* ---------- day of week ---------- */
+function renderWeekdays() {
+  const card = el('div', 'card');
+  const hd = el('div', 'card-hd');
+  hd.appendChild(el('div', 'eyebrow', 'By day of week'));
+  card.appendChild(hd);
+
+  const buckets = [[], [], [], [], [], [], []];
+  loggedKeys().forEach(k => buckets[parseKey(k).getDay()].push(stepsOn(k)));
+  if (!buckets.some(b => b.length)) {
+    card.appendChild(noteEl('Which days you actually move. Needs a couple of weeks.'));
+    return card;
+  }
+  const names = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+  const bars = buckets.map((b, i) => ({
+    label: names[i],
+    v: Math.round(mean(b)),
+    color: mean(b) >= goal() ? 'var(--good)' : 'var(--p-green)'
+  }));
+  card.appendChild(barChart(bars, { height: 140, color: 'var(--p-green)', showValues: true }));
+
+  const top = bars.reduce((b, x, i) => x.v > bars[b].v ? i : b, 0);
+  const low = bars.reduce((b, x, i) => (x.v > 0 && x.v < bars[b].v) || bars[b].v === 0 ? i : b, 0);
+  const full = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  card.appendChild(noteEl(bars[top].v > 0
+    ? full[top] + ' is your biggest day' + (bars[low].v > 0 && low !== top ? ', ' + full[low] + ' your quietest' : '') + '.'
+    : 'Averages per weekday.'));
+  return card;
+}
+
+/* ---------- recent, editable ---------- */
+function renderRecent() {
+  const card = el('div', 'card');
+  const hd = el('div', 'card-hd');
+  hd.appendChild(el('div', 'eyebrow', 'Recent'));
+  card.appendChild(hd);
+
+  const ks = keysBack(14).reverse().filter(k => stepsOn(k) > 0 || k === todayKey());
+  if (!ks.length) { card.appendChild(noteEl('Nothing logged in the last two weeks.')); return card; }
+
+  ks.forEach(k => {
+    const n = stepsOn(k);
+    const row = el('div', 'st-row');
+    row.appendChild(el('span', 'st-row-d', k === todayKey() ? 'Today' : fmtDateFull(k)));
+    const v = el('span', 'st-row-n num', n ? n.toLocaleString() : '–');
+    if (n >= goal()) v.style.color = 'var(--good)';
+    row.appendChild(v);
+    const pct = el('span', 'st-row-p', n ? Math.round(n / goal() * 100) + '%' : '');
+    row.appendChild(pct);
+    row.onclick = () => openSetSteps(k);
+    card.appendChild(n ? swipeToDelete(row, { onDelete: () => removeDay(k) }) : row);
+  });
+  card.appendChild(noteEl('Tap a day to correct it. Swipe left to clear it.'));
+  return card;
+}
+
 /* ================= WRITES ================= */
 async function setSteps(k, n, src = 'manual') {
   if (!(n >= 0)) return;
   const prev = days[k] || {};
   days[k] = { steps: Math.round(n), t: Date.now(), src, ...(prev.mi ? { mi: prev.mi } : {}) };
   await write('steps/' + k, days[k]);
+  render();
+}
+
+async function addSteps(k, inc) {
+  const n = stepsOn(k) + inc;
+  await setSteps(k, n);
+  toast('+' + inc.toLocaleString() + ' · ' + n.toLocaleString() + ' today');
 }
 
 async function removeDay(k) {
   delete days[k];
   await write('steps/' + k, null);
+  render();
   toast('Cleared ' + fmtDate(k));
 }
 
@@ -152,7 +565,7 @@ export function openStepSettings(onSaved) {
     }
     settings = { ...settings, goal: g };
     await write('settings/steps', settings);
-    close();
+    close(); render();
     if (onSaved) onSaved();
     toast('Goal saved');
   };

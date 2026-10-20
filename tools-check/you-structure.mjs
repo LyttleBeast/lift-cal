@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 //
-// Verifier for the You tab's redesign and the Steps tab's removal (October 2026).
+// Verifier for the You tab's redesign (October 2026).
 //
 //   node tools-check/you-structure.mjs
 //
@@ -12,8 +12,7 @@
 //   B  the tiles      weekNumbers() is the rule of the card each tile
 //                     summarises — computed here by hand from the same fixture
 //   C  composition    YOU_BLOCKS are names of the vocabulary's you screen
-//   D  Steps tab      gone from the dock, the views and the router; its data,
-//                     goal, the You tile and the Habits card are not
+//   D  Steps tab      untouched by this change (it is repurposed as Friends later)
 //   E  Admin, install moved out of You and into Settings → Help
 
 import { readFileSync, writeFileSync, mkdtempSync } from 'node:fs';
@@ -111,18 +110,13 @@ section('C. the composition contract');
   check('vibes/** and the icon contract are untouched by this change (new tile icons live in tile-icons.js)', !/tile-icons|tiles\.js/.test(src));
 }
 
-section('D. the Steps tab is gone; its data is not');
+section('D. the Steps tab is still there (it becomes Friends later, in its own change)');
 {
   const IDX = rd('index.html'), APP = rd('app.js'), ST = rd('steps.js');
-  check('no Steps view and no Steps dock button', !IDX.includes('view-steps') && !IDX.includes('data-view="steps"'));
-  check('the dock has four buttons: You, Train, Fuel, Weight', count(IDX, /<button data-view="/g) === 4);
-  check('the router has no Steps branch and imports no render from steps.js', !/renderSteps/.test(APP) && !/tabSteps/.test(APP));
-  check('but the Steps listener still boots, so steps stay live', /initSteps\(\)/.test(APP) && /watch\('steps'/.test(ST));
-  check('steps.js draws no page', !/export function render\b/.test(ST) && !/#view-steps/.test(ST));
-  check('the day total can still be set (You → Trends → Habits) and the goal (Settings → Step goal)', /export function openSetSteps/.test(ST) && /export function openStepSettings/.test(ST) && /openSetSteps\(todayKey\(\)\)/.test(YOU));
-  check('the walkthrough no longer tours a tab that is not there', !/view: 'steps'/.test(rd('onboarding.js')));
-  check('an old stored last tab of "steps" lands on a real view (restoreView checks the id exists)', /getElementById\('view-' \+ want\)/.test(APP));
-  check('You still has the Steps tile', /Steps \/ day/.test(rd('you-numbers.js')));
+  check('the Steps view and dock button are still in index.html', IDX.includes('view-steps') && IDX.includes('data-view="steps"'));
+  check('the router still renders it', /renderSteps/.test(APP) && /initSteps\(\)/.test(APP));
+  check('steps.js still draws the page and still exports the sheets', /export function render\b/.test(ST) && /export function openStepSettings/.test(ST));
+  check('You still has the Steps tile and its Habits card links to the tab', /Steps \/ day/.test(rd('you-numbers.js')) && /goLabel: 'Open Steps', view: 'steps'/.test(YOU));
 }
 
 section('E. Admin and the install card left You');
@@ -133,7 +127,7 @@ section('E. Admin and the install card left You');
   check('the hub opens both', /install:\s/.test(rd('settings.js')) && /openAdmin\(/.test(rd('settings.js')));
 }
 
-console.log('\nYou: redesigned, nothing dropped; Steps: the tab gone\n');
+console.log('\nYou: redesigned, nothing dropped\n');
 console.log(out.join('\n'));
 console.log('\n' + pass + ' passed, ' + fail + ' failed\n');
 process.exit(fail ? 1 : 0);
