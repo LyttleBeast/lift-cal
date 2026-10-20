@@ -72,7 +72,7 @@ const AI_SPLIT = [
 const FAMILIES = [
   ['Where people go', 'var(--p-blue)', 'main', [
     ['tabYou', 'You'], ['tabTrain', 'Train'], ['tabFuel', 'Fuel'],
-    ['tabWeight', 'Weight'], ['tabSteps', 'Steps']
+    ['tabWeight', 'Weight'], ['tabSteps', 'Steps'], ['tabFriends', 'Friends']
   ]],
   ['How food gets in', 'var(--p-yellow)', 'main', [
     ['barcode', 'Scan'], ['barcodeHit', 'Hit'], ['barcodeMiss', 'Miss'],
@@ -82,7 +82,8 @@ const FAMILIES = [
   ['Training, weight and the rest', 'var(--p-green)', 'more', [
     ['workoutStart', 'Start'], ['workoutFinish', 'Finish'], ['setLogged', 'Sets'],
     ['routineStart', 'Routine'], ['exerciseCustom', 'Custom'],
-    ['weighIn', 'Weigh-in'], ['waterLog', 'Water'], ['stepsSet', 'Steps']
+    ['weighIn', 'Weigh-in'], ['waterLog', 'Water'], ['stepsSet', 'Steps'],
+    ['friendAdd', 'Friend'], ['routineSend', 'Sent']
   ]],
   ['The shell', 'var(--p-chrome)', 'more', [
     ['appOpen', 'Opens'], ['install', 'Installs']

@@ -85,7 +85,9 @@ small ship of its own. Carried from ROADMAP §8; the same note is in
 
 From ROADMAP §1, minus the ones the world overtook:
 
-- Is the tab worth its slot at one number a day?
+- ~~Is the tab worth its slot at one number a day?~~ Answered in v67: no — the
+  slot is Friends, and steps are one of its three boards. Logging a day's total
+  is You → Trends → Habits → *Log today's steps*.
 - Backfill: Health holds years of step history. Worth a one-time bulk import the
   way `importer.js` does Liftoff?
 - Should a training day suppress the step goal, or is that over-thinking it?
@@ -222,6 +224,29 @@ Carried from `NEXT-NATIVE.md` §7 so it survives that file. Do not "fix" these:
   last one is quoted against does convert.
 
 ---
+
+## What v67 (Friends) left open in its own work
+
+- **Publish the rules.** Nothing in Friends works until `database.rules.json`
+  is pasted into the console; DEPLOY.md has the Rules Playground checks to run
+  first. The verifiers model RTDB's rules (`tools-check/lib/rules-engine.mjs`);
+  only the console runs Google's.
+- **Code guessing is bounded, not rate-limited.** RTDB rules cannot count
+  reads. If the account count grows by orders of magnitude, move code lookup
+  behind a Worker endpoint that rate-limits per uid, or lengthen codes to ten
+  characters (one constant in `friends-core.js` and one regex in the rules).
+- **Vibes draw no Friends icon.** The dock keeps index.html's line drawing
+  under every vibe (vibe.js `hasIcon`); a vibe that wants its own adds `friends`
+  to its icon set — a contract change, so a deliberate ship of its own. Friends
+  is not a screen of the composition vocabulary either.
+- **Coach and team connections** are reserved kinds (`friends-core.js` `KINDS`)
+  with no screen; making one live is a decision about what that kind may see
+  and a change to `social/codes/$code/k`.
+- **The native port**: `friends-core.js` and `friends-summary.js` copy verbatim;
+  `friends-data.js` is the gatherer to rewrite; the rules need nothing new.
+- **Summaries refresh on the owner's phone only** — a minute after a change, at
+  boot, and on a switch. An account that never opens the app shows its friends
+  an ever-older summary, which the friend's page labels "updated N days ago".
 
 ## What v64 left open in its own work
 

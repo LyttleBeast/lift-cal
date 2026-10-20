@@ -42,7 +42,7 @@ import { LS, uid, todayKey, readShared, updateShared } from './store.js';
 
 // Must be bumped alongside CACHE in sw.js. It is duplicated rather than
 // imported because sw.js is a service worker, not a module the app can load.
-const VERSION = 'rack-v66';
+const VERSION = 'rack-v67';
 
 /* ---------- the vocabulary ----------
    Closed, and exported so admin.js renders from this list rather than from
@@ -51,8 +51,9 @@ const VERSION = 'rack-v66';
 export const EVENTS = Object.freeze([
   // shell
   'appOpen', 'install',
-  // tabs — which screen people actually spend time on
-  'tabYou', 'tabTrain', 'tabFuel', 'tabWeight', 'tabSteps',
+  // tabs — which screen people actually spend time on. tabSteps stays on the
+  // list after its tab went (v67): the days already counted keep their name.
+  'tabYou', 'tabTrain', 'tabFuel', 'tabWeight', 'tabSteps', 'tabFriends',
   // the estimator. Three keys for the three ways in, because "photo", "photo
   // with a description" and "description alone" cost differently and the owner
   // asked to tell them apart. aiRecall spent nothing; aiFail came back an error.
@@ -62,7 +63,9 @@ export const EVENTS = Object.freeze([
   'foodManual', 'foodLib', 'foodMeal', 'foodCopy', 'foodRepeat', 'foodPaste',
   // the rest
   'workoutStart', 'workoutFinish', 'setLogged', 'routineStart', 'exerciseCustom',
-  'weighIn', 'waterLog', 'stepsSet'
+  'weighIn', 'waterLog', 'stepsSet',
+  // Friends (v67): a connection confirmed, a routine sent
+  'friendAdd', 'routineSend'
 ]);
 const KNOWN = new Set(EVENTS);
 

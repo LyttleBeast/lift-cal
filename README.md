@@ -15,7 +15,8 @@ invite code, or by asking the owner and being approved. See *Access* below.
 - **Weight** — body-weight log: 7-day moving average chart, weekly rate, a learned time-of-day curve, and a maintenance (TDEE) estimate built on normalised weigh-ins with a stated confidence interval.
 - **Pounds or kilos**, app-wide — body weight, set weights, volume, records, trend rates, goal weight, height and per-bodyweight macro targets, all of it. Picked at setup, changeable any time under ⚙ Units. Nothing in the database changes: pounds and inches are the stored unit and the setting converts at the edges.
 - **Water** — daily intake against a goal, in the Fuel tab: a filling bottle, one-tap common sizes, any unit you like, stored in millilitres.
-- **Steps** — its own tab: goal ring, 7-day / 30-day / 12-month trend, streaks, a 13-week heat map, day-of-week breakdown, and a typed daily total.
+- **Steps** — a daily total against a goal: a tile on You and a card under Trends → Habits, where *Log today's steps* types the day's number. Its tab became Friends in v67.
+- **Friends** — the fifth tab. Swap a short code with a friend (one makes it, the other types it, the first confirms), then race each other on three boards — personal records, training days and steps, over 7 or 30 days — and send each other routines, which land in an inbox to save or decline. Each person chooses, friend by friend, what that friend sees: records, training days and steps start on; macro consistency and weight start off. A friend never reads your log — only small summaries your own phone works out, and the database refuses the rest.
 
 ---
 
@@ -48,6 +49,11 @@ aiAllow/$uid         two booleans and three optional limits. Publicly
 usage/$uid           counters, and nothing that isn't a counter. An account
                      writes its own day keys; the owner reads every account's
                      and can write nobody's but his own
+social/…             Friends (v67): codes, connections, the switches, the
+                     derived summaries and the routine inbox. A friend reads
+                     a summary only while BOTH sides of the connection stand
+                     and the owner's switch for that friend is on; nobody
+                     writes anybody's but their own. AGENTS.md has the nodes
 everything else      denied at the root
 ```
 
@@ -56,7 +62,11 @@ release:
 
 - **No public read anywhere.** An unauthenticated `curl` at any user path gets
   `Permission denied`. That includes the owner's subtree, which used to be open.
-- **No account can reach another's data**, in either direction. There is no
+- **No account can reach another's data**, in either direction — except what
+  that account has chosen to show a friend under Friends (v67): a handful of
+  small summaries its own phone derives (records, training days, steps, and only
+  if switched on, macro consistency and the weight trend), gated per friend and
+  per thing by the rules, never the log itself. There is no
   admin read of anybody's log: the owner cannot see the roommate's food,
   weigh-ins, workouts or steps through the app or over REST. What he can see is
   who has access, and — under `usage` — how often each account opened a screen
@@ -109,7 +119,7 @@ node in the database. See *Access* below for what replaced them, and why.
 | `coach-ui.js` | Coach's card (since v49 one earned line from his own log — the sheet opens on the finding; since v53 the finish line after a workout, and a warm line when nothing is earned), the COACH ME sheet with "More", the builder's recovery caution and the bad-day mark's chips (v52), the Settings switches and Your goal (aim, experience, focus, Lift target), and the live session's chip, sheet (since v54 the next set and the effort chips) and one-line nudge |
 | `settings.js` | The settings hub behind the You gear, and the profile editor |
 | `vibes-sheet.js` | Settings → Look → Vibes (V59): one tile per vibe, each drawn from its own vibe's tokens, the worn one ringed and checked; a tap puts it on and writes `settings/vibe` through `store.js` `setVibe()` |
-| `vibe.js` | The vibe engine (V59): the `<html data-vibe>` switch and this device's first-frame hint, the colours the pinned modules bake mapped to tokens (`paint()`), the icons, the offline prefetch of a vibe's files, and composition for the experimental vibe (`blk()` / `composeScreen()`: the blocks of You, Train, Steps, the recap, the session's title and each exercise card, re-ordered and grouped as its `compose` says; v1 draws today's order) |
+| `vibe.js` | The vibe engine (V59): the `<html data-vibe>` switch and this device's first-frame hint, the colours the pinned modules bake mapped to tokens (`paint()`), the icons, the offline prefetch of a vibe's files, and composition for the experimental vibe (`blk()` / `composeScreen()`: the blocks of You, Train, the recap, the session's title and each exercise card — and of Steps, whose screen no tab draws since v67 — re-ordered and grouped as its `compose` says; v1 draws today's order. Since v67 a dock button whose view no icon set draws (Friends) keeps index.html's own drawing under every vibe) |
 | `vibes/` | The vibes as data: `defs/` (the registry, `normVibe()`, `ROLES`, each vibe's tokens) and `icons/`, pure and copied into the native tree verbatim; a vibe's own stylesheet is `vibes/<id>.css` |
 | `admin.js` | Owner-only panel — feature usage, the Accounts page, People & access |
 | `accounts.js` | Account types and what each one may do. Pure, and the single entitlement choke point — every limit and feature check goes through `capabilitiesFor()` |
@@ -135,7 +145,11 @@ node in the database. See *Access* below for what replaced them, and why.
 | `ai-config.js` | The Worker URL. A public address, not a credential. The Worker itself is **not in this repo** — it is `~/dev/rack-worker`, its own private repo |
 | `water.js` | Water card, log sheet, goal and sizes |
 | `weight.js` | Weight tab — log, trend chart, time-of-day curve, maintenance |
-| `steps.js` | Steps tab — ring, trend, streaks, heat map, and the setup walkthrough |
+| `steps.js` | Steps data — the node's listener, the goal, and the two sheets that write it (a day's total, the goal). No tab since v67: the day's number is a tile on You and a card under Trends → Habits, whose *Log today's steps* opens the sheet |
+| `friends.js` | Friends tab (v67) — requests and routines waiting on me, the board, my friends, and the sheets: add a friend, a friend's page with the five switches, send a routine, a routine for me |
+| `friends-data.js` | Friends' impure half — the watchers on this account's own node and inbox, codes, requests, confirm, remove, the switches, publishing this account's summaries and reading its friends'. The file the native port rewrites |
+| `friends-core.js` | Friends' model (pure; copied verbatim): the code format and lifetime, the kinds (`friend` live; `coach` and `team` reserved), names, the five switches and their defaults, every `social/` path, and the routine payload sent and received |
+| `friends-summary.js` | What one account shows another (pure, imports nothing; copied verbatim): the summaries built from the app's own numbers, read back clamped, and the boards' ranking |
 | `settings-registry.js` `tile-icons.js` `tiles.js` | Settings' table (rows, groups, search words, gates — pure), the coloured icon tiles' drawings (pure) and the tile itself |
 | `you-rows.js` `you-numbers.js` | You's three rows and the screens behind them (pure), and its four number tiles (pure) |
 | `tdee.js` | Public face of the weight math — trend, maintenance, calorie zones |
@@ -190,7 +204,12 @@ app.js → you.js       → coach-ui.js  → coach.js   → analytics.js ──�
                       → ai.js → ai-config.js
                               → store.js (idToken only)
                       → tdee.js → weightmodel.js ───────────→ ui.js
-      → steps.js      → analytics.js
+      → friends.js    → friends-data.js → friends-core.js → exercises.js
+                                        → friends-summary.js (imports nothing)
+                                        → analytics.js  tdee.js  insights.js
+                                        → picker.js  routines.js (adoptCustom, adoptRoutine)
+                      → analytics.js (setsText)  tiles.js  vibe.js
+      → steps.js      → store.js  ui.js  usage.js
       → weight.js     → tdee.js
                       → analytics.js
       → access.js     → store.js
@@ -457,7 +476,7 @@ the app. The card at the bottom of the Weight tab is gone.
 
 Almost none of it is implemented there. The hub is a table of contents that
 knows where Fuel's, Water's, Steps' and Train's own sheets live and opens them,
-and the gears on the Fuel and Steps headers still open the same sheets directly —
+and the gear on the Fuel header still opens the same sheets directly (Steps' header went with its tab in v67) —
 the hub is a second door, not a replacement. The two exceptions are the ones
 that had nowhere else to be: the profile editor, which is the first code that
 has ever written `profile` after onboarding, and the two sign-out paths, the
@@ -1035,8 +1054,10 @@ never leave the phone.
 
 ## Steps details
 
-- Tap **Set total** for the whole day's number, or `+500 / +1k / +2.5k` to nudge
-  it. Any of the last 14 days is tappable to correct, swipe-left to clear.
+- There is no Steps tab since v67 — its slot is Friends. **You → Trends → Habits →
+  Log today's steps** types the whole day's number (the sheet can also clear the
+  day), and Settings → Step goal sets the goal. The node, its listener and every
+  reader of it are unchanged.
 - **The step-automation walkthrough is gone** (v40). It talked somebody through
   putting their Rack email and password into a third-party automation app, and
   printed the Firebase sign-in endpoint beside a Copy button. A password typed
@@ -1050,8 +1071,38 @@ never leave the phone.
 - Neither platform lets any app read health data while the phone is locked, so
   a pushed count lands on the next unlock. That is Apple and Google's rule, not
   a limitation of any particular approach.
-- The ring is an arc, Fuel is a bar, Water is a filling vessel. Three different
-  shapes on purpose: you should know which screen you're on at a glance.
+
+## Friends details
+
+- **Adding somebody** is three steps, each one atomic in the database. One of
+  you makes a code (eight characters, no 0 O 1 I L; it works once and lasts 24
+  hours by the server's clock, and each account has at most one). The other types
+  it in, which files a request on the first person's account and spends the code
+  in the same write. The first person sees *wants to connect* and confirms, which
+  writes both sides of the connection at once. Nobody can be added without both
+  of those taps.
+- **What you show each friend** is five switches on their page: personal records,
+  training days and steps start **on** (they are the boards, and they describe
+  effort, not a body); macro consistency and weight-and-trend start **off**. Off
+  means the database refuses that friend's read — not that the screen hides it.
+- **What they actually read** is a summary your phone works out and writes to
+  `social/shared/{you}`: the last five weeks' records (lift, weight, reps, date),
+  which days you trained, your daily step totals, which of thirty days landed on
+  your calorie and protein targets (no foods, no numbers), and your trend weight,
+  its rate and your goal (no weigh-ins). Republished a minute after your log
+  changes and at least once a day; a category no friend may read is deleted.
+- **The boards** — PRs, Training and Steps, over 7 or 30 days — rank you against
+  the friends who show you that thing, and say who doesn't. Weight and macros are
+  never a board.
+- **Send a routine**: pick one, pick a friend, and it lands in their inbox — one
+  slot per sender, so sending again replaces it. Saving it adds it to their
+  routines, and any custom exercise of yours they have nothing like becomes one
+  of theirs, named on screen before they save.
+- **Removing** a friend deletes both sides, both sets of switches and anything
+  waiting in either inbox, in one write; reads end at that instant. Coming back
+  takes a new code.
+- **The rules are what make all of it true.** Until the v67 rules are pasted into
+  the Firebase console, every Friends write is refused (DEPLOY.md).
 
 ## Weight details
 

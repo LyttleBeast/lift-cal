@@ -95,6 +95,23 @@ async function addCustom(x) {
   customEx = next;
 }
 
+/* v67, Friends: the custom exercises a routine from a friend needs that this
+   library does not have yet (friends-core.js receivedRoutine() decides which,
+   and the receiver is told before anything is saved). One whole-array write
+   of the list as it stands plus the new ones — nothing is removed, so the
+   destructive-write guard measures zero — taken on once it resolves. Refused
+   until the library has been read, because a list written from an empty
+   memory is exactly the wipe the guard exists to stop. */
+export async function adoptCustom(xs) {
+  if (!loaded) throw new Error('the exercise library has not loaded yet');
+  const add = (Array.isArray(xs) ? xs : []).filter(x => x && x.id && !customEx.some(c => c.id === x.id));
+  if (!add.length) return 0;
+  const next = [...customEx, ...add];
+  await write('exercises/custom', next);
+  customEx = next;
+  return add.length;
+}
+
 /* ---------- Frequent ----------
    Ordering is by how many SESSIONS an exercise has been logged in — not sets,
    not occurrences — descending, all time.

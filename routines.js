@@ -74,6 +74,26 @@ function sorted() {
 
 export function routineCount() { return sorted().length; }
 
+/* v67, Friends. The routines to choose one from when sending, in the order
+   the Routines sheet lists them — copies, so nothing outside can edit the
+   list this file writes whole. */
+export function routineList() { return JSON.parse(JSON.stringify(sorted())); }
+
+/* v67, Friends: a routine a friend sent, accepted. Through this file and
+   nothing else, because `routines` is written WHOLE from memory here — a
+   routine written beside it as a child would be erased by the next save of
+   a list that never heard of it. The write goes first and the list is taken
+   on only once it resolves, so a refused save leaves nothing in memory the
+   database does not have. */
+export async function adoptRoutine(r) {
+  if (!r || typeof r.id !== 'string' || !r.id) throw new Error('not a routine');
+  const next = { ...routines, [r.id]: r };
+  await write('routines', next);
+  routines = next;
+  tell();
+  return r.id;
+}
+
 // Derived, never stored — a stored copy is a stored copy that goes stale.
 function groupsOf(r) {
   const seen = [];

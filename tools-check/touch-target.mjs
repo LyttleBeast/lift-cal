@@ -310,6 +310,10 @@ const V = 'section#view-workout.view.active', F = 'section#view-food.view.active
       Y = 'section#view-you.view.active', St = 'section#view-steps.view.active';
 // October 2026: You's install card and Settings' two Sign out buttons are gone
 // (the sign-outs are rows now, .set-row-nav), so they left this list and the snapshot.
+// v67: the Steps tab's +500 / Set total went with its page (the tab is Friends),
+// so they left this list and the snapshot too. Friends' own buttons are .btn
+// inside .btn-split, .qty-row and sheets — the shapes measured here already —
+// and its rows are not .btn (tools-check/friends-structure.mjs measures them).
 const BUTTONS = [
   ['Train', 'Routines', ['workout.js', /el\('button', 'btn btn-ghost', 'Routines'\)/], `button.btn.btn-ghost < div.btn-split < div.screen-pad < ${V}`, 41],
   ['Train', 'Statistics', ['workout.js', /el\('button', 'btn btn-ghost btn-block', 'Statistics'\)/], `button.btn.btn-ghost.btn-block < div.screen-pad < ${V}`, 41],
@@ -327,8 +331,6 @@ const BUTTONS = [
   ['Fuel · water', '+ bottle', ['water.js', /'btn btn-primary water-add'/], `button.btn.btn-primary.water-add < div.water-ctl < div.card < div.screen-pad < ${F}`, 46, 46],
   ['Fuel · water', '−', ['water.js', /'btn btn-ghost water-mini'/], `button.btn.btn-ghost.water-mini < div.water-ctl < div.card < div.screen-pad < ${F}`, 46, 46],
   ['Weight', 'Log', ['weight.js', /'qty-row'/], `button.btn.btn-primary < div.qty-row < div.card < div.screen-pad < ${Wv}`, 46, 46],
-  ['Steps', '+500', ['steps.js', /'btn btn-ghost st-inc'/], `button.btn.btn-ghost.st-inc < div.st-ctl < div.card < div.screen-pad < ${St}`, 36],
-  ['Steps', 'Set total', ['steps.js', /'btn btn-primary st-set'/], `button.btn.btn-primary.st-set < div.st-ctl < div.card < div.screen-pad < ${St}`, 36, `button.btn.btn-ghost.st-inc < div.st-ctl < div.card < div.screen-pad < ${St}`],
   ['Settings', 'Close', ['settings.js', /'btn btn-ghost btn-block'/], 'button.btn.btn-ghost.btn-block < div.sheet', 41],
   ['Settings', 'Choose photo', ['settings.js', /'photo-btns'/], 'button.btn.btn-ghost < div.photo-btns < div.photo-row < div.field < div.sheet', 32],
   ['Coach sheet', 'Start it', ['coach-ui.js', /'coach-build-acts'/], 'button.btn.btn-primary.btn-block < div.coach-build-acts < div.coach-build < div.coach-thread < div.sheet.coach-sheet', 39],
@@ -483,7 +485,7 @@ section('D. no rule that can reach a .btn sets a height of its own — only the 
   check('exactly one sets a height on a .btn: rack.css .btn { min-height: 44px } — and one other reaches bare buttons, ' + CAL,
         sets.length === 2 && sets.includes('rack.css .btn { min-height: 44px }') && sets.includes(CAL), sets.join(' · '));
   const navs = [];
-  for (const f of ['workout.js', 'food.js', 'steps.js', 'weight.js', 'water.js', 'you.js', 'stats.js', 'settings.js', 'admin.js']) {
+  for (const f of ['workout.js', 'food.js', 'steps.js', 'weight.js', 'water.js', 'you.js', 'stats.js', 'settings.js', 'admin.js', 'friends.js']) {
     const t = read(f);
     for (const m of t.matchAll(/const (\w+) = el\('div', 'cal-nav'\);/g)) {
       const body = t.slice(m.index).split('\n').slice(0, 25).join('\n');

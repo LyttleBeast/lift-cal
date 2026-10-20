@@ -30,7 +30,9 @@ BASE = https://lift-cal-default-rtdb.firebaseio.com
 
 # Access — the part that decides everything else
 
-Four trees at the root, and they do not overlap.
+Five trees at the root, and they do not overlap. The fifth, `social`, is Friends
+(v67): the only place one account can read anything of another's, and only what
+that account chose to show it.
 
 ## `users/{uid}` — one account's data
 
@@ -297,6 +299,179 @@ backed off — 1 minute, 5, 30, then 6 hours — the ledger is capped so a
 permanently refused write cannot grow it without bound, and `window.__rackUsage`
 is the one deliberate hatch, so "refused, or just not published yet?" is
 answerable from the console instead of by guessing.
+
+## `social/*` — Friends (v67)
+
+The one way one account sees anything of another's, and the sentence to keep
+true when touching any of it: **a friend reads only what the owner switched on
+for that friend, only while both sides of the connection stand, and never the
+owner's log.** Nothing a friend reads is under `users/` — the `users/{uid}`
+rules above are unchanged by one byte, and a friend's read of any of them is
+refused. The rules are what enforce every line of this section;
+`tools-check/friends-rules.mjs` runs the real rules file through
+`tools-check/lib/rules-engine.mjs` and asserts each property as an attempt that
+must be refused beside the honest one that must be allowed.
+
+```
+social/codes/{CODE}              { u, n, k, at }                one per account
+social/people/{uid}/code         CODE                           my live code
+social/people/{uid}/req/{from}   { n, c, k, at }                a request to me
+social/people/{uid}/out/{to}     { n, at }                      my request to them
+social/people/{uid}/list/{fid}   { k, n, at }                   my side of a connection
+social/people/{uid}/share/{fid}  { pr?, td?, st?, mac?, wt? }   what I show them
+social/shared/{uid}/me           { n, at }                      my name, for friends
+social/shared/{uid}/pr|td|st|mac|wt                             my summaries
+social/inbox/{to}/{from}         { at, n, r }                   a routine sent to me
+```
+
+Every path is built in `friends-core.js` `PATH`, the way `store.js` `userPath()`
+builds every `users/` one; every read and write is in `friends-data.js`,
+through `store.js`'s shared verbs. Every `at` is a **server timestamp**
+(`store.js` `serverNow()`, `{ ".sv": "timestamp" }`) and the rules accept no
+other: `newData.val() === now`. So no phone's clock decides a code's age or
+backdates a request. Every `n` is a display name, 1–40 characters, drawn only
+as text.
+
+### A connection is two entries, made in three atomic steps
+
+1. **A makes a code** — one multi-path update: `codes/{CODE}` `{ u: A, n, k:
+   'friend', at }`, `people/A/code`: CODE, and A's previous code deleted. The
+   rules allow a code only when its pointer names it in the same write, and move
+   or drop the pointer only when the code it named is gone afterwards — so an
+   account holds **at most one code**, and none can be orphaned. A code is
+   `XXXX-XXXX` from the invite alphabet (no `0 O 1 I L`), 31^8 ≈ 8.5 × 10^11,
+   made with rejection sampling (`makeCode`). It is readable by any **approved**
+   account that knows the exact code, and only for **24 hours** after its server
+   stamp (`at > now − 86400000`) — its owner may read it after that, to see it
+   ran out. The parent is never listable.
+2. **B types it** — one update: `people/A/req/B` `{ n, c: CODE, k, at }`,
+   `codes/CODE`: **null** (spent), `people/B/out/A` `{ n, at }`, and B's own
+   switches for A (the defaults, said on screen before the tap). The rules
+   allow the request only if, before the write, CODE exists, is A's, is A's
+   *current* code, is under a day old and is of the request's kind — and only
+   if CODE is deleted in the same write, which is also the only way anybody but
+   A may delete it. Not to yourself, not over an existing request, and not to
+   somebody whose list already has you. An `out` entry exists only beside a new
+   request.
+3. **A confirms** — one update: `people/A/list/B` and `people/B/list/A` (`{ k, n,
+   at }`), `people/A/req/B` and `people/B/out/A` deleted, and A's switches for
+   B. Each list entry is allowed only over B's pending request (so B asked),
+   only written by A (so A agreed), only with the request's kind, only with the
+   other side in the same write, and only with the request spent. Nobody can
+   write a list entry for a connection nobody asked for, write one side alone,
+   or befriend themselves. If both had asked each other, the confirm also
+   deletes the other request and its `out`.
+
+**List entries are write-once.** The rules allow creating one and deleting one,
+never changing one — so a connection's kind can never be edited after it is
+made, by either side.
+
+**Decline** deletes the request and B's `out` (A may delete both). **Cancel**
+is B deleting the same two, and B's switches for A. B's app tidies away its
+own switches for somebody who is neither a friend nor asked, which is what a
+decline leaves behind (`friends-data.js` `tidy()`, deletes only).
+
+**Remove** is either side, one update: both list entries, both sets of
+switches (deleting another's switches *for you* is allowed — it can only ever
+show you less) and both inbox slots between you. **Every friend read checks
+both list entries**, so deleting your own side alone already ends the
+connection in both directions at that instant. To connect again, one of you
+makes a new code: a removed friend cannot write themselves back.
+
+### Kinds
+
+`k` is on every code, request and list entry, and the rules hold the three to
+one value along the chain. **`friend` is the only live kind**: the rules accept
+a code of no kind but `'friend'` (`social/codes/$code/k`), so nothing of any
+other kind can exist. `coach` and `team` are named in `friends-core.js` `KINDS`
+as reserved, not live, and a list entry of a kind this build does not offer is
+not drawn (`liveKind`, fails closed). Making one live means deciding what that
+kind may see, adding it to that one validate rule, and a screen — a deliberate
+change, not a flag.
+
+### The switches — `people/{uid}/share/{fid}`
+
+What I show one friend: `pr` personal records, `td` training days, `st` steps,
+`mac` macro consistency, `wt` weight and trend. **Absent is off**; the rules
+read only `=== true`, and the app writes only the switches that are on (none on
+deletes the node). Written by the owner only, and only for a friend or somebody
+the owner has a pending request to — so nobody can write themselves a switch
+on another's node, and nobody can fill their own node with switches for
+strangers. The friend may **read** their own entry (to say "shows you…") and
+**delete** it, never write it.
+
+**Defaults: `pr`, `td` and `st` on; `mac` and `wt` off.** The three that start
+on are what the three boards are made of and describe effort, not a body; food
+and weight are the most personal numbers the app holds and start off. The
+request and confirm screens say which three are on before anything is sent.
+
+### The summaries — `social/shared/{uid}`
+
+Written by the owner only (`.write` at `shared/$uid`), each category readable by
+a friend only while `approved(reader) && approved(owner) && both list entries &&
+share/{reader}/{cat} === true` — checked on every read, so a switch turned off
+ends the next read. `me` needs only the connection. There is no read grant on
+`shared/{uid}` itself, so a friend reads category by category, never all at
+once. Each is small and fixed in shape (`friends-summary.js`; the rules end
+every level in `$other: false`):
+
+| | |
+|---|---|
+| `me` | `{ n, at }` |
+| `pr` | `{ at, ev: { 0..29: { d, x, w, r } } }` — the last five weeks' records, newest first: date, lift name (≤ 60), weight in **pounds** (0–2000), reps (0–100; 0 for a heaviest-weight record). From `analytics.js` `prTimeline()`, the app's one definition of a record |
+| `td` | `{ at, end, b }` — `b` is 35 characters of `0`/`1`, one per day ending `end`, 1 for a day trained |
+| `st` | `{ at, end, d }` — 35 comma-separated daily totals ending `end`, an empty field for none, ≤ 250 characters |
+| `mac` | `{ at, end, b }` — 30 characters, one per complete day ending `end` (the day before it was made): `.` nothing logged, `x` neither, `c` calories within 10% of target, `p` protein at 90%+ (the app's protein rule), `b` both. No food, no calorie, no gram, no target |
+| `wt` | `{ at, tw, rate?, goal?, dir? }` — trend weight (40–1000 lb), weekly rate (±10), goal weight, goal direction (−1/0/1). No weigh-in, no history |
+
+The owner's own phone republishes them (`friends-data.js` `publish()`): a few
+seconds after boot, a minute after a change to its own workouts, steps, food
+summaries, targets, weigh-ins or name, and at once after a switch changes. Only
+the categories at least one friend has on are written; every other one is
+**deleted**, and with no friends everything is. An unchanged category is
+rewritten at most once a day (device-side fingerprint), so "updated today"
+stays true. A friend's phone reads them at most every five minutes, and reads
+everything back through clamps (`readTrained`, `readSteps`, …): another
+person's writing is never drawn as it came.
+
+### The inbox — `social/inbox/{to}/{from}`
+
+A routine sent: `{ at, n, r: { name, note?, exercises: { 0..29: { exId, name,
+group, equipment?, block?, sets: { 0..29: { tw?, tr?, type, dp? } } } } } }`.
+Only the plan travels (`friends-core.js` `routinePayload`): never when it was
+last used, how often, or anything logged.
+
+- Written only by `{from}`, only into the slot named after them, only while
+  connected — **one slot per sender**, so sending again replaces it and a friend
+  can never queue more than one. A stranger writes nothing.
+- Bounded by the rules: 30 exercises, 30 sets each, every string capped, set
+  types `W N F D`, ids of the app's shape, `$other: false` at every level. The
+  largest slot the rules take is about 54 KB.
+- Read by `{to}` (the whole inbox) and by `{from}` (their own slot). Deleted by
+  either.
+- **Accepting** goes through `routines.js` `adoptRoutine()` and `picker.js`
+  `adoptCustom()` — `routines` and `exercises/custom` are written whole from
+  memory, so a routine written beside them as a child would be erased by the
+  next save. A sender's custom exercise is matched to one of the receiver's by
+  name and group, and otherwise becomes a new custom of the receiver's, named on
+  screen before they save (`receivedRoutine`). Then the slot is deleted.
+
+### What is not protected, said plainly
+
+- **Reading codes is not rate-limited.** RTDB rules cannot count. What stands
+  against guessing is the approval wall (only an approved account can read a
+  code at all), one live code per account, a day's lifetime, single use, and
+  the size of the space — and a lucky guess wins only a request the code's
+  owner sees with the guesser's name on it and declines.
+- **A name is self-chosen.** A code shows its owner's name, and anybody can call
+  themselves anything; the confirm step is a person deciding.
+- **A removed or paused account's entries stay** on its friends' lists until
+  they remove it. While the owner has removed it from `access/approved`, it can
+  read and write nothing here and nothing it published is readable. The
+  optional lock variant locks `users/` writes only; `social` is identical in
+  both files.
+- **`.length` in the rules** is read as UTF-16 units, the stricter reading; the
+  app cuts names to that and never splits a character (`friends-core.js` `fit`).
 
 ---
 
@@ -1049,7 +1224,7 @@ optional. Any food already in the log produces this exact shape — tap it →
    `settings/coach` is the worked example, and the thing to check is whether
    the section carries an `$other` deny at its own level rather than nested
    inside one of its children. The same is true of a new
-   tree at the root — `usage` is the most recent one. And editing
+   tree at the root — `social` (v67, Friends) is the most recent one. And editing
    `database.rules.json` publishes nothing: it is a copy, and somebody has to
    paste it into the Firebase console before a single one of those writes
    lands.

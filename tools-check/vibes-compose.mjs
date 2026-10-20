@@ -138,7 +138,9 @@ for (const [id, d] of Object.entries(defs)) {
 
 /* ---------- E ---------- */
 head('E  the web tags the blocks the vocabulary names');
-const FILES = ['you.js', 'workout.js', 'steps.js', 'food.js', 'weight.js'];
+// v67: steps.js draws no screen any more (its tab is Friends, which is not a
+// screen of the vocabulary and tags nothing — see RETIRED below).
+const FILES = ['you.js', 'workout.js', 'food.js', 'weight.js'];
 const tagged = {};
 const composeCalls = new Set();
 for (const f of FILES) {
@@ -151,10 +153,14 @@ expect(Object.entries(tagged).every(([s, names]) => SCREENS[s] && [...names].eve
    doing, noticed, trends and app moved behind the rows or into Settings
    (you-rows.js). The vocabulary and the definitions keep their names (vibes/**
    is not touched); arrange() leaves a block that is not drawn where it stands.
+   v67: the Steps tab became Friends, so the steps screen is not drawn at all
+   and Meet Day's arrangement of it has nothing to arrange; Friends is not a
+   screen the vocabulary names (vibes/** is pinned), so it tags no block and
+   calls no composeScreen() — a vibe arranges it once the contract names it.
    Everything else is held to the same rule as before. */
-const RETIRED = { you: ['doing', 'noticed', 'trends', 'app'] };
+const RETIRED = { steps: null, you: ['doing', 'noticed', 'trends', 'app'] };
 const composable = new Set();
-for (const d of Object.values(defs)) for (const [s, e] of Object.entries(d.compose || {})) if (e.fallback === false) composable.add(s);
+for (const d of Object.values(defs)) for (const [s, e] of Object.entries(d.compose || {})) if (e.fallback === false && RETIRED[s] !== null) composable.add(s);
 expect([...composable].every(s => composeCalls.has(s) && tagged[s]), `every screen a vibe composes (${[...composable].join(', ')}) is tagged and arranged at its end`);
 {
   // a block the vocabulary names that a composable screen draws must be tagged: list the ones never tagged

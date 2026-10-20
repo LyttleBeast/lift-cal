@@ -19,7 +19,8 @@
 //
 // What it deliberately does not do: write. Nothing on this screen edits, logs
 // or deletes anything. Every card is a read-out and every button either sends
-// you to the tab that owns the number or opens the settings hub. That is not
+// you to the tab that owns the number, opens the settings hub, or — for steps,
+// whose tab became Friends in v67 — opens the sheet that owns them. That is not
 // modesty, it is a safety property — this is the first thing that paints, often
 // on a cold start with a half-warm mirror and no signal, and a screen that
 // cannot write cannot corrupt anything while it is guessing.
@@ -73,6 +74,9 @@ import { allSessions, exerciseIndex, filterByRange, groupSplit, topBy, weeklyVol
          groupColor } from './analytics.js';
 import { weightStats, maintenance, effectiveMaint, trendRate, refreshModel, trendWeight, adjustedDays } from './tdee.js';
 import { fmtWater } from './water.js';
+// The one sheet the Habits card opens: a day's step total. The Steps tab that
+// card used to send people to became Friends in v67; the sheet is steps.js's.
+import { openSetSteps } from './steps.js';
 import { openSettings, openGoal, openDailyTargets, pickProfilePhoto } from './settings.js';
 import { isAdminOpen } from './admin.js';
 import { coachCard } from './coach-ui.js';
@@ -526,6 +530,14 @@ function goBtn(label, view) {
   const b = el('button', 'btn btn-ghost btn-block', label);
   b.style.marginTop = '12px';
   b.onclick = () => goTab(view);
+  return b;
+}
+
+// A card's button that opens a sheet rather than a tab — today only the
+// Habits card's "Log today's steps".
+function actBtn(label, fn) {
+  const b = el('button', 'btn btn-ghost btn-block', label);
+  b.onclick = fn;
   return b;
 }
 
@@ -1449,7 +1461,7 @@ function goalCard(title, o) {
   }
   if (!o.logged.length) {
     c.appendChild(noteEl(o.none));
-    const b = goBtn(o.goLabel, o.view);
+    const b = o.act ? actBtn(o.goLabel, o.act) : goBtn(o.goLabel, o.view);
     b.style.marginTop = '8px';
     c.appendChild(b);
     return c;
@@ -1487,6 +1499,7 @@ function goalCard(title, o) {
     });
     c.appendChild(row);
   }
+  if (o.act) { const b = actBtn(o.goLabel, o.act); b.style.marginTop = '10px'; c.appendChild(b); }
   return c;
 }
 
@@ -1508,7 +1521,9 @@ function stepsCard() {
       [compact(logged.reduce((s, k) => s + stepDays[k].steps, 0)), 'this week']
     ] : null,
     none: 'Nothing this week. Your goal is ' + g.toLocaleString() + ' a day.',
-    goLabel: 'Open Steps', view: 'steps'
+    // There is no Steps tab to open (v67: its slot is Friends), so the card
+    // opens the day's total itself — shown whether or not the week has any.
+    goLabel: 'Log today’s steps', act: () => openSetSteps(todayKey(), render)
   });
 }
 

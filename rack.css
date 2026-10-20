@@ -1440,9 +1440,11 @@ body.peeking .view.active { padding-bottom: 65px; }
    STEPS
    ============================================================ */
 /* Five dock slots now, not three — tighten the tracking so the longest label
-   still fits on a small phone. At 320px that is a 64px slot against WEIGHT,
-   which sets about 39px at 10px in this face; the icon is 22px. Nothing
-   collides, so nothing else here has to change. */
+   still fits on a small phone. At 320px that is a 64px slot against FRIENDS
+   (the fifth slot since v67, Steps' before), which sets about 46px at 10px in
+   this face; the icon is 22px. Nothing collides, so nothing else here has to
+   change. The Steps page these rules below drew has gone with its tab; the
+   rules stay, as the vibes' own stylesheets (pinned) still name them. */
 .dock button { letter-spacing: .07em; }
 
 .st-hero { display: flex; align-items: center; gap: 18px; margin-top: 4px; }
@@ -1488,6 +1490,143 @@ body.peeking .view.active { padding-bottom: 65px; }
 .st-row-d { font-size: 13px; color: var(--chalk); }
 .st-row-n { font-size: 14px; font-variation-settings: 'wdth' 100, 'wght' 700; }
 .st-row-p { font-size: 11px; color: var(--dim); text-align: right; }
+
+/* ============================================================
+   FRIENDS (v67) — the tab in Steps' slot (friends.js)
+   The redesign's furniture (cards, set-list rows, tiles, the switch)
+   wherever it fits; named here only what it did not have: a person's
+   initials, a ranked row, a code, the little day strips. Every colour
+   is a token, so a vibe repaints all of it.
+   ============================================================ */
+/* Somebody is waiting on me: a request to confirm or a routine to open. */
+.dock button.has-dot::after {
+  content: ''; position: absolute; top: 7px; left: calc(50% + 6px);
+  width: 12px; height: 12px; border-radius: var(--r-round);
+  background: var(--accent); border: 2px solid var(--bar);
+}
+
+.fr-head-add {
+  flex: none; display: grid; place-items: center;
+  width: 44px; height: 44px; border-radius: var(--r-round);
+  background: var(--raised); color: var(--chalk);
+  transition: transform var(--fast) var(--ease);
+}
+.fr-head-add svg { width: 20px; height: 20px; }
+.fr-head-add:active { transform: scale(.92); }
+
+/* A person: their initials on a wash of one plate colour, picked from their
+   id so a friend wears the same colour on every row. I am the accent. */
+.fr-av {
+  --av: var(--p-blue);
+  flex: none; display: grid; place-items: center;
+  width: 36px; height: 36px; border-radius: var(--r-round);
+  color: var(--av); background: color-mix(in srgb, var(--av) 18%, transparent);
+  font-size: 12px; letter-spacing: .02em;
+  font-variation-settings: 'wdth' 92, 'wght' 800;
+}
+.fr-av.me { --av: var(--accent); font-size: 10.5px; }
+
+.fr-mid { flex: 1; min-width: 0; }
+.fr-name { font-size: 15px; font-variation-settings: 'wdth' 92, 'wght' 650;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fr-sub { margin-top: 2px; font-size: 12px; line-height: 1.4; color: var(--steel); }
+.fr-two { display: flex; flex-direction: column; gap: 2px; }
+.fr-two > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.fr-req { display: flex; align-items: center; gap: 12px; padding: 6px 0; }
+.fr-req + .fr-req { border-top: 1px solid var(--collar); padding-top: 12px; }
+.fr-req-acts { margin: 8px 0 4px; }
+.fr-req-acts + .fr-req { border-top: 1px solid var(--collar); padding-top: 12px; }
+.fr-cancel { flex: none; padding: 0 14px; font-size: 12px; }
+
+.fr-friend { gap: 12px; padding: 10px 2px; min-height: 58px; }
+.fr-acts { margin-top: 4px; }
+
+/* The board. The window choice is a pill 32px tall with a hit area of 44
+   (the ::after reaches 6px past it both ways); the board choice is the app's
+   segmented control, given the full 44. */
+.fr-chip { position: relative; min-height: 32px; padding: 0 12px; display: inline-flex; align-items: center; }
+.fr-chip::after { content: ''; position: absolute; left: 0; right: 0; top: -6px; bottom: -6px; }
+.fr-seg { margin: 2px 0 8px; }
+.fr-seg .seg-btn { min-height: 44px; }
+.fr-board { list-style: none; margin: 0; padding: 0; }
+.fr-rank-row {
+  display: flex; align-items: center; gap: 10px; min-height: 58px;
+  padding: 8px 4px; border-top: 1px solid var(--collar);
+}
+.fr-rank-row:first-child { border-top: none; }
+.fr-rank-row.me { background: rgba(var(--accent-rgb),.06); border-radius: var(--r-sm); }
+.fr-rank-row.me + .fr-rank-row { border-top-color: transparent; }
+.fr-rank { flex: 0 0 18px; text-align: center; font-size: 15px; color: var(--steel);
+  font-variation-settings: 'wdth' 100, 'wght' 800; }
+.fr-rank-row.top .fr-rank { color: var(--accent); }
+.fr-rank-row .fr-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fr-val { flex: none; text-align: right; display: flex; flex-direction: column; align-items: flex-end; }
+.fr-val-n { font-size: 19px; line-height: 1.05; font-variation-settings: 'wdth' 110, 'wght' 800; }
+.fr-val-u { font-size: 10px; color: var(--dim); letter-spacing: .08em; text-transform: uppercase;
+  font-variation-settings: 'wdth' 88, 'wght' 700; }
+
+/* A week as seven dots, and five weeks as a 7-wide grid: a day trained is
+   lit, a day not shared (their summary is older than the window) is hollow. */
+.fr-dots { display: flex; gap: 4px; margin-top: 6px; }
+.fr-dots i, .fr-weeks i { display: block; width: 9px; height: 9px; border-radius: var(--r-round); background: var(--track); }
+.fr-dots i.on, .fr-weeks i.on { background: var(--p-blue); }
+.fr-dots i.unk, .fr-weeks i.unk { background: none; border: 1px solid var(--collar); }
+.fr-weeks { display: grid; grid-template-columns: repeat(7, 12px); gap: 5px; margin: 10px 0 2px; }
+.fr-weeks i { width: 12px; height: 12px; border-radius: 3px; }
+
+/* Thirty days of landing on targets: both, one of the two, a miss, nothing. */
+.fr-mac { display: grid; grid-template-columns: repeat(15, 1fr); gap: 3px; margin: 10px 0 2px; max-width: 280px; }
+.fr-mac i { display: block; aspect-ratio: 1; border-radius: 2px; background: none; border: 1px solid var(--collar); }
+.fr-mac i.both { background: var(--good); border-color: transparent; }
+.fr-mac i.one  { background: color-mix(in srgb, var(--good) 45%, transparent); border-color: transparent; }
+.fr-mac i.miss { background: var(--track); border-color: transparent; }
+
+/* Nobody yet. */
+.fr-empty { text-align: center; padding: 26px 18px 18px; }
+.fr-empty-art {
+  width: 64px; height: 64px; margin: 0 auto 14px; display: grid; place-items: center;
+  border-radius: var(--r-round); color: var(--accent); background: rgba(var(--accent-rgb),.12);
+}
+.fr-empty-art svg { width: 32px; height: 32px; }
+.fr-empty h3 { font-size: 19px; margin-bottom: 8px; }
+.fr-empty p { margin: 0 auto 12px; max-width: 300px; font-size: 13.5px; line-height: 1.5; color: var(--steel); }
+.fr-empty p.fr-empty-small { font-size: 12px; color: var(--dim); margin-bottom: 18px; }
+
+/* The add sheet: my code, big enough to read across a table. */
+.fr-code-box { padding: 14px; border-radius: var(--r); background: var(--well);
+  border: 1px dashed var(--knurl); text-align: center; margin-bottom: 10px; }
+.fr-code { font-size: 30px; letter-spacing: .14em; color: var(--chalk);
+  font-variation-settings: 'wdth' 110, 'wght' 800; }
+.fr-again { display: inline-flex; align-items: center; min-height: 44px; margin-top: 2px; }
+.fr-code-row .btn { flex: 0 0 72px; }
+.fr-found { margin-top: 12px; padding: 12px; border-radius: var(--r); background: var(--well); border: 1px solid var(--collar); }
+.fr-found .btn { margin-top: 10px; }
+.note.fr-why { margin-top: 10px; color: var(--warn); }
+
+/* One friend's page. */
+.fr-who { display: flex; align-items: center; gap: 12px; margin-top: 4px; }
+.fr-who .fr-av { width: 48px; height: 48px; font-size: 15px; }
+.fr-tog-row {
+  display: flex; align-items: center; gap: 12px; width: 100%; min-height: 60px;
+  padding: 10px 2px; text-align: left; color: var(--chalk);
+  border-top: 1px solid var(--collar);
+}
+.set-list .fr-tog-row:first-child { border-top: none; }
+.fr-tog-row .set-row-l { font-size: 14px; font-variation-settings: 'wdth' 92, 'wght' 600; }
+.fr-tog-row .tile { align-self: flex-start; }
+.fr-tog-row:active { background: rgba(var(--lift-rgb),.04); }
+.fr-shared { padding: 12px 0; border-top: 1px solid var(--collar); }
+.you-sec-t + .fr-shared { border-top: none; padding-top: 2px; }
+.fr-shared-hd { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.fr-shared-t { flex: 1; font-size: 14px; font-variation-settings: 'wdth' 92, 'wght' 650; }
+.fr-shared-w { font-size: 11px; color: var(--dim); }
+.fr-pr { display: flex; gap: 10px; justify-content: space-between; padding: 5px 0; font-size: 13px; }
+.fr-pr-x { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fr-pr-v { flex: none; color: var(--steel); font-size: 12px; }
+.fr-wt { display: flex; align-items: baseline; gap: 8px; }
+.fr-wt-v { font-size: 28px; font-variation-settings: 'wdth' 110, 'wght' 800; }
+.fr-wt-u { font-size: 12px; color: var(--steel); }
 
 /* ============================================================
    YOU

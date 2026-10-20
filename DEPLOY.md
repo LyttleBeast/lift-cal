@@ -84,6 +84,33 @@ is why the verification below checks the database and not the screen.
 You cannot lock yourself out: your uid is exempt from the approval check inside
 the rules text itself. If you ever break the file, re-paste it from the repo.
 
+### v67: Friends does nothing until this is done
+
+v67 adds one tree at the root, `social`, and changes nothing else in the file
+(`tools-check/custom-movement.mjs` holds every rule that was there before to
+being byte for byte the same). Until it is published every Friends write is
+refused: making a code says *"the Friends rules may not be published yet"*, and
+nothing else in the app is affected. Paste the whole file as above — it
+replaces everything, `social` included — and then, before trusting it with
+other people, try four things in the console's **Rules Playground** (the
+Rules tab → *Rules Playground*). Each must say **Denied**:
+
+| Type | Location | Authenticated as | Data |
+|---|---|---|---|
+| read | `/social/codes` | any uid | — |
+| read | `/social/shared/{your uid}/pr` | a made-up uid, e.g. `nobody` | — |
+| read | `/users/{your uid}` | a made-up uid | — |
+| set | `/social/shared/{your uid}/me` | a made-up uid | `{"n":"x","at":1}` |
+
+and this one must say **Allowed**: read `/social/people/{your uid}` authenticated
+as your own uid. The Playground runs Google's own evaluator, which the repo's
+verifiers can only model; it is the check of the real thing.
+
+Then the end-to-end check, with a second account on a second phone: one makes a
+code (Friends → Make a code), the other types it, the first confirms; both see
+each other under *Your friends* and on the Training board. In Firebase → Data,
+`social/people/{each uid}/list` holds the other.
+
 ### There are two rules files, and only one is ever live
 
 `database.rules.json` is the one to paste. `database.rules.OPTIONAL-LOCK.json`

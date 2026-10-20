@@ -411,10 +411,21 @@ function dock(id) {
   for (const b of buttons) {
     const was = b.querySelector('svg'), orig = dockV1.get(b);
     if (!was || !orig) continue;
-    // The dock's icons are named for their views (vibes/icons/v1.js).
-    const next = set === DEFAULT ? orig : iconEl(iconIn(set, b.dataset.view), { cssStroke: true });
+    // The dock's icons are named for their views (vibes/icons/v1.js). A view
+    // the contract draws nothing for — Friends (v67), whose slot was Steps' —
+    // keeps index.html's own drawing under every vibe, rather than the blank
+    // iconIn() falls back to: vibes/** is pinned, and a vibe that wants its
+    // own Friends icon adds one to its set under that name.
+    const named = set !== DEFAULT && hasIcon(set, b.dataset.view);
+    const next = named ? iconEl(iconIn(set, b.dataset.view), { cssStroke: true }) : orig;
     if (next !== was) b.replaceChild(next, was);
   }
+}
+
+// Whether the set, or v1's behind it, draws an icon of this name.
+function hasIcon(setId, name) {
+  const set = own(ICON_SETS, setId) ? ICON_SETS[setId] : V1_ICONS;
+  return !!((own(set.icons, name) && set.icons[name]) || (own(V1_ICONS.icons, name) && V1_ICONS.icons[name]));
 }
 
 /* ---------- chart patterns ----------

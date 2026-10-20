@@ -943,6 +943,17 @@ export async function setVibe(id) {
   return VIBE;
 }
 
+/* ---------- the server's clock (v67, Friends) ----------
+   A value to write that the database replaces with its own time as the write
+   lands: { '.sv': 'timestamp' }, exactly what the SDK's serverTimestamp()
+   returns, spelled out so this file's SDK import line stays as it was. The
+   Friends rules (social/) check a code's age and every stamp they hold
+   against `now`, the server's clock, so a phone whose clock is wrong can
+   neither stretch a code's day nor backdate a request. Shared writes only —
+   friends-data.js; nothing under users/ uses it. Lives here, below the
+   guard, because every shared verb above is pinned to rack-v58's text. */
+export function serverNow() { return { '.sv': 'timestamp' }; }
+
 /* ---------- date helpers ---------- */
 export function todayKey(d = new Date()) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;

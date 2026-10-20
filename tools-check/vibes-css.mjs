@@ -512,16 +512,16 @@ function tagSites(sheets) {
   }
   return { errs };
 }
+// v67: the Steps tab's three hooks (today card, today figure, "to go") left
+// with its page — the tab is Friends now. The hooks stay in vibes/** and
+// vocab.js as dead names, as the October 2026 removal left them.
 const MARKS = [
   ['food.js', /card\.dataset\.lead = 'fuelSummary'/, 'Fuel\'s summary is .card[data-lead="fuelSummary"]'],
-  ['steps.js', /card\.dataset\.lead = 'stepsToday'/, 'Steps\' today card is .card[data-lead="stepsToday"]'],
   ['weight.js', /log\.dataset\.lead = 'weightLog'/, 'Weight\'s log card is .card[data-lead="weightLog"]'],
   ['food.js', /const big = el\('div', 'load-num num'\);\n(?:.*\n){0,2}\s*big\.dataset\.hero = '';/, 'Fuel\'s summary figure is [data-hero]'],
-  ['steps.js', /const big = el\('div', 'load-num num',[^\n]*\n(?:.*\n){0,2}\s*big\.dataset\.hero = '';/, 'Steps\' today figure is [data-hero]'],
   ['you.js', /'headline-v num', fmtRate\([^\n]*\)\)\.dataset\.hero = '';[\s\S]{0,300}'headline-v num', '–'\)\)\.dataset\.hero = '';/, 'the Goal\'s .headline-v is [data-hero], with a pace or without'],
   ['food.js', /'kcal left today'\)\)\.dataset\.tag = '';/, '"kcal left today" / "kcal over target" is [data-tag]'],
   ['food.js', /'kcal \/ day'\)\)\.dataset\.tag = '';/, 'the targets preview\'s "kcal / day" is [data-tag]'],
-  ['steps.js', /'to go'\)\)\.dataset\.tag = '';/, '"to go" / "goal met" is [data-tag]'],
   ['weight.js', /' heavier by ' \+ hr\)\)\.dataset\.tag = '';/, '"lb heavier by …" is [data-tag]'],
   ['weight.js', /' kcal'\)\)\.dataset\.tag = '';/, '"± … kcal" is [data-tag]'],
   ['water.js', /fmtWater\(goal\)\)\)\.dataset\.tag = '';/, '"ml of …" is [data-tag]'],

@@ -58,5 +58,13 @@ export const TILE_ICONS = Object.freeze({
 
   // You's three rows
   review:   line(p('M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M9 15l2 2 4-4')),
-  chart:    line(p('M4 4v16h16M8 15l3-4 3 2 5-6'))
+  chart:    line(p('M4 4v16h16M8 15l3-4 3 2 5-6')),
+
+  // Friends (v67): the empty state's two people — the dock's own drawing,
+  // index.html — the head's add button, and an inbox routine's row. Here and
+  // not in vibes/icons for the reason at the top of this file.
+  people:   line(c(9, 8.6, 3.2), p('M3 20c.4-3.4 2.9-5.4 6-5.4s5.6 2 6 5.4'),
+                 p('M14.6 5.4a2.8 2.8 0 1 1 0 4.8M17.2 14.4c2.2.4 3.5 2.4 3.8 5.6')),
+  userPlus: line(c(10, 8, 3.5), p('M3.5 20c.4-3.5 3-5.6 6.5-5.6 1.4 0 2.6.3 3.6.9M18 13v6M15 16h6')),
+  inbox:    line(p('M4 13l2.5-8h11l2.5 8v6H4zM4 13h4.5l1 2h5l1-2H20'))
 });

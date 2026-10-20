@@ -6,7 +6,8 @@ import { onboardingState, runSetup, runTour } from './onboarding.js';
 import { initWorkout, render as renderWorkout, hasActiveSession } from './workout.js';
 import { initFood, render as renderFood } from './food.js';
 import { initWeight, render as renderWeight } from './weight.js';
-import { initSteps, render as renderSteps } from './steps.js';
+import { initSteps } from './steps.js';
+import { initFriendsTab, render as renderFriends } from './friends.js';
 import { initYou, render as renderYou } from './you.js';
 import { initUsage, bump } from './usage.js';
 import { bootVibe, setRenderer, prefetchVibes } from './vibe.js';
@@ -238,7 +239,13 @@ async function boot(user, accessRecord) {
   await initWorkout();
   await initFood();
   await initWeight();
+  // Steps has no tab since v67 — Friends has its slot — but its listener
+  // still boots, so a day pushed from elsewhere reaches You live.
   await initSteps();
+  // Unawaited: the watchers on this account's own Friends node and inbox,
+  // and its summaries published a few seconds later. Nothing about Friends
+  // is allowed to hold the opening screen.
+  initFriendsTab(user).catch(() => {});
   // Awaited here because restoreView() has to know whether You built itself
   // before it decides where to put the user.
   await youReady;
@@ -279,7 +286,7 @@ export function switchView(name) {
   if (name === 'workout') { bump('tabTrain');  renderWorkout(); }
   if (name === 'food')    { bump('tabFuel');   renderFood(); }
   if (name === 'weight')  { bump('tabWeight'); renderWeight(); }
-  if (name === 'steps')   { bump('tabSteps');  renderSteps(); }
+  if (name === 'friends') { bump('tabFriends'); renderFriends(); }
 }
 
 dock.addEventListener('click', e => {
@@ -295,7 +302,7 @@ dock.addEventListener('click', e => {
    visit, so nothing is counted and lastView is left alone. Before boot there
    is nothing drawn to repaint. */
 bootVibe();
-const RENDER = { you: renderYou, workout: renderWorkout, food: renderFood, weight: renderWeight, steps: renderSteps };
+const RENDER = { you: renderYou, workout: renderWorkout, food: renderFood, weight: renderWeight, friends: renderFriends };
 setRenderer(() => {
   if (!booted) return;
   const on = dock.querySelector('button.active');

@@ -71,8 +71,27 @@ const CONTRACT = ['vibes/defs', 'vibes/icons'].flatMap(d => readdirSync(join(ROO
 // whatever real vibes follow it, so the rest of each literal stands.
 const A_DEFS = 'const DEFS = { v1: V1', A_SETS = 'const ICON_SETS = { v1: V1_ICONS';
 const shown = new Map();
+/* v67, on purpose: the Steps tab became Friends. rack-v58's index.html is
+   compared with the tab's two pieces — its view section and its dock button —
+   swapped for Friends', exactly as written below, and nothing else: every
+   other byte, the other four dock buttons included, is still rack-v58's. The
+   Friends drawing is index.html's own, not the contract's (vibes/icons is
+   pinned); D below holds vibe.js to keeping it under every vibe. */
+const FRIENDS_VIEW = '  <section class="view" id="view-friends"></section>\n';
+const FRIENDS_BUTTON = '  <button data-view="friends" aria-label="Friends">\n' +
+  '    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">\n' +
+  '      <path d="M5.8 8.6a3.2 3.2 0 1 0 6.4 0 3.2 3.2 0 1 0-6.4 0z"/>\n' +
+  '      <path d="M3 20c.4-3.4 2.9-5.4 6-5.4s5.6 2 6 5.4"/>\n' +
+  '      <path d="M14.6 5.4a2.8 2.8 0 1 1 0 4.8M17.2 14.4c2.2.4 3.5 2.4 3.8 5.6"/>\n' +
+  '    </svg>\n    Friends\n  </button>\n';
+const friendsTab = html => html
+  .replace('  <section class="view" id="view-steps"></section>\n', FRIENDS_VIEW)
+  .replace(/  <button data-view="steps"[\s\S]*?<\/button>\n/, FRIENDS_BUTTON);
 const base = f => {
-  if (!shown.has(f)) shown.set(f, execFileSync('git', ['-C', ROOT, 'show', `${BASE}:${f}`], { encoding: 'utf8', maxBuffer: 1 << 26 }));
+  if (!shown.has(f)) {
+    const t = execFileSync('git', ['-C', ROOT, 'show', `${BASE}:${f}`], { encoding: 'utf8', maxBuffer: 1 << 26 });
+    shown.set(f, f === 'index.html' ? friendsTab(t) : t);
+  }
   return shown.get(f);
 };
 const url = f => pathToFileURL(join(ROOT, f)).href;
@@ -137,7 +156,9 @@ function freshDoc() {
   });
   const meta = new Node_('meta'); meta.attrs.push(['name', 'theme-color'], ['content', '#14161a']);
   const dock = new Node_('nav');
-  const views = ['you', 'workout', 'food', 'weight', 'steps'];
+  // The dock as it is since v67: Friends in Steps' slot — a view the icon
+  // contract draws nothing for.
+  const views = ['you', 'workout', 'food', 'weight', 'friends'];
   for (const v of views) { const b = new Node_('button'); b.attrs.push(['data-view', v]); b.dataset = { view: v }; const s = new Node_('svg'); s.attrs.push(['id', 'orig-' + v]); b.appendChild(s); dock.appendChild(b); }
   DOC = {
     log, meta, dock,
@@ -258,7 +279,9 @@ const innerAt = (text, lhs) => {
   return text.slice(i + (lhs + '.innerHTML =').length, text.indexOf(';\n', i)).trim();
 };
 {
-  for (const [file, lhs] of [['food.js', 'gear'], ['steps.js', 'gear'], ['you.js', 'gear'], ['workout.js', 'cal']]) {
+  // steps.js's gear left with the Steps page (v67: its slot is Friends, which
+  // has no gear — Step goal is under Settings).
+  for (const [file, lhs] of [['food.js', 'gear'], ['you.js', 'gear'], ['workout.js', 'cal']]) {
     const was = Function('return (' + innerAt(base(file), lhs) + ')')();
     const expr = innerAt(read(file), lhs);
     const now = expr && /^iconHtml\(/.test(expr) ? Function('iconHtml', 'return (' + expr + ')')(VB.iconHtml) : null;
@@ -336,7 +359,8 @@ const HEAD_RE = /<script>([\s\S]*?)<\/script>\n/;
     (J(links.slice().sort()) === J(sheetsOnDisk) ? '' : ` — linked ${J(links)}, on disk ${J(sheetsOnDisk)}`));
   // Everything else is rack-v58's.
   const dockOf = s => s.slice(s.indexOf('<nav class="dock" id="dock">'), s.indexOf('</nav>') + 6);
-  expect(dockOf(INDEX) === dockOf(base('index.html')) && dockOf(INDEX).length > 100, 'the dock markup is byte for byte rack-v58\'s');
+  expect(dockOf(INDEX) === dockOf(base('index.html')) && dockOf(INDEX).length > 100 && INDEX.includes(FRIENDS_BUTTON) && !INDEX.includes('data-view="steps"'),
+    'the dock markup is byte for byte rack-v58\'s, but for the fifth slot: Steps\' button swapped for Friends\' (v67)');
   const norm = INDEX.replace(HEAD_RE, '').replace(/<link rel="stylesheet" href="vibes\/[a-z0-9-]+\.css">\n/g, '')
     .replace(/<i style="background:(var\(--[\w-]+\));/g, (w, v) => `<i style="background:${lc(resolve(v))};`);
   expect(norm === base('index.html'), 'and without the head script, the vibe <link>s and the auth mark\'s tokens resolved, index.html is rack-v58\'s byte for byte');
@@ -400,8 +424,12 @@ section('D  the switch');
     'applyVibe(a vibe): data-vibe, the device key and the theme-color are that vibe\'s');
   expect(renders === 1 && J(heard) === J([['render', 'tst'], ['tst', 'v1']]), 'the screen repaints once, then the listeners hear (id, was)');
   expect(ser(svgs[0]) === '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="square" stroke-linejoin="miter"><circle cx="12" cy="12" r="9"/></svg>' &&
-    ser(svgs[1]) === ser(T.icon('workout', { cssStroke: true })) && svgs.every((s, i) => s !== origs[i]),
+    ser(svgs[1]) === ser(T.icon('workout', { cssStroke: true })) && svgs.slice(0, 4).every((s, i) => s !== origs[i]),
     'the dock draws the vibe\'s icons, falling back to v1\'s drawing where the set has none, with no stroke-width (the stylesheet\'s)');
+  // v67: Friends has no icon in any set, v1's included. Before, iconIn()'s
+  // fallback would have drawn it BLANK under every vibe but v1.
+  expect(svgs[4] === origs[4] && origs[4].getAttribute('id') === 'orig-friends',
+    'and a view no set draws (Friends) keeps index.html\'s own <svg> under the vibe — the same node, not a blank');
   expect(T.iconHtml('gear') === VB.iconHtml('gear') && T.iconHtml('you').includes('<circle cx="12" cy="12" r="9"/>'), 'icon() reads the active vibe\'s set, and v1\'s for a name the set lacks');
   expect(T.applyVibe('tst') === 'tst' && renders === 1, 'the same vibe again repaints nothing');
   const r3 = T.applyVibe('v1');
@@ -620,7 +648,11 @@ section('H  engine v2: glyphs, the vessel, tailpieces and hatch patterns');
      (go) and the page head of the screens behind them (back); and the install
      card's dismiss cross left You for Settings → Help, which has no cross. The
      contract itself (vibes/icons/v1.js, sha-pinned) is untouched. */
-  const MOVED = { 'settings.js': { go: 2, back: 1 }, 'you.js': { back: 1, dismiss: -1 } };
+  /* v67, the same kind of change: Friends' four row chevrons (its inbox
+     rows, its friend rows, and the two routine and friend pickers) are new
+     sites of the contract's own `go`, drawn through glyphed() like every
+     other row's. steps.js drew no glyph site. */
+  const MOVED = { 'settings.js': { go: 2, back: 1 }, 'you.js': { back: 1, dismiss: -1 }, 'friends.js': { go: 4 } };
   for (const [f, o] of Object.entries(MOVED)) for (const [n, d] of Object.entries(o)) {
     (want[f] = want[f] || {})[n] = ((want[f][n] || 0) + d);
     if (want[f][n] === 0) delete want[f][n];
@@ -667,7 +699,9 @@ section('H  engine v2: glyphs, the vessel, tailpieces and hatch patterns');
     expect(VB.tail(p, 'you') === p && ser(p) === before && VB.tail(null, 'you') === null, 'tail() adds nothing to a screen in v1');
   }
   // Each screen, and the recap, ends in tail() by its own name.
-  const TAILS = [['you.js', 'you'], ['workout.js', 'workout'], ['workout.js', 'recap'], ['food.js', 'food'], ['weight.js', 'weight'], ['steps.js', 'steps']];
+  // v67: steps.js left with the Steps page; Friends, in its slot, ends in
+  // tail() by its own name like every tab (no set draws it a tailpiece yet).
+  const TAILS = [['you.js', 'you'], ['workout.js', 'workout'], ['workout.js', 'recap'], ['food.js', 'food'], ['weight.js', 'weight'], ['friends.js', 'friends']];
   const noTail = TAILS.filter(([f, s]) => !new RegExp("tail\\([^;]*, '" + s + "'\\)").test(read(f)));
   expect(!noTail.length && IDX && true, 'every tab and the recap hand their screen to tail() under their own name: ' + TAILS.map(([f, s]) => f + ' ' + s).join(', ') + (noTail.length ? ' — missing: ' + noTail.map(x => x.join(' ')).join(', ') : ''));
 

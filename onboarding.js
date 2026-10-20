@@ -748,9 +748,9 @@ const TOUR = [
   { view: 'weight', title: 'Weight',
     body: 'Weigh in as often as you like — twice a day is better than once. Rack corrects each reading for what you had eaten and drunk beforehand, then fits a trend.',
     tip: 'After a couple of weeks it tells you your real maintenance calories, measured rather than guessed.' },
-  { view: 'steps', title: 'Steps',
-    body: 'Type the day’s count and the ring tracks your goal; the bars show the streak.',
-    tip: 'Steps deliberately don’t feed the calorie maths — that estimate already has your activity in it.' }
+  { view: 'friends', title: 'Friends',
+    body: 'Swap a code with a friend and you can race each other on a board — records, training days and steps — and send each other routines.',
+    tip: 'Nothing is shared until you both say yes, and you choose what each friend sees. Your step count lives on You now.' }
 ];
 
 export function runTour(switchView) {
