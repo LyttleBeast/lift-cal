@@ -455,8 +455,16 @@ section('C. the whole-array write — the guard passes an edit, refuses a partia
 
   check('the published rules grant exercises at the section and validate nothing under it — pattern and angle land as they are',
         /"exercises": \{\s*"\.write": "[^"]+"\s*\}/.test(src('database.rules.json')));
-  check('and database.rules.json is not changed by one byte from rack-v55',
-        execFileSync('git', ['show', 'f2ba45e:database.rules.json'], { cwd: ROOT, encoding: 'utf8' }) === src('database.rules.json'));
+  /* v67 added one tree at the root — `social`, Friends' — and nothing else:
+     every rule that was there at rack-v55, users/{uid}/exercises included, is
+     still byte for byte what it was. So the file is compared with that one
+     tree taken out, and the tree is held to being the only addition. */
+  const v55 = JSON.parse(execFileSync('git', ['show', 'f2ba45e:database.rules.json'], { cwd: ROOT, encoding: 'utf8' }));
+  const nowRules = JSON.parse(src('database.rules.json'));
+  const { social, ...rest } = nowRules.rules;
+  check('and database.rules.json is not changed by one byte from rack-v55 but for v67\'s new root tree, social',
+        JSON.stringify({ rules: rest }) === JSON.stringify(v55) && !!social && !('social' in v55.rules) &&
+        JSON.stringify(Object.keys(nowRules.rules)) === JSON.stringify([...Object.keys(v55.rules), 'social']));
 }
 
 /* ================= D. WHAT COACH READS ================= */

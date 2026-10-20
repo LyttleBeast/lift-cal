@@ -276,6 +276,321 @@
           ".validate": false
         }
       }
+    },
+    "social": {
+      ".read": false,
+      ".write": false,
+      "codes": {
+        "$code": {
+          ".read": "auth != null && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved').child(auth.uid).exists()) && (data.child('u').val() === auth.uid || data.child('at').val() > now - 86400000)",
+          ".write": "auth != null && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved').child(auth.uid).exists()) && ((!data.exists() && newData.exists() && newData.child('u').val() === auth.uid && newData.parent().parent().child('people').child(auth.uid).child('code').val() === $code) || (!newData.exists() && (!data.exists() || data.child('u').val() === auth.uid || newData.parent().parent().child('people').child(data.child('u').val()).child('req').child(auth.uid).child('c').val() === $code)))",
+          ".validate": "$code.matches(/^[2-9A-HJKMNP-Z]{4}-[2-9A-HJKMNP-Z]{4}$/) && newData.hasChildren(['u', 'n', 'k', 'at'])",
+          "u": {
+            ".validate": "newData.isString() && newData.val() === auth.uid"
+          },
+          "n": {
+            ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 40"
+          },
+          "k": {
+            ".validate": "newData.val() === 'friend'"
+          },
+          "at": {
+            ".validate": "newData.isNumber() && newData.val() === now"
+          },
+          "$other": {
+            ".validate": false
+          }
+        }
+      },
+      "people": {
+        "$uid": {
+          ".read": "auth != null && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved').child(auth.uid).exists()) && auth.uid === $uid",
+          "code": {
+            ".write": "auth != null && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved').child(auth.uid).exists()) && auth.uid === $uid && (!data.exists() || !newData.parent().parent().parent().child('codes').child(data.val()).exists())",
+            ".validate": "newData.isString() && newData.val().matches(/^[2-9A-HJKMNP-Z]{4}-[2-9A-HJKMNP-Z]{4}$/) && newData.parent().parent().parent().child('codes').child(newData.val()).child('u').val() === $uid"
+          },
+          "req": {
+            "$from": {
+              ".read": "auth != null && auth.uid === $from",
+              ".write": "auth != null && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved').child(auth.uid).exists()) && ((!newData.exists() && (auth.uid === $from || auth.uid === $uid)) || (!data.exists() && auth.uid === $from && $from !== $uid && ($uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved/' + $uid).exists()) && !root.child('social/people/' + $uid + '/list/' + $from).exists() && root.child('social/people/' + $uid + '/code').val() === newData.child('c').val() && root.child('social/codes/' + newData.child('c').val() + '/u').val() === $uid && root.child('social/codes/' + newData.child('c').val() + '/at').val() > now - 86400000 && root.child('social/codes/' + newData.child('c').val() + '/k').val() === newData.child('k').val() && !newData.parent().parent().parent().parent().child('codes').child(newData.child('c').val()).exists()))",
+              ".validate": "newData.hasChildren(['n', 'c', 'k', 'at'])",
+              "n": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 40"
+              },
+              "c": {
+                ".validate": "newData.isString() && newData.val().matches(/^[2-9A-HJKMNP-Z]{4}-[2-9A-HJKMNP-Z]{4}$/)"
+              },
+              "k": {
+                ".validate": "newData.isString() && newData.val().length <= 12"
+              },
+              "at": {
+                ".validate": "newData.isNumber() && newData.val() === now"
+              },
+              "$other": {
+                ".validate": false
+              }
+            }
+          },
+          "out": {
+            "$to": {
+              ".write": "auth != null && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved').child(auth.uid).exists()) && ((!newData.exists() && (auth.uid === $uid || auth.uid === $to)) || (!data.exists() && auth.uid === $uid && $to !== $uid && !root.child('social/people/' + $to + '/req/' + $uid).exists() && newData.parent().parent().parent().child($to).child('req').child($uid).exists()))",
+              ".validate": "newData.hasChildren(['n', 'at'])",
+              "n": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 40"
+              },
+              "at": {
+                ".validate": "newData.isNumber() && newData.val() === now"
+              },
+              "$other": {
+                ".validate": false
+              }
+            }
+          },
+          "list": {
+            "$fid": {
+              ".write": "auth != null && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved').child(auth.uid).exists()) && ((!newData.exists() && (auth.uid === $uid || auth.uid === $fid)) || (!data.exists() && $fid !== $uid && ((auth.uid === $uid && ($fid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved/' + $fid).exists()) && root.child('social/people/' + $uid + '/req/' + $fid).exists() && newData.child('k').val() === root.child('social/people/' + $uid + '/req/' + $fid + '/k').val() && !newData.parent().parent().child('req').child($fid).exists() && newData.parent().parent().parent().child($fid).child('list').child($uid).exists()) || (auth.uid === $fid && ($uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved/' + $uid).exists()) && root.child('social/people/' + $fid + '/req/' + $uid).exists() && newData.child('k').val() === root.child('social/people/' + $fid + '/req/' + $uid + '/k').val() && !newData.parent().parent().parent().child($fid).child('req').child($uid).exists() && newData.parent().parent().parent().child($fid).child('list').child($uid).exists()))))",
+              ".validate": "newData.hasChildren(['k', 'n', 'at'])",
+              "k": {
+                ".validate": "newData.isString() && newData.val().length <= 12"
+              },
+              "n": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 40"
+              },
+              "at": {
+                ".validate": "newData.isNumber() && newData.val() === now"
+              },
+              "$other": {
+                ".validate": false
+              }
+            }
+          },
+          "share": {
+            "$fid": {
+              ".read": "auth != null && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved').child(auth.uid).exists()) && auth.uid === $fid && root.child('social/people/' + $uid + '/list/' + $fid).exists() && root.child('social/people/' + $fid + '/list/' + $uid).exists()",
+              ".write": "auth != null && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved').child(auth.uid).exists()) && $fid !== $uid && ((auth.uid === $uid && (!newData.exists() || newData.parent().parent().child('list').child($fid).exists() || newData.parent().parent().parent().child($fid).child('req').child($uid).exists())) || (auth.uid === $fid && !newData.exists()))",
+              "pr": {
+                ".validate": "newData.isBoolean()"
+              },
+              "td": {
+                ".validate": "newData.isBoolean()"
+              },
+              "st": {
+                ".validate": "newData.isBoolean()"
+              },
+              "mac": {
+                ".validate": "newData.isBoolean()"
+              },
+              "wt": {
+                ".validate": "newData.isBoolean()"
+              },
+              "$other": {
+                ".validate": false
+              }
+            }
+          },
+          "$other": {
+            ".validate": false
+          }
+        }
+      },
+      "shared": {
+        "$uid": {
+          ".write": "auth != null && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved').child(auth.uid).exists()) && auth.uid === $uid",
+          "me": {
+            ".read": "auth != null && (auth.uid === $uid || ((auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved').child(auth.uid).exists()) && ($uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved/' + $uid).exists()) && root.child('social/people/' + $uid + '/list/' + auth.uid).exists() && root.child('social/people/' + auth.uid + '/list/' + $uid).exists()))",
+            ".validate": "newData.hasChildren(['n', 'at'])",
+            "n": {
+              ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 40"
+            },
+            "at": {
+              ".validate": "newData.isNumber() && newData.val() === now"
+            },
+            "$other": {
+              ".validate": false
+            }
+          },
+          "pr": {
+            ".read": "auth != null && (auth.uid === $uid || ((auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved').child(auth.uid).exists()) && ($uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved/' + $uid).exists()) && root.child('social/people/' + $uid + '/list/' + auth.uid).exists() && root.child('social/people/' + auth.uid + '/list/' + $uid).exists() && root.child('social/people/' + $uid + '/share/' + auth.uid + '/pr').val() === true))",
+            ".validate": "newData.hasChildren(['at'])",
+            "at": {
+              ".validate": "newData.isNumber() && newData.val() === now"
+            },
+            "ev": {
+              "$i": {
+                ".validate": "$i.matches(/^[12]?[0-9]$/) && newData.hasChildren(['d', 'x', 'w', 'r'])",
+                "d": {
+                  ".validate": "newData.isString() && newData.val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)"
+                },
+                "x": {
+                  ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 60"
+                },
+                "w": {
+                  ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 2000"
+                },
+                "r": {
+                  ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100"
+                },
+                "$other": {
+                  ".validate": false
+                }
+              }
+            },
+            "$other": {
+              ".validate": false
+            }
+          },
+          "td": {
+            ".read": "auth != null && (auth.uid === $uid || ((auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved').child(auth.uid).exists()) && ($uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved/' + $uid).exists()) && root.child('social/people/' + $uid + '/list/' + auth.uid).exists() && root.child('social/people/' + auth.uid + '/list/' + $uid).exists() && root.child('social/people/' + $uid + '/share/' + auth.uid + '/td').val() === true))",
+            ".validate": "newData.hasChildren(['at', 'end', 'b'])",
+            "at": {
+              ".validate": "newData.isNumber() && newData.val() === now"
+            },
+            "end": {
+              ".validate": "newData.isString() && newData.val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)"
+            },
+            "b": {
+              ".validate": "newData.isString() && newData.val().matches(/^[01]{35}$/)"
+            },
+            "$other": {
+              ".validate": false
+            }
+          },
+          "st": {
+            ".read": "auth != null && (auth.uid === $uid || ((auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved').child(auth.uid).exists()) && ($uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved/' + $uid).exists()) && root.child('social/people/' + $uid + '/list/' + auth.uid).exists() && root.child('social/people/' + auth.uid + '/list/' + $uid).exists() && root.child('social/people/' + $uid + '/share/' + auth.uid + '/st').val() === true))",
+            ".validate": "newData.hasChildren(['at', 'end', 'd'])",
+            "at": {
+              ".validate": "newData.isNumber() && newData.val() === now"
+            },
+            "end": {
+              ".validate": "newData.isString() && newData.val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)"
+            },
+            "d": {
+              ".validate": "newData.isString() && newData.val().length <= 250 && newData.val().matches(/^[0-9,]*$/)"
+            },
+            "$other": {
+              ".validate": false
+            }
+          },
+          "mac": {
+            ".read": "auth != null && (auth.uid === $uid || ((auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved').child(auth.uid).exists()) && ($uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved/' + $uid).exists()) && root.child('social/people/' + $uid + '/list/' + auth.uid).exists() && root.child('social/people/' + auth.uid + '/list/' + $uid).exists() && root.child('social/people/' + $uid + '/share/' + auth.uid + '/mac').val() === true))",
+            ".validate": "newData.hasChildren(['at', 'end', 'b'])",
+            "at": {
+              ".validate": "newData.isNumber() && newData.val() === now"
+            },
+            "end": {
+              ".validate": "newData.isString() && newData.val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)"
+            },
+            "b": {
+              ".validate": "newData.isString() && newData.val().matches(/^[.xcpb]{30}$/)"
+            },
+            "$other": {
+              ".validate": false
+            }
+          },
+          "wt": {
+            ".read": "auth != null && (auth.uid === $uid || ((auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved').child(auth.uid).exists()) && ($uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved/' + $uid).exists()) && root.child('social/people/' + $uid + '/list/' + auth.uid).exists() && root.child('social/people/' + auth.uid + '/list/' + $uid).exists() && root.child('social/people/' + $uid + '/share/' + auth.uid + '/wt').val() === true))",
+            ".validate": "newData.hasChildren(['at', 'tw'])",
+            "at": {
+              ".validate": "newData.isNumber() && newData.val() === now"
+            },
+            "tw": {
+              ".validate": "newData.isNumber() && newData.val() >= 40 && newData.val() <= 1000"
+            },
+            "rate": {
+              ".validate": "newData.isNumber() && newData.val() >= -10 && newData.val() <= 10"
+            },
+            "goal": {
+              ".validate": "newData.isNumber() && newData.val() >= 40 && newData.val() <= 1000"
+            },
+            "dir": {
+              ".validate": "newData.val() === -1 || newData.val() === 0 || newData.val() === 1"
+            },
+            "$other": {
+              ".validate": false
+            }
+          },
+          "$other": {
+            ".validate": false
+          }
+        }
+      },
+      "inbox": {
+        "$to": {
+          ".read": "auth != null && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved').child(auth.uid).exists()) && auth.uid === $to",
+          "$from": {
+            ".read": "auth != null && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved').child(auth.uid).exists()) && auth.uid === $from",
+            ".write": "auth != null && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved').child(auth.uid).exists()) && ((!newData.exists() && (auth.uid === $to || auth.uid === $from)) || (newData.exists() && auth.uid === $from && $from !== $to && ($to === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved/' + $to).exists()) && root.child('social/people/' + $from + '/list/' + $to).exists() && root.child('social/people/' + $to + '/list/' + $from).exists()))",
+            ".validate": "newData.hasChildren(['at', 'n', 'r'])",
+            "at": {
+              ".validate": "newData.isNumber() && newData.val() === now"
+            },
+            "n": {
+              ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 40"
+            },
+            "r": {
+              ".validate": "newData.hasChildren(['name', 'exercises'])",
+              "name": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 60"
+              },
+              "note": {
+                ".validate": "newData.isString() && newData.val().length <= 200"
+              },
+              "exercises": {
+                "$e": {
+                  ".validate": "$e.matches(/^[12]?[0-9]$/) && newData.hasChildren(['exId', 'name', 'group', 'sets'])",
+                  "exId": {
+                    ".validate": "newData.isString() && newData.val().matches(/^[a-z0-9][a-z0-9-]{0,79}$/)"
+                  },
+                  "name": {
+                    ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 60"
+                  },
+                  "group": {
+                    ".validate": "newData.isString() && newData.val().matches(/^[a-z]{1,12}$/)"
+                  },
+                  "equipment": {
+                    ".validate": "newData.isString() && newData.val().matches(/^[a-z]{1,12}$/)"
+                  },
+                  "block": {
+                    ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 30"
+                  },
+                  "sets": {
+                    "$s": {
+                      ".validate": "$s.matches(/^[12]?[0-9]$/) && newData.hasChildren(['type'])",
+                      "tw": {
+                        ".validate": "newData.isString() && newData.val().length <= 12"
+                      },
+                      "tr": {
+                        ".validate": "newData.isString() && newData.val().length <= 6"
+                      },
+                      "type": {
+                        ".validate": "newData.val() === 'W' || newData.val() === 'N' || newData.val() === 'F' || newData.val() === 'D'"
+                      },
+                      "dp": {
+                        ".validate": "newData.val() === 1"
+                      },
+                      "$other": {
+                        ".validate": false
+                      }
+                    }
+                  },
+                  "$other": {
+                    ".validate": false
+                  }
+                }
+              },
+              "$other": {
+                ".validate": false
+              }
+            },
+            "$other": {
+              ".validate": false
+            }
+          }
+        }
+      },
+      "$other": {
+        ".validate": false
+      }
     }
   }
 }
