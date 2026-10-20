@@ -13,10 +13,23 @@
 // code has touched users/{uid}/profile since onboarding wrote it) and the two
 // sign-out paths, which are the only controls in the app that can lose data.
 //
-// Sheets never nest. Every row that opens another sheet closes this one first.
+// The October 2026 regroup (rack-mobile's NEXT-WEB-YOU-SETTINGS.md): one
+// searchable list, a profile card at the top, nine kinds of row each with a
+// coloured icon tile, Coach behind one row, and the three controls that used
+// to sit inline (Units, Open the app on, Default rest) behind small sheets of
+// their own. WHICH rows exist, where each sits and what search reads is
+// settings-registry.js — a table, so a verifier can hold it to "nothing was
+// dropped". What a row DOES is below, and is what it always did: every row
+// opens the same sheet through the same function, and the three small sheets
+// carry the old controls, writes, toasts and notes word for word. Admin moved
+// here from the You tab (owner only, isOwner() and nothing else).
+//
+// Sheets never nest. Every row that opens another sheet closes this one first,
+// and the small sheets start with ‹ Settings, which closes them and opens this
+// again.
 
 import { el, sheet, toast, noteEl, confirmSheet, segmented, LIMITS, clamp } from './ui.js';
-import { LS, uid, readExact, currentEmail, write, purgeDevice, logout,
+import { LS, uid, readExact, currentEmail, write, purgeDevice, logout, isOwner,
          wu, hu, setUnits, refusedSaves, retryRefused, discardRefused } from './store.js';
 import { openTargets, openAiSettings, openRecallList, openImportPaste,
          foodTargets, latestLb, goalId, previewGoal, setGoal, goalFits, misfitNote } from './food.js';
@@ -28,37 +41,15 @@ import { hasProxy } from './ai.js';
 import { canUseAi } from './access.js';
 import { hasActiveSession } from './workout.js';
 import { openInstallGuide, profileYearProblem } from './onboarding.js';
-import { coachToggleRows, coachAnswerRows, openCoachSheet } from './coach-ui.js';
+import { coachToggleGroups, coachAnswerRows, coachSwitchRows, openCoachSheet } from './coach-ui.js';
 import { openVibes, vibeName } from './vibes-sheet.js';
 import { glyphed } from './vibe.js';
+import { openAdmin } from './admin.js';
+import { tile, glyph } from './tiles.js';
+import { sections, coachCount } from './settings-registry.js';
 import { hIn as inchesFrom, fmtH, unitH, limH, labelRate } from './units.js';
 
 /* ---------- pieces ---------- */
-
-function section(host, title) {
-  const s = el('div', 'you-sec');
-  s.appendChild(el('div', 'you-sec-t', title));
-  host.appendChild(s);
-  return s;
-}
-
-function rowList(s) {
-  const list = el('div', 'set-list');
-  s.appendChild(list);
-  return list;
-}
-
-// A tappable row: label, an optional live value, and the chevron that is the
-// row's only signal that it opens something.
-function navRow(list, label, value, onTap) {
-  const b = el('button', 'set-row-nav');
-  b.appendChild(el('span', 'set-row-l', label));
-  if (value) b.appendChild(el('span', 'set-row-v num', value));
-  b.appendChild(glyphed(el('span', 'set-row-x', '›'), 'go'));
-  b.onclick = onTap;
-  list.appendChild(b);
-  return b;
-}
 
 function field(label, node) {
   const f = el('div', 'field');
@@ -114,28 +105,238 @@ function aiPill() {
 
 /* ================= THE HUB ================= */
 
+const OPEN_ON_LABEL = { you: 'You', workout: 'Train', last: 'Last one' };
+
+const restPill  = () => LS.get('restDefault', 150) + ' s';
+const unitsPill = () => (wu() === 'kg' ? 'kg · cm' : 'lb · in');
+const openOnPill = () => OPEN_ON_LABEL[LS.get('openOn', 'you')] || 'You';
+
+function initialsOf(name) {
+  const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return '–';
+  return (parts[0][0] + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
+}
+
+/* The value shown at the right of a row, by the registry's `pill` name. Each
+   comes from its owning module's in-memory getter (see "the value pills"). */
+function pillOf(name) {
+  switch (name) {
+    case 'goal':    return goalPill();
+    case 'targets': return targetPill();
+    case 'water':   return waterPill();
+    case 'steps':   { const v = stepPill(); return v ? v + ' steps' : null; }
+    case 'rest':    return restPill();
+    case 'coach':   return coachCount(coachSwitchRows());
+    case 'vibe':    return vibeName();
+    case 'units':   return unitsPill();
+    case 'openOn':  return openOnPill();
+    case 'ai':      return aiPill();
+    case 'owner':   return 'Owner';
+    default:        return null;
+  }
+}
+
+/* The three small sheets and the Coach sheet open with this: ‹ Settings over
+   the eyebrow and the title. The back button closes the sheet and opens the
+   hub again — sheets never nest. */
+function subSheet(title, onEdit, who) {
+  const { sh, close } = sheet();
+  const back = el('button', 'back-btn');
+  back.innerHTML = '<span aria-hidden="true">&#8249;</span> Settings';
+  glyphed(back.firstChild, 'back');
+  back.onclick = () => { close(); openSettings(onEdit, who); };
+  sh.appendChild(back);
+  sh.appendChild(el('div', 'eyebrow', 'Settings'));
+  sh.appendChild(el('h2', null, title));
+  return { sh, close };
+}
+
 /* `onEdit` fires after a change that the screen behind this sheet may be
    quoting. It has to hang off the individual sheets rather than off this one,
    because every row closes the hub before opening its own — so by the time a
-   goal is saved this sheet is long gone and has nothing left to tell anybody. */
-export function openSettings(onEdit) {
+   goal is saved this sheet is long gone and has nothing left to tell anybody.
+
+   `who` is { name, photo } for the profile card — the You tab already holds
+   both, so the card paints with the sheet instead of waiting on a read. */
+export function openSettings(onEdit, who = {}) {
   const { sh, close } = sheet();
   sh.appendChild(el('div', 'eyebrow', 'Rack'));
   sh.appendChild(el('h2', null, 'Settings'));
 
-  /* ---- you ---- */
-  const you = section(sh, 'You');
-  const youList = rowList(you);
-  navRow(youList, 'Goal', goalPill(), () => { close(); openGoal(onEdit); });
-  navRow(youList, 'Your details', null, () => { close(); openProfile(onEdit); });
+  /* Only when there is something to say. A row that reads "0 saves were
+     refused" is a row that teaches everybody to ignore it, and on a healthy
+     account this list is empty for the life of the install. It is here rather
+     than on a tab because it is a repair, not a feature — the morning after a
+     rules publish goes wrong is the day it exists for. */
+  const refused = refusedSaves();
+  const ctx = {
+    owner: isOwner(),
+    refused: refused.length
+      ? refused.length + ' save' + (refused.length === 1 ? ' was' : 's were') + ' refused'
+      : null
+  };
+  // The Coach row also answers to its switches' names and notes, which live in
+  // coach.js and not in the registry.
+  const extra = { coach: coachSwitchRows().map(r => r.label + ' ' + r.note).join(' ') };
 
-  /* Pounds or kilos, and inches or centimetres, as one choice. It is stored as
-     two fields so splitting them later costs nothing, but nobody has asked to
-     weigh in kilos and stand 5'11", and two controls for that would be two
-     questions where there is one. It lives in You rather than App because it
-     governs body weight, height and macro targets — which is what this section
-     is about — and it is one binary choice, so it is the same inline segmented
-     control "Open the app on" uses rather than a row that opens a sheet. */
+  /* What each row does. Every one is what the row did before the regroup. */
+  const ACTIONS = {
+    profile: () => { close(); openProfile(onEdit); },
+    goal:    () => { close(); openGoal(onEdit); },
+    targets: () => { close(); openTargets(onEdit); },
+    water:   () => { close(); openWaterSettings(latestLb(), onEdit); },
+    steps:   () => { close(); openStepSettings(onEdit); },
+    rest:    () => { close(); openRestSheet(onEdit, who); },
+    library: () => { close(); openExerciseManager(); },
+    coach:   () => { close(); openCoachSettings(onEdit, who); },
+    vibes:   () => { close(); openVibes(onEdit); },
+    units:   () => { close(); openUnitsSheet(onEdit, who); },
+    openOn:  () => { close(); openOpenOnSheet(onEdit, who); },
+    ai:      () => { close(); openAiSettings(); },
+    recall:  () => { close(); openRecallList(); },
+    paste:   () => { close(); openImportPaste(); },
+    import:  () => { close(); openImport(); },
+    install: () => { close(); openInstallGuide(); },
+    tour:    () => {
+      close();
+      if (typeof window.__rackTour === 'function') window.__rackTour();
+      else toast('Reload the app and try again');
+    },
+    refused: () => { close(); openRefused(onEdit); },
+    // isOwner() is the client-side check and nothing more — the rules are what
+    // actually decide, and they check the same uid on the server. Closing puts
+    // the parked DOM back on its own; the callback repaints it with whatever
+    // landed while the panel was up.
+    admin:   () => { close(); openAdmin(onEdit); },
+    signOut: () => {
+      close();
+      if (hasActiveSession()) {
+        confirmSheet({
+          title: 'Workout in progress',
+          body: 'You have a live session. Signing out keeps it saved on this device, but you’ll need to sign back in to finish it.',
+          confirmLabel: 'Sign out anyway',
+          danger: true,
+          onConfirm: () => logout()
+        });
+        return;
+      }
+      logout();
+    },
+    /* Signing out leaves this device's cached copy of the account behind. It is
+       namespaced by uid, so no other account can reach it through the app — but
+       on a shared or borrowed phone "unreachable through the app" is not the
+       same as gone, and this is the button that makes it gone. It also clears
+       any queued offline writes, which is the reason it is not the default. */
+    erase:   () => {
+      close();
+      confirmSheet({
+        title: 'Erase this device’s copy?',
+        body: 'Everything stays in your account and comes back when you sign in again. Anything logged while offline and not yet synced is lost.',
+        confirmLabel: 'Erase and sign out',
+        danger: true,
+        onConfirm: async () => {
+          const u = uid();
+          await logout();
+          purgeDevice(u);
+          location.reload();
+        }
+      });
+    }
+  };
+
+  /* ---- search ---- */
+  const find = el('div', 'set-search');
+  find.appendChild(glyph('search'));
+  const q = el('input');
+  q.type = 'search';
+  q.placeholder = 'Search settings';
+  q.setAttribute('aria-label', 'Search settings');
+  q.autocomplete = 'off';
+  q.setAttribute('autocapitalize', 'none');
+  q.spellcheck = false;
+  find.appendChild(q);
+  sh.appendChild(find);
+
+  const body = el('div');
+  sh.appendChild(body);
+
+  const row = (r, tone) => {
+    const label = r.label || ctx.refused || '';
+    const b = el('button', 'set-row-nav has-tile' + (r.danger ? ' danger' : '') + (r.tone === 'warn' ? ' warn' : ''));
+    b.appendChild(tile(r.icon, r.danger ? 'out' : (r.tone || tone)));
+    b.appendChild(el('span', 'set-row-l', label));
+    const v = r.pill ? pillOf(r.pill) : null;
+    if (v) b.appendChild(el('span', 'set-row-v num', v));
+    if (!r.danger) b.appendChild(glyphed(el('span', 'set-row-x', '›'), 'go'));
+    b.onclick = ACTIONS[r.opens];
+    return b;
+  };
+
+  /* The profile card is the "Your details" row, drawn big. It filters like any
+     other row — search "photo" and it is still there. */
+  const profileCard = r => {
+    const b = el('button', 'set-profile');
+    const av = el('span', 'set-avatar');
+    if (typeof who.photo === 'string' && who.photo.startsWith('data:image/')) {
+      const img = el('img');
+      img.src = who.photo;
+      img.alt = '';
+      av.appendChild(img);
+    } else {
+      av.textContent = initialsOf(who.name || currentEmail() || '');
+    }
+    b.appendChild(av);
+    const mid = el('span', 'set-profile-b');
+    mid.appendChild(el('span', 'set-profile-n', who.name || currentEmail() || 'You'));
+    mid.appendChild(el('span', 'set-profile-s', 'Your details · name, photo, height, birth year'));
+    b.appendChild(mid);
+    b.appendChild(glyphed(el('span', 'set-row-x', '›'), 'go'));
+    b.onclick = ACTIONS[r.opens];
+    return b;
+  };
+
+  const draw = () => {
+    body.innerHTML = '';
+    const secs = sections(ctx, q.value, extra);
+    if (!secs.length) {
+      const n = noteEl('Nothing in Settings matches “' + q.value.trim() + '”. Try a shorter word.');
+      n.classList.add('set-nothing');
+      body.appendChild(n);
+      return;
+    }
+    secs.forEach(({ group, rows }) => {
+      if (group.id === 'you') {
+        rows.forEach(r => body.appendChild(profileCard(r)));
+        return;
+      }
+      const host = el('div', group.title ? 'you-sec' : 'set-group-out');
+      if (group.title) host.appendChild(el('div', 'you-sec-t', group.title));
+      const list = el('div', 'set-list');
+      rows.forEach(r => list.appendChild(row(r, group.tone)));
+      host.appendChild(list);
+      body.appendChild(host);
+    });
+  };
+  q.oninput = draw;
+  draw();
+
+  const done = el('button', 'btn btn-ghost btn-block', 'Close');
+  done.style.marginTop = '18px';
+  done.onclick = close;
+  sh.appendChild(done);
+}
+
+/* ================= THE SMALL SHEETS =================
+   The three controls that sat inline in the old hub, each now behind its row.
+   Their controls, writes, toasts and notes are the old ones, verbatim. */
+
+/* Pounds or kilos, and inches or centimetres, as one choice. It is stored as
+   two fields so splitting them later costs nothing, but nobody has asked to
+   weigh in kilos and stand 5'11", and two controls for that would be two
+   questions where there is one. It is one binary choice, so it is the same
+   segmented control "Open the app on" uses. */
+function openUnitsSheet(onEdit, who) {
+  const { sh } = subSheet('Units', onEdit, who);
   const unitsRow = el('div', 'field');
   unitsRow.style.marginTop = '14px';
   unitsRow.appendChild(el('label', null, 'Units'));
@@ -151,13 +352,16 @@ export function openSettings(onEdit) {
       if (onEdit) onEdit();
       toast(metric ? 'Kilograms and centimetres' : 'Pounds and inches');
     }));
-  you.appendChild(unitsRow);
-  you.appendChild(noteEl(
+  sh.appendChild(unitsRow);
+  sh.appendChild(noteEl(
     'Nothing is converted in storage — this changes how every weight is shown ' +
     'and typed. Body weight, set weights, volume, records, your goal and your ' +
     'per-bodyweight protein and fat targets all re-render in the new unit, ' +
-    'including everything already logged. Water keeps its own unit, under Fuel.'));
+    'including everything already logged. Water keeps its own unit, under Your plan.'));
+}
 
+function openOpenOnSheet(onEdit, who) {
+  const { sh } = subSheet('Open the app on', onEdit, who);
   const openOn = el('div', 'field');
   openOn.style.marginTop = '14px';
   openOn.appendChild(el('label', null, 'Open the app on'));
@@ -168,22 +372,15 @@ export function openSettings(onEdit) {
     [['you', 'You'], ['workout', 'Train'], ['last', 'Last one']],
     LS.get('openOn', 'you'),
     v => { LS.set('openOn', v); toast('Saved'); }));
-  you.appendChild(openOn);
-  you.appendChild(noteEl(
+  sh.appendChild(openOn);
+  sh.appendChild(noteEl(
     '“Last one” reopens whichever tab you closed on. A workout you never ' +
     'finished outranks all three — coming back to a parked session and landing ' +
     'anywhere but Train is how sets get lost.'));
+}
 
-  /* ---- fuel ---- */
-  const fuel = rowList(section(sh, 'Fuel'));
-  navRow(fuel, 'Daily targets', targetPill(), () => { close(); openTargets(onEdit); });
-  navRow(fuel, 'Water goal and sizes', waterPill(), () => { close(); openWaterSettings(latestLb(), onEdit); });
-  navRow(fuel, 'AI estimator', aiPill(), () => { close(); openAiSettings(); });
-  navRow(fuel, 'Food memory', null, () => { close(); openRecallList(); });
-  navRow(fuel, 'Paste food JSON', null, () => { close(); openImportPaste(); });
-
-  /* ---- train ---- */
-  const train = section(sh, 'Train');
+function openRestSheet(onEdit, who) {
+  const { sh } = subSheet('Default rest', onEdit, who);
   const restRow = el('div', 'field');
   const lab = el('label', null, 'Default rest (seconds)');
   lab.setAttribute('for', 'restDef');
@@ -198,109 +395,41 @@ export function openSettings(onEdit) {
     LS.set('restDefault', r); toast('Rest updated');
   };
   restRow.appendChild(restIn);
-  train.appendChild(restRow);
+  sh.appendChild(restRow);
+}
 
-  const trainList = rowList(train);
-  navRow(trainList, 'Exercise library', null, () => { close(); openExerciseManager(); });
-  navRow(trainList, 'Import workout history', null, () => { close(); openImport(); });
-
-  /* ---- coach ----
-     One switch per category of thing Coach may notice. Two categories are
-     deliberately absent and not mutable: the card's own state machine, which
-     is how it says it cannot read the log, and anything that counsels rest or
-     care. Everything else is somebody's to switch off, and an absent key means
-     on — so a fresh account has every switch on without a byte being written. */
-  const coachSec = section(sh, 'Coach');
-  coachSec.appendChild(noteEl(
+/* ---- coach ----
+   One switch per category of thing Coach may notice, under four headings.
+   Two categories are deliberately absent and not mutable: the card's own state
+   machine, which is how it says it cannot read the log, and anything that
+   counsels rest or care. Everything else is somebody's to switch off, and an
+   absent key means on — so a fresh account has every switch on without a byte
+   being written. */
+function openCoachSettings(onEdit, who) {
+  const { sh, close } = subSheet('Coach', onEdit, who);
+  sh.appendChild(noteEl(
     'What Coach may bring up. It only ever compares you against numbers you set ' +
     'or against your own trailing average, and a rule with thin data stays quiet ' +
     'rather than guessing.'));
-  coachToggleRows(coachSec, onEdit);
-  coachAnswerRows(coachSec, onEdit);
-  const coachList = rowList(coachSec);
-  navRow(coachList, 'Ask Coach something', null, () => { close(); openCoachSheet(); });
+  coachToggleGroups(sh, onEdit);
 
-  /* ---- steps ---- */
-  const steps = rowList(section(sh, 'Steps'));
-  navRow(steps, 'Step goal', stepPill(), () => { close(); openStepSettings(onEdit); });
-
-  /* ---- look ----
-     Its own section, before App, one row (V59 §8.2). A vibe changes how Rack
-     looks and never what it says or does, so it sits apart from every setting
-     that changes a number. The native hub puts the same section after Coach,
-     where its App section follows. */
-  const look = rowList(section(sh, 'Look'));
-  navRow(look, 'Vibes', vibeName(), () => { close(); openVibes(onEdit); });
-
-  /* ---- app ---- */
-  const app = section(sh, 'App');
-  const appList = rowList(app);
-  navRow(appList, 'Add to Home Screen', null, () => { close(); openInstallGuide(); });
-  navRow(appList, 'Replay the walkthrough', null, () => {
-    close();
-    if (typeof window.__rackTour === 'function') window.__rackTour();
-    else toast('Reload the app and try again');
-  });
-
-  /* Only when there is something to say. A row that reads "0 saves were
-     refused" is a row that teaches everybody to ignore it, and on a healthy
-     account this list is empty for the life of the install. It is here rather
-     than on a tab because it is a repair, not a feature — the morning after a
-     rules publish goes wrong is the day it exists for. */
-  const refused = refusedSaves();
-  if (refused.length) {
-    navRow(appList,
-      refused.length + ' save' + (refused.length === 1 ? ' was' : 's were') + ' refused',
-      null,
-      () => { close(); openRefused(onEdit); });
+  const told = el('div');
+  if (coachAnswerRows(told, onEdit) != null) {
+    const sec = el('div', 'you-sec');
+    sec.appendChild(el('div', 'you-sec-t', 'What you’ve told Coach'));
+    sec.appendChild(told);
+    sh.appendChild(sec);
   }
 
-  const out = el('button', 'btn btn-danger btn-block', 'Sign out');
-  out.style.marginTop = '16px';
-  out.onclick = () => {
-    close();
-    if (hasActiveSession()) {
-      confirmSheet({
-        title: 'Workout in progress',
-        body: 'You have a live session. Signing out keeps it saved on this device, but you’ll need to sign back in to finish it.',
-        confirmLabel: 'Sign out anyway',
-        danger: true,
-        onConfirm: () => logout()
-      });
-      return;
-    }
-    logout();
-  };
-  app.appendChild(out);
-
-  /* Signing out leaves this device's cached copy of the account behind. It is
-     namespaced by uid, so no other account can reach it through the app — but
-     on a shared or borrowed phone "unreachable through the app" is not the
-     same as gone, and this is the button that makes it gone. It also clears
-     any queued offline writes, which is the reason it is not the default. */
-  const wipe = el('button', 'linkish', 'Sign out and erase this device’s copy');
-  wipe.style.cssText = 'display:block;width:100%;text-align:center;margin-top:10px';
-  wipe.onclick = () => {
-    close();
-    confirmSheet({
-      title: 'Erase this device’s copy?',
-      body: 'Everything stays in your account and comes back when you sign in again. Anything logged while offline and not yet synced is lost.',
-      confirmLabel: 'Erase and sign out',
-      danger: true,
-      onConfirm: async () => {
-        const u = uid();
-        await logout();
-        purgeDevice(u);
-        location.reload();
-      }
-    });
-  };
-  app.appendChild(wipe);
-
-  const done = el('button', 'btn btn-ghost btn-block', 'Close');
-  done.style.marginTop = '18px';
-  done.onclick = close;
-  sh.appendChild(done);
+  const ask = el('button', 'set-row-nav has-tile');
+  ask.appendChild(tile('bubble', 'coach'));
+  ask.appendChild(el('span', 'set-row-l', 'Ask Coach something'));
+  ask.appendChild(glyphed(el('span', 'set-row-x', '›'), 'go'));
+  ask.onclick = () => { close(); openCoachSheet(); };
+  const list = el('div', 'set-list');
+  list.style.marginTop = '14px';
+  list.appendChild(ask);
+  sh.appendChild(list);
 }
 
 /* ================= REFUSED SAVES =================

@@ -567,10 +567,12 @@ section('H. sites — the unit reaches the screen, and reaches it once');
         /const steps = \[welcome, unitsStep, aboutYou, weighIn,/.test(S('onboarding.js')));
   check('setup defaults water to ml on metric and leaves it alone afterwards',
         S('onboarding.js').includes("unit: a.units === 'kg' ? 'ml' : 'floz',"));
-  check('Settings has one Units control, in the You section, as a segmented',
+  // October 2026 regroup: Units is a row under Look and feel (the registry) that
+  // opens a small sheet, and the sheet holds the one segmented control.
+  check('Settings has one Units control: a Look-and-feel row opening a sheet with a segmented',
         /unitsRow[\s\S]{0,400}segmented\(\s*\n?\s*\[\['lb', 'Imperial'\], \['kg', 'Metric'\]\]/.test(S('settings.js')) &&
-        S('settings.js').indexOf("const unitsRow") > S('settings.js').indexOf("const you = section(sh, 'You')") &&
-        S('settings.js').indexOf("const unitsRow") < S('settings.js').indexOf("const fuel = rowList"));
+        (S('settings.js').match(/segmented\(\s*\n?\s*\[\['lb', 'Imperial'\]/g) || []).length === 1 &&
+        /id: 'units',\s+group: 'look'/.test(S('settings-registry.js')));
   check('changing units repaints the screen behind the sheet, with no reload',
         /await setUnits\([\s\S]{0,300}if \(onEdit\) onEdit\(\);/.test(S('settings.js')) &&
         !/setUnits[\s\S]{0,300}location\.reload/.test(S('settings.js')));
@@ -581,7 +583,8 @@ section('H. sites — the unit reaches the screen, and reaches it once');
   // exactly two of those left, both deliberate and both named here.
   const ALLOWED = new Set([
     'Per side · lb plates',              // the plates really are pounds — BACKLOG.md
-    'Imperial — lb and ft/in'            // the label of the imperial option itself
+    'Imperial — lb and ft/in',           // the label of the imperial option itself
+    'lb · in'                            // the Units row's own value, imperial's name (settings.js unitsPill)
   ]);
   const stripComments = t => t
     .replace(/\/\*[\s\S]*?\*\//g, '')

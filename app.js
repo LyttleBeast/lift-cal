@@ -6,7 +6,7 @@ import { onboardingState, runSetup, runTour } from './onboarding.js';
 import { initWorkout, render as renderWorkout, hasActiveSession } from './workout.js';
 import { initFood, render as renderFood } from './food.js';
 import { initWeight, render as renderWeight } from './weight.js';
-import { initSteps, render as renderSteps } from './steps.js';
+import { initSteps } from './steps.js';
 import { initYou, render as renderYou } from './you.js';
 import { initUsage, bump } from './usage.js';
 import { bootVibe, setRenderer, prefetchVibes } from './vibe.js';
@@ -279,7 +279,6 @@ export function switchView(name) {
   if (name === 'workout') { bump('tabTrain');  renderWorkout(); }
   if (name === 'food')    { bump('tabFuel');   renderFood(); }
   if (name === 'weight')  { bump('tabWeight'); renderWeight(); }
-  if (name === 'steps')   { bump('tabSteps');  renderSteps(); }
 }
 
 dock.addEventListener('click', e => {
@@ -295,7 +294,7 @@ dock.addEventListener('click', e => {
    visit, so nothing is counted and lastView is left alone. Before boot there
    is nothing drawn to repaint. */
 bootVibe();
-const RENDER = { you: renderYou, workout: renderWorkout, food: renderFood, weight: renderWeight, steps: renderSteps };
+const RENDER = { you: renderYou, workout: renderWorkout, food: renderFood, weight: renderWeight };
 setRenderer(() => {
   if (!booted) return;
   const on = dock.querySelector('button.active');

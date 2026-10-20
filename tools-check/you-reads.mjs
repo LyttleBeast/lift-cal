@@ -169,16 +169,25 @@ section('A. the count — rack-v56 measured, this build pinned, with a spy on ev
   check('rack-v56 read the seven on those too: ' + J(before.tail.map(r => r.length)), before.tail.every(r => r.length === 7), J(before.tail));
 }
 
-/* ================= B. THE SCREEN IS THE SAME ================= */
-section('B. the same fixture, both builds — the You tab says the same thing, line for line');
+/* ================= B. THE SCREEN ================= */
+section('B. the screen — rack-v56 drew the old You; this build draws the redesign, and holds still between changes');
 {
-  check('the screen has something on it to compare: ' + after.boot.text.split('\n').length + ' lines, the name, Coach, the trend and the targets among them',
-        after.boot.text.split('\n').length > 100 && ['Micah', 'COACH', 'Trend today', 'Against your targets', 'Weekly review'].every(s => after.boot.text.includes(s)),
-        after.boot.text.slice(0, 400));
-  check('at boot, once every load has landed', before.boot.text === after.boot.text, parting(before.boot.text, after.boot.text));
-  check('after three switches to the tab', before.afterRenders === after.afterRenders, parting(before.afterRenders, after.afterRenders));
-  ['weigh', 'food', 'targets', 'remote'].forEach(k =>
-    check('after ' + after.steps[k].what, before.steps[k].text === after.steps[k].text, parting(before.steps[k].text, after.steps[k].text)));
+  /* WAS, until the October 2026 redesign: "the same fixture, both builds — the
+     You tab says the same thing, line for line". That held v57's read
+     reduction to v56's pixels. The screen is redesigned on purpose now (the
+     goal as one number, four tiles, three rows), so line-for-line is gone;
+     what v57 promised — a repaint never changes what is said unless the data
+     changed — is held below as: the same text after three switches, and a
+     different one after each change. Every card v56 drew is still drawn, one
+     tap away: tools-check/you-structure.mjs holds that. */
+  const T = after.boot.text;
+  check('the v56 screen is the instrument\'s baseline: it still draws the old cards on You (the name, Coach, the trend, the targets, the review)',
+        ['Micah', 'COACH', 'Trend today', 'Against your targets', 'Weekly review'].every(x => before.boot.text.includes(x)));
+  check('this build\'s screen has something on it: ' + T.split('\n').length + ' lines — the name, Coach, the four tiles and the three rows',
+        ['Micah', 'COACH', 'Calories / day', 'Protein / day', 'Sessions', 'Steps / day', 'Weekly review', 'Trends', 'Rack noticed'].every(x => T.includes(x)),
+        T.slice(0, 400));
+  check('and the cards that moved behind the rows are not drawn on it', !['Against your targets', 'Trend today', 'How you’re doing'].some(x => T.includes(x)));
+  check('after three switches to the tab it says exactly what it said at boot', after.boot.text === after.afterRenders, parting(after.boot.text, after.afterRenders));
 }
 
 /* ================= C. A WRITE ELSEWHERE STILL SHOWS ================= */
@@ -207,9 +216,10 @@ section('C. a write elsewhere is on You at the next switch to it, no reload — 
   check('THE ONE LINE THAT DIFFERS, on purpose: rack-v56 never showed it. Its callback emptied the fingerprint, so the seven it read were taken as the boot values and thrown away',
         O.details.seen === false && O.details.added.length === 0 && mine(O.details.gets).length === 8 && S.details.text.includes('Jordan'),
         J({ v56seen: O.details.seen, v56gets: O.details.gets }));
-  // The name, and the avatar's initial.
+  // The name, and the avatar's initial: the only line the save changed on the
+  // screen it opened over is the name (and its initial) — the first lines.
   const cut = a => a.split('\n').filter(l => !/^(Micah|Jordan|M|J)$/.test(l)).join('\n');
-  check('and that name is the only thing between the two screens after it', cut(O.details.text) === cut(S.details.text), parting(cut(O.details.text), cut(S.details.text)));
+  check('and that name is the only thing it changed on this build\'s screen', cut(S.remote.text) === cut(S.details.text), parting(cut(S.remote.text), cut(S.details.text)));
 }
 
 /* ================= D. THE CODE SAYS SO ================= */
@@ -221,7 +231,7 @@ section('D. the mechanism — one change feed in store.js, and You reads only wh
   check('you.js subscribes once, at load, and refreshLogged() reads only the nodes that changed',
         (Y.match(/^onChange\(/gm) || []).length === 1 && /Promise\.all\(want\.map\(n => read\(n, null\)\)\)/.test(Y) && !/liveFp/.test(Y));
   check('no callback throws a refresh away any more: the four settings callbacks repaint, and the repaint reads what changed',
-        !/liveFp = ''/.test(Y) && Y.includes('pickProfilePhoto(() => render())') && (Y.match(/openSettings\(\(\) => render\(\)\)/g) || []).length === 2 &&
+        !/liveFp = ''/.test(Y) && Y.includes('pickProfilePhoto(() => render())') && (Y.match(/openSettings\(\(\) => render\(\), \{ name: nameOf\(\), photo: profile && profile\.photo \}\)/g) || []).length === 2 &&
         Y.includes('const back = () => render();') && /refreshSessions\(\);\s*\n\}/.test(Y));
 }
 
@@ -499,18 +509,23 @@ async function child(dir) {
   await step('targets', 'the calorie target, moved on Fuel', () =>
     store.write('food/targets', { ...getAt(U + 'food/targets'), cal: 3620 }), '3,620');
   // A weigh-in from another device: the database moves and the Weight tab's
-  // listener delivers it. Nothing on this device wrote anything.
+  // listener delivers it. Nothing on this device wrote anything. (An earlier
+  // day's, 186.0 three days back: the redesigned You prints the TREND to one
+  // decimal, not the latest reading as the v56 screen did, and a second
+  // reading on an already-weighed day moves it by less than 0.05.)
   await step('remote', 'a weigh-in from another device, through the Weight tab’s listener', async () => {
-    setAt(U + 'weight/entries/wtREMOTE', { lb: 197.2, t: at(0, 18, 20) });
+    setAt(U + 'weight/entries/wtREMOTE', { lb: 186.0, t: at(3, 8, 20) });
     touch(U + 'weight/entries/wtREMOTE');
-  }, '197.2');
+  }, '191.8');
   // Your details, from You's own gear: the hub, the row, the name, Save.
   {
     const k = gets.length;
     const gear = view.querySelector('.you-gear');
     gear.onclick();
     await settle();
-    const row = walk(body).find(n => n._cls.includes('set-row-nav') && n.textContent.startsWith('Your details'));
+    // October 2026: the hub's first row is the profile card now; the v56 build this
+    // file also drives has the old set-row-nav.
+    const row = walk(body).find(n => n._cls.includes('set-profile') || (n._cls.includes('set-row-nav') && n.textContent.startsWith('Your details')));
     row.onclick();
     await settle();
     const sheets = body.children.filter(n => n._cls.includes('sheet'));

@@ -71,8 +71,17 @@ const CONTRACT = ['vibes/defs', 'vibes/icons'].flatMap(d => readdirSync(join(ROO
 // whatever real vibes follow it, so the rest of each literal stands.
 const A_DEFS = 'const DEFS = { v1: V1', A_SETS = 'const ICON_SETS = { v1: V1_ICONS';
 const shown = new Map();
+// October 2026: the Steps tab is gone, so rack-v58's index.html is compared
+// WITHOUT the tab's two pieces — its view section and its dock button — and
+// nothing else. Every other byte is still rack-v58's.
+const noStepsTab = html => html
+  .replace('  <section class="view" id="view-steps"></section>\n', '')
+  .replace(/  <button data-view="steps"[\s\S]*?<\/button>\n/, '');
 const base = f => {
-  if (!shown.has(f)) shown.set(f, execFileSync('git', ['-C', ROOT, 'show', `${BASE}:${f}`], { encoding: 'utf8', maxBuffer: 1 << 26 }));
+  if (!shown.has(f)) {
+    const t = execFileSync('git', ['-C', ROOT, 'show', `${BASE}:${f}`], { encoding: 'utf8', maxBuffer: 1 << 26 });
+    shown.set(f, f === 'index.html' ? noStepsTab(t) : t);
+  }
   return shown.get(f);
 };
 const url = f => pathToFileURL(join(ROOT, f)).href;
@@ -258,7 +267,7 @@ const innerAt = (text, lhs) => {
   return text.slice(i + (lhs + '.innerHTML =').length, text.indexOf(';\n', i)).trim();
 };
 {
-  for (const [file, lhs] of [['food.js', 'gear'], ['steps.js', 'gear'], ['you.js', 'gear'], ['workout.js', 'cal']]) {
+  for (const [file, lhs] of [['food.js', 'gear'], ['you.js', 'gear'], ['workout.js', 'cal']]) {
     const was = Function('return (' + innerAt(base(file), lhs) + ')')();
     const expr = innerAt(read(file), lhs);
     const now = expr && /^iconHtml\(/.test(expr) ? Function('iconHtml', 'return (' + expr + ')')(VB.iconHtml) : null;
@@ -615,6 +624,16 @@ section('H  engine v2: glyphs, the vessel, tailpieces and hatch patterns');
   // The contract's web sites (file:line at rack-v58), per file and glyph.
   const want = {};
   for (const [name, g] of Object.entries(IC1.glyphs)) for (const s of g.web) { const f = s.split(':')[0]; (want[f] = want[f] || {})[name] = (want[f][name] || 0) + 1; }
+  /* October 2026, on purpose, each a change of where a glyph is drawn and not of
+     which: the Settings hub's rows and its two sub-sheet backs, You's three rows
+     (go) and the page head of the screens behind them (back); and the install
+     card's dismiss cross left You for Settings → Help, which has no cross. The
+     contract itself (vibes/icons/v1.js, sha-pinned) is untouched. */
+  const MOVED = { 'settings.js': { go: 2, back: 1 }, 'you.js': { back: 1, dismiss: -1 } };
+  for (const [f, o] of Object.entries(MOVED)) for (const [n, d] of Object.entries(o)) {
+    (want[f] = want[f] || {})[n] = ((want[f][n] || 0) + d);
+    if (want[f][n] === 0) delete want[f][n];
+  }
   const got = {}, stray = [];
   for (const f of readdirSync(ROOT).filter(x => x.endsWith('.js') && !PINNED.includes(x) && x !== 'vibe.js')) {
     for (const c of callsIn(read(f))) {
@@ -657,7 +676,7 @@ section('H  engine v2: glyphs, the vessel, tailpieces and hatch patterns');
     expect(VB.tail(p, 'you') === p && ser(p) === before && VB.tail(null, 'you') === null, 'tail() adds nothing to a screen in v1');
   }
   // Each screen, and the recap, ends in tail() by its own name.
-  const TAILS = [['you.js', 'you'], ['workout.js', 'workout'], ['workout.js', 'recap'], ['food.js', 'food'], ['weight.js', 'weight'], ['steps.js', 'steps']];
+  const TAILS = [['you.js', 'you'], ['workout.js', 'workout'], ['workout.js', 'recap'], ['food.js', 'food'], ['weight.js', 'weight']];   // steps.js left with the Steps tab, Oct 2026
   const noTail = TAILS.filter(([f, s]) => !new RegExp("tail\\([^;]*, '" + s + "'\\)").test(read(f)));
   expect(!noTail.length && IDX && true, 'every tab and the recap hand their screen to tail() under their own name: ' + TAILS.map(([f, s]) => f + ' ' + s).join(', ') + (noTail.length ? ' — missing: ' + noTail.map(x => x.join(' ')).join(', ') : ''));
 

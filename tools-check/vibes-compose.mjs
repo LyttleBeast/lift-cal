@@ -138,7 +138,7 @@ for (const [id, d] of Object.entries(defs)) {
 
 /* ---------- E ---------- */
 head('E  the web tags the blocks the vocabulary names');
-const FILES = ['you.js', 'workout.js', 'steps.js', 'food.js', 'weight.js'];
+const FILES = ['you.js', 'workout.js', 'food.js', 'weight.js'];
 const tagged = {};
 const composeCalls = new Set();
 for (const f of FILES) {
@@ -147,12 +147,19 @@ for (const f of FILES) {
   for (const m of t.matchAll(/composeScreen\('(\w+)'/g)) composeCalls.add(m[1]);
 }
 expect(Object.entries(tagged).every(([s, names]) => SCREENS[s] && [...names].every(n => SCREENS[s].blocks.includes(n))), 'every blk() names a block of its screen');
+/* October 2026, on purpose: the Steps tab is gone (its screen is no longer drawn,
+   so there is nothing to tag) and You stopped drawing four of its blocks —
+   doing, noticed, trends and app moved behind the rows or into Settings
+   (you-rows.js). The vocabulary and the definitions keep their names (vibes/**
+   is not touched); arrange() leaves a block that is not drawn where it stands.
+   Everything else is held to the same rule as before. */
+const RETIRED = { steps: null, you: ['doing', 'noticed', 'trends', 'app'] };
 const composable = new Set();
-for (const d of Object.values(defs)) for (const [s, e] of Object.entries(d.compose || {})) if (e.fallback === false) composable.add(s);
+for (const d of Object.values(defs)) for (const [s, e] of Object.entries(d.compose || {})) if (e.fallback === false && RETIRED[s] !== null) composable.add(s);
 expect([...composable].every(s => composeCalls.has(s) && tagged[s]), `every screen a vibe composes (${[...composable].join(', ')}) is tagged and arranged at its end`);
 {
   // a block the vocabulary names that a composable screen draws must be tagged: list the ones never tagged
-  const untagged = [...composable].flatMap(s => SCREENS[s].blocks.filter(n => !tagged[s].has(n)).map(n => `${s}.${n}`));
+  const untagged = [...composable].flatMap(s => SCREENS[s].blocks.filter(n => !(RETIRED[s] || []).includes(n) && !tagged[s].has(n)).map(n => `${s}.${n}`));
   expect(!untagged.length, 'no block of a composable screen is left untagged' + (untagged.length ? ' — ' + untagged.join(', ') : ''));
 }
 {

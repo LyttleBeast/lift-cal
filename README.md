@@ -135,7 +135,9 @@ node in the database. See *Access* below for what replaced them, and why.
 | `ai-config.js` | The Worker URL. A public address, not a credential. The Worker itself is **not in this repo** — it is `~/dev/rack-worker`, its own private repo |
 | `water.js` | Water card, log sheet, goal and sizes |
 | `weight.js` | Weight tab — log, trend chart, time-of-day curve, maintenance |
-| `steps.js` | Steps tab — ring, trend, streaks, heat map, and the setup walkthrough |
+| `steps.js` | Steps data — the node's listener, the goal, and the two sheets that write it (a day's total, the goal). No tab since October 2026: the day's number is a tile on You and a card under Trends → Habits |
+| `settings-registry.js` `tile-icons.js` `tiles.js` | Settings' table (rows, groups, search words, gates — pure), the coloured icon tiles' drawings (pure) and the tile itself |
+| `you-rows.js` `you-numbers.js` | You's three rows and the screens behind them (pure), and its four number tiles (pure) |
 | `tdee.js` | Public face of the weight math — trend, maintenance, calorie zones |
 | `weightmodel.js` | Weigh-in normalisation: gut-load model, coefficient fit, robust slope |
 | `exercises.js` | Static 231-exercise library |

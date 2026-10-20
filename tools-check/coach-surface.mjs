@@ -299,6 +299,9 @@ writeFileSync(join(dir, 'coach-data-stub.mjs'),
   IMPORTED.map(n => `export function ${n}(...a) { return globalThis.__coachData('${n}', a); }`).join('\n') + '\n');
 writeFileSync(join(dir, 'coach-ui.mjs'), UI_SRC
   .replace("from './ui.js'", 'from ' + real('ui.js'))
+  // October 2026: the switch rows' tile and the Coach sheet's four groups.
+  .replace("from './tiles.js'", 'from ' + real('tiles.js'))
+  .replace("from './settings-registry.js'", 'from ' + real('settings-registry.js'))
   // v53: the Lift target Save validates through coach-goal.js before it writes.
   .replace("from './coach-goal.js'", 'from ' + real('coach-goal.js'))
   // v49: the Lift target row converts its box through units.js.
@@ -1974,7 +1977,11 @@ section('N. v52 — the caution before a proposal, the mark’s chips, and "Shou
      in a box of their own (rack.css, 44px, measured by touch-target.mjs F).
      The chip and its box, and no more. */
   const V55 = ['coach-goal-opt', 'coach-goal-opts'];
-  const added = [...cls(src('coach-ui.js'))].filter(c => !was.has(c) && !V54.includes(c) && !V55.includes(c));
+  /* October 2026, on purpose: Settings → Coach draws its switches in four
+     headed groups, and the group's box is You's own section box (rack.css
+     .you-sec, which already carries the heading above it). Reused, not new. */
+  const V2610 = ['you-sec'];
+  const added = [...cls(src('coach-ui.js'))].filter(c => !was.has(c) && !V54.includes(c) && !V55.includes(c) && !V2610.includes(c));
   check('no new CSS class: the caution and the mark are Coach bubbles and chips', !added.length, list(added));
   // ---- Phase B: "Am I fueled?" ----
   /* A month of food logged as he goes, training every other day; now is

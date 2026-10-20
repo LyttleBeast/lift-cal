@@ -37,6 +37,10 @@ import { normGoalLift, GOAL_LB_MAX } from './coach-goal.js';
 // a group's hex as the token that paints it (V59 §5.4, §5.7) — vibePaint, since
 // paint is a local repaint's name further down.
 import { paint as vibePaint, icon, glyphed } from './vibe.js';
+// Settings → Coach draws its switches under four headings with a tile each
+// (the October 2026 redesign); the table that says which is settings-registry.js.
+import { tile } from './tiles.js';
+import { coachSections, COACH_ICONS } from './settings-registry.js';
 
 /* The two marks: the speech bubble, and the lock. Built as they always were —
    the <svg> made here, its drawing written in as markup. */
@@ -893,6 +897,50 @@ export function coachToggleRows(host, onChange) {
   });
   host.appendChild(list);
   return list;
+}
+
+/* The switches as data — [{ id, label, note, on }] — for the row that says
+   "13 of 14 on" and for the grouped list below. `on` is what the switch shows:
+   isMuted, so Patterns (stored the other way round) reads right. */
+export function coachSwitchRows() {
+  const settings = coachSettings();
+  return CATEGORIES.filter(c => c.mutable)
+    .map(c => ({ id: c.id, label: c.label, note: c.note, on: !isMuted(settings, c.id) }));
+}
+
+/* The same switches as coachToggleRows, under four headings, each with its
+   tile (Settings → Coach). The switch itself is the one toggle() draws and the
+   write is the one it makes — only where each sits and what it wears changed.
+   A category the registry has not placed lands under Other, so a switch added
+   to coach.js is never unreachable. */
+export function coachToggleGroups(host, onChange) {
+  if (!coachReady()) {
+    host.appendChild(noteEl('Still reading Coach’s settings. Give it a moment and reopen this.'));
+  } else if (!coachSettingsKnown()) {
+    host.appendChild(noteEl(
+      'Coach’s settings couldn’t be read from this device just now. These are the ' +
+      'defaults — a change made here won’t save until it can reach the database.'));
+  }
+  const cats = new Map(CATEGORIES.filter(c => c.mutable).map(c => [c.id, c]));
+  coachSections(coachSwitchRows()).forEach(({ group, rows }) => {
+    const sec = el('div', 'you-sec');
+    sec.appendChild(el('div', 'you-sec-t', group.title));
+    const list = el('div', 'set-list');
+    rows.forEach(r => {
+      const c = cats.get(r.id);
+      if (!c) return;
+      const row = el('div', 'set-row-tog');
+      row.appendChild(tile(COACH_ICONS[r.id] || 'bubble', group.tone));
+      const body = el('div', 'set-row-l');
+      body.appendChild(el('span', null, c.label));
+      body.appendChild(el('span', 'set-row-sub', c.note));
+      row.appendChild(body);
+      row.appendChild(toggle(c, onChange));
+      list.appendChild(row);
+    });
+    sec.appendChild(list);
+    host.appendChild(sec);
+  });
 }
 
 /* The one new component this ship adds, and it is added rather than reused

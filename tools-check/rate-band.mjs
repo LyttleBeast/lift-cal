@@ -231,7 +231,9 @@ section('D2. You — the Weight card\'s /week arrow asks rateVerdict; its 30-day
 section('E. You — the Goal card\'s dot and bar take no colour past the band');
 {
   const you = read('you.js');
-  const cl = /  const called = (!\(t\.enough && t\.rate != null && rateVerdict\(t\.rate, t\.dir\) == null\));\n/.exec(you);
+  // the gate is a module-level function since the October 2026 You redesign (the
+  // headline card and the full Goal card both ask it); same expression.
+  const cl = /const trajCalled = t => (!\(t\.enough && t\.rate != null && rateVerdict\(t\.rate, t\.dir\) == null\));\n/.exec(you);
   const dl = /  const dot = el\('i', 'traj-dot ' \+ \((!called \? '' : [^;]*)\)\);\n/.exec(you);
   check('the dot and its `called` gate are where this file expects them', !!cl && !!dl);
   const dot = t => new Function('t', 'rateVerdict', 'const called = ' + (cl ? cl[1] : 'true') + '; return (' + (dl ? dl[1] : "''") + ');')(t, rateVerdict);

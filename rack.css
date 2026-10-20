@@ -1439,10 +1439,8 @@ body.peeking .view.active { padding-bottom: 65px; }
 /* ============================================================
    STEPS
    ============================================================ */
-/* Five dock slots now, not three — tighten the tracking so the longest label
-   still fits on a small phone. At 320px that is a 64px slot against WEIGHT,
-   which sets about 39px at 10px in this face; the icon is 22px. Nothing
-   collides, so nothing else here has to change. */
+/* Four dock slots (the Steps tab went in October 2026; its room is Friends',
+   later). The tracking stays as it was — wider slots only give it more room. */
 .dock button { letter-spacing: .07em; }
 
 .st-hero { display: flex; align-items: center; gap: 18px; margin-top: 4px; }
@@ -1588,6 +1586,77 @@ body.peeking .view.active { padding-bottom: 65px; }
   font-variant-numeric: tabular-nums; }
 /* The trailing chevron: the row's only signal that it opens something. */
 .set-row-x { flex: none; color: var(--dim); font-size: 17px; line-height: 1; }
+
+/* ---------- the icon tiles (October 2026 redesign) ----------
+   A 32 px rounded square with an 18 px line glyph (tiles.js). The wash is the
+   tone's colour at a low alpha and the glyph is the tone's colour — both read
+   from ONE variable per tone, set here from the plate/role tokens, so a vibe
+   that repaints those repaints every tile with no rule of its own. The tones:
+   plan = the blue plate, train = the accent, coach = the good green, look =
+   half red plate and half yellow plate (the "ember" — no role exists for it,
+   so it is mixed from two that do), tools = the chrome plate, help = chalk,
+   out = danger, warn = warn. */
+.tile {
+  flex: none; display: grid; place-items: center;
+  width: 32px; height: 32px; border-radius: var(--r-sm);
+  color: var(--tile-ink, var(--chalk));
+  background: color-mix(in srgb, var(--tile-ink, var(--chalk)) var(--tile-wash, 16%), transparent);
+}
+.tile svg { width: 18px; height: 18px; display: block; }
+.tile-plan  { --tile-ink: var(--p-blue); }
+.tile-train { --tile-ink: var(--accent); --tile-wash: 14%; }
+.tile-coach { --tile-ink: var(--good); }
+.tile-look  { --tile-ink: color-mix(in srgb, var(--p-red) 50%, var(--p-yellow)); }
+.tile-tools { --tile-ink: var(--p-chrome); }
+.tile-help  { --tile-ink: var(--chalk); --tile-wash: 8%; }
+.tile-out   { --tile-ink: var(--danger); }
+.tile-warn  { --tile-ink: var(--warn); }
+
+/* Words in a tone (the two sign-outs, the refused row): the tone moved toward
+   chalk until it reads on the sheet — danger red alone is about 3.5:1 on --bar,
+   this is over 5:1 — so the label is legible and the tile keeps the pure red. */
+.set-row-nav.danger .set-row-l { color: color-mix(in srgb, var(--danger) 65%, var(--chalk)); }
+.set-row-nav.warn .set-row-l { color: var(--warn); }
+
+/* A row that leads with a tile. */
+.set-row-nav.has-tile { gap: 12px; padding: 10px 2px; min-height: 52px; }
+.set-row-nav.has-tile .set-row-v { max-width: 46%; text-align: right; }
+.set-row-tog .tile { align-self: flex-start; }
+
+/* Settings: the search field, the profile card, and the unheaded lists. */
+.set-search {
+  position: relative; display: flex; align-items: center; margin-top: 14px;
+}
+.set-search svg {
+  position: absolute; left: 12px; width: 17px; height: 17px; color: var(--steel); pointer-events: none;
+}
+.set-search input {
+  width: 100%; min-height: 44px; padding: 10px 12px 10px 38px;
+  background: var(--well); color: var(--chalk);
+  border: 1px solid var(--collar); border-radius: var(--r-sm);
+  font: inherit; font-size: 16px;
+}
+.set-search input:focus { border-color: var(--focus); outline: none; }
+.set-profile {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+  margin-top: 14px; padding: 12px;
+  background: var(--well); color: var(--chalk);
+  border: 1px solid var(--collar); border-radius: var(--r-sm);
+}
+.set-profile:active { background: rgba(var(--lift-rgb),.04); }
+.set-avatar {
+  flex: none; display: grid; place-items: center; overflow: hidden;
+  width: 44px; height: 44px; border-radius: var(--r-round);
+  background: var(--raised); color: var(--chalk); font-size: 15px;
+  font-variation-settings: 'wdth' 100, 'wght' 700;
+}
+.set-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.set-profile-b { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.set-profile-n { font-size: 15px; font-variation-settings: 'wdth' 96, 'wght' 700;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.set-profile-s { font-size: 11px; color: var(--steel); line-height: 1.35; }
+.set-nothing { margin-top: 22px; }
+.set-group-out { margin-top: 24px; }
 
 /* ---------- admin ----------
    Same bones as `.person` in auth.css — a name over a quieter second line,
@@ -2571,3 +2640,30 @@ body.peeking .view.active { padding-bottom: 65px; }
   fill: none; stroke: var(--chalk); stroke-width: 2.25; stroke-linecap: round; stroke-linejoin: round;
 }
 .vibes-close { margin-top: 11px; }
+
+
+/* ============================================================
+   YOU — the redesign (October 2026)
+   The goal headline, four number tiles, three rows that open screens.
+   ============================================================ */
+.traj-reason.good { color: var(--good); }
+.you-tiles { margin-bottom: 12px; }
+.kpi-note {
+  margin-top: 6px; font-size: 11px; line-height: 1.35; color: var(--steel);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.you-rows { display: flex; flex-direction: column; }
+.you-row {
+  display: flex; align-items: center; gap: 12px; width: 100%; min-height: 60px;
+  padding: 10px 2px; text-align: left; color: var(--chalk);
+  border-top: 1px solid var(--collar);
+  transition: background var(--fast) var(--ease);
+}
+.you-row:first-child { border-top: none; }
+.you-row:active { background: rgba(var(--lift-rgb),.04); }
+.you-row-m { flex: 1; min-width: 0; }
+.you-row-n { font-size: 15px; font-variation-settings: 'wdth' 92, 'wght' 650; }
+.you-row-s {
+  margin-top: 2px; font-size: 12px; color: var(--steel);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}

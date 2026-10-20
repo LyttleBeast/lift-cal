@@ -64,8 +64,8 @@
 // onboarding.js and the two new modules it owns the entry points to. Nothing
 // imports back.
 
-import { read, LS, todayKey, isOwner, wu, onChange } from './store.js';
-import { $, el, noteEl, parseKey, fmtDate, compact, fmtDuration, sheet } from './ui.js';
+import { read, todayKey, wu, onChange } from './store.js';
+import { $, el, noteEl, parseKey, fmtDate, compact, fmtDuration, sheet, segmented } from './ui.js';
 import { assess, keysBack as keysBackI, streakOf, fmtRange,
          goalDirection, rateVerdict } from './insights.js';
 import { allSessions, exerciseIndex, filterByRange, groupSplit, topBy, weeklyVolume,
@@ -73,11 +73,13 @@ import { allSessions, exerciseIndex, filterByRange, groupSplit, topBy, weeklyVol
          groupColor } from './analytics.js';
 import { weightStats, maintenance, effectiveMaint, trendRate, refreshModel, trendWeight, adjustedDays } from './tdee.js';
 import { fmtWater } from './water.js';
-import { isStandalone } from './usage.js';
-import { openInstallGuide } from './onboarding.js';
+import { openSetSteps } from './steps.js';
 import { openSettings, openGoal, openDailyTargets, pickProfilePhoto } from './settings.js';
-import { openAdmin, isAdminOpen } from './admin.js';
+import { isAdminOpen } from './admin.js';
 import { coachCard } from './coach-ui.js';
+import { tile } from './tiles.js';
+import { YOU_ROWS, TRENDS, trendsOf, rowSub } from './you-rows.js';
+import { weekNumbers } from './you-numbers.js';
 import { initCoachData, coachLogReady, noteCoachSessions, noteCoachData } from './coach-data.js';
 import { wOut, fmtW, fmtSetLoad, labelW, unitW, fmtRate, labelRate, fmtVol,
          kcalPerUnit } from './units.js';
@@ -126,6 +128,14 @@ let stepSet   = null;
 let stepDays  = {};
 let waterSet  = null;
 let onboard   = null;
+
+// Which screen behind a row is open, or null for You itself: { id, show } —
+// id is a you-rows.js YOU_ROWS id, show the Trends switch. Module state on
+// purpose: the screen behind a row is this same tab with a Back button, and
+// four repaints land on their own schedule — one that arrives while it is open
+// must paint IT, not You.
+let sub = null;
+let subFrom = 0;          // where You was scrolled to, restored on Back
 
 let sessions  = null;     // null until allSessions() resolves — not the same as []
 let waterDays = null;     // null until the day reads resolve; then { dateKey: ml }
@@ -513,6 +523,12 @@ function kpi({ label, now, prev, fmt, dfmt, unit, judge, series, color, rgb, ref
   return t;
 }
 
+function actBtn(label, fn) {
+  const b = el('button', 'btn btn-ghost btn-block', label);
+  b.onclick = fn;
+  return b;
+}
+
 function goBtn(label, view) {
   const b = el('button', 'btn btn-ghost btn-block', label);
   b.style.marginTop = '12px';
@@ -532,7 +548,7 @@ export function render() {
 
   let wrap;
   try {
-    wrap = build();
+    wrap = sub ? buildSub() : build();
   } catch {
     // The screen the app opens on. If a derivation throws, keep the last good
     // paint rather than clearing to nothing, and only fall back to the bare
@@ -559,82 +575,198 @@ function build() {
   const wrap = el('div', 'screen-pad');
 
   wrap.appendChild(blk('you', 'hero', hero()));
-  /* Coach sits directly under the greeting and above everything else, because
-     it is the only thing on this screen that answers "what should I do about
-     it" rather than "what happened". Its own box is a fixed height whatever it
-     has to say, so the cards below it never move between one day and the next.
-
-     Deliberately NOT passing workout.js's hasActiveSession() in. This file
-     imports none of the four tab modules and that is a property rather than a
-     tidiness: `session` is workout.js's module state, populated by
-     initWorkout(), and app.js starts initYou() BEFORE it — so the first paint
-     of this screen would read "no session running" with one parked on the
-     device. The card asks the device instead, which is right at any moment and
-     in any order. Train passes its own answer in, because there it IS the
-     authority. */
+  /* Coach sits directly under the greeting, because it is the only thing on
+     this screen that answers "what should I do about it" rather than "what
+     happened". Deliberately NOT passing workout.js's hasActiveSession() in:
+     `session` is workout.js's module state and app.js starts initYou() BEFORE
+     it, so the first paint would read "no session running" with one parked on
+     the device. The card asks the device instead. */
   wrap.appendChild(blk('you', 'coach', coachCard({ go: goTab })));
   wrap.appendChild(blk('you', 'since', sinceLine()));
 
-  // One maintenance estimate for the whole paint. Calling it per card would
-  // walk food/daySummaries three times and, worse, invites the two cards that
-  // print it to drift apart.
+  // One maintenance estimate and one reading of the data for the whole paint,
+  // so the headline and the cards behind the rows can never count differently.
   const est = modelReady ? maintenance(entries, summaries) : null;
   const maint = maintInfo(est);
-
-  // One reading of the data for the whole paint. Everything the verdict
-  // cards say is derived here from the same numbers the charts draw, so a
-  // "protein on target 5 of 6 days" line and the macro rows under the fuel
-  // chart can never be counting different days.
   const found = loaded && modelReady ? safeAssess(est, maint) : null;
 
-  // The order is the order a person wants the answers in: how am I doing,
-  // where is it heading, what happened this week, what did Rack notice, then
-  // the pictures, then the week written up. Nothing here is a wall of stats
-  // first and a meaning second.
-  const s1 = section('How you’re doing');
-  s1.appendChild(assessCard(found, 'wins'));
-  s1.appendChild(assessCard(found, 'improve'));
-  wrap.appendChild(blk('you', 'doing', s1));
-
-  const s2 = section('Goal');
-  s2.appendChild(trajectoryCard(found, est, maint));
-  wrap.appendChild(blk('you', 'goal', s2));
-
-  const s3 = section('This week');
-  s3.appendChild(weekCard(maint));
-  wrap.appendChild(blk('you', 'week', s3));
-
-  if (found && found.insights.length) {
-    const s4 = section('Rack noticed');
-    s4.appendChild(insightsCard(found));
-    wrap.appendChild(blk('you', 'noticed', s4));
-  }
-
-  const s5 = section('Trends');
-  s5.appendChild(weightCard(maint));
-  s5.appendChild(fuelCard(maint));
-  s5.appendChild(trainingCard());
-  const pair = el('div', 'you-pair');
-  pair.appendChild(stepsCard());
-  pair.appendChild(waterCard());
-  s5.appendChild(pair);
-  wrap.appendChild(blk('you', 'trends', s5));
-
-  const s6 = section('Weekly review');
-  s6.appendChild(reviewCard(found));
-  wrap.appendChild(blk('you', 'review', s6));
-
-  const showInstall = !isStandalone() && !LS.get('installDismissed', false);
-  const owner = isOwner();
-  if (showInstall || owner) {
-    const s8 = section('App');
-    if (showInstall) s8.appendChild(installCard());
-    if (owner) s8.appendChild(adminRow());
-    wrap.appendChild(blk('you', 'app', s8));
-  }
+  wrap.appendChild(blk('you', 'goal', headlineCard(found, est, maint)));
+  wrap.appendChild(blk('you', 'week', numberTiles()));
+  wrap.appendChild(blk('you', 'review', rowsCard(found)));
 
   // the vibe's arrangement of the blocks above, where it has one (none in v1)
   return composeScreen('you', wrap);
+}
+
+/* ================= THE GOAL, AS ONE NUMBER ================= */
+/* The trend weight, the line under it, one 45-day trend line, and the progress
+   bar. The words and the bar are trajectoryWhy / progressBar — the same ones
+   the full Goal card (Trends → Weight) draws. ⋯ opens the same sheet. */
+function headlineCard(found, est, maint) {
+  const t = found ? found.trajectory : null;
+  const gu = wu();
+  const why = trajectoryWhy(t, est, maint);
+  const title = t ? dirWord(t.dir) + (t.goalLb ? ' · goal ' + fmtW(t.goalLb, gu) + ' ' + unitW(gu) : '') : 'Your goal';
+  const c = card(title, t && t.startDate ? 'since ' + fmtDate(t.startDate) : null, why);
+
+  if (!loaded || !modelReady) {
+    c.appendChild(noteEl('Working out where your numbers sit…'));
+    return c;
+  }
+  const latest = latestWeighIn();
+  if (!latest) {
+    c.appendChild(noteEl('No weigh-ins yet. One number today is all it takes — after a couple of weeks of them Rack can measure what you burn instead of estimating it.'));
+    c.appendChild(goBtn('Log your first weigh-in', 'weight'));
+    return c;
+  }
+  if (!t) {
+    c.appendChild(noteEl('No goal is set. Setup asks whether you are cutting, maintaining or bulking; the rate under ⚙ Daily targets is where it lives now.'));
+    c.appendChild(goalBtn('Set a goal'));
+    return c;
+  }
+
+  const tw = t.tw != null ? t.tw : (trendWeight() != null ? trendWeight() : latest.lb);
+  const hl = el('div', 'headline');
+  hl.appendChild(el('span', 'headline-v num', fmtW(tw, gu)));
+  hl.appendChild(el('span', 'headline-u', unitW(gu) + ' trend'));
+  c.appendChild(hl);
+  const called = trajCalled(t);
+  const reason = el('div', 'traj-reason' + (called && (t.status === 'on' || t.status === 'ahead') ? ' good' : ''), t.reason);
+  c.appendChild(reason);
+
+  // 45-day trend: an exponential average (a quarter of each new day) over the
+  // food-and-water corrected days — the same shape Body weight draws dashed.
+  const since = Date.now() - 45 * DAY;
+  const adj = adjustedDays();
+  const trend = [];
+  let ema = null;
+  (adj || []).filter(p => p && Number.isFinite(p.lb))
+    .map(p => ({ t: parseKey(p.d).getTime(), v: wOut(p.lb, gu) }))
+    .sort((a, b) => a.t - b.t)
+    .forEach(p => { ema = ema == null ? p.v : ema + (p.v - ema) * 0.25; if (p.t > since) trend.push({ t: p.t, v: ema }); });
+  const chart = el('div');
+  chart.style.marginTop = '12px';
+  chart.appendChild(trend.length >= 2
+    ? lineChart(trend, { color: C_WEIGHT, height: 96, unit: unitW(gu), dots: false, markMax: false })
+    : emptyChart('Two days of weigh-ins draw the first line'));
+  c.appendChild(chart);
+
+  if (t.goalLb && t.progress != null) progressBar(c, t, gu, called);
+  else if (!t.goalLb && t.dir !== 0) {
+    c.appendChild(noteEl('Set a goal weight and this card works out when you would reach it at the current pace.'));
+    c.appendChild(goalBtn('Set a goal weight', 'targets'));
+  }
+  return c;
+}
+
+/* ================= THE WEEK, AS FOUR NUMBERS ================= */
+function numberTiles() {
+  const grid = el('div', 'kpi-grid you-tiles');
+  weekNumbers({ targets, summaries, stepDays, sessions, loaded }).forEach(n => {
+    const k = el('div', 'kpi');
+    k.appendChild(el('div', 'kpi-lbl', n.label));
+    const v = el('div', 'kpi-val num');
+    v.appendChild(el('span', null, n.value));
+    if (n.unit) v.appendChild(el('span', 'kpi-unit', n.unit));
+    k.appendChild(v);
+    k.appendChild(el('div', 'kpi-note num', n.note));
+    grid.appendChild(k);
+  });
+  return grid;
+}
+
+/* ================= THE THREE ROWS ================= */
+function rowsCard(found) {
+  const c = el('div', 'card');
+  const list = el('div', 'you-rows');
+  YOU_ROWS.forEach(r => {
+    const b = el('button', 'you-row');
+    b.appendChild(tile(r.icon, r.tone));
+    const mid = el('div', 'you-row-m');
+    mid.appendChild(el('div', 'you-row-n', r.label));
+    mid.appendChild(el('div', 'you-row-s', rowSub(r.id, found)));
+    b.appendChild(mid);
+    glyphed(b.appendChild(el('div', 'set-row-x', '›')), 'go');
+    b.onclick = () => openSub(r.id);
+    list.appendChild(b);
+  });
+  c.appendChild(list);
+  return c;
+}
+
+/* ================= THE SCREENS BEHIND THEM ================= */
+function openSub(id) {
+  subFrom = window.scrollY || 0;
+  sub = { id, show: 'weight' };
+  render();
+  window.scrollTo(0, 0);
+}
+function closeSub() {
+  sub = null;
+  render();
+  window.scrollTo(0, subFrom);
+}
+
+function pageHead(eyebrow, title, onBack) {
+  const hd = el('div', 'cal-hd');
+  const left = el('div');
+  const back = el('button', 'back-btn');
+  back.innerHTML = '<span aria-hidden="true">&#8249;</span> Back';
+  glyphed(back.firstChild, 'back');
+  back.onclick = onBack;
+  left.appendChild(back);
+  left.appendChild(el('div', 'eyebrow', eyebrow));
+  left.appendChild(el('h1', null, title));
+  hd.appendChild(left);
+  return hd;
+}
+
+function buildSub() {
+  const row = YOU_ROWS.find(r => r.id === sub.id);
+  if (!row) { sub = null; return build(); }
+  const wrap = el('div', 'screen-pad');
+  wrap.appendChild(pageHead('You', row.label, closeSub));
+
+  const est = modelReady ? maintenance(entries, summaries) : null;
+  const maint = maintInfo(est);
+  const found = loaded && modelReady ? safeAssess(est, maint) : null;
+
+  if (sub.id === 'review') {
+    const s1 = section('How you’re doing');
+    s1.appendChild(assessCard(found, 'wins'));
+    s1.appendChild(assessCard(found, 'improve'));
+    wrap.appendChild(s1);
+    const s2 = section('This week');
+    s2.appendChild(weekCard(maint));
+    wrap.appendChild(s2);
+    const s3 = section('Weekly review');
+    s3.appendChild(reviewCard(found));
+    wrap.appendChild(s3);
+  } else if (sub.id === 'noticed') {
+    if (found && found.insights.length) wrap.appendChild(insightsCard(found));
+    else wrap.appendChild(noteEl('Nothing stands out this week. Rack only notices what clears a plain bar — a streak, a plateau, a gap between what you log and what the scale does — and says nothing otherwise.'));
+  } else {
+    const show = trendsOf(sub.show);
+    const body = el('div');
+    const paint = id => {
+      body.innerHTML = '';
+      if (id === 'weight') { body.appendChild(trajectoryCard(found, est, maint)); body.appendChild(weightCard(maint)); }
+      else if (id === 'fuel') body.appendChild(fuelCard(maint));
+      else if (id === 'training') body.appendChild(trainingCard());
+      else {
+        const pair = el('div', 'you-pair');
+        pair.appendChild(stepsCard());
+        pair.appendChild(waterCard());
+        body.appendChild(pair);
+      }
+    };
+    const seg = segmented(TRENDS.map(t => [t.id, t.label]), show, id => { sub.show = id; paint(id); });
+    seg.style.margin = '0 0 12px';
+    wrap.appendChild(seg);
+    paint(show);
+    wrap.appendChild(body);
+  }
+  return wrap;
 }
 
 /* ================= HERO ================= */
@@ -705,7 +837,7 @@ function hero() {
   // the sheet wrote (refreshLogged). Until v57 this emptied a fingerprint first,
   // which made the read it asked for look like the boot's and be thrown away:
   // a name saved here did not reach this screen until something else changed.
-  gear.onclick = () => openSettings(() => render());
+  gear.onclick = () => openSettings(() => render(), { name: nameOf(), photo: profile && profile.photo });
   h.appendChild(gear);
 
   return h;
@@ -934,7 +1066,7 @@ function fuelCard(maint) {
     c.appendChild(noteEl('No daily targets set yet. Setup writes a starting set from your height, weight and goal — if you skipped it, the gear at the top of this screen is where they live.'));
     const b = el('button', 'btn btn-ghost btn-block', 'Set your daily targets');
     b.style.marginTop = '12px';
-    b.onclick = () => openSettings(() => render());
+    b.onclick = () => openSettings(() => render(), { name: nameOf(), photo: profile && profile.photo });
     c.appendChild(b);
     return c;
   }
@@ -1324,7 +1456,7 @@ function goalCard(title, o) {
   }
   if (!o.logged.length) {
     c.appendChild(noteEl(o.none));
-    const b = goBtn(o.goLabel, o.view);
+    const b = o.act ? actBtn(o.goLabel, o.act) : goBtn(o.goLabel, o.view);
     b.style.marginTop = '8px';
     c.appendChild(b);
     return c;
@@ -1362,6 +1494,7 @@ function goalCard(title, o) {
     });
     c.appendChild(row);
   }
+  if (o.act) { const b = actBtn(o.goLabel, o.act); b.style.marginTop = '10px'; c.appendChild(b); }
   return c;
 }
 
@@ -1383,7 +1516,7 @@ function stepsCard() {
       [compact(logged.reduce((s, k) => s + stepDays[k].steps, 0)), 'this week']
     ] : null,
     none: 'Nothing this week. Your goal is ' + g.toLocaleString() + ' a day.',
-    goLabel: 'Open Steps', view: 'steps'
+    goLabel: 'Log today’s steps', act: () => openSetSteps(todayKey())
   });
 }
 
@@ -1487,13 +1620,13 @@ function assessCard(found, kind) {
 }
 
 /* ================= GOAL TRAJECTORY ================= */
-function trajectoryCard(found, est, maint) {
-  const t = found ? found.trajectory : null;
-  const dirWord = d => d < 0 ? 'Cutting' : d > 0 ? 'Bulking' : 'Maintaining';
+const dirWord = d => d < 0 ? 'Cutting' : d > 0 ? 'Bulking' : 'Maintaining';
 
-  // The card's ⋯ is where the old "how it fits together" card went: the
-  // arithmetic behind maintenance and the pace, with the reader's numbers in
-  // it, derived from the estimate's own total so the sums close on screen.
+/* The ⋯ on the Goal card and on the headline card above it: the arithmetic
+   behind maintenance and the pace, with the reader's numbers in it, derived
+   from the estimate's own total so the sums close on screen. One function so
+   the two cards can never say different things about the same number. */
+function trajectoryWhy(t, est, maint) {
   const gu = wu();
   const why = { title: 'Where this is heading', body: [] };
   if (maint) {
@@ -1520,6 +1653,34 @@ function trajectoryCard(found, est, maint) {
     why.body.push('Progress runs from your first recorded daily average, ' + labelW(t.start, gu) + ' on ' + fmtDate(t.startDate) + ', to your goal of ' + fmtW(t.goalLb, gu) + '. The finish date is the distance left divided by the current pace, and it moves as the pace does.');
   }
 
+  return why;
+}
+
+/* Past RATE_BAND_LB the pace gets no colour at all — not green, not red —
+   because rateVerdict, which the Weight tab's number asks, gives it none. */
+const trajCalled = t => !(t.enough && t.rate != null && rateVerdict(t.rate, t.dir) == null);
+
+/* The Goal card's progress bar and its three ends — start, how far, goal —
+   drawn into `c`. The headline card on You draws the same one. */
+function progressBar(c, t, gu, called) {
+  const bar = el('div', 'traj-bar');
+  const fill = el('div', 'traj-fill');
+  fill.style.width = Math.round(t.progress * 100) + '%';
+  fill.style.background = called && (t.status === 'wrong' || t.status === 'drift') ? 'var(--warn)' : C_WEIGHT;
+  bar.appendChild(fill);
+  c.appendChild(bar);
+  const ends = el('div', 'traj-ends');
+  ends.appendChild(el('span', 'num', labelW(t.start, gu) + ' · ' + fmtDate(t.startDate)));
+  ends.appendChild(el('span', 'num', Math.round(t.progress * 100) + '% there'));
+  ends.appendChild(el('span', 'num', labelW(t.goalLb, gu)));
+  c.appendChild(ends);
+}
+
+function trajectoryCard(found, est, maint) {
+  const t = found ? found.trajectory : null;
+  const gu = wu();
+  const why = trajectoryWhy(t, est, maint);
+
   const c = card('Goal', t ? dirWord(t.dir).toLowerCase() : null, why);
 
   if (!loaded || !modelReady) {
@@ -1536,9 +1697,7 @@ function trajectoryCard(found, est, maint) {
   // when there is one, then the progress bar when there is a start and an
   // end to run it between.
   const hl = el('div', 'headline');
-  // Past RATE_BAND_LB the pace gets no colour at all — not green, not red —
-  // because rateVerdict, which the Weight tab's number asks, gives it none.
-  const called = !(t.enough && t.rate != null && rateVerdict(t.rate, t.dir) == null);
+  const called = trajCalled(t);
   const dot = el('i', 'traj-dot ' + (!called ? '' : t.status === 'on' || t.status === 'ahead' ? 'good' : t.status === 'wrong' || t.status === 'drift' ? 'bad' : t.status ? 'warn' : ''));
   hl.appendChild(dot);
   // data-hero: the Goal's pace is a hero figure (a vibe's hook; VOCAB headline)
@@ -1566,19 +1725,7 @@ function trajectoryCard(found, est, maint) {
     sr.style.marginTop = '12px';
     c.appendChild(sr);
 
-    if (t.progress != null) {
-      const bar = el('div', 'traj-bar');
-      const fill = el('div', 'traj-fill');
-      fill.style.width = Math.round(t.progress * 100) + '%';
-      fill.style.background = called && (t.status === 'wrong' || t.status === 'drift') ? 'var(--warn)' : C_WEIGHT;
-      bar.appendChild(fill);
-      c.appendChild(bar);
-      const ends = el('div', 'traj-ends');
-      ends.appendChild(el('span', 'num', labelW(t.start, gu) + ' · ' + fmtDate(t.startDate)));
-      ends.appendChild(el('span', 'num', Math.round(t.progress * 100) + '% there'));
-      ends.appendChild(el('span', 'num', labelW(t.goalLb, gu)));
-      c.appendChild(ends);
-    }
+    if (t.progress != null) progressBar(c, t, gu, called);
   } else if (t.dir !== 0) {
     c.appendChild(noteEl('Set a goal weight and this card works out when you would reach it at the current pace.'));
     c.appendChild(goalBtn('Set a goal weight', 'targets'));
@@ -1680,45 +1827,5 @@ function reviewCard(found) {
     ]);
     c.appendChild(sr);
   }
-  return c;
-}
-
-/* ================= INSTALL ================= */
-function installCard() {
-  const c = el('div', 'card install-card');
-
-  const x = el('button', 'install-x', '×'); glyphed(x, 'dismiss');
-  x.setAttribute('aria-label', 'Dismiss');
-  x.onclick = () => { LS.set('installDismissed', true); render(); };
-  c.appendChild(x);
-
-  c.appendChild(el('div', 'eyebrow', 'App'));
-  c.appendChild(el('h3', null, 'Put Rack on your home screen'));
-  c.appendChild(noteEl('It opens from the icon, fills the screen with no browser bar, and keeps working when the signal doesn’t. Takes about four taps.'));
-
-  const b = el('button', 'btn btn-primary btn-block', 'Show me how');
-  b.style.marginTop = '14px';
-  b.onclick = () => openInstallGuide();
-  c.appendChild(b);
-  return c;
-}
-
-/* ================= ADMIN ================= */
-function adminRow() {
-  const c = el('div', 'card');
-  const list = el('div', 'set-list');
-
-  const row = el('button', 'set-row-nav');
-  row.appendChild(el('div', 'set-row-l', 'Admin'));
-  row.appendChild(el('div', 'set-row-v', 'Owner'));
-  row.appendChild(glyphed(el('div', 'set-row-x', '›'), 'go'));
-  // isOwner() is the client-side check and nothing more — the rules are what
-  // actually decide, and they check the same uid on the server. Closing puts
-  // the parked DOM back on its own; the callback repaints it with whatever
-  // landed while the panel was up.
-  row.onclick = () => openAdmin(() => render());
-  list.appendChild(row);
-
-  c.appendChild(list);
   return c;
 }
