@@ -167,6 +167,9 @@ function harness(o = {}) {
     keepSets: A.keepSets, setsText: A.setsText, dropHeads: A.dropHeads, retypeSet: A.retypeSet, removeSet: A.removeSet, addDrop: A.addDrop,
     // v56: "+ Set" asks which set it copies — the real one.
     repeatOf: A.repeatOf,
+    // v65: the ▲▼ buttons on an exercise's head — the real one (ui.js), so the head still draws.
+    moveButtons: UI.moveButtons,
+    canMoveExercise: B.canMoveExercise, moveExercise: B.moveExercise, canMoveBlock: B.canMoveBlock, moveBlock: B.moveBlock,
     el: UI.el, LIMITS: UI.LIMITS, setNum: UI.setNum, fmtDate: UI.fmtDate, GROUPS, vibePaint: VB.paint, blk: VB.blk, composeScreen: VB.composeScreen,
     // engine v2: a glyph site drawn through the vibe (vibe.js glyphed) — the real one
     glyphed: VB.glyphed,
