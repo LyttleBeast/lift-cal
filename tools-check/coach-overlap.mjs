@@ -120,6 +120,9 @@ const C = await import(pathToFileURL(join(dir, 'coach.mjs')).href);
 const O = await import(pathToFileURL(join(dir, 'coach-overlap.mjs')).href);
 const { EXERCISES } = await import(pathToFileURL(join(ROOT, 'exercises.js')).href);
 const U = await import(pathToFileURL(join(ROOT, 'units.js')).href);
+// v69: the staged analytics.js's own e1rm, for the record day's best — the
+// figure the set row prints, never restated here.
+const { e1rm: U_E1RM } = await import(pathToFileURL(join(dir, 'analytics.mjs')).href);
 
 /* ---------- harness ---------- */
 let pass = 0, fail = 0;
@@ -471,6 +474,57 @@ const said = [];
 
   results.push('\n  ok: ' + tally.ok + '   miss: ' + tally.miss + '   wrong: ' + tally.wrong);
   check('wrong: 0 — no row reads a plateau, a cut, a record or a lighter week the row does not', tally.wrong === 0);
+}
+
+/* ================= A2. v69 — NO RECORD DAY AFTER A MARKED OR FAILED SESSION, OR ACROSS A LAYOFF ================= */
+section('A2. v69 — the record day refuses a marked newest session, an F, and a best from before a layoff');
+{
+  const rec = inp => { const oi = C.overlapInput(inp); return O.recordDay(oi, NOW); };
+  const newest = inp => inp.sessions.slice().sort((a, b) => b.startedAt - a.startedAt)[0];
+  const marked = (inp, s) => ({ ...inp, settings: { ...inp.settings, marks: { [s.id]: { r: 'sleep', d: s._date } } } });
+  // The mark. Until v69 the baselines read the performance log, where the
+  // marked session is already out: "the last session" was the one before the
+  // mark and the mark was invisible — a record day right after a bad day.
+  const p1 = P1();
+  const onNewest = rec(marked(p1, newest(p1)));
+  check('P1 with its newest session marked a bad day: no candidate (control: unmarked, 6 at 225)',
+        onNewest === null && !!rec(p1) && rec(p1).reps === 6, JSON.stringify(onNewest && onNewest.text));
+  const older = p1.sessions.filter(s => s.exercises.some(e => e.exId === BENCH)).sort((a, b) => b.startedAt - a.startedAt)[2];
+  const onOlder = rec(marked(p1, older));
+  check('a mark on an older session of the lift is not the newest: the candidate stands (the mark only takes that day out of the baselines)',
+        !!onOlder && onOlder.exId === BENCH, JSON.stringify(onOlder && onOlder.text));
+  const failMarked = rec(marked(P1({ fail: true }), newest(P1({ fail: true }))));
+  check('an F in the newest session, marked: no candidate — the F is unread behind the mark, and the mark alone refuses it', failMarked === null);
+  check('an F in the newest session, unmarked: no candidate (P4, as shipped)', rec(P1({ fail: true })) === null);
+
+  // The layoff. Six sessions of 225 × 8 ending ten weeks ago (best 285), a
+  // sixty-day gap, then 225 × 5, 5, 6 since. Until v69 the best reps at 225
+  // were read over the whole log — 8 — so the record day asked for 9 at
+  // 225, an estimated max his capacity after the layoff could not reach.
+  const layoff = nSince => {
+    const pre = daysFor(2, 3, 70).map(ago => sess(ago, [[BENCH, xN(3, 225, 8)]]));
+    const sinceAgo = [10, 6, 3].slice(3 - nSince);
+    const post = sinceAgo.map((ago, k) => sess(ago, [[BENCH, xN(3, 225, k === sinceAgo.length - 1 ? 6 : 5)]]));
+    return input({ sessions: sortS(pre.concat(post)), weighIns: weighIns(45, 0, 185, 185, 2),
+                   weight: { latestLb: 185, latestAt: localAt(0, 7), rateWk: 0, rateDays: 45, goalDir: null, goalRateWk: null } });
+  };
+  const two = rec(layoff(2));
+  check('a 60-day gap with two sessions since, and a higher best before it: no candidate', two === null, JSON.stringify(two && two.text));
+  const three = rec(layoff(3));
+  check('three sessions since the gap: a candidate at the post-gap load — 7 at 225, one more than the best SINCE the layoff, never 9',
+        !!three && three.exId === BENCH && Math.abs(three.load - 225) < 0.01 && three.reps === 7 && three.bestReps === 6, JSON.stringify(three && three.text));
+  check('    and the best it is measured against is the post-gap best (225 × 6), not the pre-layoff 225 × 8',
+        !!three && three.best === U_E1RM(225, 6) && three.would === U_E1RM(225, 7) && /is 6 reps\./.test(three.reason), JSON.stringify(three && { best: three.best, would: three.would }));
+  // The control: the same three sessions with no layoff before them (the
+  // six older sessions three weeks back instead of ten) read the whole log.
+  const noGap = (() => {
+    const pre = daysFor(2, 3, 14).map(ago => sess(ago, [[BENCH, xN(3, 225, 8)]]));
+    const post = [10, 6, 3].map((ago, k) => sess(ago, [[BENCH, xN(3, 225, k === 2 ? 6 : 5)]]));
+    return rec(input({ sessions: sortS(pre.concat(post)), weighIns: weighIns(45, 0, 185, 185, 2),
+                       weight: { latestLb: 185, latestAt: localAt(0, 7), rateWk: 0, rateDays: 45, goalDir: null, goalRateWk: null } }));
+  })();
+  check('control: without the gap, the 225 × 8 days count — 9 at 225 or nothing, never 7',
+        noGap === null || (noGap.reps === 9 && noGap.bestReps === 8), JSON.stringify(noGap && noGap.text));
 }
 
 /* ================= B. THE PROPERTIES ================= */

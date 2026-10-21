@@ -125,13 +125,18 @@ const VARIATION_DAYS = 182;
 // three reps or more, the lift done inside twelve days (the layoff clock
 // coach-prog.js holds a first session back on), no three-week gap in its last
 // three (not a comeback), and the group rested at least two days — or his own
-// quickest quarter of gaps, if that is longer.
+// quickest quarter of gaps, if that is longer. v69: never on a lift whose
+// newest session is marked a bad day, and the best to beat is the best since
+// the last three-week gap on the lift.
 const RECORD_MIN_EXPOSURES = 6;
 const RECORD_WINDOW_DAYS = 28;
 const RECORD_MIN_REPS = 3;
 const RECORD_DROP = 0.25;
 const RECORD_LIFT_DAYS = 12;
 const RECORD_GAP_DAYS = 21;
+// v69: the best to beat is read over the tops since the last three-week gap,
+// and there have to be three of them — a pre-layoff best is not current.
+const RECORD_SINCE_GAP = 3;
 const RECORD_REST_DAYS = 2;
 const RECORD_REST_Q = 0.25;
 // The same cap coach-prog.js puts on the estimated-max series.
@@ -795,6 +800,13 @@ function record(i, now) {
   const cands = [];
   i.lifts.forEach(ex => {
     if (!ex || isCardio(ex)) return;
+    /* v69: a lift whose newest session is marked a bad day gets no record
+       day. The baselines below read the performance log, where a marked
+       session is already out — so "the last session" was the one before the
+       mark, and the mark was invisible (the battery's R_MARK, and R_F: an F
+       in that marked session went unread too). coach.js liftsOf() sets
+       mark.latest exactly when the newest exposure is marked. */
+    if (ex.mark && ex.mark.latest) return;
     const b = baselinesOf(i, ex, ctx);
     if (!b || b.assisted || b.exposures < RECORD_MIN_EXPOSURES || b.status === 'declining') return;
     const tops = b.tops;
@@ -802,6 +814,15 @@ function record(i, now) {
     if (!(last.daysAgo >= 0 && last.daysAgo < RECORD_LIFT_DAYS)) return;
     const tail = tops.slice(-3);
     for (let k = 1; k < tail.length; k++) if (daysBetween(tail[k - 1].startedAt, tail[k].startedAt) > RECORD_GAP_DAYS) return;
+    /* v69: the best he is asked to beat is the best SINCE his last layoff on
+       the lift — the tops after the last gap of more than three weeks between
+       consecutive ones, three of them at least. A best from before a layoff
+       read as current asked for a record his capacity that day could not
+       reach (R_UNREACH). */
+    let since = 0;
+    for (let k = 1; k < tops.length; k++) if (daysBetween(tops[k - 1].startedAt, tops[k].startedAt) > RECORD_GAP_DAYS) since = k;
+    const recent = tops.slice(since);
+    if (recent.length < RECORD_SINCE_GAP) return;
     // The last session: no set to failure, and no set 25% or more under the
     // first at the same weight or lighter. v55: read between the sets that
     // are not a drop set's — a drop set's reps fall at a lighter weight by
@@ -819,16 +840,19 @@ function record(i, now) {
 
     // The heaviest on-grid top load of the last four weeks where one more
     // rep than his best there sets a new best estimated max, at three reps or more.
-    const best = b.best;
+    // v69: the best, and the best reps at each load, over the tops since the
+    // last layoff (`recent`), never the whole log.
+    const best = Math.max(0, ...recent.flatMap(t => t.sets.filter(s => s.type !== 'D').map(s => e1rm(s.w, Math.min(s.reps, E1RM_MAX_REPS)))));
+    if (!(best > 0)) return;
     const loads = [];
-    tops.forEach(t => {
+    recent.forEach(t => {
       if (t.daysAgo < 0 || t.daysAgo >= RECORD_WINDOW_DAYS || !t.grid || !(t.load > 0)) return;
       if (!loads.some(x => Math.abs(x.load - t.load) < TOL)) loads.push({ load: t.load, w: t.w });
     });
     loads.sort((a, b2) => b2.load - a.load);
     for (const L of loads) {
       let bestReps = 0, bestAt = null;
-      tops.forEach(t => t.sets.forEach(s => {
+      recent.forEach(t => t.sets.forEach(s => {
         if (s.type === 'D' || Math.abs(s.load - L.load) >= TOL) return;
         if (s.reps >= bestReps) { bestReps = s.reps; bestAt = t; }
       }));
