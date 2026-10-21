@@ -420,6 +420,48 @@ section('C. a set typed F never yields "one more set" on that exercise');
   check('while the sessions with no F in hand do get "one more set" (' + freshAnother + ' of them)', freshAnother > 5);
 }
 
+/* ================= C2. v69 — A SET RATED TOO HARD IS FATIGUE IN ITS OWN RIGHT =================
+   Until v69 "one more set" learned of a rir 0 only through the next set's
+   stop, which needs a target in hand; with none (a defer day, the targets
+   switch off) Coach said "one more set is usual" over a set he had just
+   called too hard. fatigueIn() now reads `rir === 0` beside F and the rep
+   drop, so no target is needed. */
+section('C2. v69 — a set rated too hard never yields "one more set", with no next-set function handed in');
+{
+  // No nextSet function at all: the targets switch off is how coach.js hands
+  // in `nextSet: null`, so nothing below can be the next set's stop.
+  const noNext = { settings: { v: 1, mute: { targets: true }, answers: {}, asked: {} } };
+  const hard = live([['squat', [[245, 5], [245, 5]]]]);
+  hard.exercises[0].sets = [{ w: '225', r: '5', type: 'N', done: true, rir: 0 }];
+  const h1 = read(hard, noNext, { current: 0 });
+  check('one set of squat rated too hard, on a lift with history and no next set to ask: never "one more set"',
+        !h1 || h1.kind !== 'another', J(h1));
+  const hard3 = live([['squat', [[245, 5], [245, 5], [245, 5]]]]);
+  hard3.exercises[0].sets[2].rir = 0;
+  const h3 = read(hard3, noNext, { current: 0 });
+  check('three of squat, the last rated too hard — the count that would otherwise be "one more set is usual" (4 of 10): not another',
+        !h3 || h3.kind !== 'another', J(h3));
+  const ctl = read(live([['squat', [[245, 5], [245, 5], [245, 5]]]]), noNext, { current: 0 });
+  check('control: the same three sets unrated are "one more set" — the rating is the only difference', ctl && ctl.kind === 'another', J(ctl));
+  const easy = live([['squat', [[245, 5], [245, 5], [245, 5]]]]);
+  easy.exercises[0].sets[2].rir = 4;
+  check('rated way too easy (4) or about right (2): not fatigue, still "one more set"',
+        [4, 2].every(r => { easy.exercises[0].sets[2].rir = r; const a = read(easy, noNext, { current: 0 }); return a && a.kind === 'another'; }));
+  // The done read, driven by it: two exercises worked, each with fatigue in
+  // its sets, one of them the rating — and the sentence names the rating.
+  const tiredTwo = live([['bench', [[185, 8], [185, 8], [185, 8, 'F']]], ['incline', [[65, 10], [65, 10]]]]);
+  tiredTwo.exercises[1].sets[1].rir = 0;
+  const d = read(tiredTwo, noNext, { current: 1 });
+  check('done, off a failure on bench and a too-hard rating on incline, names both — "a set you rated too hard"',
+        d && d.kind === 'done' && d.text === 'You’re probably good for today — Barbell Bench Press, a set taken to failure; Incline Dumbbell Bench Press, a set you rated too hard.',
+        J(d));
+  check('and its why says so, and the "one more set" why-line now says none was rated too hard',
+        d && d.why.some(x => x === 'Incline Dumbbell Bench Press: a set you rated too hard.') &&
+        /none rated too hard/.test((ctl.why || []).join(' ')), J(d && d.why));
+  check('the rating is read as the integer zero only — "0", null and absent are unknown (coach-prog.js rirOf)',
+        ['0', null, undefined, false].every(v => { const s = live([['squat', [[245, 5], [245, 5], [245, 5]]]]); if (v !== undefined) s.exercises[0].sets[2].rir = v; const a = read(s, noNext, { current: 0 }); return a && a.kind === 'another'; }));
+}
+
 /* ================= D. SILENCE ================= */
 section('D. thin history, and every gate, is silence');
 {
@@ -760,13 +802,16 @@ section('H. v54 — the next set (spec §3.10 with his rating), each rule by nam
         !wrongWords.length, list(wrongWords));
   check('and in kilos, through units.js', L.rateAnswer(4, nextOf(FK, sess(FK, B, [[87.5, 8, { rir: 4 }]])).next, 'kg') === 'Strong set. Next one: 90 kg × 8.');
 
-  // The habit answers with a rating: exactly today's with no target in hand,
-  // and "one more set" never above a stopped next set.
+  // The habit answers with a rating: a set rated too hard is fatigue in its
+  // own right (v69), target in hand or not; the other two ratings change
+  // nothing; and "one more set" is never above a stopped next set.
   const three = rir => live([['bench', n('bench', 3)]]).exercises.map(e => ({ ...e, sets: e.sets.map((s, i) => (i === 2 && rir != null ? { ...s, rir } : s)) }));
   const liveOf = rir => ({ id: 'wlive', name: 'Live', startedAt: NOW - 1800e3, exercises: three(rir) });
   const targetsOff = { settings: { v: 1, mute: { targets: true }, answers: {}, asked: {} } };
-  check('targets off, the live answer is exactly today’s whatever the rating — "one more set" on three of bench, rated too hard or not',
-        J(read(liveOf(0), targetsOff)) === J(read(liveOf(null), targetsOff)) && read(liveOf(0), targetsOff).kind === 'another');
+  check('targets off, a set rated about right or way too easy changes nothing — "one more set" on three of bench',
+        [2, 4].every(r => J(read(liveOf(r), targetsOff)) === J(read(liveOf(null), targetsOff))) && read(liveOf(null), targetsOff).kind === 'another');
+  check('v69: targets off, three of bench with the last rated too hard: never "one more set" — the rating is read as fatigue, no target needed',
+        (read(liveOf(0), targetsOff) || {}).kind !== 'another', J(read(liveOf(0), targetsOff)));
   check('with a target in hand, a set rated too hard stops the lift: "one more set" is not said above "call that the last set"',
         (read(liveOf(0)) || {}).kind !== 'another' && (read(liveOf(null)) || {}).kind === 'another' &&
         C.coach(input()).liveSet(liveOf(0), { current: 0 }).next.kind === 'stop');

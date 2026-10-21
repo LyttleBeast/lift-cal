@@ -55,9 +55,11 @@
 // same exercise at the same or a lighter weight, reps falling a quarter or more
 // from that session's first working set. A warm-up is not a working set, so how
 // many warm-ups there were is never fatigue. Since v54 a set can carry his own
-// rating (`rir`); it is the next set's business (setRead), and the four answers
-// read it in one place only: "one more set" is not said of a lift whose next
-// set has been stopped, which with no target in hand is never.
+// rating (`rir`), and since v69 a set rated too hard (`rir === 0`) is fatigue
+// here as well — fatigueIn() reads it beside F and the rep drop, so "one more
+// set" is never said over it, target in hand or not. (Until v69 the four
+// answers learned of it only through the next set's stop, which needs a
+// target, so on a defer day the rating went unread.)
 //
 // PURE, and copied into the native tree verbatim (src/pure/coach-live.js). No
 // reads, no DOM, no clock, no module state. And it derives nothing about the
@@ -348,10 +350,17 @@ function lastTime(i, history, exId, name) {
    v55: a drop set's sets ('D') are not read for the rep drop. Its reps fall at
    a lighter weight by design — that is what a drop set is — so "reps from 8 to
    6 at the same or a lighter weight" was being said of the technique, not of
-   him. The rep drop is read between the other working sets, as it always was. */
+   him. The rep drop is read between the other working sets, as it always was.
+   v69: a set he rated too hard (`rir === 0`, the integer — the one test
+   coach-prog.js rirOf() makes of a zero) is read here directly. Before, the
+   "one more set" answer learned of it only through the next set's stop,
+   which needs a target in hand, so on a lift with no target Coach said "one
+   more set is usual" over a set he had just called too hard (the battery's
+   L_ANOTHER_F, 144 of them). */
 function fatigueIn(sets) {
   if (!sets.length) return null;
   if (sets.some(s => s.type === 'F')) return { kind: 'failure' };
+  if (sets.some(s => s.rir === 0)) return { kind: 'hard' };
   const main = sets.filter(s => s.type !== 'D');
   const first = main[0];
   for (let k = 1; k < main.length; k++) {
@@ -363,6 +372,7 @@ function fatigueIn(sets) {
   return null;
 }
 const fatigueWords = f => (f.kind === 'failure' ? 'a set taken to failure'
+  : f.kind === 'hard' ? 'a set you rated too hard'
   : 'reps from ' + f.from + ' to ' + f.to + ' at the same or a lighter weight');
 
 /* ================================================================
@@ -484,7 +494,8 @@ function switchRead(i, t, history, shape, day = NO_DAY) {
 function anotherRead(i, t, history) {
   const cur = t.current;
   if (!cur || cur.cardio || !cur.sets.length) return null;
-  // Never after a set typed F, and never once the reps have fallen away.
+  // Never after a set typed F, never after one he rated too hard (v69), and
+  // never once the reps have fallen away.
   if (fatigueIn(cur.sets)) return null;
   const counts = history.map(s => s.order.find(ex => ex.exId === cur.exId)).filter(Boolean).map(ex => ex.sets.length);
   if (counts.length < MIN_SESSIONS) return null;
@@ -510,7 +521,7 @@ function anotherRead(i, t, history) {
       plural(now, 'working set') + ' of ' + cur.name + ' so far this session — warm-ups are not counted.',
       'Across your ' + plural(counts.length, 'session') + ' of it in the last twelve weeks, ' + more +
         ' had ' + (now + 1) + ' or more.',
-      'Nothing in this session’s sets of it was taken to failure, and none came in a quarter or more under the ' +
+      'Nothing in this session’s sets of it was taken to failure, none rated too hard, and none came in a quarter or more under the ' +
         'first set’s reps at the same or a lighter weight.'
     ]
   };
