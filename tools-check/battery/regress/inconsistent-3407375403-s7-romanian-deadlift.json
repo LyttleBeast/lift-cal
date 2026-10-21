@@ -1,0 +1,13 @@
+{
+  "id": "inconsistent-3407375403-s7-romanian-deadlift",
+  "archetype": "inconsistent",
+  "seed": 3407375403,
+  "session": 7,
+  "exId": "romanian-deadlift",
+  "surface": null,
+  "forbid": [
+    "N_STOPPED"
+  ],
+  "note": "step up after a true rep drop; untagged warm-up was the rep-drop baseline",
+  "added": "2026-10-21"
+}

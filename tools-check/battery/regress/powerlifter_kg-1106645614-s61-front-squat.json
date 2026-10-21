@@ -1,0 +1,14 @@
+{
+  "id": "powerlifter_kg-1106645614-s61-front-squat",
+  "archetype": "powerlifter_kg",
+  "seed": 1106645614,
+  "session": 61,
+  "exId": "front-squat",
+  "surface": null,
+  "forbid": [
+    "T_MAX",
+    "T_JUMP"
+  ],
+  "note": "range learned 1-4 from single days; target 3x1 heavier",
+  "added": "2026-10-21"
+}

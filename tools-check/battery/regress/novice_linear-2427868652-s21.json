@@ -1,0 +1,13 @@
+{
+  "id": "novice_linear-2427868652-s21",
+  "archetype": "novice_linear",
+  "seed": 2427868652,
+  "session": 21,
+  "exId": null,
+  "surface": "volume",
+  "forbid": [
+    "V_OVER"
+  ],
+  "note": "untagged ramp sets counted as hard sets",
+  "added": "2026-10-21"
+}

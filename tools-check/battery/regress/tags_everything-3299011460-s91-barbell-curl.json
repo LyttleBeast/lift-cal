@@ -1,0 +1,13 @@
+{
+  "id": "tags_everything-3299011460-s91-barbell-curl",
+  "archetype": "tags_everything",
+  "seed": 3299011460,
+  "session": 91,
+  "exId": "barbell-curl",
+  "surface": "live",
+  "forbid": [
+    "L_ANOTHER_F"
+  ],
+  "note": "one more set after a set rated too hard, with no target in hand",
+  "added": "2026-10-21"
+}

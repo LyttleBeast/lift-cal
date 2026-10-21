@@ -9,6 +9,9 @@ node_modules/
 .wrangler/
 dist/
 
+# The Coach battery's reports (tools-check/battery/run-all.sh writes them here)
+tools-check/battery/out/
+
 # OS junk
 .DS_Store
 Thumbs.db

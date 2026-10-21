@@ -1,0 +1,14 @@
+{
+  "id": "novice_baddays-1690486854-s25-back-squat-high-bar",
+  "archetype": "novice_baddays",
+  "seed": 1690486854,
+  "session": 25,
+  "exId": "back-squat-high-bar",
+  "surface": "record",
+  "forbid": [
+    "R_MARK",
+    "R_F"
+  ],
+  "note": "record day right after a marked bad-day session",
+  "added": "2026-10-21"
+}

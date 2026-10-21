@@ -1,0 +1,13 @@
+{
+  "id": "never_tags_warmups-2934075396-s35-barbell-bench-press",
+  "archetype": "never_tags_warmups",
+  "seed": 2934075396,
+  "session": 35,
+  "exId": "barbell-bench-press",
+  "surface": "live",
+  "forbid": [
+    "L_ANOTHER_DROP"
+  ],
+  "note": "one more set after a true rep drop hidden behind untagged warm-ups",
+  "added": "2026-10-21"
+}

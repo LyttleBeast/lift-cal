@@ -1,0 +1,13 @@
+{
+  "id": "tags_everything-3293644384-s79-back-squat-low-bar",
+  "archetype": "tags_everything",
+  "seed": 3293644384,
+  "session": 79,
+  "exId": "back-squat-low-bar",
+  "surface": null,
+  "forbid": [
+    "T_MAX"
+  ],
+  "note": "5x2 at a heavier load from a 2-5 range",
+  "added": "2026-10-21"
+}

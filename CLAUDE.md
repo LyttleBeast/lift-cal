@@ -126,7 +126,16 @@ for f in tools-check/*.mjs; do node "$f" >/dev/null 2>&1; echo "$? $f"; done
 ```
 
 Plain `node --check file.js` silently passes broken ES modules, so use the form
-above. Then re-read your own diff. For anything touching Fuel, Train or Weight,
+above. Then re-read your own diff.
+
+**The Coach battery** (`tools-check/battery/`, since v69) is the other gate for
+anything that touches `coach*.js`: a seeded simulator of 300 lifters whose
+truth is known, driven through Coach's real pure modules and scored
+ok / miss / wrong per decision. `bash tools-check/battery/run-all.sh` must
+pass before a Coach ship finishes — wrong must be 0 for the gate it runs
+(`engine` today; `all` from v70), every regression case must pass, and a bug
+fixed gets a `regress.mjs --add` case. `tools-check/battery/README.md` has
+the commands, the codes and the generator's one rule. For anything touching Fuel, Train or Weight,
 walk the change against the schema in `AGENTS.md` and confirm every node you
 write to is one the published rules allow.
 

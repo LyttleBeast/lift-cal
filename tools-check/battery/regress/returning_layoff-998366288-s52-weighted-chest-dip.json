@@ -1,0 +1,13 @@
+{
+  "id": "returning_layoff-998366288-s52-weighted-chest-dip",
+  "archetype": "returning_layoff",
+  "seed": 998366288,
+  "session": 52,
+  "exId": "weighted-chest-dip",
+  "surface": "record",
+  "forbid": [
+    "R_UNREACH"
+  ],
+  "note": "record day at a pre-layoff best read as current",
+  "added": "2026-10-21"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "novice_linear-2427868652-s12-lying-leg-curl",
+  "archetype": "novice_linear",
+  "seed": 2427868652,
+  "session": 12,
+  "exId": "lying-leg-curl",
+  "surface": null,
+  "forbid": [
+    "N_WARMUP"
+  ],
+  "note": "untagged warm-up quoted as the next working set mid-ramp",
+  "added": "2026-10-21"
+}
