@@ -31,6 +31,9 @@
 //      friend cannot come back without a new code
 //   J  unapproved, revoked and signed-out accounts: nothing
 //   K  the lock variant carries the identical social tree
+//   L  (v68) a friend's face: friends only, a small JPEG data string only
+//   M  (v68) nudges: friends only, one a day by the server's clock, fixed
+//      words, the receiver's switches, dismissed or taken back
 //
 // No rule is copied into this file. Everything is the file Micah pastes.
 
@@ -436,6 +439,81 @@ section('K. the lock variant agrees');
   let ok = true;
   try { connect(w); } catch { ok = false; }
   check('and the whole connect flow passes under it too', ok);
+}
+
+/* ================= L (v68) ================= */
+section('L. v68 — a friend\'s face: only friends read it, only a small JPEG data string is written');
+{
+  const w = world();
+  connect(w);
+  const JPEG = 'data:image/jpeg;base64,' + '/9j/4AAQSkZJRgABAQ'.repeat(40) + 'AA==';
+  allowed(w.ann.set('social/shared/' + ANN + '/av', { p: JPEG, at: TS }), 'Ann publishes a small JPEG face');
+  allowed(w.bob.get('social/shared/' + ANN + '/av'), 'Bob, her friend, reads it');
+  refused(w.cat.get('social/shared/' + ANN + '/av'), 'Cat, not her friend, does not');
+  refused(w.dan.get('social/shared/' + ANN + '/av'), 'nor does an unapproved account');
+  refused(w.anon.get('social/shared/' + ANN + '/av'), 'nor anybody signed out');
+  refused(w.owner.get('social/shared/' + ANN + '/av'), 'nor the owner, who is not her friend');
+  refused(w.bob.set('social/shared/' + ANN + '/av', { p: JPEG, at: TS }), 'Bob cannot write Ann\'s face');
+  refused(w.ann.set('social/shared/' + ANN + '/av', { p: 'data:image/jpeg;base64,' + 'A'.repeat(6000), at: TS }), 'over 6,000 characters is refused');
+  allowed(w.ann.set('social/shared/' + ANN + '/av', { p: 'data:image/jpeg;base64,' + 'A'.repeat(6000 - 23), at: TS }), 'exactly 6,000 is allowed');
+  refused(w.ann.set('social/shared/' + ANN + '/av', { p: 'data:image/png;base64,AAAA', at: TS }), 'a PNG is refused (JPEG only)');
+  refused(w.ann.set('social/shared/' + ANN + '/av', { p: 'data:image/svg+xml;base64,AAAA', at: TS }), 'an SVG — which could carry script — is refused');
+  refused(w.ann.set('social/shared/' + ANN + '/av', { p: 'data:image/jpeg;base64,AA"><script>', at: TS }), 'anything but base64 after the prefix is refused');
+  refused(w.ann.set('social/shared/' + ANN + '/av', { p: 'https://example.com/me.jpg', at: TS }), 'a URL is refused — nothing is fetched from anywhere');
+  refused(w.ann.set('social/shared/' + ANN + '/av', { p: JPEG, at: NOW - 5 }), 'a client stamp is refused');
+  refused(w.ann.set('social/shared/' + ANN + '/av', { p: JPEG, at: TS, big: 'x' }), 'and it carries nothing else');
+  allowed(w.ann.set('social/shared/' + ANN + '/av', null), 'Ann removes it');
+  allowed(w.ann.set('social/shared/' + ANN + '/av', { p: JPEG, at: TS }), 'and puts it back');
+  allowed(w.ann.update('', { [people(ANN) + '/list/' + BOB]: null }), 'Ann removes her side of Bob');
+  refused(w.bob.get('social/shared/' + ANN + '/av'), 'and Bob reads her face no more, at once');
+}
+
+/* ================= M (v68) ================= */
+section('M. v68 — nudges: friends only, one a day by the server\'s clock, fixed words, the receiver decides');
+{
+  const w = world();
+  connect(w);
+  const nudge = (cl, from, to, v = 0) => cl.update('', { ['social/nudge/' + to + '/' + from]: { v, at: TS }, [people(from) + '/nudged/' + to]: TS });
+  allowed(nudge(w.bob, BOB, ANN), 'Bob nudges Ann: the nudge and his stamp, in one write');
+  allowed(w.ann.get('social/nudge/' + ANN), 'Ann reads her nudges');
+  allowed(w.bob.get('social/nudge/' + ANN + '/' + BOB), 'Bob reads the one he sent');
+  refused(w.cat.get('social/nudge/' + ANN), 'Cat reads nobody\'s');
+  refused(w.bob.get('social/nudge/' + ANN), 'and Bob not the rest of Ann\'s box');
+  refused(nudge(w.bob, BOB, ANN), 'a second nudge the same day is refused');
+  allowed(w.ann.set('social/nudge/' + ANN + '/' + BOB, null), 'Ann dismisses it');
+  refused(nudge(w.bob, BOB, ANN), 'and dismissing does not open the door: still one a day');
+  refused(w.bob.set(people(BOB) + '/nudged/' + ANN, null), 'Bob cannot delete his stamp to send again');
+  refused(w.bob.set(people(BOB) + '/nudged/' + ANN, TS), 'nor move it on its own');
+  refused(w.bob.set('social/nudge/' + ANN + '/' + BOB, { v: 1, at: TS }), 'a nudge without the stamp beside it is refused');
+  w.db.setNow(NOW + DAY - 1);
+  refused(nudge(w.bob, BOB, ANN), 'a minute short of a day: still refused');
+  w.db.setNow(NOW + DAY);
+  allowed(nudge(w.bob, BOB, ANN, 1), 'a day later, the next one goes');
+  w.db.setNow(NOW + 2 * DAY);
+  refused(w.cat.update('', { ['social/nudge/' + ANN + '/' + CAT]: { v: 0, at: TS }, [people(CAT) + '/nudged/' + ANN]: TS }), 'Cat, not a friend, cannot nudge Ann');
+  refused(w.dan.update('', { ['social/nudge/' + ANN + '/' + DAN]: { v: 0, at: TS }, [people(DAN) + '/nudged/' + ANN]: TS }), 'nor can an unapproved account');
+  refused(nudge(w.bob, BOB, BOB), 'nobody nudges themselves');
+  refused(w.bob.update('', { ['social/nudge/' + ANN + '/' + BOB]: { v: 3, at: TS }, [people(BOB) + '/nudged/' + ANN]: TS }), 'a wording that is not one of the three is refused');
+  refused(w.bob.update('', { ['social/nudge/' + ANN + '/' + BOB]: { v: 0, at: TS, text: 'free text' }, [people(BOB) + '/nudged/' + ANN]: TS }), 'free text is refused — fixed words only');
+  refused(w.bob.update('', { ['social/nudge/' + ANN + '/' + BOB]: { v: 0, at: NOW }, [people(BOB) + '/nudged/' + ANN]: TS }), 'a client stamp is refused');
+  refused(w.bob.update('', { ['social/nudge/' + ANN + '/' + CAT]: { v: 0, at: TS }, [people(BOB) + '/nudged/' + ANN]: TS }), 'Bob cannot write a nudge in Cat\'s name');
+  allowed(w.ann.set(people(ANN) + '/nonudge/' + BOB, true), 'Ann switches off nudges from Bob');
+  refused(w.bob.set(people(ANN) + '/nonudge/' + BOB, null), 'Bob cannot switch them back on for himself');
+  refused(nudge(w.bob, BOB, ANN), 'and his next nudge is refused');
+  refused(w.ann.set(people(ANN) + '/nonudge/' + BOB, 'yes'), 'the switch is `true` or absent');
+  allowed(w.ann.set(people(ANN) + '/nonudge/' + BOB, null), 'Ann allows them again');
+  allowed(w.ann.set(people(ANN) + '/quiet', true), 'Ann mutes all nudges');
+  refused(nudge(w.bob, BOB, ANN), 'and none gets through');
+  refused(w.bob.set(people(ANN) + '/quiet', null), 'nobody else unmutes her');
+  allowed(w.ann.set(people(ANN) + '/quiet', null), 'Ann unmutes');
+  allowed(nudge(w.bob, BOB, ANN, 2), 'and a nudge lands again');
+  allowed(w.bob.set('social/nudge/' + ANN + '/' + BOB, null), 'the sender may take one back');
+  refused(w.cat.set('social/nudge/' + ANN + '/' + BOB, null), 'a stranger may not delete one');
+  allowed(w.ann.update('', { [people(ANN) + '/list/' + BOB]: null, [people(BOB) + '/list/' + ANN]: null }), 'Ann removes Bob');
+  w.db.setNow(NOW + 4 * DAY);
+  refused(nudge(w.bob, BOB, ANN), 'and a removed friend cannot nudge');
+  refused(w.ann.set(people(ANN) + '/nudged/' + BOB, TS), 'and a stamp alone is never written');
+  refused(w.ann.set(people(ANN) + '/nonudge/' + ANN, true), 'and nobody switches nudges from themselves');
 }
 
 console.log('\nFriends: the rules, run\n');

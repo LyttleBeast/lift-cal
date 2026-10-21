@@ -44,7 +44,8 @@ import { routineList, adoptRoutine } from './routines.js';
 import { makeCustomExercise } from './exercises.js';
 import { bump } from './usage.js';
 import { PATH, makeCode, normCode, liveKind, cleanName, readPeople, shareNode, defaultShare,
-         normShare, wantedCats, routinePayload, receivedRoutine, SHARE_IDS, CODE_TTL_MS } from './friends-core.js';
+         normShare, wantedCats, routinePayload, receivedRoutine, SHARE_IDS, CODE_TTL_MS,
+         AV_MAX, AV_PX, avatarOk, readAvatar, readNudges, nextVariant, nudgeWait, NUDGE_LINES } from './friends-core.js';
 import { prPart, trainedPart, stepsPart, macroPart, weightPart } from './friends-summary.js';
 
 const PUB_DELAY = 60000;          // after a change to my own log, publish this much later
@@ -53,6 +54,8 @@ const FRIEND_TTL = 5 * 60000;     // a friend's summaries are read at most this 
 
 let me = null;
 let myProfileName = '';
+let myPhoto = null;               // users/{me}/profile/photo, the source of my friends' copy (v68)
+let nudgeNode = {};               // social/nudge/{me} (v68)
 let people = null;                // social/people/{me} as last delivered; null until it is
 let inbox = {};                   // social/inbox/{me}
 let codeInfo = null;              // { code, at } — my live code as read back, server time
@@ -80,6 +83,10 @@ export function friendsState() {
     outgoing: p.outgoing.filter(o => !o.already),
     code: codeInfo && p.code === codeInfo.code ? codeInfo : (p.code ? { code: p.code, at: 0 } : null),
     inbox: inboxList(),
+    // v68: nudges to me from current friends, live ones only; whether I take
+    // none at all
+    nudges: readNudges(nudgeNode, people || {}, Date.now()).live,
+    quiet: p.quiet,
     data: friendData,
     loadedAt: friendAt
   };
@@ -99,7 +106,7 @@ function inboxList() {
    open. The dock's dot. */
 export function waiting() {
   const s = friendsState();
-  return s.incoming.length + s.inbox.length;
+  return s.incoming.length + s.inbox.length + s.nudges.length;
 }
 
 export function myName() {
@@ -111,7 +118,7 @@ export function myName() {
 export async function initFriends(user) {
   me = uid();
   if (!me) return;
-  try { const p = await read('profile', null); myProfileName = (p && p.name) || (user && user.displayName) || ''; }
+  try { const p = await read('profile', null); myProfileName = (p && p.name) || (user && user.displayName) || ''; myPhoto = (p && p.photo) || null; }
   catch { myProfileName = (user && user.displayName) || ''; }
 
   stops.forEach(s => { try { s(); } catch {} });
@@ -126,14 +133,16 @@ export async function initFriends(user) {
       refreshCode();
       tell();
     }),
-    watchShared(PATH.inbox(me), v => { inbox = v || {}; tell(); })
+    watchShared(PATH.inbox(me), v => { inbox = v || {}; tell(); }),
+    // v68. Refused (unpublished rules) is no nudges — the watch never fires.
+    watchShared(PATH.nudges(me), v => { nudgeNode = v || {}; tidyNudges(); tell(); })
   ];
 
   /* My own log changed: the summaries my friends read are out of date. One
      publish a minute after the last change, not one per set ticked. */
   onChange(path => {
     if (/^(workouts|steps|food\/daySummaries|food\/targets|weight\/entries|profile)(\/|$)/.test(path)) {
-      if (/^profile/.test(path)) read('profile', null).then(p => { if (p && p.name) myProfileName = p.name; }).catch(() => {});
+      if (/^profile/.test(path)) read('profile', null).then(p => { if (p && p.name) myProfileName = p.name; myPhoto = (p && p.photo) || null; }).catch(() => {});
       schedulePublish(PUB_DELAY);
     }
   });
@@ -157,6 +166,11 @@ function tidy() {
   for (const r of p.incoming) if (r.already) { upd[PATH.req(me, r.uid)] = null; upd[PATH.out(r.uid, me)] = null; }
   for (const o of p.outgoing) if (o.already) { upd[PATH.out(me, o.uid)] = null; upd[PATH.req(o.uid, me)] = null; }
   for (const u of p.orphanShares) upd[PATH.share(me, u)] = null;
+  // v68, its own write: under rules published before v68 the delete of a
+  // nonudge entry is refused, and it must not take the deletes above with it.
+  if (p.orphanNoNudge.length && online.value) {
+    updateShared(Object.fromEntries(p.orphanNoNudge.map(u => [PATH.noNudge(me, u), null]))).catch(() => {});
+  }
   if (!Object.keys(upd).length || !online.value) return;
   tidying = true;
   updateShared(upd).catch(() => {}).finally(() => { tidying = false; });
@@ -322,6 +336,10 @@ export async function removeFriend(f) {
     return { ok: false, why: 'That couldn’t be done just now. Check your connection and try again.' };
   }
   delete friendData[f];
+  // v68, its own write, best effort: the nudges between us and my nudge
+  // switch for them. Under rules published before v68 it is refused, and the
+  // removal above has already happened either way.
+  updateShared({ [PATH.nudge(me, f)]: null, [PATH.nudge(f, me)]: null, [PATH.noNudge(me, f)]: null }).catch(() => {});
   schedulePublish(500);
   return { ok: true };
 }
@@ -411,6 +429,7 @@ export async function publish() {
       await updateShared(upd);
       LS.set(PUB_KEY, next);
     }
+    await publishAvatar(p.friends.length > 0, today);
   } catch {
     // Refused or dropped: the fingerprints were not saved, so the next
     // publish tries again.
@@ -418,6 +437,58 @@ export async function publish() {
     pubBusy = false;
     if (pubAgain) { pubAgain = false; schedulePublish(1000); }
   }
+}
+
+/* v68: my face, for my friends — its own write, never part of the one
+   above. Under rules published before v68 it is refused, and a refusal must
+   cost nothing but the face: the summaries above have already landed, and
+   the fingerprint is kept only when this write lands, so it is tried again
+   on the next publish and stops failing the moment the rules are pasted.
+   With no friends, or no photo, it is deleted. */
+const AV_KEY = 'friendsAv';
+async function publishAvatar(any, today) {
+  const was = LS.get(AV_KEY, null) || {};
+  const src = any && typeof myPhoto === 'string' && myPhoto.startsWith('data:image/') ? myPhoto : null;
+  const key = src ? src.length + ':' + src.slice(-48) : null;
+  if (was.key === key && was.day === today) return;
+  let value = null;
+  if (src) {
+    const p = await shrinkAvatar(src).catch(() => null);
+    if (!avatarOk(p)) return;               // never written in a shape the rules refuse
+    value = { p, at: serverNow() };
+  }
+  try { await updateShared({ [PATH.shared(me, 'av')]: value }); LS.set(AV_KEY, { key, day: today }); }
+  catch { /* the rules may not be published yet: next publish, again */ }
+}
+
+/* The profile picture (144 px, up to 24,000 characters) drawn again at
+   AV_PX square, quality stepping down and then the size, until it is at most
+   AV_MAX characters — about 4 KB of picture. The canvas is the browser's;
+   the port does the same with the platform's image API. Null if it cannot. */
+function shrinkAvatar(src) {
+  return new Promise((resolve) => {
+    if (typeof Image === 'undefined' || typeof document === 'undefined') { resolve(null); return; }
+    const img = new Image();
+    img.onerror = () => resolve(null);
+    img.onload = () => {
+      const side = Math.min(img.naturalWidth, img.naturalHeight);
+      if (!(side > 0)) { resolve(null); return; }
+      const sx = (img.naturalWidth - side) / 2, sy = (img.naturalHeight - side) / 2;
+      for (let px = AV_PX; px >= 32; px = Math.round(px * 0.8)) {
+        const cv = document.createElement('canvas');
+        cv.width = px; cv.height = px;
+        const ctx = cv.getContext('2d');
+        if (!ctx) break;
+        ctx.drawImage(img, sx, sy, side, side, 0, 0, px, px);
+        for (const q of [0.7, 0.55, 0.4]) {
+          const d = cv.toDataURL('image/jpeg', q);
+          if (d.length <= AV_MAX && avatarOk(d)) { resolve(d); return; }
+        }
+      }
+      resolve(null);
+    };
+    img.src = src;
+  });
 }
 
 /* My own numbers, built the way my friends read them, for my row on the
@@ -442,6 +513,9 @@ export function loadFriends(force) {
   friendLoad = Promise.all(list.map(async f => {
     const share = normShare(await readShared(PATH.share(f.uid, me), null));
     const d = { share, me: await readShared(PATH.shared(f.uid, 'me'), null) };
+    // v68: their face, if they have one and the rules are published. A
+    // refused read is no face — the letters, as before.
+    d.av = readAvatar(await readShared(PATH.shared(f.uid, 'av'), null));
     await Promise.all(SHARE_IDS.filter(id => share[id]).map(async id => { d[id] = await readShared(PATH.shared(f.uid, id), null); }));
     return [f.uid, d];
   })).then(rows => {
@@ -506,6 +580,67 @@ export async function declineRoutine(from) {
   try { await writeShared(PATH.slot(me, from), null); return { ok: true }; }
   catch { return { ok: false, why: 'That couldn’t be done just now. Try again.' }; }
 }
+
+/* ================= nudges (v68) ================= */
+
+/* Old, junk and from-a-stranger nudges are deleted (I may delete anything
+   in my nudge box). Best effort. */
+function tidyNudges() {
+  if (!me || !people || !online.value) return;
+  const { stale } = readNudges(nudgeNode, people, Date.now());
+  if (!stale.length) return;
+  updateShared(Object.fromEntries(stale.map(from => [PATH.nudge(me, from), null]))).catch(() => {});
+}
+
+/* Whether I can nudge `f` now, by my own node: { ok } or { ok: false, why,
+   left }. The rules are the real check — this is what the button says. */
+export function canNudge(f) {
+  const fr = readPeople(people || {}).friends.find(x => x.uid === f);
+  if (!fr) return { ok: false, why: 'They’re not on your list any more.' };
+  const left = nudgeWait(fr.nudgedAt, Date.now());
+  if (left > 0) return { ok: false, left, why: 'You’ve nudged ' + cleanName(fr.name).split(' ')[0] + ' today. One a day.' };
+  return { ok: true };
+}
+
+/* One nudge: the wording's number and the server's time in their nudge box,
+   and my stamp beside it, in one write — the rules take neither alone. The
+   wording rotates per friend (device state). */
+export async function sendNudge(f) {
+  const can = canNudge(f);
+  if (!can.ok) return can;
+  if (!online.value) return { ok: false, why: 'You’re offline. Try again with a signal.' };
+  const vKey = 'nudgeV:' + f;
+  const v = nextVariant(LS.get(vKey, null));
+  try {
+    await updateShared({ [PATH.nudge(f, me)]: { v, at: serverNow() }, [PATH.nudged(me, f)]: serverNow() });
+  } catch {
+    return { ok: false, why: 'That nudge didn’t go through. They may have nudges switched off — or, if this keeps happening, the Friends rules may not be published yet.' };
+  }
+  LS.set(vKey, v);
+  bump('nudgeSend');
+  return { ok: true, v };
+}
+
+/* Dismiss: the nudge is deleted from my box. */
+export async function dismissNudge(from) {
+  try { await updateShared({ [PATH.nudge(me, from)]: null }); return { ok: true }; }
+  catch { return { ok: false, why: 'That couldn’t be done just now. Try again.' }; }
+}
+
+/* My switches: nudges from one friend (on unless I say otherwise), and from
+   anybody. Turning one off deletes what that friend has already sent. Each
+   resolves false when refused, so the screen can flip it back. */
+export async function setNudgesFrom(f, on) {
+  const upd = { [PATH.noNudge(me, f)]: on ? null : true };
+  if (!on) upd[PATH.nudge(me, f)] = null;
+  try { await updateShared(upd); return true; } catch { return false; }
+}
+export async function setQuiet(on) {
+  const upd = { [PATH.quiet(me)]: on ? true : null };
+  if (on) for (const from of Object.keys(nudgeNode || {})) upd[PATH.nudge(me, from)] = null;
+  try { await updateShared(upd); return true; } catch { return false; }
+}
+export const NUDGE_COUNT = NUDGE_LINES.length;
 
 // The rules' code lifetime, for the screen's "lasts a day".
 export const CODE_HOURS = Math.round(CODE_TTL_MS / 3600000);

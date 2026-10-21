@@ -83,7 +83,7 @@ const FAMILIES = [
     ['workoutStart', 'Start'], ['workoutFinish', 'Finish'], ['setLogged', 'Sets'],
     ['routineStart', 'Routine'], ['exerciseCustom', 'Custom'],
     ['weighIn', 'Weigh-in'], ['waterLog', 'Water'], ['stepsSet', 'Steps'],
-    ['friendAdd', 'Friend'], ['routineSend', 'Sent']
+    ['friendAdd', 'Friend'], ['routineSend', 'Sent'], ['nudgeSend', 'Nudge']
   ]],
   ['The shell', 'var(--p-chrome)', 'more', [
     ['appOpen', 'Opens'], ['install', 'Installs']

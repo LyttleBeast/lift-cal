@@ -64,8 +64,8 @@ export const EVENTS = Object.freeze([
   // the rest
   'workoutStart', 'workoutFinish', 'setLogged', 'routineStart', 'exerciseCustom',
   'weighIn', 'waterLog', 'stepsSet',
-  // Friends (v67): a connection confirmed, a routine sent
-  'friendAdd', 'routineSend'
+  // Friends (v67): a connection confirmed, a routine sent; (v68) a nudge sent
+  'friendAdd', 'routineSend', 'nudgeSend'
 ]);
 const KNOWN = new Set(EVENTS);
 

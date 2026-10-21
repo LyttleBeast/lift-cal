@@ -388,6 +388,22 @@
               }
             }
           },
+          "nonudge": {
+            "$fid": {
+              ".write": "auth != null && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved').child(auth.uid).exists()) && auth.uid === $uid && $fid !== $uid",
+              ".validate": "newData.val() === true"
+            }
+          },
+          "quiet": {
+            ".write": "auth != null && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved').child(auth.uid).exists()) && auth.uid === $uid",
+            ".validate": "newData.val() === true"
+          },
+          "nudged": {
+            "$to": {
+              ".write": "auth != null && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved').child(auth.uid).exists()) && auth.uid === $uid && $to !== $uid && (!data.exists() || data.val() <= now - 86400000) && (!newData.exists() || newData.parent().parent().parent().parent().child('nudge').child($to).child($uid).child('at').val() === now)",
+              ".validate": "newData.isNumber() && newData.val() === now"
+            }
+          },
           "$other": {
             ".validate": false
           }
@@ -401,6 +417,19 @@
             ".validate": "newData.hasChildren(['n', 'at'])",
             "n": {
               ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 40"
+            },
+            "at": {
+              ".validate": "newData.isNumber() && newData.val() === now"
+            },
+            "$other": {
+              ".validate": false
+            }
+          },
+          "av": {
+            ".read": "auth != null && (auth.uid === $uid || ((auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved').child(auth.uid).exists()) && ($uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved/' + $uid).exists()) && root.child('social/people/' + $uid + '/list/' + auth.uid).exists() && root.child('social/people/' + auth.uid + '/list/' + $uid).exists()))",
+            ".validate": "newData.hasChildren(['p', 'at'])",
+            "p": {
+              ".validate": "newData.isString() && newData.val().length <= 6000 && newData.val().matches(/^data:image\\/jpeg;base64,[A-Za-z0-9+\\/]+=*$/)"
             },
             "at": {
               ".validate": "newData.isNumber() && newData.val() === now"
@@ -581,6 +610,25 @@
               "$other": {
                 ".validate": false
               }
+            },
+            "$other": {
+              ".validate": false
+            }
+          }
+        }
+      },
+      "nudge": {
+        "$to": {
+          ".read": "auth != null && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved').child(auth.uid).exists()) && auth.uid === $to",
+          "$from": {
+            ".read": "auth != null && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved').child(auth.uid).exists()) && auth.uid === $from",
+            ".write": "auth != null && (auth.uid === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved').child(auth.uid).exists()) && ((!newData.exists() && (auth.uid === $to || auth.uid === $from)) || (newData.exists() && auth.uid === $from && $from !== $to && ($to === 'aXSDfnZK8IMT9wRVhBbEgkDHpsj2' || root.child('access/approved/' + $to).exists()) && root.child('social/people/' + $from + '/list/' + $to).exists() && root.child('social/people/' + $to + '/list/' + $from).exists() && root.child('social/people/' + $to + '/nonudge/' + $from).val() !== true && root.child('social/people/' + $to + '/quiet').val() !== true && newData.parent().parent().parent().child('people').child($from).child('nudged').child($to).val() === now && root.child('social/people/' + $from + '/nudged/' + $to).val() !== now))",
+            ".validate": "newData.hasChildren(['v', 'at'])",
+            "v": {
+              ".validate": "newData.val() === 0 || newData.val() === 1 || newData.val() === 2"
+            },
+            "at": {
+              ".validate": "newData.isNumber() && newData.val() === now"
             },
             "$other": {
               ".validate": false

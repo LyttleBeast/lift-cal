@@ -211,6 +211,90 @@ export function wantedCats(byFriend) {
   return SHARE_IDS.filter(id => on.has(id));
 }
 
+/* ================= a friend's face (v68) =================
+   The owner's profile picture, shrunk again to a tiny square JPEG and
+   published at social/shared/{uid}/av for the people on their list. Not a
+   switch: a friend already sees the name you go by, and the face beside it
+   is the same kind of thing — who you are, not anything you logged. It goes
+   only to confirmed friends (the rules gate it exactly as they gate `me`),
+   it is gone the moment the connection is, and removing your photo removes
+   it. The rules hold it to a JPEG data string of at most AV_MAX characters
+   and nothing but base64 after the prefix, so another person's writing can
+   only ever be drawn as a picture — and is checked again here before it is. */
+export const AV_MAX = 6000;
+export const AV_PX = 72;
+export const AV_RE = /^data:image\/jpeg;base64,[A-Za-z0-9+\/]+=*$/;
+export function avatarOk(p) {
+  return typeof p === 'string' && p.length <= AV_MAX && AV_RE.test(p);
+}
+/* A friend's `av` summary as read back: the picture, or null. */
+export function readAvatar(av) {
+  return av && typeof av === 'object' && avatarOk(av.p) ? av.p : null;
+}
+
+/* ================= nudges (v68) =================
+   One tap on a friend's row: "Ann says you are slacking off. Get in there."
+   The words are these three and only these — what travels is which one (`v`,
+   0–2) and the server's time, never text, and the name is the one on the
+   receiver's own list. The rules make the rest true:
+
+     - only between confirmed friends, both sides standing;
+     - one per sender per friend per 24 hours, by the SERVER's clock: the
+       nudge is written beside a stamp on the sender's own node
+       (people/{from}/nudged/{to}) that cannot be moved or deleted for a day,
+       so a dismissed nudge does not open the door to the next;
+     - the receiver can switch nudges off per friend (people/{me}/nonudge/
+       {fid}, absent means allowed) or all at once (people/{me}/quiet), and
+       a nudge to somebody who has is refused;
+     - the receiver dismisses (deletes) it, either side deletes it, and the
+       app shows none older than NUDGE_TTL and tidies them away.
+
+   Delivered in the app today: the Friends tab's card and the dock's dot.
+   Phone notifications plug in later without changing any of this —
+   PUSH-NUDGE-CONTRACT.md. */
+export const NUDGE_LINES = Object.freeze([
+  '{n} says you are slacking off. Get in there.',
+  '{n} thinks the bar misses you. Time for a session.',
+  '{n} is checking in: go get a workout in today.'
+]);
+export const NUDGE_GAP = 86400000;            // the rules' one-a-day
+export const NUDGE_TTL = 7 * 86400000;        // shown for a week, then tidied
+export function nudgeText(v, name) {
+  const i = Number.isInteger(v) && v >= 0 && v < NUDGE_LINES.length ? v : 0;
+  return NUDGE_LINES[i].replace('{n}', firstName(name));
+}
+function firstName(name) { return cleanName(name).split(' ')[0]; }
+/* The next wording for a sender, rotating: after 0 comes 1, then 2, then 0. */
+export function nextVariant(prev) {
+  return Number.isInteger(prev) && prev >= 0 ? (prev + 1) % NUDGE_LINES.length : 0;
+}
+/* My nudge inbox as read: live ones from current friends only, newest first,
+   each named from my own list — and the ones to delete (expired, junk, or
+   from somebody who is no longer a friend). */
+export function readNudges(node, peopleNode, nowMs) {
+  const n = node && typeof node === 'object' ? node : {};
+  const list = peopleNode && peopleNode.list && typeof peopleNode.list === 'object' ? peopleNode.list : {};
+  const live = [], stale = [];
+  for (const [from, x] of Object.entries(n)) {
+    const at = x && Number(x.at);
+    const friend = list[from] && liveKind(list[from].k);
+    const v = x && x.v;
+    if (!friend || !Number.isFinite(at) || !Number.isInteger(v) || v < 0 || v >= NUDGE_LINES.length ||
+        !(Number.isFinite(nowMs) && at > nowMs - NUDGE_TTL)) { stale.push(from); continue; }
+    const name = cleanName(list[from].n);
+    live.push({ from, name, v, at, text: nudgeText(v, name) });
+  }
+  live.sort((a, b) => b.at - a.at);
+  return { live, stale };
+}
+/* Whether I may nudge `fid` now, by what my node says I last sent: the time
+   left in ms, or 0. A stamp from a phone that cannot read the server clock
+   reads as none — the rules are the real check. */
+export function nudgeWait(sentAt, nowMs) {
+  if (!Number.isFinite(sentAt) || !Number.isFinite(nowMs)) return 0;
+  return Math.max(0, sentAt + NUDGE_GAP - nowMs);
+}
+
 /* ================= the node paths =================
    Every social path is built here, the way store.js userPath() builds every
    path under users/{uid}: one place where a uid enters a path. */
@@ -229,7 +313,13 @@ export const PATH = Object.freeze({
   share:    (u, f) => 'social/people/' + seg(u) + '/share/' + seg(f),
   shared:   (u, cat) => 'social/shared/' + seg(u) + (cat ? '/' + seg(cat) : ''),
   inbox:    u => 'social/inbox/' + seg(u),
-  slot:     (to, from) => 'social/inbox/' + seg(to) + '/' + seg(from)
+  slot:     (to, from) => 'social/inbox/' + seg(to) + '/' + seg(from),
+  // v68: nudges, and the receiver's two switches for them
+  nudges:   u => 'social/nudge/' + seg(u),
+  nudge:    (to, from) => 'social/nudge/' + seg(to) + '/' + seg(from),
+  nudged:   (from, to) => 'social/people/' + seg(from) + '/nudged/' + seg(to),
+  noNudge:  (u, f) => 'social/people/' + seg(u) + '/nonudge/' + seg(f),
+  quiet:    u => 'social/people/' + seg(u) + '/quiet'
 });
 
 /* ================= reading my own node =================
@@ -242,7 +332,9 @@ export function readPeople(node, nowMs) {
   const friends = [], incoming = [], outgoing = [];
   for (const [uid, e] of Object.entries(obj(n.list))) {
     if (!e || !liveKind(e.k)) continue;
-    friends.push({ uid, kind: e.k, name: cleanName(e.n), at: Number(e.at) || 0, share: normShare(obj(n.share)[uid]) });
+    friends.push({ uid, kind: e.k, name: cleanName(e.n), at: Number(e.at) || 0, share: normShare(obj(n.share)[uid]),
+                   // v68: my nudge switch for them (absent: allowed), and when I last nudged them
+                   nudges: obj(n.nonudge)[uid] !== true, nudgedAt: Number(obj(n.nudged)[uid]) || 0 });
   }
   for (const [uid, e] of Object.entries(obj(n.req))) {
     if (!e || !liveKind(e.k)) continue;
@@ -261,7 +353,11 @@ export function readPeople(node, nowMs) {
     code: typeof n.code === 'string' && CODE_RE.test(n.code) ? n.code : null,
     // Share entries with nobody behind them — a request that was declined or
     // cancelled leaves the requester's defaults — for the client to tidy.
-    orphanShares: Object.keys(obj(n.share)).filter(u => !obj(n.list)[u] && !obj(n.out)[u])
+    orphanShares: Object.keys(obj(n.share)).filter(u => !obj(n.list)[u] && !obj(n.out)[u]),
+    // v68: every nudge from anybody is off (people/{me}/quiet), and my
+    // per-friend nudge switches with nobody behind them, to tidy
+    quiet: n.quiet === true,
+    orphanNoNudge: Object.keys(obj(n.nonudge)).filter(u => !obj(n.list)[u])
   };
 }
 

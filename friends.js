@@ -28,11 +28,12 @@ import { fmtW, unitW, fmtRate } from './units.js';
 import { setsText } from './analytics.js';
 import { tail, glyphed } from './vibe.js';
 import { tile, glyph } from './tiles.js';
-import { initialsOf, cleanName, SHARE, normShare, codeLeft, leftWords } from './friends-core.js';
+import { initialsOf, cleanName, SHARE, normShare, codeLeft, leftWords, avatarOk } from './friends-core.js';
 import { BOARDS, WINDOWS, board, readTrained, readSteps, readPRs, readMacros, readWeight, agoWords } from './friends-summary.js';
 import { onFriends, friendsState, initFriends, newCode, lookupCode, sendRequest, confirm, decline, cancel,
          removeFriend, setShare, loadFriends, mySummaries, routineList, routineFor, pendingTo, sendRoutine,
-         preview, acceptRoutine, declineRoutine, waiting, myName, CODE_HOURS } from './friends-data.js';
+         preview, acceptRoutine, declineRoutine, waiting, myName, CODE_HOURS,
+         canNudge, sendNudge, dismissNudge, setNudgesFrom, setQuiet } from './friends-data.js';
 
 // The board's two choices, kept across repaints and visits (device state).
 let boardId = 'td';
@@ -91,6 +92,7 @@ export function render() {
     wrap.appendChild(noteEl('Looking for your friends…'));
   } else {
     if (s.incoming.length) wrap.appendChild(requestsCard(s));
+    if (s.nudges.length) wrap.appendChild(nudgesCard(s));
     if (s.inbox.length) wrap.appendChild(inboxCard(s));
     if (s.friends.length) {
       wrap.appendChild(boardCard(s));
@@ -129,8 +131,21 @@ function head() {
   return hd;
 }
 
-function avatar(name, key, me) {
+/* v68: `photo` is a friend's face as their own phone published it
+   (friends-data.js loadFriends, checked there and again here): drawn as an
+   <img> whose src is a JPEG data string the rules allow nothing else into,
+   never as markup. No face, or one that will not decode: the letters. */
+function avatar(name, key, me, photo) {
   const a = el('span', 'fr-av' + (me ? ' me' : ''), me ? 'You' : initialsOf(name));
+  if (!me && avatarOk(photo)) {
+    const img = el('img');
+    img.alt = '';
+    img.decoding = 'async';
+    img.onerror = () => { img.remove(); a.classList.remove('has-photo'); };
+    img.src = photo;
+    a.classList.add('has-photo');
+    a.appendChild(img);
+  }
   if (!me) {
     const tones = ['var(--p-blue)', 'var(--p-green)', 'var(--p-red)', 'var(--p-yellow)', 'var(--p-chrome)'];
     // FNV-1a over the id, so similar ids still spread across the five.
@@ -182,6 +197,28 @@ function requestsCard(s) {
   return c;
 }
 
+/* v68: nudges to me — "Ann says you are slacking off. Get in there." —
+   each with a dismiss, and a way to stop them from that friend. */
+function nudgesCard(s) {
+  const c = el('div', 'card fr-card fr-nudges');
+  cardHead(c, s.nudges.length === 1 ? 'A nudge' : s.nudges.length + ' nudges');
+  s.nudges.forEach(n => {
+    const row = el('div', 'fr-req fr-nudge');
+    row.appendChild(avatar(n.name, n.from, false, (s.data[n.from] || {}).av));
+    const mid = el('div', 'fr-mid');
+    mid.appendChild(el('div', 'fr-name fr-nudge-t', n.text));
+    mid.appendChild(el('div', 'fr-sub', ago(n.at)));
+    row.appendChild(mid);
+    const x = el('button', 'btn btn-ghost fr-cancel', 'Dismiss');
+    x.setAttribute('aria-label', 'Dismiss the nudge from ' + n.name);
+    x.onclick = async () => { x.disabled = true; const res = await dismissNudge(n.from); if (!res.ok) { toast(res.why); x.disabled = false; } };
+    row.appendChild(x);
+    c.appendChild(row);
+  });
+  c.appendChild(noteEl('Nudges switch off per friend on their page, or for everybody there too.'));
+  return c;
+}
+
 function inboxCard(s) {
   const c = el('div', 'card fr-card');
   cardHead(c, s.inbox.length === 1 ? 'A routine for you' : 'Routines for you');
@@ -230,7 +267,7 @@ function boardCard(s) {
   res.rows.forEach(r => {
     const li = el('li', 'fr-rank-row' + (r.me ? ' me' : '') + (r.rank === 1 && r.value > 0 ? ' top' : ''));
     li.appendChild(el('span', 'fr-rank num', String(r.rank)));
-    li.appendChild(avatar(r.name, r.uid, r.me));
+    li.appendChild(avatar(r.name, r.uid, r.me, r.me ? null : (s.data[r.uid] || {}).av));
     const mid = el('div', 'fr-mid');
     mid.appendChild(el('div', 'fr-name', r.me ? 'You' : r.name));
     const sub = boardSub(def.id, r.read, win.days);
@@ -291,18 +328,44 @@ function friendsCard(s) {
   cardHead(c, s.friends.length === 1 ? 'Your friend' : 'Your friends · ' + s.friends.length);
   const list = el('div', 'set-list');
   s.friends.forEach(f => {
+    // v68: the row and its nudge button side by side — a button may not
+    // hold a button.
+    const line = el('div', 'fr-friend-line');
     const b = el('button', 'set-row-nav fr-friend');
-    b.appendChild(avatar(f.name, f.uid));
+    b.appendChild(avatar(f.name, f.uid, false, (s.data[f.uid] || {}).av));
     const mid = el('span', 'set-row-l fr-two');
     mid.appendChild(el('span', null, f.name));
     mid.appendChild(el('span', 'set-row-sub', theyShare(s.data[f.uid])));
     b.appendChild(mid);
     b.appendChild(glyphed(el('span', 'set-row-x', '›'), 'go'));
     b.onclick = () => openFriend(f.uid);
-    list.appendChild(b);
+    line.append(b, nudgeButton(f));
+    list.appendChild(line);
   });
   c.appendChild(list);
   return c;
+}
+
+/* v68: one nudge a day per friend. The button says when it is spent rather
+   than vanishing, so the row does not jump. */
+function nudgeButton(f) {
+  const first = firstOf(f.name);
+  const can = canNudge(f.uid);
+  const b = el('button', 'fr-nudge-btn' + (can.ok ? '' : ' spent'), can.ok ? 'Nudge' : 'Nudged');
+  b.setAttribute('aria-label', can.ok ? 'Nudge ' + first + ' to get a workout in' : 'You’ve nudged ' + first + ' today');
+  b.onclick = async e => {
+    e.stopPropagation();
+    if (!canNudge(f.uid).ok) { toast(canNudge(f.uid).why); return; }
+    b.disabled = true;
+    const res = await sendNudge(f.uid);
+    b.disabled = false;
+    if (!res.ok) { toast(res.why); return; }
+    // Spent at once, whatever the repaint brings: the stamp is the server's.
+    b.textContent = 'Nudged'; b.classList.add('spent');
+    b.setAttribute('aria-label', 'You’ve nudged ' + first + ' today');
+    toast('Nudged ' + first + '. They’ll see it on their Friends tab.');
+  };
+  return b;
 }
 
 function theyShare(d) {
@@ -461,7 +524,7 @@ function openFriend(f) {
   const { sh, close } = sheet();
   sh.appendChild(el('div', 'eyebrow', 'Friend'));
   const top = el('div', 'fr-who');
-  top.appendChild(avatar(fr.name, fr.uid));
+  top.appendChild(avatar(fr.name, fr.uid, false, d && d.av));
   const mid = el('div', 'fr-mid');
   mid.appendChild(el('h2', null, fr.name));
   const since = fr.at ? 'Friends since ' + new Date(fr.at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Friends';
@@ -514,6 +577,54 @@ function openFriend(f) {
   mineSec.appendChild(list);
   mineSec.appendChild(noteEl('Off means ' + first + ' can’t read it at all — the database refuses, not just this screen. Each friend has their own switches.'));
   sh.appendChild(mineSec);
+
+  /* v68: nudges from them, and from anybody. Not something I show — something
+     I let in — so they are their own section. */
+  const nudgeSec = el('div', 'you-sec');
+  nudgeSec.appendChild(el('div', 'you-sec-t', 'Nudges'));
+  const nlist = el('div', 'set-list');
+  const nrow = (label, note, get, set) => {
+    const b = el('button', 'fr-tog-row');
+    b.setAttribute('role', 'switch');
+    b.appendChild(tile('bell', 'coach'));
+    const body = el('span', 'set-row-l fr-two');
+    body.appendChild(el('span', null, label));
+    body.appendChild(el('span', 'set-row-sub', note));
+    b.appendChild(body);
+    const knob = el('span', 'tog');
+    knob.setAttribute('aria-hidden', 'true');
+    b.appendChild(knob);
+    let on = get();
+    const paint = () => { knob.classList.toggle('on', on); b.setAttribute('aria-checked', on ? 'true' : 'false'); };
+    paint();
+    let busy = false;
+    b.onclick = async () => {
+      if (busy) return;
+      busy = true; on = !on; paint();
+      const ok = await set(on);
+      busy = false;
+      if (!ok) { on = !on; paint(); toast('That didn’t save. Check your connection and try again.'); }
+    };
+    return b;
+  };
+  nlist.appendChild(nrow('Allow nudges from ' + first, first + ' can send you one a day: a nudge to get a workout in. Fixed words, never a message.',
+    () => fr.nudges !== false, on => setNudgesFrom(f, on)));
+  nlist.appendChild(nrow('Mute all nudges', 'No nudges from anybody, whatever each friend’s switch says.',
+    () => !!friendsState().quiet, on => setQuiet(on)));
+  nudgeSec.appendChild(nlist);
+  const nudgeHim = el('button', 'btn btn-ghost btn-block', 'Nudge ' + first);
+  nudgeHim.style.marginTop = '10px';
+  const cn = canNudge(f);
+  if (!cn.ok) { nudgeHim.disabled = true; nudgeHim.textContent = 'Nudged ' + first + ' today'; }
+  nudgeHim.onclick = async () => {
+    nudgeHim.disabled = true;
+    const res = await sendNudge(f);
+    if (!res.ok) { toast(res.why); nudgeHim.disabled = !canNudge(f).ok; return; }
+    nudgeHim.textContent = 'Nudged ' + first + ' today';
+    toast('Nudged ' + first + '. They’ll see it on their Friends tab.');
+  };
+  nudgeSec.appendChild(nudgeHim);
+  sh.appendChild(nudgeSec);
 
   const send = el('button', 'btn btn-ghost btn-block', 'Send ' + first + ' a routine');
   send.style.marginTop = '16px';

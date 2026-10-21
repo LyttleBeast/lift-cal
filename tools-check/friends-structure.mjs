@@ -100,10 +100,13 @@ section('D. safety in the code');
   check('the gatherer writes only through the shared verbs — never users/ read()/write(), never mergeUpdate()',
     !/\bwrite\(|mergeUpdate\(/.test(code(FD)) && /from '\.\/store\.js'/.test(FD));
   // The seven writes that carry a stamp: a code, a request, an outgoing note,
-  // both sides of a connection, a published summary and an inbox slot.
+  // both sides of a connection, a published summary and an inbox slot — and
+  // v68's two: the face (av) and a nudge, beside the sender's nudged stamp,
+  // which is a bare serverNow() of its own.
   const stamps = (code(FD).match(/\bat: serverNow\(\)/g) || []).length;
   check('every stamp written is the server\'s (serverNow()), so no phone\'s clock decides a code\'s day — ' + stamps + ' of them',
-    stamps === 7 && !/\bat: Date\.now\(\)/.test(code(FD)) && !/Date\.now\(\)\s*[+-]\s*CODE_TTL/.test(code(FD)));
+    stamps === 9 && /\[PATH\.nudged\(me, f\)\]: serverNow\(\)/.test(code(FD)) &&
+    !/\bat: Date\.now\(\)/.test(code(FD)) && !/Date\.now\(\)\s*[+-]\s*CODE_TTL/.test(code(FD)));
   const EV = rd('usage.js');
   check('the three new counters are on usage.js\'s closed list, and tabSteps stays for the days already counted',
     ['tabFriends', 'friendAdd', 'routineSend', 'tabSteps'].every(e => EV.includes("'" + e + "'")));
@@ -148,7 +151,8 @@ section('F. touch targets: 44px or more on everything Friends adds that a thumb 
 section('G. the docs and the version');
 {
   const SW = /const CACHE='(rack-v\d+)'/.exec(rd('sw.js'))[1], US = /const VERSION = '(rack-v\d+)'/.exec(rd('usage.js'))[1];
-  check('sw.js and usage.js both say rack-v67', SW === 'rack-v67' && US === 'rack-v67', SW + ' / ' + US);
+  // v68, on purpose: the build moved on, and the two still agree.
+  check('sw.js and usage.js both say rack-v68', SW === 'rack-v68' && US === 'rack-v68', SW + ' / ' + US);
   const AG = rd('AGENTS.md');
   check('AGENTS.md documents every social node', ['social/codes/{CODE}', 'social/people/{uid}', 'social/shared/{uid}', 'social/inbox/{to}/{from}'].every(k => AG.includes(k)));
   check('README.md and CLAUDE.md name the four files', ['friends.js', 'friends-data.js', 'friends-core.js', 'friends-summary.js'].every(f => rd('README.md').includes(f) && rd('CLAUDE.md').includes(f)));
