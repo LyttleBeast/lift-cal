@@ -146,9 +146,9 @@ node in the database. See *Access* below for what replaced them, and why.
 | `water.js` | Water card, log sheet, goal and sizes |
 | `weight.js` | Weight tab — log, trend chart, time-of-day curve, maintenance |
 | `steps.js` | Steps data — the node's listener, the goal, and the two sheets that write it (a day's total, the goal). No tab since v67: the day's number is a tile on You and a card under Trends → Habits, whose *Log today's steps* opens the sheet |
-| `friends.js` | Friends tab (v67) — requests and routines waiting on me, the board, my friends, and the sheets: add a friend, a friend's page with the five switches, send a routine, a routine for me |
+| `friends.js` | Friends tab (v67) — requests, nudges (v68) and routines waiting on me, the board, my friends with their faces and a Nudge button, and the sheets: add a friend, a friend's page with the five switches and the nudge switches, send a routine, a routine for me |
 | `friends-data.js` | Friends' impure half — the watchers on this account's own node and inbox, codes, requests, confirm, remove, the switches, publishing this account's summaries and reading its friends'. The file the native port rewrites |
-| `friends-core.js` | Friends' model (pure; copied verbatim): the code format and lifetime, the kinds (`friend` live; `coach` and `team` reserved), names, the five switches and their defaults, every `social/` path, and the routine payload sent and received |
+| `friends-core.js` | Friends' model (pure; copied verbatim): the code format and lifetime, the kinds (`friend` live; `coach` and `team` reserved), names, the five switches and their defaults, every `social/` path, the routine payload sent and received, and (v68) the face's bounds and the nudge's wordings and rules |
 | `friends-summary.js` | What one account shows another (pure, imports nothing; copied verbatim): the summaries built from the app's own numbers, read back clamped, and the boards' ranking |
 | `settings-registry.js` `tile-icons.js` `tiles.js` | Settings' table (rows, groups, search words, gates — pure), the coloured icon tiles' drawings (pure) and the tile itself |
 | `you-rows.js` `you-numbers.js` | You's three rows and the screens behind them (pure), and its four number tiles (pure) |

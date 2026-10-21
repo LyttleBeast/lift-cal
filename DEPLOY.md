@@ -111,6 +111,30 @@ code (Friends → Make a code), the other types it, the first confirms; both see
 each other under *Your friends* and on the Training board. In Firebase → Data,
 `social/people/{each uid}/list` holds the other.
 
+### v68: faces and nudges wait for this publish (the app works before it)
+
+v68 adds five nodes inside `social` and changes nothing else in the file:
+`social/shared/$uid/av` (a friend's face), `social/nudge/$to/$from` (a
+nudge), and on `social/people/$uid` the three children `nonudge`, `nudged`
+and `quiet`. Ship the app first or the rules first — either order is safe.
+Until the rules are pasted, faces show as letters, a nudge says it didn't go
+through, and everything else in Friends works exactly as in v67
+(`tools-check/friends-v68.mjs` section 2 runs the app against v67's rules).
+Paste the whole file as above, then in the **Rules Playground** each of
+these must say **Denied**:
+
+| Type | Location | Authenticated as | Data |
+|---|---|---|---|
+| read | `/social/shared/{your uid}/av` | a made-up uid | — |
+| read | `/social/nudge/{your uid}` | a made-up uid | — |
+| set | `/social/shared/{your uid}/av` | your uid | `{"p":"data:image/png;base64,AA","at":{".sv":"timestamp"}}` |
+
+and this one **Allowed**: read `/social/nudge/{your uid}` as your own uid.
+End to end, with a second account that is a friend: tap **Nudge** on their
+row; on their phone the Friends tab shows "<your name> says you are slacking
+off. Get in there." and the dock's dot; a second tap the same day says one
+a day.
+
 ### There are two rules files, and only one is ever live
 
 `database.rules.json` is the one to paste. `database.rules.OPTIONAL-LOCK.json`

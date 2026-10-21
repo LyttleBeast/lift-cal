@@ -7,7 +7,7 @@ Two things this file is not. It is not a design document — where a shape was
 already decided, the decision stays where it was written and this only points at
 it. And it is not a port brief: `NEXT-NATIVE.md`, `NEXT-NATIVE-UNITS.md`,
 `NEXT-NATIVE-V40.md`, `NEXT-NATIVE-V41.md`, `NEXT-NATIVE-V42.md`,
-`NEXT-NATIVE-V43.md`, `NEXT-NATIVE-V45.md`, `NEXT-NATIVE-V46.md`, `NEXT-NATIVE-V48.md`, `NEXT-NATIVE-V49.md`, `NEXT-NATIVE-V52.md`, `NEXT-NATIVE-V53.md`, `NEXT-NATIVE-V54.md`, `NEXT-NATIVE-V55.md`, `NEXT-NATIVE-V56.md`, `NEXT-NATIVE-V57.md` and `NEXT-NATIVE-V58.md` are the instructions for copying
+`NEXT-NATIVE-V43.md`, `NEXT-NATIVE-V45.md`, `NEXT-NATIVE-V46.md`, `NEXT-NATIVE-V48.md`, `NEXT-NATIVE-V49.md`, `NEXT-NATIVE-V52.md`, `NEXT-NATIVE-V53.md`, `NEXT-NATIVE-V54.md`, `NEXT-NATIVE-V55.md`, `NEXT-NATIVE-V56.md`, `NEXT-NATIVE-V57.md`, `NEXT-NATIVE-V58.md` (and since, `NEXT-NATIVE-V63.md` to `NEXT-NATIVE-V65.md` and `NEXT-NATIVE-V68.md`) are the instructions for copying
 work into `~/dev/rack-mobile`, and they stay. What is below is the list of
 things nobody has done yet.
 
@@ -224,6 +224,34 @@ Carried from `NEXT-NATIVE.md` §7 so it survives that file. Do not "fix" these:
   last one is quoted against does convert.
 
 ---
+
+## What v68 left open in its own work
+
+v68 is warm-ups in the grey rows, Settings' back arrow, friends' faces, the
+nudge, and four backlog items (`OVERNIGHT-V68.md`; port note
+`NEXT-NATIVE-V68.md`).
+
+- **Publish the rules.** v68's five `social` nodes (`DEPLOY.md`, "v68"). The
+  app is safe either side of the publish (`tools-check/friends-v68.mjs` §2).
+- **Phone notifications for nudges** — `PUSH-NUDGE-CONTRACT.md`, waiting on
+  the Apple Developer account. Nothing about the nudge changes when it lands.
+- **The one-time index rebuild** (`workout.js` `upgradeHistory`) reads the
+  whole `workouts` tree once per device. At today's size that is a few hundred
+  KB once; it is not repeated.
+- **Warm-ups of an exercise added from a routine or the builder** are what the
+  routine or the builder says — the grey ramp is for an exercise added by
+  hand, as the v54 rule always was. A routine saved from a session already
+  carries its warm-ups as `W` targets.
+- **The nudge's "seems to be slacking" is the sender's judgement**, not
+  Rack's: the button is on every friend row, not only on somebody whose
+  training board is empty. A row that only offers it after N quiet days is an
+  easy follow-up if Micah wants it (the board's training-days strip has the
+  number).
+- **sw.js option A** (navigations revalidate on the FIRST launch) stays gated
+  on the real-phone check in `report/index-stale.md`; v68 shipped option B.
+- **The Coach card's greeting pin and the thin-log rotation** (v44's notes
+  above) are unchanged and are not the 24-hour rule, which v53 built and
+  `tools-check/coach-hype.mjs` G holds.
 
 ## What v67 (Friends) left open in its own work
 
@@ -1186,8 +1214,12 @@ case the fix deliberately does not reach. (Two more were closed by v45: the
 `CACHE`/`VERSION` verifier is `tools-check/version-match.mjs`, and `g_in_a_row`
 says "in seven days" now.)
 
-- **`index.html` is still served from the browser's HTTP cache for up to ten
-  minutes after a ship.** The revalidating leg is same-origin and
+- ~~**`index.html` is still served from the browser's HTTP cache for up to ten
+  minutes after a ship.**~~ **Narrowed to one launch in v68** — sw.js ships
+  `report/index-stale.md`'s option B (a background conditional request beside
+  each navigation; `tools-check/sw-navigate.mjs`). The first launch after a
+  ship can still get the old `index.html`; option A, which would fix that too,
+  stays gated on the report's real-phone check. The revalidating leg is same-origin and
   non-navigation, and the second half of that is the cost: passing any init at
   all to `fetch()` makes it rebuild the Request, and while the Fetch spec says
   a navigate-mode rebuild is downgraded to same-origin rather than thrown on,
@@ -1210,8 +1242,10 @@ says "in seven days" now.)
   list — so the two ways out are to pin later (and pay that cost) or to give the
   late-gated lines a cheap log-only sibling. Neither was in scope. Until then,
   a generic line on a cold start is not evidence the rotation is broken.
-- **ZXing has never been cached by the service worker, and the README said it
-  was until v44.** `food.js` loads it with a `<script>` tag, so the request is
+- ~~**ZXing has never been cached by the service worker, and the README said it
+  was until v44.**~~ **Fixed before v68** (`food.js` sets `crossOrigin =
+  'anonymous'`; `tools-check/scanner-offline.mjs`). Re-checked in v68; the
+  real-phone airplane-mode test is still worth one run. `food.js` loads it with a `<script>` tag, so the request is
   no-cors, the response is opaque with `status === 0`, and the handler's
   `r.status===200` guard never writes it. Barcode scanning therefore does not
   work offline on an iPhone, where it is the only scanner there is. Fixable by
@@ -1234,7 +1268,11 @@ v43 is the Coach fix run — the rotation, the boot path, the tier gate, the
 sheet's surface, the stall's voice and the short-finding gap. Two things it
 found and deliberately did not touch, plus one it could not check.
 
-- **`.btn` renders 41px tall against a 44px touch-target minimum.** Routines,
+- ~~**`.btn` renders 41px tall against a 44px touch-target minimum.**~~ **Fixed
+  in v47** (`min-height: 44px`, `report/btn-44.md`). v68 re-measured every
+  button on every tab and the Settings hub in Chrome at 390 and 320: no `.btn`
+  under 44. What WAS 40 was the picker's and the library's rows (`.ex-item`),
+  44 since v68. Routines,
   Exercises and Statistics on Train are therefore 3px under. It is real and it
   is small, and `.btn` is used on every screen in the app — changing its padding
   for this moves every button in Rack, which is a far bigger blast radius than

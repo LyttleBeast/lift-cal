@@ -319,9 +319,14 @@ social/people/{uid}/req/{from}   { n, c, k, at }                a request to me
 social/people/{uid}/out/{to}     { n, at }                      my request to them
 social/people/{uid}/list/{fid}   { k, n, at }                   my side of a connection
 social/people/{uid}/share/{fid}  { pr?, td?, st?, mac?, wt? }   what I show them
+social/people/{uid}/nonudge/{fid} true                          v68: no nudges from them
+social/people/{uid}/nudged/{to}  server time                    v68: when I last nudged them
+social/people/{uid}/quiet        true                           v68: no nudges from anybody
 social/shared/{uid}/me           { n, at }                      my name, for friends
+social/shared/{uid}/av           { p, at }                      v68: my face, for friends
 social/shared/{uid}/pr|td|st|mac|wt                             my summaries
 social/inbox/{to}/{from}         { at, n, r }                   a routine sent to me
+social/nudge/{to}/{from}         { v, at }                      v68: a nudge to me
 ```
 
 Every path is built in `friends-core.js` `PATH`, the way `store.js` `userPath()`
@@ -455,6 +460,45 @@ last used, how often, or anything logged.
   next save. A sender's custom exercise is matched to one of the receiver's by
   name and group, and otherwise becomes a new custom of the receiver's, named on
   screen before they save (`receivedRoutine`). Then the slot is deleted.
+
+### A friend's face — `social/shared/{uid}/av` (v68)
+
+`{ p, at }`: `p` a JPEG data string, `data:image/jpeg;base64,` and base64
+only, at most **6,000** characters (`friends-core.js` `AV_MAX`, `AV_RE`, held
+to the rules' text by `tools-check/friends-v68.mjs`); `at` the server's.
+Read by exactly the rule that reads `me` — both sides of the connection —
+and **not a switch**: it is who you are, the same consent as your name. The
+owner's phone redraws `users/{me}/profile/photo` at 72 px and publishes it
+(`friends-data.js` `publishAvatar`) in **its own write**, never inside the
+summaries' one, so under rules that predate it the refusal costs only the
+face; with no friends or no photo it is deleted. A friend reads it with the
+summaries (`readAvatar`) and draws it as an `<img>` over the letters, which
+are the fallback.
+
+### Nudges — `social/nudge/{to}/{from}` (v68)
+
+`{ v: 0|1|2, at }` — which of `friends-core.js` `NUDGE_LINES` ("{n} says you
+are slacking off. Get in there." and two more), never text; the name is the
+receiver's own list's. The rules:
+
+- **Friends only**: both list entries, the receiver approved, never yourself.
+- **One a day by the server's clock.** The nudge is allowed only in the same
+  write as the sender's own stamp, `people/{from}/nudged/{to}` = `now`, and
+  that stamp may be written only when the last one is a day old — and never
+  deleted or moved otherwise. So dismissing a nudge does not open the door to
+  the next, and no phone's clock decides.
+- **The receiver decides**: `people/{to}/nonudge/{from}` (`true` = not from
+  them; absent = allowed, the default for every friend) and `people/{to}/quiet`
+  (`true` = from nobody). A nudge either blocks is refused. Only the owner
+  writes either.
+- Read by `{to}` (the box) and `{from}` (their slot). Deleted by either —
+  Dismiss, or taking it back. The app shows none over a week old
+  (`NUDGE_TTL`) and deletes them, and deletes the nudges between two people
+  and the switch when they stop being friends (its own write).
+
+Delivered in the app only: the Friends tab's card and the dock's dot. Phone
+notifications are `PUSH-NUDGE-CONTRACT.md`, not built; they change none of
+the above.
 
 ### What is not protected, said plainly
 
@@ -795,6 +839,21 @@ v55, never on a drop: a drop set is rated on the set he changed to a drop set.
 `history/{exId}` → `[ { date, sets: [ {w,r,type,dp?} ] }, … ]`, newest first, 20 max
 — the per-exercise "last time" index. `dp` (v55) is a drop's, so the "Last ·"
 line can draw a drop set as one group.
+
+**v68: the index keeps warm-ups**, typed `'W'`, in session order — every set
+of an exercise that has at least one working set (an exercise of nothing but
+warm-ups is not indexed). It is what lets an exercise added by hand offer
+last time's whole ramp in grey, warm-ups first (`workout.js` `nextGrey`), and
+the "Last ·" line say "warm-ups 45 to 225 · 315×5 …" (`warmupsText`). **The
+index is not a count**: its readers are the "Last ·" line, the grey rows and
+the picker's row count, and nothing that works out a volume, an e1RM, a
+record, a group or a Coach read touches it — those read `workouts` and filter
+with `isWorking`, and `tools-check/warmup-leaks.mjs` holds that every one of
+them answers the same with warm-ups as without. Entries folded before v68
+have no `W` rows and read exactly as before; `upgradeHistory()` rebuilds the
+index from the log once per device (online only, `readExact`, never while a
+workout is open, flag `historyWarmups`). The published rules take it as they
+are (`history` carries a section-level `.write`).
 
 ## `water/log/{YYYY-MM-DD}` → `{ entryId: { ml, t, src } }`
 
@@ -1224,7 +1283,9 @@ optional. Any food already in the log produces this exact shape — tap it →
    `settings/coach` is the worked example, and the thing to check is whether
    the section carries an `$other` deny at its own level rather than nested
    inside one of its children. The same is true of a new
-   tree at the root — `social` (v67, Friends) is the most recent one. And editing
+   tree at the root — `social` (v67, Friends) is the most recent one, and a new
+   child of `social` with a `$other` deny at its level (v68's `av`, `nudge`,
+   `nonudge`, `nudged`, `quiet`) needs its own rule for the same reason. And editing
    `database.rules.json` publishes nothing: it is a copy, and somebody has to
    paste it into the Firebase console before a single one of those writes
    lands.
