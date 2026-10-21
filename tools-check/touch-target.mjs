@@ -836,6 +836,21 @@ section('F. Your goal (v55): every answer’s label fits its chip on one line, a
   }
 }
 
+/* ================= I (v68) ================= */
+section('I. (v68) the picker\'s and the library\'s exercise rows, and the ‹ back arrow, are 44px');
+{
+  // Chrome measured both in v68 (Playwright over report/btn-44's fakes):
+  // .ex-item 40px on every row of the picker and the library, .back-btn 33.
+  // Both are now 44 by a min-height that only adds.
+  for (const w of [390, 320]) {
+    const ex = buttonBox(RULES, chain('button.ex-item < div.picker-list < div.sheet'), w);
+    check(`${w} · picker row (.ex-item): ${ex.used}px, by min-height ${ex.minH} from ${(ex.c['min-height'] || {}).where}`, ex.used >= 44 && ex.minH === 44 && !ex.capped);
+    const bk = buttonBox(RULES, chain('button.back-btn < div.sheet'), w);
+    check(`${w} · ‹ Settings / ‹ Back (.back-btn): ${bk.used}px`, bk.used >= 44 && bk.minH === 44 && !bk.capped);
+  }
+  check('the rows are still built as button.ex-item', /el\('button', 'ex-item'/.test(CODE['picker.js']));
+}
+
 /* ---------- report ---------- */
 console.log('\nevery .btn is a 44px touch target\n');
 console.log(results.join('\n'));

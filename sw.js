@@ -16,4 +16,14 @@
 // only cache there was. Without the retry that launch is a blank app in a
 // basement where the old one worked. It costs one rejected promise offline and
 // nothing at all online, where the first leg has already answered.
-const CACHE='rack-v68';self.addEventListener('install',e=>self.skipWaiting());self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));self.addEventListener('fetch',e=>{if(e.request.method!=='GET')return;const u=new URL(e.request.url);if(!u.protocol.startsWith('http'))return;if(u.hostname.includes('firebaseio.com')||u.hostname.includes('googleapis.com')||u.hostname.endsWith('workers.dev'))return;const fresh=u.origin===self.location.origin&&e.request.mode!=='navigate';const net=fresh?fetch(e.request,{cache:'no-cache'}).catch(()=>fetch(e.request)):fetch(e.request);e.respondWith(net.then(r=>{if(r&&r.status===200){const c=r.clone();caches.open(CACHE).then(x=>x.put(e.request,c));}return r;}).catch(()=>caches.match(e.request).then(m=>m||(e.request.mode==='navigate'?caches.match('./index.html'):Response.error()))));});
+// v68: index.html's ten-minute window (report/index-stale.md, option B — the
+// one it recommends shipping first). A navigation is still answered exactly as
+// before, by the plain fetch above; beside it, a background conditional
+// request for the same URL refreshes the browser's HTTP cache, so the launch
+// after a ship's first launch gets the new index.html instead of waiting out
+// Pages' max-age=600. It is a separate request built from the URL string, so it
+// never rebuilds the navigation Request; its response is never handed to
+// respondWith, so a redirect it follows is harmless; and its failure is
+// swallowed. A 304 per launch, given Pages' ETag. Option A (navigations take
+// the revalidating leg) stays gated on the one phone check the report names.
+const CACHE='rack-v68';self.addEventListener('install',e=>self.skipWaiting());self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));self.addEventListener('fetch',e=>{if(e.request.method!=='GET')return;const u=new URL(e.request.url);if(!u.protocol.startsWith('http'))return;if(u.hostname.includes('firebaseio.com')||u.hostname.includes('googleapis.com')||u.hostname.endsWith('workers.dev'))return;const fresh=u.origin===self.location.origin&&e.request.mode!=='navigate';const net=fresh?fetch(e.request,{cache:'no-cache'}).catch(()=>fetch(e.request)):fetch(e.request);if(e.request.mode==='navigate'&&u.origin===self.location.origin)e.waitUntil(fetch(e.request.url,{cache:'no-cache'}).catch(()=>{}));e.respondWith(net.then(r=>{if(r&&r.status===200){const c=r.clone();caches.open(CACHE).then(x=>x.put(e.request,c));}return r;}).catch(()=>caches.match(e.request).then(m=>m||(e.request.mode==='navigate'?caches.match('./index.html'):Response.error()))));});

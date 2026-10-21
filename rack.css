@@ -807,9 +807,12 @@ body.peeking .view.active { padding-bottom: 65px; }
 }
 .move-opt.on { border-color: var(--accent); background: var(--raised); color: var(--chalk); }
 
+/* v68: 44px — the touch target. The picker's and the library's rows were 40
+   (their padding and a 14px line), measured in Chrome on every row of both
+   sheets; min-height only adds, so nothing about a width or a wrap moves. */
 .ex-item {
   display: flex; align-items: center; gap: 10px;
-  padding: 11px 4px; border-bottom: 1px solid var(--collar);
+  min-height: 44px; padding: 11px 4px; border-bottom: 1px solid var(--collar);
   width: 100%; text-align: left;
 }
 .ex-item .dot { width: 8px; height: 8px; border-radius: var(--r-plate); flex-shrink: 0; }
