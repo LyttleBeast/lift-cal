@@ -201,7 +201,10 @@ export function cases() {
     K('A32', CUSTOM_LEGS, [xN(3, 200, 5), xN(3, 200, 5), xN(3, 200, 5), xN(3, 200, 5)], { mode: 'add', load: 210, reps: [5, 5, 5] }),
     K('A33', bench, A33_LOG, { mode: 'reduce', load: 87.5, reps: [8, 8, 8] }, { u: 'kg' }),
     K('A34', bench, A34_LOG, { mode: 'hold', code: 'confirm', load: 185 }),
-    K('A34b', bench, A34_LOG.slice(-6), { mode: 'add', load: 190, reps: [6, 6, 6] }),
+    // v69: the three sessions before the judged one are all at 185 for 8–10,
+    // so the held-load rule (spec §6.5) reads 8–10 and the add starts at 8 —
+    // until v69 this row read the default band and started at 6.
+    K('A34b', bench, A34_LOG.slice(-6), { mode: 'add', load: 190, reps: [8, 8, 8], range: [8, 10, 'yours'] }),
     K('A35', squat, A35_LOG, { mode: 'add', load: 335, reps: [5, 5, 5] }, { aim: 'strength', exp: 'years' }),
     K('A36', bench, A36_LOG, { mode: 'add', load: 195, reps: [8, 8, 8] }, { group: 4 }),
     K('A37', squat, A35_LOG, { mode: 'add', load: 325, reps: [5, 5, 5] }, { aim: 'strength', exp: 'new' }),
@@ -588,20 +591,39 @@ if (MAIN) {
     const rows51 = [];
     const OLD = ['exposures', 'range', 'step', 'status', 'slope', 'sigma'];
     const pick = (b, keys) => (b ? Object.fromEntries(keys.map(k => [k, b[k]])) : null);
-    const rowsMoved = [], basesMoved = [], inconsistent = [];
-    let rows = 0, swept = 0;
+    const rowsMoved = [], basesMoved = [], inconsistent = [], unfenced = [];
+    let rows = 0, swept = 0, touched = 0;
 
     // The two promises, over one lift: the target and the old fields are v48's
     // byte for byte, and the new fields agree with the status beside them.
+    // v69 moved the engine on purpose — a heavy day teaches no range and no
+    // step and gets no target (doubles too), a big barbell jump needs three
+    // sightings, and three sessions at one load teach the held-load band — so
+    // the promise is now: byte for byte wherever none of those applies, and
+    // where the target moved, one of them must be the reason (the range or
+    // the step baseline moved, a held range, or a heavy defer). v69Of() is
+    // the fingerprint; `touched` counts the histories it fires on.
+    const v69Of = (t, b, b48) => {
+      const r = JSON.stringify(b && b.range) !== JSON.stringify(b48 && b48.range);
+      const s = JSON.stringify(b && b.step) !== JSON.stringify(b48 && b48.step);
+      return r || s || !!(t && t.range && t.range.held) || !!(t && t.mode === 'defer' && t.code === 'heavy');
+    };
     const hold = (label, meta, sessions, group, ctx) => {
       const exposures = P.exposuresFor(sessions, meta.exId);
       const ex = { ...meta, exposures, groupDaysSince: group };
-      const now = JSON.stringify(P.prescribe(ex, ctx)), then = JSON.stringify(P48.prescribe(ex, ctx));
-      if (now !== then) rowsMoved.push(label);
-      const v51 = JSON.stringify(P51.prescribe(ex, ctx));
-      if (now !== v51 || JSON.stringify(P.targetFor(ex, ctx, null)) !== v51) rows51.push(label);
+      const t = P.prescribe(ex, ctx);
       const b = P.baselines(ex, ctx), b48 = P48.baselines(ex, ctx);
-      if (JSON.stringify(pick(b, OLD)) !== JSON.stringify(pick(b48, OLD))) basesMoved.push(label);
+      const moved = v69Of(t, b, b48);
+      if (moved) touched++;
+      const now = JSON.stringify(t), then = JSON.stringify(P48.prescribe(ex, ctx));
+      // Moved with a v69 reason: expected (rowsMoved). Moved without one: a
+      // change this ship did not mean to make (unfenced).
+      if (now !== then) (moved ? rowsMoved : unfenced).push(label);
+      const v51 = JSON.stringify(P51.prescribe(ex, ctx));
+      if (!moved && (now !== v51 || JSON.stringify(P.targetFor(ex, ctx, null)) !== v51)) rows51.push(label);
+      if (moved && JSON.stringify(P.targetFor(ex, ctx, null)) !== now) rows51.push(label + ' (targetFor differs from prescribe)');
+      if (!moved && JSON.stringify(pick(b, OLD)) !== JSON.stringify(pick(b48, OLD))) basesMoved.push(label);
+      if (moved && JSON.stringify(pick(b, OLD.filter(k => k !== 'range' && k !== 'step'))) !== JSON.stringify(pick(b48, OLD.filter(k => k !== 'range' && k !== 'step')))) basesMoved.push(label + ' (a field other than range/step)');
       if (!b) return;
       const bad = [];
       const S = b.series;
@@ -638,10 +660,13 @@ if (MAIN) {
         hold(u + ' seed ' + s, h.meta, h.sessions, h.group, h.ctx);
       }
     }
-    check('prescribe() is byte-identical to rack-v48’s on every battery row (' + rows + ') and every swept history (' + swept + ')',
-          rows >= 57 && !rowsMoved.length, list(rowsMoved));
-    check('and every field baselines() already returned is too', !basesMoved.length, list(basesMoved));
-    check('v52: prescribe() and targetFor() with no mark are rack-v51’s prescribe(), byte for byte, on every row (' + rows + ') and every swept history (' + swept + ')',
+    check('prescribe() is byte-identical to rack-v48’s on every battery row and swept history that no v69 rule touches (' +
+          (rows + swept - touched) + ' of ' + (rows + swept) + '; ' + rows + ' rows, ' + swept + ' histories)',
+          rows >= 57 && !unfenced.length && rows + swept - touched > (rows + swept) * 0.5, list(unfenced));
+    check('v69: every target that moved from v48’s carries a v69 reason — a range or step baseline that moved, a held range, or a heavy defer (' +
+          rowsMoved.length + ' moved, ' + touched + ' touched)', rowsMoved.length > 0 && touched >= rowsMoved.length);
+    check('and every field baselines() already returned is too, range and step aside where v69 moved them', !basesMoved.length, list(basesMoved));
+    check('v52: prescribe() and targetFor() with no mark are rack-v51’s prescribe(), byte for byte, on every untouched row and history — and each other’s everywhere',
           rows >= 57 && !rows51.length, list(rows51));
     check('the new fields agree with the status beside them — a best in the last three is progressing, ' +
           'a stall has none in its last four, the series is the window after the last layoff, oldest first',
@@ -873,14 +898,23 @@ if (MAIN) {
        out of git, on every row of section A and every swept history — the
        promise §5.3 makes, beside section D's against v48 and v51. */
     const P53 = await stageProg('71cb16e');
-    const diff = [];
+    // v69: as in section D — byte for byte wherever no v69 rule touches the
+    // history; a moved target must carry a v69 reason.
+    const diff = [], movedOk = [];
+    let touched53 = 0;
+    const same53 = (label, ex, ctx) => {
+      const t = P.prescribe(ex, ctx), b = P.baselines(ex, ctx), b53 = P53.baselines(ex, ctx);
+      const moved = JSON.stringify(b && b.range) !== JSON.stringify(b53 && b53.range) || JSON.stringify(b && b.step) !== JSON.stringify(b53 && b53.step) ||
+                    !!(t && t.range && t.range.held) || !!(t && t.mode === 'defer' && t.code === 'heavy');
+      if (moved) touched53++;
+      if (JSON.stringify(t) !== JSON.stringify(P53.prescribe(ex, ctx))) (moved ? movedOk : diff).push(label);
+    };
     for (const c of cases()) {
       const { exposures } = run(P, c);
       const last = exposures[exposures.length - 1];
       const own = last ? Math.round((new Date(NOW).setHours(12, 0, 0, 0) - new Date(last.startedAt).setHours(12, 0, 0, 0)) / DAY) : null;
       const ex = { ...c.meta, exposures, groupDaysSince: c.group != null ? c.group : own };
-      const ctx = { now: NOW, u: c.u, ...c.ctx };
-      if (JSON.stringify(P.prescribe(ex, ctx)) !== JSON.stringify(P53.prescribe(ex, ctx))) diff.push(c.id);
+      same53(c.id, ex, { now: NOW, u: c.u, ...c.ctx });
     }
     let sw = 0;
     for (const u of ['lb', 'kg']) for (let s = 1; s <= PER_UNIT; s++) {
@@ -888,12 +922,143 @@ if (MAIN) {
       const exposures = P.exposuresFor(h.sessions, h.meta.exId);
       const ex = { ...h.meta, exposures, groupDaysSince: h.group };
       sw++;
-      if (JSON.stringify(P.prescribe(ex, h.ctx)) !== JSON.stringify(P53.prescribe(ex, h.ctx))) diff.push(u + ' seed ' + s);
+      same53(u + ' seed ' + s, ex, h.ctx);
     }
-    check('unrated, prescribe() is rack-v53’s, byte for byte, on all ' + cases().length + ' rows and ' + sw + ' swept histories',
-          !diff.length, list(diff));
+    check('unrated, prescribe() is rack-v53’s, byte for byte, on every row and swept history no v69 rule touches (' +
+          (cases().length + sw - touched53) + ' of ' + (cases().length + sw) + '), and every move carries a v69 reason (' + movedOk.length + ')',
+          !diff.length && touched53 >= movedOk.length, list(diff));
     check('and an unrated set crosses exposuresFor() as the three keys it always was',
           JSON.stringify(Object.keys(P.exposuresFor(logOf(bench, [xN(1, 185, 8)]), bench.exId)[0].sets[0])) === '["w","r","type"]');
+  }
+
+  /* ================= J. v69 — NEVER A HEAVIER SINGLE OR DOUBLE, AND THE HELD-LOAD RANGE ================= */
+  section('J. v69 — a heavy day teaches nothing and gets no target; a range never bottoms at two; three sessions at one load teach their band');
+  {
+    const bench = metaOf('barbell-bench-press'), squat = metaOf('back-squat-high-bar');
+    const ask = (meta, entries, o = {}) => {
+      const c = { meta, u: o.u || 'lb', sessions: logOf(meta, entries), ctx: { aim: o.aim || null, exp: o.exp || null, energy: null, rateWk: null }, group: o.group };
+      const { exposures, t } = run(P, c);
+      const own = exposures.length ? Math.round((new Date(NOW).setHours(12, 0, 0, 0) - new Date(exposures[exposures.length - 1].startedAt).setHours(12, 0, 0, 0)) / DAY) : null;
+      const b = P.baselines({ ...meta, exposures, groupDaysSince: c.group != null ? c.group : own }, { now: NOW, u: c.u, ...c.ctx });
+      return { t, b };
+    };
+    const topReps = t => t.sets.filter(s => s.type !== 'W' && t.loadLb != null && Math.abs(parseFloat(s.tw) - t.loadLb) < 0.01).map(s => parseInt(s.tr, 10));
+
+    // (a) The powerlifter's log: twelve days of 405 × 1 then 315 × 5 × 3, every
+    // load rising. Until v69 the single contributed a 1 to every pair, the
+    // range read 1–4, and the target was "3 × 1 at 410" — a heavier single.
+    const pl = Array.from({ length: 12 }, (_, i) => [set(405 + 5 * i, 1)].concat(xN(3, 315 + 5 * i, 5)));
+    const a = ask(squat, pl, { aim: 'powerlifting', exp: 'years' });
+    check('(a) twelve single-plus-back-off days with rising loads: no range bottoms at two — lo ' + (a.b && a.b.range.lo),
+          a.b && a.b.range.lo >= 3 && a.b.range.source === 'default', JSON.stringify(a.b && a.b.range));
+    check('    and the target is defer(heavy), quoting last time', a.t.mode === 'defer' && a.t.code === 'heavy' && a.t.loadLb == null &&
+          a.t.line === 'No target for heavy singles, doubles or triples on their own.' && /^Last time: /.test(a.t.why[a.t.why.length - 1]), a.t.line);
+    // The same lifter on a 5s day after the singles: still never a 1–4 band.
+    const pl5 = pl.concat([xN(3, 375, 5)]);
+    const a5 = ask(squat, pl5, { aim: 'powerlifting', exp: 'years' });
+    check('    a 3 × 5 day after them reads no range learned from the singles (source ' + (a5.b && a5.b.range.source) + ', lo ' + (a5.b && a5.b.range.lo) + ')',
+          a5.b && a5.b.range.lo >= 3 && !(a5.t.mode === 'add' && topReps(a5.t).some(r => r <= 2)), a5.t.line);
+
+    // (b) 5 × 2 at one load, four sessions running: a fixed-rep scheme until
+    // v69, which then got "5 × 2 at 230" — a heavier double.
+    const dbl = ask(bench, [xN(5, 225, 2), xN(5, 225, 2), xN(5, 225, 2), xN(5, 225, 2)], { aim: 'powerlifting' });
+    check('(b) 5 × 2 at 225, four sessions running: defer(heavy), never 5 × 2 at 230', dbl.t.mode === 'defer' && dbl.t.code === 'heavy' && dbl.t.loadLb == null, dbl.t.line);
+    const dbl3 = ask(bench, [xN(5, 225, 3), xN(5, 225, 3), xN(5, 225, 3), xN(5, 225, 3)], { aim: 'powerlifting' });
+    check('    while 5 × 3 straight sets still get a target (confirmed twice, as shipped)', dbl3.t.mode === 'add' && dbl3.t.loadLb != null, dbl3.t.line);
+    const lone = ask(bench, [[set(245, 3), set(205, 8), set(205, 8)], [set(250, 3), set(210, 8), set(210, 8)]]);
+    check('    a lone top triple with back-offs: defer(heavy), as shipped', lone.t.mode === 'defer' && lone.t.code === 'heavy', lone.t.line);
+
+    // (c) Every generated history, plus a sweep built to reach the fences:
+    // no add target carries a top-set rep count of two or fewer at a load
+    // above last time's top; a heavy last session is always a heavy defer.
+    const bad = [], heavyLast = [];
+    let adds = 0, heavyDays = 0;
+    const judge = (label, meta, sessions, ctx, group) => {
+      const exposures = P.exposuresFor(sessions, meta.exId);
+      if (!exposures.length) return;
+      const t = P.prescribe({ ...meta, exposures, groupDaysSince: group }, ctx);
+      if (!t) return;
+      const last = exposures[exposures.length - 1];
+      // Stored pounds throughout: the top load and the target's loadLb are both pounds.
+      const main = last.sets.filter(x => x.type !== 'D').map(x => ({ L: parseFloat(x.w) || 0, R: parseInt(x.r, 10) }));
+      const dir = assistedOf(meta) ? -1 : 1;
+      const T = dir < 0 ? Math.min(...main.map(x => x.L)) : Math.max(...main.map(x => x.L));
+      const top = main.filter(x => Math.abs(x.L - T) < 0.01);
+      const heavy = top.some(x => x.R <= 2) || (top.length === 1 && top[0].R <= 3);
+      if (heavy && main.every(x => x.L > 0)) { heavyDays++; if (!(t.mode === 'defer' && t.code === 'heavy')) heavyLast.push(label + ': ' + t.mode + '(' + t.code + ') ' + t.line); }
+      if (t.mode === 'add') adds++;
+      if (t.loadLb != null && dir * (t.loadLb - T) > 0.01 && topReps(t).some(r => r <= 2)) bad.push(label + ': ' + t.line);
+    };
+    for (const u of ['lb', 'kg']) for (let s = 1; s <= PER_UNIT; s++) {
+      const h = history(s * 7919 + (u === 'kg' ? 13 : 0), u);
+      judge(u + ' seed ' + s, h.meta, h.sessions, h.ctx, h.group);
+    }
+    // The built sweep: straight 5s days with single, double and lone-triple
+    // days dropped in at random, loads drifting up, both units.
+    const r = rng(69);
+    for (let s = 0; s < 600; s++) {
+      const u = s % 2 ? 'kg' : 'lb';
+      const meta = r() < 0.5 ? bench : squat;
+      const store = L => (u === 'kg' ? String(U.wIn(L, 'kg')) : String(L));
+      let L = u === 'kg' ? 100 : 225;
+      const n = 4 + Math.floor(r() * 9);
+      const entries = [];
+      for (let i = 0; i < n; i++) {
+        const x = r();
+        const step = u === 'kg' ? 2.5 : 5;
+        if (i && r() < 0.5) L += step * (1 + Math.floor(r() * 2));
+        if (x < 0.25) entries.push([set(store(L * 1.25), 1 + Math.floor(r() * 2))].concat(xN(3, store(L), 5)));   // a single or double, then back-offs
+        else if (x < 0.4) entries.push(xN(3 + Math.floor(r() * 3), store(L * 1.1), 2));                          // straight doubles
+        else if (x < 0.5) entries.push([set(store(L * 1.15), 3), set(store(L), 5), set(store(L), 5)]);         // a lone top triple
+        else entries.push(xN(3, store(L), 4 + Math.floor(r() * 3)));                                              // straight 4s to 6s
+      }
+      const sessions = logOf(meta, entries);
+      judge('built ' + s + ' ' + u, meta, sessions, { now: NOW, u, aim: 'powerlifting', exp: 'years', energy: null, rateWk: null }, null);
+    }
+    check('(c) over ' + (PER_UNIT * 2) + ' generated and 600 built histories (' + adds + ' adds): no add target carries a top set of two reps or fewer above last time’s top',
+          !bad.length && adds > 200, list(bad));
+    check('    and every history whose last session is heavy — a single, a double, a lone triple (' + heavyDays + ' of them) — is defer(heavy)',
+          !heavyLast.length && heavyDays > 150, list(heavyLast));
+
+    // (d) The held-load range: 185 for 10, 10, 9 → 9, 8, 8 → 8, 8, 8, then a
+    // judged session of 8, 7, 7. The band is 8–10, held; the judged session
+    // is a miss against it, and never drags it down to 7.
+    const heldLog = [rs(185, [10, 10, 9]), rs(185, [9, 8, 8]), rs(185, [8, 8, 8]), rs(185, [8, 7, 7])];
+    const hd = ask(bench, heldLog);
+    check('(d) 10, 10, 9 → 9, 8, 8 → 8, 8, 8 at 185: the range is 8–10, his, held for three sessions',
+          hd.t.range && hd.t.range.lo === 8 && hd.t.range.hi === 10 && hd.t.range.source === 'yours' && hd.t.range.held === 3, JSON.stringify(hd.t.range));
+    check('    and the judged 8, 7, 7 is hold(miss) against it — "came in under 8" — not a new 7–10',
+          hd.t.mode === 'hold' && hd.t.code === 'miss' && /came in under 8 last time \(8, 7, 7\)/.test(hd.t.why[0]), hd.t.mode + '(' + hd.t.code + ') ' + hd.t.why[0]);
+    const hdIn = ask(bench, heldLog.slice(0, 3).concat([rs(185, [9, 9, 8])]));
+    check('    a judged 9, 9, 8 inside it: one more rep, and the why names the held load — "Inside the 8–10 you’ve held 185 lb at for three sessions"',
+          hdIn.t.mode === 'reps' && hdIn.t.why[0] === 'Inside the 8–10 you’ve held 185 lb at for three sessions, and 9, 9, 8 at 185 lb last time.', hdIn.t.why[0]);
+    const hdTop = ask(bench, heldLog.slice(0, 3).concat([rs(185, [10, 10, 10])]));
+    check('    a judged 10, 10, 10 reached its top: add, starting at 8, "the top of the 8–10 you’ve shown there"',
+          hdTop.t.mode === 'add' && hdTop.t.loadLb === 190 && JSON.stringify(topReps(hdTop.t)) === '[8,8,8]' && /the top of the 8–10 you’ve shown there\.$/.test(hdTop.t.why[0]), hdTop.t.why[0]);
+    const hdTwo = ask(bench, heldLog.slice(1));
+    check('    two sessions at the load plus the judged one: no held range — three are needed before the one being judged', !(hdTwo.t.range && hdTwo.t.range.held), JSON.stringify(hdTwo.t.range));
+    const hdWide = ask(bench, [rs(185, [12, 12, 11]), rs(185, [9, 8, 8]), rs(185, [7, 7, 7]), rs(185, [8, 7, 7])]);
+    check('    a band wider than four (7–12) is not held', !(hdWide.t.range && hdWide.t.range.held), JSON.stringify(hdWide.t.range));
+    const hdLow = ask(bench, [rs(225, [3, 2, 2]), rs(225, [3, 3, 2]), rs(225, [3, 3, 3]), rs(225, [3, 3, 2])], { aim: 'powerlifting' });
+    check('    sessions bottoming at two are heavy, never held, and such a day is defer(heavy)',
+          !(hdLow.b.range && hdLow.b.range.held) && hdLow.t.mode === 'defer' && hdLow.t.code === 'heavy', hdLow.t.line + ' ' + JSON.stringify(hdLow.b.range));
+    const hdKg = ask(bench, [rs(kg(85), [10, 10, 9]), rs(kg(85), [9, 8, 8]), rs(kg(85), [8, 8, 8]), rs(kg(85), [9, 9, 8])], { u: 'kg' });
+    check('    in kilos the held load prints through units.js: "you’ve held 85 kg at"', hdKg.t.mode === 'reps' && /you’ve held 85 kg at for three sessions/.test(hdKg.t.why[0]), hdKg.t.why[0]);
+
+    // (e) The step: 135 → 155 → 175 on a bench, 20-lb jumps twice. Twice is
+    // enough for a 5- or 10-lb jump; a jump past twice the default step is a
+    // programme change until seen three times, so the step stays the default.
+    const st = ask(bench, [xN(3, 135, 8), xN(3, 155, 8), xN(3, 175, 8)]);
+    check('(e) bench 135 → 155 → 175, 20-lb jumps twice: the step is the default 5, not 20', st.t.step && st.t.step.source === 'default' && st.t.step.value === 5, JSON.stringify(st.t.step));
+    const st3 = ask(bench, [xN(3, 135, 8), xN(3, 155, 8), xN(3, 175, 8), xN(3, 195, 8)]);
+    check('    seen three times, it is his: 20 lb from 3 increases', st3.t.step && st3.t.step.source === 'yours' && st3.t.step.value === 20 && st3.t.step.n === 3, JSON.stringify(st3.t.step));
+    const st5 = ask(bench, [xN(3, 135, 8), xN(3, 140, 8), xN(3, 145, 8)]);
+    check('    a 5-lb jump seen twice is still his, as shipped', st5.t.step && st5.t.step.source === 'yours' && st5.t.step.value === 5, JSON.stringify(st5.t.step));
+    const stH = ask(bench, [xN(3, 185, 5), [set(200, 2), set(170, 5)], xN(3, 190, 5), [set(205, 2), set(175, 5)], xN(3, 195, 5)]);
+    check('    a rise into a heavy day (185 → 200 × 2, 190 → 205 × 2) teaches no 15-lb step: the baselines say the default 5',
+          stH.b.step && stH.b.step.source === 'default' && stH.b.step.value === 5, JSON.stringify(stH.b.step));
+    const stKg = ask(bench, [xN(3, kg(60), 8), xN(3, kg(67.5), 8), xN(3, kg(75), 8)], { u: 'kg' });
+    check('    in kilos, 7.5-kg jumps twice on a 2.5-kg default: the default', stKg.t.step && stKg.t.step.source === 'default' && stKg.t.step.value === 2.5, JSON.stringify(stKg.t.step));
   }
 
   console.log('\nCoach names a weight only when it is one he can load\n');

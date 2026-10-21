@@ -24,6 +24,10 @@
 //   would put a wrong number in the log itself.
 //   SILENCE IS ALWAYS AVAILABLE. A defer that quotes last time is a correct
 //   answer, never a failure.
+//   NEVER A HEAVIER SINGLE OR DOUBLE (v69). A heavy day — a single, a double,
+//   a lone top set of three or fewer — gets no target, teaches no range and
+//   no step, and a range whose bottom is two is refused; a last fence in the
+//   add branch holds it whatever the branches above worked out.
 //
 // THE UNITS RULE. Storage is pounds forever; every COMPARISON here happens in
 // the display unit, because that is the unit the plates are in, and every
@@ -128,6 +132,24 @@ const SIGMA_DEFAULT = 3;
 // loads; 0.01 because every stored weight is rounded to two decimals.
 const GRID = 0.5;
 const GRID_TOL = 0.01;
+// v69: HEAVY. Top sets of two reps or fewer, or a lone top set of three or
+// fewer, are too close to all-out for Coach to call the next one (spec §0 #10)
+// — and too close to teach a range or a step from, either. A powerlifter's
+// 405 × 1 + 315 × 5 day taught a 1–4 band and the next target was a heavier
+// single (the battery's T_MAX). So a heavy exposure is never a target's
+// basis, never a pair in a range, never a jump in a step. A range whose
+// bottom is two or under is the same thing said another way.
+const HEAVY_REPS = 2;
+const HEAVY_TOP_REPS = 3;
+// A jump on a barbell lift bigger than twice its default step is more often a
+// programme change than a step; it is learned only when seen three times.
+const BIG_STEP_SEEN = 3;
+// The held-load range (spec §6.5): three sessions at one load, straight
+// sets, teach the band they were done in — when it is no wider than four
+// reps and its bottom is three or more.
+const HELD_SESSIONS = 3;
+const HELD_SPREAD = 4;
+const HELD_MIN_REPS = 3;
 
 /* THE DEFAULT STEPS — a labelled training starting point, used only until his
    own log shows one twice (Micah's 23 Sep answer: yes, for training only).
@@ -295,6 +317,11 @@ function readExposure(e, u, assisted, now) {
   };
 }
 
+/* v69: the heavy gate, as one test — a read exposure whose top sets hold a
+   single or a double, or a lone top set of three or fewer. decide() refuses
+   such a session a target; rangeOf() and stepOf() refuse to learn from it. */
+const isHeavy = e => e.R.some(r => r <= HEAVY_REPS) || (e.scheme === 'top' && e.R[0] <= HEAVY_TOP_REPS);
+
 /* ================================================================
    3.  THE BASELINES — his range, his step, his rate
    ================================================================ */
@@ -307,7 +334,13 @@ function readExposure(e, u, assisted, now) {
    programme (a top load moving more than 15% between two sessions not a
    layoff apart), excluding the session being judged. Each rise in top load
    inside it is a pair: the reps every set reached before he moved up, and the
-   reps the new weight started at. */
+   reps the new weight started at.
+
+   v69: a heavy exposure (isHeavy — a single, a double, a lone top set of
+   three or fewer) is never a member of a pair and never counted in the
+   fixed-rep tally. Pairs read min(R) across the top sets, so a 405 × 1 day
+   contributed a 1, a powerlifter's log taught a 1–4 band, and the next
+   target was a heavier single. */
 function rangeOf(X, now, dir, band) {
   const n = X.length;
   let start = 0;
@@ -319,6 +352,7 @@ function rangeOf(X, now, dir, band) {
   const his = [], los = [];
   for (let i = 1; i < regime.length; i++) {
     const a = regime[i - 1], b = regime[i];
+    if (isHeavy(a) || isHeavy(b)) continue;
     if (dir * (b.T - a.T) > GRID_TOL / 2) { his.push(Math.min(...a.R)); los.push(Math.min(...b.R)); }
   }
   if (his.length >= 2) {
@@ -335,10 +369,32 @@ function rangeOf(X, now, dir, band) {
   if (regime.length >= 3) {
     const tally = {};
     regime.slice(-4).forEach(e => {
+      if (isHeavy(e)) return;
       if (e.R.every(r => r === e.R[0])) tally[e.R[0]] = (tally[e.R[0]] || 0) + 1;
     });
     const R = Object.keys(tally).map(Number).find(r => tally[r] >= 3);
     if (R != null) return { lo: R, hi: R, fixed: true, source: 'yours', pairs: his.length, stage: 'learning', usable: true };
+  }
+  /* v69: THE HELD-LOAD RANGE (COACH-V2-SPEC §6.5). The three newest sessions
+     of the regime — never the one being judged, which the regime already
+     leaves out — all straight sets at one top load, none heavy: the band
+     their top sets ran over is the range he has shown. Only when it is no
+     wider than four and its bottom is three or more: a band learned from
+     three tired sessions is bounded, and a 2–4 is a heavy day, not a range.
+     Between the fixed-rep tally and the default band, so somebody holding
+     185 for 10, 10, 9 → 9, 8, 8 → 8, 8, 8 reads 8–10, and a session of
+     8, 7, 7 after it is a miss against a band he showed — not a new band. */
+  if (regime.length >= HELD_SESSIONS) {
+    const held = regime.slice(-HELD_SESSIONS);
+    const T0 = held[0].T;
+    if (held.every(e => !isHeavy(e) && e.scheme === 'straight' && Math.abs(e.T - T0) < GRID_TOL)) {
+      const lo = Math.min(...held.map(e => Math.min(...e.R)));
+      const hi = Math.max(...held.map(e => Math.max(...e.R)));
+      if (hi - lo <= HELD_SPREAD && lo >= HELD_MIN_REPS) {
+        return { lo, hi, fixed: lo === hi, source: 'yours', pairs: his.length, stage: 'learning', usable: true,
+                 held: HELD_SESSIONS, heldT: T0 };
+      }
+    }
   }
   // The labelled starting band — and only if last time sits inside it, give or
   // take two at the top. COACH NEVER CALLS A MISS AGAINST A RANGE HE DID NOT
@@ -354,22 +410,31 @@ function rangeOf(X, now, dir, band) {
    sessions whose loads are both on the grid, kept when it is a rise (for an
    assisted lift, less help) of no more than 15% — past that it is a new
    programme — rounded to the half unit. The step is the SMALLEST jump seen at
-   least twice, so it is never learned from one. */
+   least twice, so it is never learned from one.
+
+   v69: a rise into or out of a heavy exposure (a 315 × 5 day to a 405 × 1
+   day) is not a jump and is never learned. And on a barbell lift a rise
+   bigger than twice its default step — 20 lb on a bench whose plates go in
+   fives — is more often a programme change under the 15% line than a step,
+   so it has to be seen three times, not two (the battery's T_JUMP). */
 function stepOf(X, dir, equipment, lowerBody, u) {
   const seen = new Map();
+  const d = defaultStep(equipment, lowerBody, u);
+  const big = equipment === 'barbell' && d != null ? 2 * d : null;
   for (let i = 1; i < X.length; i++) {
     const a = X[i - 1], b = X[i];
     if (!a.grid || !b.grid || Math.abs(b.T - a.T) < GRID_TOL) continue;
+    if (isHeavy(a) || isHeavy(b)) continue;
     const diff = Math.round(dir * (b.T - a.T) / GRID) * GRID;
     if (!(diff > 0) || dir * (b.T - a.T) > SHAPE_JUMP * b.T + GRID_TOL) continue;
     seen.set(diff, (seen.get(diff) || 0) + 1);
   }
-  const twice = [...seen.keys()].filter(v => seen.get(v) >= 2).sort((a, b) => a - b);
+  const enough = v => seen.get(v) >= (big != null && v > big + GRID_TOL ? BIG_STEP_SEEN : 2);
+  const twice = [...seen.keys()].filter(enough).sort((a, b) => a - b);
   if (twice.length) {
     const n = seen.get(twice[0]);
     return { value: twice[0], n, source: 'yours', stage: n >= 4 ? 'yours' : 'learning' };
   }
-  const d = defaultStep(equipment, lowerBody, u);
   return d == null ? null : { value: d, n: 0, source: 'default', stage: 'learning' };
 }
 
@@ -666,18 +731,26 @@ function decide(ex, c) {
     return out({ mode, code, loadLb: null, sets, line, why, stage: 'yours', range: null, step: null, ...common });
   }
 
-  /* 4–5. HEAVY. A single, or a lone top set of three or fewer, is too close to
-     all-out for Coach to call the next one without knowing how hard it was.
-     BEFORE the layoff gate, so an old single never comes back as "405 for 1"
-     and never steps down into a heavy re-entry. */
-  if (last.R.some(r => r === 1) || (last.scheme === 'top' && last.R[0] <= 3)) {
-    return defer('heavy', 'No target for heavy singles, doubles or triples on their own.',
+  /* 4–5. HEAVY. A single or a double, or a lone top set of three or fewer, is
+     too close to all-out for Coach to call the next one without knowing how
+     hard it was. BEFORE the layoff gate, so an old single never comes back as
+     "405 for 1" and never steps down into a heavy re-entry. v69: doubles too
+     (isHeavy) — a 5 × 2 was a fixed-rep scheme and got a heavier 5 × 2. */
+  const heavyLine = 'No target for heavy singles, doubles or triples on their own.';
+  if (isHeavy(last)) {
+    return defer('heavy', heavyLine,
       ['They’re too close to an all-out set for Coach to call without knowing how hard they were.']);
   }
 
   // The baselines, needed by every branch from here on.
   // The band is the aim's alone — the energy and the slope turn other dials.
   const range = rangeOf(X, now, lift.dir, lift.band);
+  // v69: a range whose bottom is a double is a heavy day said another way, and
+  // its "add" would be a heavier single or double. No target off it.
+  if (range.lo <= HEAVY_REPS) {
+    return defer('heavy', heavyLine,
+      ['Your rep range here reads as singles or doubles, and Coach won’t call a heavier one of those.']);
+  }
   const step = stepOf(X, lift.dir, lift.equipment, lift.lowerBody, u);
   const S = step ? step.value : null;
   const stage = weakest(range.stage, step ? step.stage : 'learning');
@@ -692,7 +765,8 @@ function decide(ex, c) {
     if (stage === 'learning') w.push(learning(X.length));
     return w;
   };
-  const rangeOut = { lo: range.lo, hi: range.hi, fixed: range.fixed, source: range.source };
+  const rangeOut = { lo: range.lo, hi: range.hi, fixed: range.fixed, source: range.source,
+                     ...(range.held ? { held: range.held } : null) };
   const lo = range.lo;
   const offGrid = 'Last time’s weight doesn’t land on a half-' + (u === 'kg' ? 'kilo' : 'pound') +
     ' step, so Coach won’t work a new number out from it.';
@@ -792,7 +866,10 @@ function decide(ex, c) {
   }
 
   /* ---------- the decision ---------- */
-  const micro = range.source === 'default' && S && (T <= 0 || S / T > MICRO_SHARE);
+  // v69: the held-load band stretches the same way — it is learned at one
+  // load, so like the default band it says nothing about what a jump this
+  // size does to the reps.
+  const micro = (range.source === 'default' || !!range.held) && S && (T <= 0 || S / T > MICRO_SHARE);
   const hiEff = range.hi + (micro ? MICRO_REPS : 0);
   /* v54: HIS RATING, two of spec §6.4's RIR rules and no more (SHIP-V54-PROMPT
      §5.3). A top set rated too hard (rir 0) means the session did not hit the
@@ -856,12 +933,18 @@ function decide(ex, c) {
   // How the range is named: his own, or the labelled starting band — and when
   // a big jump has stretched that band's top by two, said so.
   const band = range.lo + '–' + range.hi;
-  const topOf = () => range.source === 'yours' ? ', the top of your ' + band + '.'
+  // v69: a range held at one load for three sessions is said as what it is.
+  const heldAt = range.held ? shown(store(range.heldT)) : null;
+  const topOf = () => range.held ? (micro ? ', two past the top of the ' + band + ' you’ve shown there before a jump this size.'
+                                          : ', the top of the ' + band + ' you’ve shown there.')
+    : range.source === 'yours' ? ', the top of your ' + band + '.'
     : micro ? ', two past the top of ' + band + ' (a common starting range) before a jump this size.'
     : ', the top of ' + band + ', a common starting range.';
-  const inside = () => range.source === 'yours' ? 'Inside your ' + band
+  const inside = () => range.held ? 'Inside the ' + band + ' you’ve held ' + heldAt + ' at for three sessions'
+    : range.source === 'yours' ? 'Inside your ' + band
     : 'Inside ' + range.lo + '–' + hiEff;
-  const insideTail = () => range.source === 'yours' ? ''
+  const insideTail = () => range.held ? (micro ? ' Two more past the top of it before a jump this size.' : '')
+    : range.source === 'yours' ? ''
     : micro ? ' That is ' + band + ', a common starting range, plus two before a jump this size.'
     : ' ' + band + ' is a common starting range.';
 
@@ -925,6 +1008,14 @@ function decide(ex, c) {
         line: noLoadLine('unassisted', trs), why: finish([head], false),
         stage, range: rangeOut, step: stepOut, ...common });
     }
+    /* v69: THE LAST FENCE. Never a heavier single or double, whatever the
+       branches above worked out: a top set of two reps or fewer at a load
+       past last time's is a max attempt in all but name. Unreachable after
+       the heavy gate and the range fence; it is the line a verifier holds. */
+    if (trs.some(r => r <= HEAVY_REPS) && lift.dir * (P - T) > GRID_TOL) {
+      return defer('heavy', heavyLine,
+        ['The next step here would be a heavier set of ' + Math.min(...trs) + ', and Coach won’t call one of those.']);
+    }
     const tw = store(P);
     return out({ mode: 'add', code: null, loadLb: loadLbOf(tw), sets: setsFor(tw, trs),
       line: loadLine(tw, trs), why: finish([head], true),
@@ -937,7 +1028,8 @@ function decide(ex, c) {
     const trs = last.R.slice();
     const up = weakestHalf(last.top).filter(j => last.top[j].type !== 'F' && trs[j] < hiEff);
     up.forEach(j => { trs[j] = Math.min(hiEff, trs[j] + 1); });
-    const why = [inside() + at + shown(lastW) + ' last time (' + reps(last.R) + ').' + insideTail()];
+    const why = [range.held ? inside() + ', and ' + reps(last.R) + at + shown(lastW) + ' last time.' + insideTail()
+                            : inside() + at + shown(lastW) + ' last time (' + reps(last.R) + ').' + insideTail()];
     if (up.length) {
       why.push(last.k === 1 ? 'One more rep on your top set.'
         : 'One more rep on the ' + (up.length === 1 ? 'lowest set.' : word(up.length) + ' lowest sets.'));
