@@ -35,7 +35,22 @@ export function sheet(onClose) {
   };
   back.onclick = close;
   document.body.append(back, sh);
+  // v68: the one sheet a Settings row opens gets the hub's back arrow, put
+  // here, straight under the grab, before its opener draws anything.
+  if (nextSheet) { const f = nextSheet; nextSheet = null; try { f({ sh, close }); } catch { /* the sheet still opens */ } }
   return { back, sh, close };
+}
+
+/* v68: "the next sheet opened, while `open()` runs, is a child of mine".
+   Settings uses it so that every row's sheet — in whichever module draws it —
+   gets a ‹ Settings arrow that goes back to the hub instead of closing it,
+   without each of those modules having to know Settings exists. One-shot,
+   synchronous, and cleared when `open()` returns, so a sheet opened later by
+   something else can never inherit it. `open()`'s own return is passed back. */
+let nextSheet = null;
+export function asChildSheet(decorate, open) {
+  nextSheet = decorate;
+  try { return open(); } finally { nextSheet = null; }
 }
 
 /* ---------- toast ---------- */

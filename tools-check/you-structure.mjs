@@ -126,7 +126,8 @@ section('D. the Steps tab became Friends (v67); its data did not go anywhere');
   check('the day total can still be set — You → Trends → Habits, "Log today’s steps" — and the goal (Settings → Step goal)',
         /export function openSetSteps\(k = todayKey\(\), onSaved\)/.test(ST) && /export function openStepSettings/.test(ST) &&
         /goLabel: 'Log today’s steps', act: \(\) => openSetSteps\(todayKey\(\), render\)/.test(YOU) &&
-        /steps:\s+\(\) => \{ close\(\); openStepSettings\(onEdit\); \}/.test(rd('settings.js')));
+        // v68: every Settings row opens its sheet as a child (kid), for the back arrow
+        /steps:\s+kid\(\(\) => openStepSettings\(onEdit\)\)/.test(rd('settings.js')));
   check('and the card shows that button whether or not the week has steps in it', count(YOU, /o\.act \? actBtn\(o\.goLabel, o\.act\)/g) === 1 && /if \(o\.act\) \{ const b = actBtn\(o\.goLabel, o\.act\);/.test(YOU));
   check('an old stored last tab of "steps" lands on a real view (restoreView checks the id exists)', /getElementById\('view-' \+ want\)/.test(APP));
   check('You still has the Steps tile', /Steps \/ day/.test(rd('you-numbers.js')));

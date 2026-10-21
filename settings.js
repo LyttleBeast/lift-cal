@@ -28,7 +28,7 @@
 // and the small sheets start with ‹ Settings, which closes them and opens this
 // again.
 
-import { el, sheet, toast, noteEl, confirmSheet, segmented, LIMITS, clamp } from './ui.js';
+import { el, sheet, toast, noteEl, confirmSheet, segmented, LIMITS, clamp, asChildSheet } from './ui.js';
 import { LS, uid, readExact, currentEmail, write, purgeDevice, logout, isOwner,
          wu, hu, setUnits, refusedSaves, retryRefused, discardRefused } from './store.js';
 import { openTargets, openAiSettings, openRecallList, openImportPaste,
@@ -136,19 +136,33 @@ function pillOf(name) {
   }
 }
 
-/* The three small sheets and the Coach sheet open with this: ‹ Settings over
-   the eyebrow and the title. The back button closes the sheet and opens the
-   hub again — sheets never nest. */
+/* The three small sheets and the Coach sheet open with this: the eyebrow and
+   the title. Their ‹ Settings arrow is backArrow's, below, like every other
+   row's. */
 function subSheet(title, onEdit, who) {
   const { sh, close } = sheet();
-  const back = el('button', 'back-btn');
-  back.innerHTML = '<span aria-hidden="true">&#8249;</span> Settings';
-  glyphed(back.firstChild, 'back');
-  back.onclick = () => { close(); openSettings(onEdit, who); };
-  sh.appendChild(back);
   sh.appendChild(el('div', 'eyebrow', 'Settings'));
   sh.appendChild(el('h2', null, title));
   return { sh, close };
+}
+
+/* v68: ‹ Settings, at the top of EVERY sheet a Settings row opens — the
+   targets, water, the library, Vibes, food memory and the rest are drawn in
+   their own modules, and before v68 only the four above had a way back: in
+   every other one, Close closed Settings too (Micah, 21 Oct 2026). The arrow
+   closes the sheet and opens the hub again, with what was typed in its search
+   still there; sheets never nest. It is put on by ui.js asChildSheet, so the
+   modules that draw those sheets do not import Settings. 44px tall, the touch
+   target (rack.css .back-btn). */
+function backArrow(onEdit, who, q) {
+  return ({ sh, close }) => {
+    const back = el('button', 'back-btn');
+    back.innerHTML = '<span aria-hidden="true">&#8249;</span> Settings';
+    glyphed(back.firstChild, 'back');
+    back.setAttribute('aria-label', 'Back to Settings');
+    back.onclick = () => { close(); openSettings(onEdit, who, { q }); };
+    sh.appendChild(back);
+  };
 }
 
 /* `onEdit` fires after a change that the screen behind this sheet may be
@@ -158,7 +172,7 @@ function subSheet(title, onEdit, who) {
 
    `who` is { name, photo } for the profile card — the You tab already holds
    both, so the card paints with the sheet instead of waiting on a read. */
-export function openSettings(onEdit, who = {}) {
+export function openSettings(onEdit, who = {}, from = {}) {
   const { sh, close } = sheet();
   sh.appendChild(el('div', 'eyebrow', 'Rack'));
   sh.appendChild(el('h2', null, 'Settings'));
@@ -179,35 +193,39 @@ export function openSettings(onEdit, who = {}) {
   // coach.js and not in the registry.
   const extra = { coach: coachSwitchRows().map(r => r.label + ' ' + r.note).join(' ') };
 
-  /* What each row does. Every one is what the row did before the regroup. */
+  /* What each row does. Every one is what the row did before the regroup.
+     v68: each sheet a row opens is a child of this one (kid), so its
+     ‹ Settings arrow comes back here instead of closing everything. */
+  const kid = open => () => { const q0 = q.value; close(); asChildSheet(backArrow(onEdit, who, q0), open); };
   const ACTIONS = {
-    profile: () => { close(); openProfile(onEdit); },
-    goal:    () => { close(); openGoal(onEdit); },
-    targets: () => { close(); openTargets(onEdit); },
-    water:   () => { close(); openWaterSettings(latestLb(), onEdit); },
-    steps:   () => { close(); openStepSettings(onEdit); },
-    rest:    () => { close(); openRestSheet(onEdit, who); },
-    library: () => { close(); openExerciseManager(); },
-    coach:   () => { close(); openCoachSettings(onEdit, who); },
-    vibes:   () => { close(); openVibes(onEdit); },
-    units:   () => { close(); openUnitsSheet(onEdit, who); },
-    openOn:  () => { close(); openOpenOnSheet(onEdit, who); },
-    ai:      () => { close(); openAiSettings(); },
-    recall:  () => { close(); openRecallList(); },
-    paste:   () => { close(); openImportPaste(); },
-    import:  () => { close(); openImport(); },
-    install: () => { close(); openInstallGuide(); },
+    profile: kid(() => openProfile(onEdit)),
+    goal:    kid(() => openGoal(onEdit)),
+    targets: kid(() => openTargets(onEdit)),
+    water:   kid(() => openWaterSettings(latestLb(), onEdit)),
+    steps:   kid(() => openStepSettings(onEdit)),
+    rest:    kid(() => openRestSheet(onEdit, who)),
+    library: kid(() => openExerciseManager()),
+    coach:   kid(() => openCoachSettings(onEdit, who)),
+    vibes:   kid(() => openVibes(onEdit)),
+    units:   kid(() => openUnitsSheet(onEdit, who)),
+    openOn:  kid(() => openOpenOnSheet(onEdit, who)),
+    ai:      kid(() => openAiSettings()),
+    recall:  kid(() => openRecallList()),
+    paste:   kid(() => openImportPaste()),
+    import:  kid(() => openImport()),
+    install: kid(() => openInstallGuide()),
     tour:    () => {
       close();
       if (typeof window.__rackTour === 'function') window.__rackTour();
       else toast('Reload the app and try again');
     },
-    refused: () => { close(); openRefused(onEdit); },
+    refused: kid(() => openRefused(onEdit)),
     // isOwner() is the client-side check and nothing more — the rules are what
     // actually decide, and they check the same uid on the server. Closing puts
     // the parked DOM back on its own; the callback repaints it with whatever
     // landed while the panel was up.
-    admin:   () => { close(); openAdmin(onEdit); },
+    // v68: Admin is a page, not a sheet; its ‹ Back comes back here too.
+    admin:   () => { const q0 = q.value; close(); openAdmin(() => { if (onEdit) onEdit(); openSettings(onEdit, who, { q: q0 }); }); },
     signOut: () => {
       close();
       if (hasActiveSession()) {
@@ -318,6 +336,7 @@ export function openSettings(onEdit, who = {}) {
     });
   };
   q.oninput = draw;
+  if (from && typeof from.q === 'string') q.value = from.q;
   draw();
 
   const done = el('button', 'btn btn-ghost btn-block', 'Close');
