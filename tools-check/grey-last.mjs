@@ -92,7 +92,7 @@ function lift(name) {
   const end = WSRC.indexOf('\n}\n', m.index);
   return WSRC.slice(m.index, end + 2).replace(/^export /, '');
 }
-const LIFTED = ['historyRows', 'lastEntry', 'greyFor', 'lastTargets', 'newExercise', 'addSetTo', 'addPicked',
+const LIFTED = ['historyRows', 'lastEntry', 'greyFor', 'lastTargets', 'nextGrey', 'blankOrAdopted', 'newExercise', 'addSetTo', 'addPicked',
                 'tickSet', 'collectFrom', 'renderSet', 'setW', 'e1rm', 'coachExIdx', 'showCoach'];
 const S = { u: 'lb' };
 const stubs = {
@@ -113,7 +113,7 @@ const W = new Function(...NAMES, `
 let session = null, history = {}, coachNone = null, coachTapped = false;
 ${LIFTED.map(lift).join('\n')}
 return {
-  lastTargets, newExercise, addSetTo, addPicked, tickSet, collectFrom, renderSet, lastEntry,
+  lastTargets, nextGrey, newExercise, addSetTo, addPicked, tickSet, collectFrom, renderSet, lastEntry,
   setSession: s => { session = s; }, getSession: () => session, setHistory: h => { history = h; }
 };`)(...NAMES.map(k => stubs[k]));
 
@@ -301,6 +301,81 @@ section('F. in kilos: the placeholder is printed converted, and the stored targe
   check('a bodyweight grey set shows no weight target at all — never "0"', bwRow[0].placeholder === '–' && bwRow[1].placeholder === '10',
         bwRow.map(x => x.placeholder).join(' / '));
   S.u = 'lb';
+}
+
+/* ================= G. HIS WARM-UPS (v68) ================= */
+section('G. v68 — Micah’s squat: the grey rows are last time’s whole ramp, warm-ups first, typed W');
+{
+  // His report of 21 Oct 2026, as the index holds it since v68: the ramp, in
+  // order, typed W, then the working sets.
+  const SQUAT = { id: 'back-squat-low-bar', name: 'Back Squat (Low Bar)', group: 'legs', equipment: 'barbell' };
+  const ramp = [['45', '10'], ['45', '8'], ['135', '5'], ['135', '3'], ['225', '2']].map(([w, r]) => ({ w, r, type: 'W' }));
+  const work = [{ w: '315', r: '5', type: 'N' }, { w: '365', r: '2', type: 'N' }, { w: '365', r: '2', type: 'N' }];
+  W.setHistory({ ...clone(HISTORY), 'back-squat-low-bar': [{ date: '2026-10-17', sets: ramp.concat(work) }] });
+  W.setSession(liveSession());
+  const ex = W.newExercise(SQUAT, false);
+  for (let k = 0; k < 7; k++) W.addSetTo(ex);
+  const rows = ex.sets.map(s => [s.type, s.tw, s.tr]);
+  check('add Back Squat (Low Bar), tap + Set seven times: 45, 45, 135, 135, 225 as warm-ups, then 315 × 5, 365 × 2, 365 × 2',
+        J(rows) === J([['W', '45', '10'], ['W', '45', '8'], ['W', '135', '5'], ['W', '135', '3'], ['W', '225', '2'],
+                       ['N', '315', '5'], ['N', '365', '2'], ['N', '365', '2']]), J(rows));
+  check('every one of them grey: empty boxes, targets marked as last time’s (tl), nothing ticked',
+        ex.sets.every(s => s.w === '' && s.r === '' && s.tl === true && s.done === false));
+  // The tick adopts them, by the shipped rule, whatever the type.
+  const ticked = ex.sets.map(s => W.tickSet(s));
+  check('ticked without typing, each row logs its grey numbers and keeps its type',
+        J(ticked.map(s => [s.type, s.w, s.r])) === J(rows.map(([t, w, r]) => [t, w, r])));
+  const rec = W.collectFrom([{ ...ex, sets: ticked }]);
+  check('the record: eight sets, five W, no tw/tr/tl', rec[0].sets.length === 8 &&
+        rec[0].sets.filter(s => s.type === 'W').length === 5 && rec[0].sets.every(s => !('tw' in s) && !('tl' in s)), J(rec[0].sets));
+  check('and analytics.js counts only the three working sets: volume 315×5 + 365×2 + 365×2',
+        A.exerciseVolume(rec[0]) === 315 * 5 + 365 * 4 && rec[0].sets.filter(A.isWorking).length === 3);
+  check('the best set and heaviest weight are working sets, never a warm-up', A.topWeight(rec[0]) === 365 &&
+        A.bestSet(rec[0]).type === 'N');
+
+  // Adopting row by row, the way he trains: tick, + Set, tick, + Set.
+  const live = W.newExercise(SQUAT, false);
+  live.sets[0] = W.tickSet(live.sets[0]);
+  W.addSetTo(live);
+  check('ticking the grey 45 × 10 and tapping + Set gives the next of his ramp, 45 × 8 W — not 45 × 10 again',
+        J([live.sets[1].type, live.sets[1].tw, live.sets[1].tr]) === J(['W', '45', '8']), J(live.sets[1]));
+  live.sets[1] = { ...W.tickSet(live.sets[1]), w: '50' };
+  W.addSetTo(live);
+  check('a grey row he changed is his: + Set after it copies 50 × 8 as typed, exactly as before v68',
+        live.sets[2].w === '50' && live.sets[2].r === '8' && !('tw' in live.sets[2]), J(live.sets[2]));
+
+  // A warm-up he types himself, or a working set first, changes where it starts.
+  const own = { exId: SQUAT.id, name: SQUAT.name, group: 'legs', equipment: 'barbell', sets: [{ w: '45', r: '10', type: 'W', done: true }] };
+  W.addSetTo(own);
+  check('a warm-up he typed first: + Set copies it as typed (the v54 rule for a typed set)', own.sets[1].w === '45' && !('tw' in own.sets[1]));
+  check('nextGrey counts by kind: one W today → last time’s second warm-up; a working set today → last time’s 2nd working set',
+        J(W.nextGrey(ramp.concat(work), [{ type: 'W' }])) === J({ tw: '45', tr: '8', type: 'W' }) &&
+        J(W.nextGrey(ramp.concat(work), [{ type: 'N' }])) === J({ tw: '365', tr: '2' }));
+  check('once today has a working set, no more warm-ups are offered', !('type' in (W.nextGrey(ramp.concat(work), [{ type: 'W' }, { type: 'N' }]) || {})));
+  check('more warm-ups today than last time: straight to his first working set',
+        J(W.nextGrey(ramp.concat(work), Array.from({ length: 6 }, () => ({ type: 'W' })))) === J({ tw: '315', tr: '5' }));
+  check('an index entry folded before v68 (no W rows) reads exactly as v54 did',
+        J(W.nextGrey(work, [])) === J(W.lastTargets(work, 0)) && J(W.nextGrey(work, [{ type: 'N' }])) === J(W.lastTargets(work, 1)));
+  check('warm-ups only last time: no grey at all, the v54 rule', W.nextGrey(ramp, []) === null);
+  check('a bodyweight warm-up (\'0\') has a blank weight target, never "0"',
+        J(W.nextGrey([{ w: '0', r: '10', type: 'W' }, { w: '0', r: '8', type: 'N' }], [])) === J({ tw: '', tr: '10', type: 'W' }));
+  W.setHistory(clone(HISTORY));
+}
+
+/* ================= H. THE "Last ·" LINE ================= */
+section('H. v68 — the "Last ·" line says the warm-ups once, compactly, then the working sets');
+{
+  const WT = lift('warmupsText');
+  const warmupsText = new Function('return ' + WT)();
+  const one = w => U.fmtSetLoad(w, 'lb');
+  const ramp = [['45', '10'], ['45', '8'], ['135', '5'], ['135', '3'], ['225', '2']].map(([w, r]) => ({ w, r, type: 'W' }));
+  check('his ramp reads "warm-ups 45 to 225"', warmupsText(ramp.concat([{ w: '315', r: '5', type: 'N' }]), one) === 'warm-ups 45 to 225');
+  check('one warm-up reads "warm-up 135"; none reads nothing', warmupsText([{ w: '135', r: '5', type: 'W' }], one) === 'warm-up 135' &&
+        warmupsText([{ w: '315', r: '5', type: 'N' }], one) === '');
+  check('in kilos, through units.js', warmupsText(ramp, w => U.fmtSetLoad(w, 'kg')) === 'warm-ups ' + U.fmtSetLoad('45', 'kg') + ' to ' + U.fmtSetLoad('225', 'kg'));
+  const re = /function renderExercise\([\s\S]*?\n\}\n/.exec(WSRC);
+  check('renderExercise prints the warm-ups through warmupsText and the working sets through keepSets(…, isWorking)',
+        !!re && /warmupsText\(prev\.sets/.test(re[0]) && /setsText\(keepSets\(prev\.sets, isWorking\)/.test(re[0]));
 }
 
 console.log('\nlast time’s numbers, in grey, where they belong and nowhere else\n');

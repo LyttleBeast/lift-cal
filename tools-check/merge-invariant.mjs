@@ -542,9 +542,18 @@ for (const [name, fx] of fixtures) {
 
 /* The fix has to have moved something, and only on the repeats. */
 
-check('two paths: a log with no repeats writes exactly what it always did',
-      JSON.stringify(pathFinish(plainLog)) === JSON.stringify(LEGACY_finish(plainLog)) &&
-      JSON.stringify(pathRebuild(plainLog)) === JSON.stringify(LEGACY_rebuild(plainLog)));
+/* v68, on purpose: the index holds the warm-ups now (workout.js
+   foldSessionIntoHistory, for the grey rows), so "what it always did" is said
+   of the working sets — the index with its 'W' rows set aside — and the
+   warm-ups are held to being exactly the session's, in order, below. */
+const noWarm = h => Object.fromEntries(Object.entries(h).map(([k, rows]) =>
+  [k, rows.map(e => ({ date: e.date, sets: e.sets.filter(x => x.type !== 'W') }))]));
+check('two paths: a log with no repeats writes exactly what it always did, warm-ups aside',
+      JSON.stringify(noWarm(pathFinish(plainLog))) === JSON.stringify(LEGACY_finish(plainLog)) &&
+      JSON.stringify(noWarm(pathRebuild(plainLog))) === JSON.stringify(LEGACY_rebuild(plainLog)));
+check('two paths (v68): and the warm-up is on the index, first, typed W',
+      JSON.stringify(pathFinish(plainLog).bench[0].sets.map(x => [x.w, x.r, x.type])) === JSON.stringify([[135, 10, 'W'], [225, 5, 'N']]),
+      JSON.stringify(pathFinish(plainLog).bench[0].sets));
 
 check('two paths: the pre-fix writers really did disagree on a repeat',
       JSON.stringify(LEGACY_finish(dupSessions)) !== JSON.stringify(LEGACY_rebuild(dupSessions)) &&
@@ -555,12 +564,12 @@ check('two paths: the pre-fix writers really did disagree on a repeat',
 
 {
   const merged = pathRebuild(dupSessions).bench[0];        // 2026-06-05, newest first
-  check('two paths: every block of the repeated day survives, in session order',
+  check('two paths: every block of the repeated day survives, in session order — the warm-up first (v68)',
         JSON.stringify(merged.sets.map(x => [x.w, x.r])) ===
-        JSON.stringify([[225, 5], [235, 3], [245, 1]]),
+        JSON.stringify([[135, 5], [225, 5], [235, 3], [245, 1]]),
         JSON.stringify(merged.sets));
-  check('two paths: the warm-up is still excluded, as everywhere else',
-        merged.sets.every(x => x.type !== 'W'));
+  check('two paths (v68): the warm-up keeps its W, so every reader can still leave it out',
+        merged.sets.filter(x => x.type === 'W').length === 1 && merged.sets[0].type === 'W');
 
   const legacyFin = LEGACY_finish(dupSessions).bench[0];
   check('two paths: the pre-fix finish kept only the LAST block of that day',

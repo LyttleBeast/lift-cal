@@ -527,9 +527,11 @@ const SET_KEYS = ['w', 'r', 'type', 'done'];
     .map(x => x.replace(/^await write\(/, '').replace(/,$/, '').trim()).sort();
   // v53, on purpose: and one more, the recap's rating — a child of the one
   // session's record (workouts/{mk}/{dd}/{id}/feel), never a container.
+  // v68, on purpose: one more write of `history` — upgradeHistory(), the
+  // one-time rebuild that puts warm-ups on the index — and no new node.
   check('guards: workout.js writes the four nodes it always did, and v53’s one child of a record',
         JSON.stringify(paths) === JSON.stringify([
-          "'history'", "'history'", '`workouts/${mk}/${dd}/${record.id}/feel`', '`workouts/${mk}/${dd}/${session.id}`', '`workouts/${mk}`'
+          "'history'", "'history'", "'history'", '`workouts/${mk}/${dd}/${record.id}/feel`', '`workouts/${mk}/${dd}/${session.id}`', '`workouts/${mk}`'
         ]), JSON.stringify(paths));
   check('guards: saveMonth still refuses a month this device never read',
         WSRC.includes('if (!hydrated.has(mk)) {') &&

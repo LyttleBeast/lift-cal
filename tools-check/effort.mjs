@@ -124,7 +124,7 @@ function liftFrom(SRC, file, name) {
 const lift = name => liftFrom(WSRC, 'workout.js', name);
 const LIFTED = ['collectFrom', 'computeVolume', 'recordGroups', 'unsavedTicks', 'historyRows', 'foldSessionIntoHistory', 'trimHistory',
   'loadMonth', 'watchMonth', 'saveMonth', 'refuseUnread', 'hydrateForWrite', 'deleteSession', 'finishWorkout', 'runFinish', 'saveEdit',
-  'editWorkout', 'tickSet', 'rateSet', 'useNext', 'rateLive', 'useNextLive', 'dupSet', 'addSetTo', 'greyFor', 'lastEntry', 'lastTargets'];
+  'editWorkout', 'tickSet', 'rateSet', 'useNext', 'rateLive', 'useNextLive', 'dupSet', 'addSetTo', 'blankOrAdopted', 'greyFor', 'lastEntry', 'lastTargets', 'nextGrey'];
 
 function makeDb(seed) {
   const tree = clone(seed || {});

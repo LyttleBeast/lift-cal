@@ -670,7 +670,9 @@ section('I. a recorded set with no load reads BW — on a screen, never in a box
   // stored pound string (tw), never this; and coach-live.js's line over the
   // effort chips and the answer after a tap — "Set 3 · 185 lb × 8. How was
   // it?", "Next one: 190 lb × 8." — which never fill an input.
-  const DISPLAY = { 'workout.js': 4, 'stats.js': 2, 'you.js': 1, 'analytics.js': 1, 'coach-build.js': 1,
+  // v68, one more in workout.js, a sentence: the "Last ·" line's warm-ups,
+  // "warm-ups 45 to 225" (warmupsText), which never fills an input.
+  const DISPLAY = { 'workout.js': 5, 'stats.js': 2, 'you.js': 1, 'analytics.js': 1, 'coach-build.js': 1,
                     'coach-live.js': 2, 'coach-prog.js': 2, 'coach.js': 1 };
   const BOXES   = { 'workout.js': 2, 'routines.js': 3 };
   const wrong = [];

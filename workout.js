@@ -5,7 +5,7 @@ import {
   duplicateBlock, deleteBlock, sessionLayout,
   moveExercise, canMoveExercise, moveBlock, canMoveBlock
 } from './blocks.js';
-import { read, readExact, write, watch, LS, todayKey, monthKey, wu } from './store.js';
+import { read, readExact, write, watch, LS, todayKey, monthKey, wu, online } from './store.js';
 import {
   $, el, sheet, toast, noteEl, confirmSheet, swipeToDelete,
   fmtDate, fmtDateFull, fmtDuration, parseKey, clamp, setNum, LIMITS, moveButtons
@@ -111,6 +111,7 @@ export async function initWorkout() {
   // calendar has no set row to mark, and this question costs a whole-tree read
   // that nobody who is not actually training should pay for.
   if (session) refreshCoachMark();
+  else upgradeHistory().catch(() => {});
   startTick();
 }
 
@@ -283,13 +284,23 @@ function historyRows(v) {
 // be able to make rather than a comment.
 //
 // v55: a drop's `dp` rides into the index too, so the "Last ·" line can draw
-// a drop set as one group. keepSets is what drops the warm-ups, so a drop set
-// is never stitched to another across one.
+// a drop set as one group.
+//
+// v68: the warm-ups ride in too, in the order he did them, typed 'W' (Micah,
+// 21 Oct 2026: "the grey rows start at 315 — where is my 45, 135, 225?"). The
+// index is the "last time" index and nothing else: its readers are the "Last ·"
+// line and the grey rows (lastEntry, below) and the picker's row count, and
+// none of them is a volume, a record or a Coach read — every one of those reads
+// `workouts` and filters with isWorking (tools-check/warmup-leaks.mjs holds
+// that). An exercise is still indexed only when it has a WORKING set, the rule
+// record.groups follows, so a day of nothing but warm-up bench is never
+// anybody's "last time".
 export function foldSessionIntoHistory(h, dateK, exercises) {
   const out = { ...h };
   mergeSessionExercises(exercises).forEach(ex => {
     if (!ex.exId) return;
-    const sets = keepSets(ex.sets || [], isWorking)
+    if (!(ex.sets || []).some(isWorking)) return;
+    const sets = keepSets(ex.sets || [], s => !!s)
       .map(s => ({ w: s.w, r: s.r, type: s.type, ...(s.dp === 1 ? { dp: 1 } : null) }));
     if (!sets.length) return;
     const list = historyRows(out[ex.exId]);
@@ -333,6 +344,36 @@ async function rebuildHistoryFromLog() {
   const next = trimHistory(h);
   await write('history', next);
   history = next;
+}
+
+/* v68, once per account per device: the index folded before v68 holds no
+   warm-ups, so his last squat day would keep starting the grey rows at 315
+   until he squatted again. This rebuilds it from the log once, with the
+   warm-ups, through the same fold and trim as every other writer.
+
+   It reads through readExact, never allSessions(): allSessions() resolves []
+   when the read fails, and an index rebuilt from [] is an index erased. Any
+   failure leaves the flag unset and the index as it was, to try again next
+   launch. It never runs while a workout is open — a finish folding onto the
+   index while this one rebuilds it would race — and it is not awaited by
+   anything, so the first paint never waits on a whole-log read. */
+async function upgradeHistory() {
+  // Online only: offline, readExact answers from the device's mirror, which
+  // is not the log.
+  if (LS.get('historyWarmups', false) || !online.value) return;
+  let tree;
+  try { tree = await readExact('workouts'); } catch { return; }
+  if (session) return;
+  const list = [];
+  Object.keys(tree || {}).forEach(mk => Object.keys(tree[mk] || {}).forEach(dd =>
+    Object.values(tree[mk][dd] || {}).forEach(r => { if (r && r.startedAt) list.push({ r, k: mk + '-' + dd }); })));
+  list.sort((a, b) => a.r.startedAt - b.r.startedAt);
+  let h = {};
+  list.forEach(x => { h = foldSessionIntoHistory(h, x.k, x.r.exercises); });
+  const next = trimHistory(h);
+  if (!Object.keys(next).length) { LS.set('historyWarmups', true); return; }
+  if (session) return;
+  try { await write('history', next); history = next; LS.set('historyWarmups', true); } catch { /* next launch */ }
 }
 
 /* ================= RENDER ROOT ================= */
@@ -932,13 +973,14 @@ function lastEntry(exId) {
    plan's; collectFrom strips it with tw and tr. Null in an edit of a past
    session, on an exercise carrying a routine's or the builder's targets (a set
    with tw/tr that last time did not put there), and with no "Last ·" session
-   to read. The position is how many of today's sets are not warm-ups, so a
-   warm-up typed first does not push last time's first set along. */
+   to read. v68: which of last time's rows comes next is nextGrey's (below) —
+   his warm-ups first, typed 'W', then his working sets — so the answer can
+   carry `type: 'W'`, which the caller's spread puts on the new row. */
 function greyFor(ex) {
   if (!session || session._edit) return null;
   if ((ex.sets || []).some(s => s && ('tw' in s || 'tr' in s) && !s.tl)) return null;
   const prev = lastEntry(ex.exId);
-  const t = prev ? lastTargets(prev.sets, (ex.sets || []).filter(s => s && s.type !== 'W').length) : null;
+  const t = prev ? nextGrey(prev.sets, ex.sets) : null;
   return t ? { ...t, tl: true } : null;
 }
 
@@ -950,8 +992,22 @@ function greyFor(ex) {
    drop (analytics.js repeatOf). */
 function addSetTo(ex) {
   const last = repeatOf(ex.sets) || {};
-  const blank = (last.w == null || last.w === '') && (last.r == null || last.r === '');
-  ex.sets.push({ w: last.w || '', r: last.r || '', type: 'N', done: !!session._edit, ...(blank ? greyFor(ex) : null) });
+  const grey = blankOrAdopted(last) ? greyFor(ex) : null;
+  if (grey) ex.sets.push({ w: '', r: '', type: 'N', done: !!session._edit, ...grey });
+  else ex.sets.push({ w: last.w || '', r: last.r || '', type: 'N', done: !!session._edit });
+}
+
+/* v68: whether "+ Set" goes on through last time's rows rather than copying
+   the set above. Both boxes blank, as since v54 — or a grey row he ticked
+   without changing (`tl`, and each box holding exactly its grey number),
+   because ticking 45 × 10 and tapping "+ Set" means "the next one", not
+   "45 × 10 again". A box he typed a different number into is his, and is
+   copied exactly as it always was. */
+function blankOrAdopted(s) {
+  const blank = v => v == null || v === '';
+  if (blank(s.w) && blank(s.r)) return true;
+  const same = (v, t) => (blank(v) && blank(t)) || String(v) === String(t);
+  return !!s.tl && same(s.w, s.tw) && same(s.r, s.tr);
 }
 
 /* What "+ Add exercise" hands the picker, and — the same function, never a
@@ -1237,10 +1293,13 @@ function renderExercise(ex, exIdx) {
 
   // previous performance — the single most useful thing on the screen. v55: a
   // drop set reads as one group, "185×8 → 135×6 → 95×5".
+  // v68: the index holds his warm-ups too; they are said once, compactly,
+  // before the working sets ("warm-ups 45 to 225 · 315×5  365×2").
   const prev = lastEntry(ex.exId);
   if (prev) {
-    const txt = setsText(prev.sets, s => `${fmtSetLoad(s.w, wu())}×${s.r}`, '  ');
-    block.appendChild(blk('exercise', 'prev', el('div', 'ex-prev', `Last · ${fmtDate(prev.date)}   ${txt}`)));
+    const txt = setsText(keepSets(prev.sets, isWorking), s => `${fmtSetLoad(s.w, wu())}×${s.r}`, '  ');
+    const warm = warmupsText(prev.sets, w => fmtSetLoad(w, wu()));
+    block.appendChild(blk('exercise', 'prev', el('div', 'ex-prev', `Last · ${fmtDate(prev.date)}   ${warm ? warm + ' · ' : ''}${txt}`)));
   } else {
     block.appendChild(blk('exercise', 'prev', el('div', 'ex-prev', 'No previous record')));
   }
@@ -1630,6 +1689,56 @@ export function lastTargets(prevSets, n) {
   if (!work.length) return null;
   const s = work[Number.isInteger(n) && n >= 0 ? Math.min(n, work.length - 1) : work.length - 1];
   return { tw: parseFloat(s.w) > 0 ? String(s.w) : '', tr: String(s.r) };
+}
+
+/* ---------- his warm-ups, in grey too (v68) ----------
+
+   THE RULE, Micah's report of 21 Oct 2026 ("I add Back Squat, tap + Set, and
+   the grey rows start at 315 — my 45, 45, 135, 135, 225 are gone"), and the
+   native session screen builds to the same words:
+
+     Last time's warm-ups come first. While today's sets of the exercise hold
+     no working set yet, the next row is last time's next warm-up — the
+     warm-ups he logged before his first working set, in order — typed 'W' so
+     it shows as one. Once those are used up, or once today has a working
+     set, the next row is lastTargets()' working set for how many working
+     rows today has (the v54 rule, unchanged). A day whose index entry has no
+     warm-ups — every entry folded before v68 — is exactly v54.
+
+   Counting by kind rather than by row is what keeps a warm-up he types
+   himself from pushing last time's first working set along, and what keeps
+   an old warm-up-less entry reading as it always did. Still grey, still
+   `tl`, still adopted only by a tick (tickSet) and stripped at Finish
+   (collectFrom). A warm-up ticked is a warm-up recorded — 'W', excluded from
+   volume, e1RM, records, groups and Coach as every warm-up is. Pure, beside
+   lastTargets, and copied verbatim by the port. */
+export function nextGrey(prevSets, todaySets) {
+  const rows = (Array.isArray(prevSets) ? prevSets : []).filter(s => s && parseInt(s.r, 10) >= 1);
+  const first = rows.findIndex(isWorking);
+  if (first === -1) return null;
+  const warm = rows.slice(0, first);
+  const today = (Array.isArray(todaySets) ? todaySets : []).filter(Boolean);
+  const nW = today.filter(s => s.type === 'W').length;
+  const nWork = today.length - nW;
+  if (nWork === 0 && nW < warm.length) {
+    const s = warm[nW];
+    return { tw: parseFloat(s.w) > 0 ? String(s.w) : '', tr: String(s.r), type: 'W' };
+  }
+  return lastTargets(rows, nWork);
+}
+
+/* v68: last time's warm-ups on the "Last ·" line, compactly — "warm-ups 45 to
+   225", "warm-up 135" — so the line says the whole session without spelling
+   out a ramp the grey rows already hold. The lightest and the heaviest, through
+   units.js (`one` is the caller's printer for one load, in his unit). '' when
+   there were none. Pure. */
+export function warmupsText(sets, one) {
+  const warm = (Array.isArray(sets) ? sets : []).filter(s => s && s.type === 'W' && parseInt(s.r, 10) >= 1);
+  if (!warm.length) return '';
+  const loads = warm.map(s => parseFloat(s.w) || 0);
+  const lo = Math.min(...loads), hi = Math.max(...loads);
+  const word = warm.length === 1 ? 'warm-up ' : 'warm-ups ';
+  return word + (lo === hi ? one(String(lo)) : one(String(lo)) + ' to ' + one(String(hi)));
 }
 
 /* ---------- his rating of a set (v54) ----------

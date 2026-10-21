@@ -318,8 +318,10 @@ bwRecord.volume = computeVolume(bwRecord.exercises);
     { w: '', r: '12', type: 'N', done: true }
   ])]);
   check('a blank-weight warm-up is still recorded', rec[0].sets.length === 2, shape(rec));
-  check('and is still excluded from the history row',
-    foldSessionIntoHistory({}, DATE, rec)['pull-up'][0].sets.length === 1);
+  // v68, on purpose: the "last time" index keeps warm-ups (typed W) for the
+  // grey rows; volume and records never read it.
+  check('and reaches the history row as a warm-up, typed W, before the working set',
+    JSON.stringify(foldSessionIntoHistory({}, DATE, rec)['pull-up'][0].sets.map(s => s.type)) === '["W","N"]');
 }
 
 {

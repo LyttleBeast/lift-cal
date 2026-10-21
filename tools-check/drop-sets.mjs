@@ -132,7 +132,7 @@ function liftFrom(SRC, file, name) {
 }
 const LIFTED = ['collectFrom', 'computeVolume', 'recordGroups', 'unsavedTicks', 'historyRows', 'foldSessionIntoHistory', 'trimHistory',
   'loadMonth', 'watchMonth', 'saveMonth', 'refuseUnread', 'hydrateForWrite', 'finishWorkout', 'runFinish', 'saveEdit',
-  'editWorkout', 'tickSet', 'dupSet', 'addSetTo', 'greyFor', 'lastEntry', 'lastTargets',
+  'editWorkout', 'tickSet', 'dupSet', 'addSetTo', 'blankOrAdopted', 'greyFor', 'lastEntry', 'lastTargets', 'nextGrey', 'warmupsText',
   'renderExercise', 'renderSet', 'dropAddRow', 'setW', 'e1rm', 'coachExIdx', 'showCoach'];
 
 function makeDb(seed) {
