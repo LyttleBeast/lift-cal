@@ -1,0 +1,14 @@
+{
+  "id": "bad_day-3313864278-s27-dumbbell-row",
+  "archetype": "bad_day",
+  "seed": 3313864278,
+  "session": 27,
+  "exId": "dumbbell-row",
+  "surface": "record",
+  "forbid": [
+    "R_F",
+    "R_MARK"
+  ],
+  "note": "record day with an F inside the marked newest session",
+  "added": "2026-10-21"
+}

@@ -598,7 +598,7 @@ section('F2. the one read that was wrong: a drop set’s falling reps read as fa
   // A sweep: logs with no drop set in them read the same in both, every read above.
   let seed = 7;
   const rnd = () => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; };
-  let same = 0, diff = [];
+  let same = 0, diff = [], gaps = 0;
   for (let n = 0; n < 60; n++) {
     const sessions = Array.from({ length: 6 + Math.floor(rnd() * 8) }, (_, k) => {
       const ago = 2 + k * (2 + Math.floor(rnd() * 4));
@@ -608,12 +608,20 @@ section('F2. the one read that was wrong: a drop set’s falling reps read as fa
       return { id: 'x' + n + '_' + k, startedAt: t.getTime(), _date: key(t.getTime()), exercises: [mk(BENCH), mk(PEC)].slice(0, 1 + Math.floor(rnd() * 2)) };
     });
     const i = vin(sessions);
-    const a = J([OLD.V.volumeRead(OLD.C.volumeInput(i)), OLD.C.overlapInput(i).shaped.map(x => x.ldrop), day(OLD, i)]);
-    const b = J([NEW.V.volumeRead(NEW.C.volumeInput(i)), NEW.C.overlapInput(i).shaped.map(x => x.ldrop), day(NEW, i)]);
+    // v69: the record day reads the best since the last gap of more than
+    // three weeks on the lift, so a log with such a gap may name a different
+    // record day than v54 did — on those the record day is left out of the
+    // comparison (the volume read and the rep drops still have to agree).
+    const agos = sessions.map(s => Math.round((NOW - s.startedAt) / DAY)).sort((x, y) => y - x);
+    const gapped = agos.some((ago, k) => k > 0 && agos[k - 1] - ago > 21);
+    if (gapped) gaps++;
+    const a = J([OLD.V.volumeRead(OLD.C.volumeInput(i)), OLD.C.overlapInput(i).shaped.map(x => x.ldrop), gapped ? null : day(OLD, i)]);
+    const b = J([NEW.V.volumeRead(NEW.C.volumeInput(i)), NEW.C.overlapInput(i).shaped.map(x => x.ldrop), gapped ? null : day(NEW, i)]);
     if (a === b) same++; else diff.push(n);
   }
-  check('60 generated logs with no drop set: the volume read, the rep drops and the record day are rack-v54’s exactly (' + same + ' of 60)',
-        same === 60, diff.join(', '));
+  check('60 generated logs with no drop set: the volume read, the rep drops and the record day are rack-v54’s exactly (' + same + ' of 60; ' +
+        gaps + ' with a three-week gap, where v69 reads the record day since the gap and it is left out)',
+        same === 60 && gaps < 10, diff.join(', '));
 }
 
 section('F3. the live chips rate a drop set on the set he changed, never on a drop');

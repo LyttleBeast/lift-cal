@@ -1,0 +1,13 @@
+{
+  "id": "powerlifter_kg-1103886756-s57-barbell-row",
+  "archetype": "powerlifter_kg",
+  "seed": 1103886756,
+  "session": 57,
+  "exId": "barbell-row",
+  "surface": null,
+  "forbid": [
+    "T_JUMP"
+  ],
+  "note": "a 15% programme change learned as a two-step jump on an upper-body barbell row",
+  "added": "2026-10-21"
+}

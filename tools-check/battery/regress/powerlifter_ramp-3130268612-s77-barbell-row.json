@@ -1,0 +1,13 @@
+{
+  "id": "powerlifter_ramp-3130268612-s77-barbell-row",
+  "archetype": "powerlifter_ramp",
+  "seed": 3130268612,
+  "session": 77,
+  "exId": "barbell-row",
+  "surface": null,
+  "forbid": [
+    "N_HEAVY"
+  ],
+  "note": "next set a 20-lb step learned from a programme change; 175 over 155",
+  "added": "2026-10-21"
+}

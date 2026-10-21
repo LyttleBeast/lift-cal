@@ -1,0 +1,14 @@
+{
+  "id": "never_tags_warmups-2926952506-s57-back-squat-high-bar",
+  "archetype": "never_tags_warmups",
+  "seed": 2926952506,
+  "session": 57,
+  "exId": "back-squat-high-bar",
+  "surface": null,
+  "forbid": [
+    "T_MAX",
+    "T_JUMP"
+  ],
+  "note": "1 x 1 at 180 from a 150 single: a heavier single, two steps over",
+  "added": "2026-10-21"
+}
