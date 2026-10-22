@@ -18,7 +18,10 @@
 //                  v72 (moved here from coach.js, unchanged in meaning; coach.js
 //                  QUESTIONS is the `answers` subset of this table) and the two
 //                  the recap asks: were those your warm-ups, and did that record
-//                  have more in it. A question names the rules its answer
+//                  have more in it, (v73) the step on a machine, (v74) what he
+//                  is going for and a rough weight, and (v76) the two the log
+//                  can see but cannot explain: why a lift came in 15% under,
+//                  and whether a gap was time off. A question names the rules its answer
 //                  changes (`changes`), and tools-check/coach-registry.mjs
 //                  fails one that changes nothing — a survey is not a question.
 //   THE ENGINE     pickQuestion(): one question for one moment, scored and
@@ -364,12 +367,20 @@ export function stepOptions(u) {
     .concat([{ value: null, label: 'Not sure', ack: null }]);
 }
 
+// v76: coach.js BACK_GAP_DAYS — a comeback is a session after twelve days
+// away (q_back_what's gate and cooldown). Held equal by tools-check/coach-ask.mjs.
+export const BACK_GAP_DAYS = 12;
+
 export const ASK_QUESTIONS = Object.freeze([
   /* ---------- the seven that shipped before v72, unchanged in meaning ---------- */
   {
     id: 'q_goal_direction',
     moments: Object.freeze(['open']),
     text: 'Which way are you trying to go right now?',
+    /* v76: an opener is offered as one of the sheet's starter bubbles
+       (coach.js topicsFor), and `short` is its label there — the question
+       itself is drawn when he taps it. */
+    short: 'Which way are you going?',
     options: Object.freeze([
       { value: 'down', label: 'Down' },
       { value: 'hold', label: 'Holding' },
@@ -468,6 +479,7 @@ export const ASK_QUESTIONS = Object.freeze([
   {
     id: 'q_goal_check_weight',
     moments: Object.freeze(['open']),
+    short: 'Did your goal change?',
     text: (d, u) => {
       const w = (d.f('coach.goalChecks') || {}).weeks || [];
       const moved = w.length ? w[w.length - 1].to - w[0].from : 0;
@@ -488,6 +500,7 @@ export const ASK_QUESTIONS = Object.freeze([
   {
     id: 'q_goal_check_targets',
     moments: Object.freeze(['open']),
+    short: 'Did your goal change?',
     text: (d, u) => {
       const g = d.f('weight.goalRateWk');
       return 'You set ' + aimLabel(d.f('coach.aim')) + ', and your food targets are set to ' +
@@ -655,8 +668,113 @@ export const ASK_QUESTIONS = Object.freeze([
     stampOf: ctx => (ctx && ctx.rough ? roughStamp(ctx.rough.exId) : 'q_rough_weight'),
     ack: 'Noted. I’ll start you there and set targets from what you log.',
     when: (d, ctx) => !!(ctx && ctx.rough && ID_RE.test(String(ctx.rough.exId)))
+  },
+
+  /* ---------- v76: what the log shows and cannot explain ---------- */
+  /* WHY A LIFT CAME IN 15% UNDER. coach-prog.js's shape test sees the drop
+     (dropOf: the top load fell by more than SHAPE_JUMP inside the gap, the
+     same scheme, no layoff) and cannot know the reason, and the reason
+     changes the rule. Building back up (`hold`): no target goes heavier than
+     the lower load until he logs heavier himself, for 42 days. A lighter week
+     (`light`): the lower session is not `prev` for the shape test, no step is
+     learned across it, and it is a light week for that lift's own reads
+     (coach-overlap.js). Just that day (`day`): nothing moves, and the asking
+     stops for the fact's 42 days. Nothing medical in it, on purpose: the
+     question is about the load, and every answer is about the plan.
+     Asked on the recap about a lift in the record, or under "What should I
+     lift today?" about one on the plan (dropAskLift, below). THE ONE
+     PERCENTAGE Coach prints, and it is a share of his own two logged loads. */
+  {
+    id: 'q_drop_why',
+    moments: Object.freeze(['debrief', 'under:targets']),
+    text: (d, u, ctx) => (ctx && ctx.drop ? ctx.drop.name + ' came in ' + ctx.drop.pct + '% under last time. On purpose?' : ''),
+    options: Object.freeze([
+      { value: 'hold',  label: 'Building back up — hold it' },
+      { value: 'light', label: 'Lighter week',  ack: 'Noted. I’ll read that as a lighter week, not a new programme.' },
+      { value: 'day',   label: 'Just that day', ack: 'Noted.' }
+    ]),
+    // The hold's ack names the lift and the load it holds at (dropOptions).
+    optionsFor: (u, ctx) => dropOptions(u, ctx),
+    writes: 'knowBy', key: 'hold',
+    // The lift it is about, when a moment's context carries more than one
+    // (under the targets the step question's may ride beside it).
+    idOf: ctx => (ctx && ctx.drop ? String(ctx.drop.exId) : null),
+    // The targets (coach-prog.js: the held add, the shape test's prev, the
+    // step and range across a lighter week) and the lighter-week read
+    // (coach-overlap.js: a light week for the lift).
+    changes: Object.freeze(['lift_targets', 'lighter_week']),
+    cooldownDays: 0, budget: 'D',
+    stampOf: ctx => (ctx && ctx.drop ? dropStamp(ctx.drop.exId) : 'q_drop_why'),
+    ack: 'Noted.',
+    when: (d, ctx) => !!(ctx && ctx.drop && ID_RE.test(String(ctx.drop.exId)) && Number.isFinite(ctx.drop.pct))
+  },
+  /* WHAT THE GAP WAS. Twelve days or more since a session (BACK_GAP_DAYS,
+     coach.js's comeback clock) and the log cannot say whether he trained
+     somewhere I cannot see or took the time off — and the re-entry differs
+     (coach-prog.js): `elsewhere` starts him at REENTER_NEAR (90%) whatever
+     the gap, never the far step; `off` leaves the shipped ladder. Asked under
+     the sheet's first answers back — "What should I train today?" and
+     "Should I rest or go lighter?" — once per gap: an answer given after the
+     last session is the gap's (backAnswer), and the next session ends it. */
+  {
+    id: 'q_back_what',
+    moments: Object.freeze(['under:shape', 'under:lighter']),
+    text: 'Good to have you back. Training somewhere I can’t see, or time off?',
+    options: Object.freeze([
+      { value: 'elsewhere', label: 'Training elsewhere', ack: 'Noted. I’ll start you a little under where you were, not a lot.' },
+      { value: 'off',       label: 'Time off',           ack: 'Noted. I’ll start the weights lighter and work back up with you.' }
+    ]),
+    writes: 'know', key: 'back',
+    changes: Object.freeze(['lift_targets', 'returning_from_layoff']),
+    // One gap is twelve days at least, so twelve days is "once per gap" as a
+    // cooldown too — and the budget never loses a stamp to its own re-ask.
+    cooldownDays: BACK_GAP_DAYS, budget: 'D',
+    ack: 'Noted.',
+    when: (d, ctx) => !!(ctx && ctx.back && Number(ctx.back.gap) >= BACK_GAP_DAYS)
   }
 ]);
+
+/* ---------- v76: the drop and the gap, their small parts ---------- */
+export const dropStamp = exId => 'q_drop_why:' + exId;
+/* The lift to ask "came in 15% under — on purpose?" about, or null.
+     lifts  the moment's candidates in screen order, each { exId, name, drop }
+            — drop: coach-prog.js dropOf()'s { pct, w, at } or null
+   One is asked about when it dropped and he has said nothing about it inside
+   the fact's 42 days (any answer — hold, light or day — ends the asking). */
+export function dropAskLift(lifts, settings, now) {
+  for (const l of Array.isArray(lifts) ? lifts : []) {
+    if (!l || typeof l.exId !== 'string' || !ID_RE.test(l.exId) || !l.drop || !Number.isFinite(l.drop.pct)) continue;
+    const f = knowOf(settings, 'hold', l.exId, now);
+    if (f && !f.expired) continue;
+    return { exId: l.exId, name: String(l.name || l.exId), pct: l.drop.pct, w: String(l.drop.w == null ? '' : l.drop.w) };
+  }
+  return null;
+}
+/* Its chips: the hold's ack names the lift and the load it will hold at —
+   the lower top's stored weight, through units.js — so he hears the number
+   he is agreeing to. */
+export function dropOptions(u, ctx) {
+  const q = BY_ID.q_drop_why;
+  const drop = ctx && ctx.drop;
+  const w = drop ? parseFloat(drop.w) : NaN;
+  return q.options.map(op => (op.value === 'hold'
+    ? { ...op, ack: drop && Number.isFinite(w) && w > 0
+        ? 'Noted. I’ll hold ' + drop.name + ' at ' + labelW(w, u === 'kg' ? 'kg' : 'lb') + ' until you take it higher yourself.'
+        : 'Noted. I’ll hold it there until you take it higher yourself.' }
+    : op));
+}
+/* What he said the gap was, for THIS gap: 'elsewhere' | 'off', or null when
+   he has not said since his last session (`lastAt`, the newest session's
+   start). Expiry is not read here — it is the gate's "once per gap"; the
+   engine reads the TTL as well (coach.js). */
+// What a question is about in a moment: its own `idOf(ctx)`, else ctx.id.
+export const idFor = (q, ctx) => (q && typeof q.idOf === 'function' ? q.idOf(ctx)
+  : ctx && ctx.id != null ? String(ctx.id) : null);
+export function backAnswer(settings, now, lastAt) {
+  const k = knowOf(settings, 'back', null, now);
+  if (!k) return null;
+  return Number.isFinite(lastAt) && k.at <= lastAt ? null : k.v;
+}
 
 /* v74: the two in-the-gym questions' small parts. */
 export const wantStamp = exId => 'q_want_next:' + exId;
@@ -759,7 +877,7 @@ export function pickQuestion(d, moment, settings, now, opens, ctx) {
     if (!ok) return;
     let staleness = 0;
     if (q.writes === 'know' || q.writes === 'knowBy') {
-      const f = knowOf(s, q.key, ctx && ctx.id, now);
+      const f = knowOf(s, q.key, idFor(q, ctx), now);
       staleness = f ? (f.expired ? 2 : f.c === 1 ? 1 : 0) : 0;
     } else if (q.writes === 'answers') {
       const a = (s.answers || {})[q.id];
@@ -847,9 +965,11 @@ export function prSetOf(record, prs) {
      record    the session just saved
      settings  settings/coach
      now, opens
-     ctx       { prs, harder, marked, u } — the records workout.js worked out
-               for this session, feelHarder(record.feel), whether the session
-               is marked, and the display unit
+     ctx       { prs, harder, marked, u, drop } — the records workout.js
+               worked out for this session, feelHarder(record.feel), whether
+               the session is marked, the display unit, and (v76) the first
+               lift in the record that came in 15% under and has no answer yet
+               (dropAskLift's row, coach.js's to work out)
 
    confirm   warmRamp()'s row, or null; null account-wide when warmStyle is
              'none'; with warmStyle 'ramp' it carries oneTap: true (the row is
@@ -892,12 +1012,21 @@ export function debriefPlan(d, record, settings, now, opens, ctx) {
                      !(record && record.id != null && sh.session && sh.session.id === record.id))) return out;
   if (c.harder || c.marked) return out;
   const pr = prSetOf(record, c.prs);
-  const q = pickQuestion(d, 'debrief', s, now, opens, { pr, ramp: null });
+  // v76: and the drop question's lift, with its id so the fact's staleness
+  // and the writer read the right key.
+  const drop = c.drop && typeof c.drop === 'object' && ID_RE.test(String(c.drop.exId)) ? c.drop : null;
+  const qc = { pr, ramp: null, ...(drop ? { drop, id: drop.exId } : null) };
+  const q = pickQuestion(d, 'debrief', s, now, opens, qc);
   if (!q) return out;
+  const u = c.u === 'kg' ? 'kg' : 'lb';
   let text = q.text;
-  if (typeof text === 'function') { try { text = String(text(d, c.u === 'kg' ? 'kg' : 'lb', { pr }) || ''); } catch { text = ''; } }
+  if (typeof text === 'function') { try { text = String(text(d, u, qc) || ''); } catch { text = ''; } }
   if (!text) return out;
-  out.question = { id: q.id, text, options: q.options, ack: q.ack || null, writes: q.writes,
-                   stamp: typeof q.stampOf === 'function' ? q.stampOf({ pr }) : q.id, ...(q.id === 'q_pr_how' ? { pr } : null) };
+  let options = q.options;
+  if (typeof q.optionsFor === 'function') { try { options = q.optionsFor(u, qc); } catch { options = q.options; } }
+  out.question = { id: q.id, text, options, ack: q.ack || null, writes: q.writes,
+                   stamp: typeof q.stampOf === 'function' ? q.stampOf(qc) : q.id, ...(q.id === 'q_pr_how' ? { pr } : null),
+                   // v76: what a fact question's writer needs (learnBy / learn).
+                   ...(q.writes === 'knowBy' || q.writes === 'know' ? { key: q.key || null, by: q.writes === 'knowBy' ? idFor(q, qc) : null } : null) };
   return out;
 }

@@ -65,7 +65,7 @@
 // session MATH of analytics.js (the e1rm the set row prints). coach.js imports
 // this; nothing imports back.
 
-import { baselines, exposuresFor, targetFor, nextSet, targetSaid } from './coach-prog.js';
+import { baselines, exposuresFor, targetFor, nextSet, targetSaid, dropOf } from './coach-prog.js';
 // v74: a target as every view says it (its line, and a defer's quote of last
 // time), handed on to coach.js, which reaches coach-prog.js only through here.
 export { targetSaid };
@@ -234,6 +234,23 @@ function baselinesOf(i, ex, c) {
   const own = i && Array.isArray(i.lifts) && i.lifts.find(l => l.exId === ex.exId) === ex;
   return own ? memo(i, 'b|' + ex.exId + '|' + ctxKey(c), () => baselines(ex, c)) : baselines(ex, c);
 }
+/* v76: THE LIGHTER WEEK HE NAMED on one lift (coach-ask.js q_drop_why
+   'light', on the lift as `lightAt` from coach.js lifts()): the week number,
+   as blocksOf counts weeks, of the newest exposure at or before his answer —
+   the session the question was about. A second source of light weeks for
+   that lift's own reads only, beside the volume one every read shares. A Set,
+   empty when he has not said. */
+function lightWeeksOf(ex, now) {
+  const at = ex && Number.isFinite(ex.lightAt) ? ex.lightAt : null;
+  if (at == null || !Number.isFinite(now)) return new Set();
+  let ms = null;
+  (Array.isArray(ex.exposures) ? ex.exposures : []).forEach(e => {
+    if (e && Number.isFinite(e.startedAt) && e.startedAt <= at && (ms == null || e.startedAt > ms)) ms = e.startedAt;
+  });
+  if (ms == null) return new Set();
+  const k = Math.floor(daysBetween(ms, now) / 7);
+  return k >= 0 ? new Set([k]) : new Set();
+}
 // The weeks and the light ones, once per moment.
 function weeksOf(i, now) {
   return memo(i, 'w|' + now, () => { const blocks = blocksOf(i.shaped, now); return { blocks, ...lightOf(blocks) }; });
@@ -356,7 +373,9 @@ function readOne(ex0, c, i) {
   if (b.status === 'progressing') return none('progressing', { b });
 
   const { blocks, light } = weeksOf(i, now);
-  const inLight = ms => light.has(Math.floor(daysBetween(ms, now) / 7));
+  // v76: and the lighter week he named on THIS lift (lightWeeksOf).
+  const named = lightWeeksOf(ex, now);
+  const inLight = ms => { const k = Math.floor(daysBetween(ms, now) / 7); return light.has(k) || named.has(k); };
 
   const S = b.series;
   const lastAt = S[S.length - 1].startedAt;
@@ -810,6 +829,11 @@ function record(i, now) {
        in that marked session went unread too). coach.js liftsOf() sets
        mark.latest exactly when the newest exposure is marked. */
     if (ex.mark && ex.mark.latest) return;
+    /* v76: nor a lift he said he is building back on (knowBy.hold 'hold',
+       inside its 42 days — coach.js puts `holdAt` on it only then), nor one
+       whose lighter week he named is this week. A record day is the last
+       thing a held lift is asked for, so the whole 42 days are quiet. */
+    if (Number.isFinite(ex.holdAt) || lightWeeksOf(ex, now).has(0)) return;
     const b = baselinesOf(i, ex, ctx);
     if (!b || b.assisted || b.exposures < RECORD_MIN_EXPOSURES || b.status === 'declining') return;
     const tops = b.tops;
@@ -1097,6 +1121,23 @@ export function stepFor(input, exId, now) {
     if (!l || !Number.isFinite(now)) return null;
     const b = baselinesOf(i, l, ctxOf(i, now));
     return b && b.step ? { value: b.step.value, n: b.step.n, source: b.step.source } : null;
+  } catch {
+    return null;
+  }
+}
+
+/* v76: THE DROP on one lift of the prepared log — coach-prog.js dropOf():
+   its last two exposures trip the shape test with the newer one lower — as
+   { pct, w, prevW, at }, or null. For the drop question's gate (coach-ask.js
+   q_drop_why, dropAskLift). Read on the performance log (marked sessions
+   out) and never on a lift whose newest session is marked: a bad day has its
+   own line. Here for the reason stepFor() is. */
+export function dropFor(input, exId, now) {
+  try {
+    const i = prepare(input || {});
+    const l = i.lifts.find(x => x.exId === exId);
+    if (!l || !Number.isFinite(now) || (l.mark && l.mark.latest)) return null;
+    return dropOf(l, ctxOf(i, now));
   } catch {
     return null;
   }

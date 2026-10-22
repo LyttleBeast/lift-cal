@@ -104,10 +104,16 @@ const LS_GREETS = 'coachGreets';
    reason, under their own key in the same per-account namespace — a sibling
    of the greeting's, written once per app open. */
 const LS_HYPE   = 'coachHype';
+/* v76: the last five starter bubbles he tapped (route ids, newest first) —
+   the bubbles' "he knows it's there, show him something else" (coach.js
+   topicsFor). The same namespace and the same reason as the greeting's: a
+   device convenience, synchronous, never the database. */
+const LS_TAPS   = 'coachTaps';
 
 let opens        = 0;
 let recentGreets = [];
 let recentHype   = [];
+let recentTaps   = [];
 let rotationRead = false;
 
 function readRotation() {
@@ -124,6 +130,8 @@ function readRotation() {
   recentGreets = Array.isArray(g) ? g.filter(x => typeof x === 'string' && x).slice(0, 3) : [];
   const h = LS.get(LS_HYPE, []);
   recentHype = Array.isArray(h) ? h.map(hypeEntry).filter(Boolean).slice(0, 8) : [];
+  const t = LS.get(LS_TAPS, []);
+  recentTaps = Array.isArray(t) ? t.filter(x => typeof x === 'string' && /^[a-z_]{1,40}$/.test(x)).slice(0, 5) : [];
 }
 
 /* v53: an entry of the card's memory, { id, key, at } — the line, the fact
@@ -378,6 +386,10 @@ export function coachInput(extra) {
     opens,
     recentGreets,
     recentHype,
+    // v76: the bubbles he tapped last (rememberTap), newest first, five deep.
+    // Read as they stand now, not as they stood at open: only the sheet's
+    // order reads them, and the next sheet should see this sheet's tap.
+    recentTaps: recentTaps.slice(),
     u: wu(),
     log: logKnown ? logState : 'unknown',
     sessions,
@@ -546,8 +558,9 @@ async function patchNow(change0, more) {
      and never piles up. The engine reads them by its own clock. */
   // v73: and the step question's `asked.q_equipment_step:<exId>`, the same way.
   // v74: and `asked.q_want_next:<exId>` and `asked.q_rough_weight:<exId>`.
+  // v76: and `asked.q_drop_why:<exId>`.
   Object.keys(next.asked).forEach(k => { if ((k.startsWith('warm:') || k.startsWith('q_pr_how:') || k.startsWith('q_equipment_step:') ||
-    k.startsWith('q_want_next:') || k.startsWith('q_rough_weight:')) && staleStamp(next.asked[k])) delete next.asked[k]; });
+    k.startsWith('q_want_next:') || k.startsWith('q_rough_weight:') || k.startsWith('q_drop_why:')) && staleStamp(next.asked[k])) delete next.asked[k]; });
 
   try {
     await write('settings/coach', next);
@@ -811,6 +824,17 @@ export function rememberGreeting(id) {
   if (recentGreets[0] === id) return;
   recentGreets = [id].concat(recentGreets.filter(x => x !== id)).slice(0, 3);
   LS.set(LS_GREETS, recentGreets);
+}
+
+/* v76: a starter bubble he tapped — synchronously, to the device, beside the
+   greeting's memory and for its reason (a write that dies with a closed page
+   is no memory). Route ids only: a question bubble is not remembered, its
+   own `asked` stamp is its memory. Newest first, five deep, each id once. */
+export function rememberTap(id) {
+  if (typeof id !== 'string' || !/^[a-z_]{1,40}$/.test(id)) return;
+  readRotation();
+  recentTaps = [id].concat(recentTaps.filter(x => x !== id)).slice(0, 5);
+  LS.set(LS_TAPS, recentTaps);
 }
 
 /* v49: the card's earned line, the same way and for the same reasons —

@@ -104,6 +104,12 @@ const GROUP_NEAR_DAYS = 15;
 const GROUP_FAR_DAYS = 30;
 const REENTER_NEAR = 0.9;
 const REENTER_FAR = 0.8;
+// v76: and when he said the gap was training I could not see (know.back
+// 'elsewhere'), the near one whatever the gap — said so, every time it is.
+const KEPT_TRAINING = 'You said you kept training, so a small step back rather than a big one.';
+// v76: the hold's own line, and how long it stands (coach-ask.js KNOW_KEYS
+// hold.ttlDays, 42 — held equal by tools-check/coach-prog.mjs).
+const HOLD_LASTS = 'That stands for six weeks from when you told me, or until you go heavier yourself.';
 // Coming back, at most six of his own steps below the last top set. Past
 // that, no number: "lighter than last time".
 const REENTER_MAX_STEPS = 6;
@@ -583,8 +589,89 @@ function liftOf(ex, dials) {
   // told me on a lift the log has never seen (stored pounds, knowBy.rough).
   const wantNext = ['push', 'same', 'ease'].includes(ex.wantNext) ? ex.wantNext : null;
   const roughTold = Number.isFinite(ex.roughTold) && ex.roughTold > 0 ? ex.roughTold : null;
+  /* v76: two more things he said (coach-ask.js q_drop_why, q_back_what;
+     coach.js lifts()), each already inside its TTL or absent — this file
+     reads no clock on them:
+       holdAt   when he answered "Building back up — hold it" on this lift
+       lightAt  when he answered "Lighter week" on it
+       back     'elsewhere' — the gap since his last session was training I
+                cannot see (know.back, answered since that session) */
+  const holdAt = Number.isFinite(ex.holdAt) && ex.holdAt > 0 ? ex.holdAt : null;
+  const lightAt = Number.isFinite(ex.lightAt) && ex.lightAt > 0 ? ex.lightAt : null;
+  const back = ex.back === 'elsewhere' ? 'elsewhere' : null;
   return { exId, tag, assisted, dir: assisted ? -1 : 1, lowerBody, equipment: ex.equipment || null,
-           band: band.slice(), group: ex.group || null, warm, stepTold, wantNext, roughTold };
+           band: band.slice(), group: ex.group || null, warm, stepTold, wantNext, roughTold, holdAt, lightAt, back };
+}
+
+/* v76: THE SESSION HIS ANSWER WAS ABOUT — the newest exposure that started
+   at or before the answer. The drop question is asked on the recap of that
+   session or under the targets before the next one, so it is always this
+   one. An index into X, or -1. */
+function answeredAt(X, at, dir) {
+  let j = -1;
+  if (Number.isFinite(at)) X.forEach((e, i) => { if (e.startedAt <= at) j = i; });
+  /* And only when that session IS the drop he was asked about — more than
+     SHAPE_JUMP under the one before it — so a replay of the log as it stood
+     before the drop (targetsReplay, easyAt) never reads the answer into a
+     session it was not about. */
+  if (j < 1) return -1;
+  const a = X[j - 1], b = X[j];
+  return a.T > 0 && dir * (a.T - b.T) > SHAPE_JUMP * a.T ? j : -1;
+}
+/* v76: THE HOLD ("Building back up — hold it", knowBy.hold 'hold'): the
+   exposure it holds at — the lower session he answered about — while no
+   exposure since has gone heavier than it. He takes it higher himself; I
+   never do while it stands. Null when there is no hold, or he has. */
+function heldOf(X, lift) {
+  const j = answeredAt(X, lift.holdAt, lift.dir);
+  if (j < 0) return null;
+  const h = X[j];
+  for (let k = j + 1; k < X.length; k++) if (lift.dir * (X[k].T - h.T) > GRID_TOL) return null;
+  return h;
+}
+/* v76: THE LIGHTER WEEK HE NAMED (knowBy.hold 'light'): that session's
+   startedAt, or null. It is not `prev` for the shape test once a session
+   has followed it, and no step or range is learned across it — it was not a
+   new programme. While it is still the newest session, the shipped defer
+   stands: that is the once the recap asked. */
+function lightOf(X, lift) {
+  const j = answeredAt(X, lift.lightAt, lift.dir);
+  return j >= 0 ? X[j].startedAt : null;
+}
+// The exposures the range and the step learn from: the lighter week left
+// out once a session has followed it.
+function learnFrom(X, lift) {
+  const at = lightOf(X, lift);
+  return at != null && X.length && X[X.length - 1].startedAt !== at ? X.filter(e => e.startedAt !== at) : X;
+}
+
+/* v76: THE DROP the recap asks about (coach-ask.js q_drop_why) — the lift's
+   last two exposures trip the shape test with the newer one LOWER: the same
+   scheme, the top load more than SHAPE_JUMP under the one before, the two
+   inside LIFT_HOLD_DAYS of each other (a longer gap is time away, which has
+   its own rule and its own question), and neither heavy nor bodyweight.
+     { pct, w, prevW, at } — the share of his own two loads, rounded; the
+   lower top's stored weight and the earlier one's; when the lower session
+   started — or null. The one percentage Coach prints, never a body or food
+   number. Read on the exposures exactly as decide() reads them. */
+export function dropOf(ex, ctx) {
+  try {
+    const c = ctx || {};
+    const u = c.u === 'kg' ? 'kg' : 'lb';
+    if (!ex || !Number.isFinite(c.now) || ex.equipment === 'cardio') return null;
+    const lift = liftOf(ex, dialsFor({ aim: c.aim, exp: c.exp, energy: c.energy }));
+    const X = readAll(ex.exposures, u, lift.assisted, c.now, lift.warm);
+    if (X.length < 2) return null;
+    const last = X[X.length - 1], prev = X[X.length - 2];
+    if (!(prev.T > 0) || !(last.T > 0) || last.scheme !== prev.scheme || last.scheme === 'bw') return null;
+    if (isHeavy(last) || isHeavy(prev)) return null;
+    if (daysBetween(prev.startedAt, last.startedAt) >= LIFT_HOLD_DAYS) return null;
+    const fall = lift.dir * (prev.T - last.T);
+    if (!(fall > SHAPE_JUMP * prev.T)) return null;
+    return { pct: Math.round(fall / prev.T * 100), w: last.all[last.top[0].i].w, prevW: prev.all[prev.top[0].i].w, at: last.startedAt };
+  } catch {
+    return null;
+  }
 }
 
 /* Everything this file knows about one lift before it decides anything. What
@@ -617,10 +704,12 @@ export function baselines(ex, ctx) {
     if (!X.length) return null;
     const prog = progressOf(X, c.now);
     const within = n => X.filter(e => e.daysAgo >= 0 && e.daysAgo < n).length;
+    // v76: a lighter week he named teaches no range and no step.
+    const XL = learnFrom(X, lift);
     return {
       exposures: X.length,
-      range: rangeOf(X, c.now, lift.dir, lift.band),
-      step: stepOf(X, lift.dir, lift.equipment, lift.lowerBody, u, lift.stepTold),
+      range: rangeOf(XL, c.now, lift.dir, lift.band),
+      step: stepOf(XL, lift.dir, lift.equipment, lift.lowerBody, u, lift.stepTold),
       status: prog.status, slope: prog.slope, sigma: prog.sigma,
       series: prog.series, lastBestAt: prog.lastBestAt, moveLb: prog.moveLb, best: prog.best,
       freq: { recent: within(28) / 4, normal: within(WINDOW_DAYS) / 12 },
@@ -714,7 +803,14 @@ function decide(ex, c) {
   }
 
   const last = X[X.length - 1];
-  const prev = X.length >= 2 ? X[X.length - 2] : null;
+  /* v76: the exposures the range and the step learn from — a lighter week he
+     named left out once a session has followed it — and `prev`, which is
+     theirs: the session before the newest, past that lighter week. Every
+     other reader of X (last, the quotes, the series) is unchanged. */
+  const XL = learnFrom(X, lift);
+  const prev = XL.length >= 2 ? XL[XL.length - 2] : null;
+  const prevIdx = prev ? X.indexOf(prev) : -1;
+  const held = heldOf(X, lift);
   const prog = progressOf(X, now);
   const dials = dialsFor({ aim: c.aim, exp: c.exp, energy: c.energy,
                            slowSlope: prog.slow, fastSlope: prog.fast });
@@ -779,12 +875,14 @@ function decide(ex, c) {
     const tops = last.top;
     const lastR = tops.map(s => s.R);
     let target = lastR.slice(), mode = 'bodyweight', code = null, why;
-    const back = gg > GROUP_FAR_DAYS ? REENTER_FAR : gg >= GROUP_NEAR_DAYS ? REENTER_NEAR : null;
+    // v76: he kept training elsewhere — the near step back, whatever the gap.
+    const back = gg > GROUP_FAR_DAYS && !lift.back ? REENTER_FAR : gg >= GROUP_NEAR_DAYS ? REENTER_NEAR : null;
     const prevR = prev && (prev.scheme === 'bw' || (lift.assisted && prev.T <= 0)) ? prev.top.map(s => s.R) : null;
     if (back) {
       target = lastR.map(r => Math.max(1, Math.round(r * back)));
       code = 'back';
       why = [gg + ' days since ' + sinceWhat + ', so a few fewer than last time (' + reps(lastR) + ').'];
+      if (lift.back) why.push(KEPT_TRAINING);
     } else if (g >= LIFT_HOLD_DAYS) {
       mode = 'hold'; code = 'back';
       why = ['First time on this lift in ' + g + ' days, so no jump on the first one back.'];
@@ -820,14 +918,14 @@ function decide(ex, c) {
 
   // The baselines, needed by every branch from here on.
   // The band is the aim's alone — the energy and the slope turn other dials.
-  const range = rangeOf(X, now, lift.dir, lift.band);
+  const range = rangeOf(XL, now, lift.dir, lift.band);
   // v69: a range whose bottom is a double is a heavy day said another way, and
   // its "add" would be a heavier single or double. No target off it.
   if (range.lo <= HEAVY_REPS) {
     return defer('heavy', heavyLine,
       ['Your rep range here reads as singles or doubles, and I won’t call a heavier one of those.']);
   }
-  const step = stepOf(X, lift.dir, lift.equipment, lift.lowerBody, u, lift.stepTold);
+  const step = stepOf(XL, lift.dir, lift.equipment, lift.lowerBody, u, lift.stepTold);
   const S = step ? step.value : null;
   const stage = weakest(range.stage, step ? step.stage : 'learning');
   const learning = n => 'I’m learning this lift: ' + plural(n, 'session') + ' so far.';
@@ -885,10 +983,13 @@ function decide(ex, c) {
   /* 6. TIME OFF, ON TWO CLOCKS. The group's clock decides how far back to
      start; the lift's own clock only holds it — squat after weeks of leg press
      gets no jump its first time back, and no step down either. */
-  const f = gg > GROUP_FAR_DAYS ? REENTER_FAR : gg >= GROUP_NEAR_DAYS ? REENTER_NEAR : null;
+  /* v76: "Training elsewhere" (know.back, coach-ask.js q_back_what) — the
+     near step back whatever the gap, never the far one: the group kept
+     working where I could not see it. The gate itself does not move. */
+  const f = gg > GROUP_FAR_DAYS && !lift.back ? REENTER_FAR : gg >= GROUP_NEAR_DAYS ? REENTER_NEAR : null;
   if (f) {
     const repsNow = last.top.map(() => lo);
-    const days = gg + ' days since ' + sinceWhat + '.';
+    const days = gg + ' days since ' + sinceWhat + '.' + (lift.back ? ' ' + KEPT_TRAINING : '');
     if (lift.assisted) {
       return out({ mode: 'reenter', code: null, loadLb: null, sets: setsFor(null, repsNow),
         line: noLoadLine('a little more assistance than last time', repsNow),
@@ -933,9 +1034,25 @@ function decide(ex, c) {
       stage, range: rangeOut, step: step ? { value: step.value, n: step.n, source: step.source } : null, ...common });
   }
 
+  /* v76: BUILDING BACK UP — HOLD IT (knowBy.hold 'hold', inside its 42
+     days, while nothing since has gone heavier than the session he answered
+     about): last time's weight and reps again, never a step up. He takes it
+     higher himself; then the shipped rules resume from his new load. */
+  const stepOut0 = step ? { value: step.value, n: step.n, source: step.source } : null;
+  const heldOut = () => out({ mode: 'hold', code: 'held', loadLb: last.grid ? loadLbOf(lastW) : null,
+    sets: setsFor(null, last.R),
+    line: last.grid ? loadLine(lastW, last.R, ' again') : noLoadLine('same weight as last time', last.R),
+    why: finish(['Holding ' + String(ex.name || lift.exId) + at + shown(lastW) + ' while you build back, as you asked.', HOLD_LASTS]
+      .concat(last.grid ? [] : [offGrid]), last.grid),
+    stage, range: rangeOut, step: stepOut0, ...common });
+
   // 7–8. A different kind of session, or a new programme.
-  if (prev && (prev.scheme !== last.scheme ||
-      (Math.abs(last.T - prev.T) > SHAPE_JUMP * prev.T && daysBetween(prev.startedAt, last.startedAt) <= GAP_DAYS))) {
+  /* v76: the drop he said he is building back from is not a new programme:
+     the held session is the newest, the one before it heavier — the test
+     stands for a jump UP and for a change of scheme, and the hold answers it. */
+  const jumped = !!prev && Math.abs(last.T - prev.T) > SHAPE_JUMP * prev.T && daysBetween(prev.startedAt, last.startedAt) <= GAP_DAYS;
+  if (held && held === last && jumped && prev.scheme === last.scheme && lift.dir * (prev.T - last.T) > 0) return heldOut();
+  if (prev && (prev.scheme !== last.scheme || jumped)) {
     return defer('shape', 'No target this time.', ['Your last two sessions of this lift were set up differently.']);
   }
   // 9. Reps too far apart to carry a number.
@@ -1032,6 +1149,8 @@ function decide(ex, c) {
 
   /* v74: EASE OFF — he said so for this lift (q_want_next, unconsumed): a
      session that earned the step holds at last time's weight instead. */
+  // v76: a session that earned the step, on a lift he is building back on, holds.
+  if (hitTop && held) return heldOut();
   if (hitTop && lift.wantNext === 'ease') {
     const trs = last.R;
     return out({ mode: 'hold', code: 'ease', loadLb: last.grid ? loadLbOf(lastW) : null,
@@ -1050,7 +1169,7 @@ function decide(ex, c) {
     // not rated too hard there, or rated way too easy at its target.
     const prevAt = !!prev && Math.abs(prev.T - T) < GRID_TOL;
     const prevTop = prevAt && prev.R.every(r => r >= hiEff) && !tooHardAt(prev);
-    const prevEasy = prevAt && !prevTop && rated && need !== 1 && easyAt(X.length - 2);
+    const prevEasy = prevAt && !prevTop && rated && need !== 1 && prevIdx >= 0 && easyAt(prevIdx);
     const prevHit = prevTop || prevEasy;
     const reached = easy ? 'Last time you rated ' + topSaid(last) + ' way too easy'
                          : who + ' reached ' + hiEff + at + shown(lastW);
@@ -1371,9 +1490,10 @@ function nextOf(ex, c, today) {
     : (Array.isArray(ex.exposures) ? ex.exposures : []).filter(x => !(m && m.markedAt instanceof Set && m.markedAt.has(x.startedAt)));
   const X = readAll(src, u, false, c.now, lift.warm);
   const known = rampLoads(src.map(allOf), { warm: lift.warm });
-  const step = X.length ? stepOf(X, 1, lift.equipment, lift.lowerBody, u, lift.stepTold) : null;
+  const XL = learnFrom(X, lift);
+  const step = X.length ? stepOf(XL, 1, lift.equipment, lift.lowerBody, u, lift.stepTold) : null;
   const S = step ? step.value : null;
-  const range = X.length ? rangeOf(X, c.now, 1, lift.band) : null;
+  const range = X.length ? rangeOf(XL, c.now, 1, lift.band) : null;
   const logged = P => X.some(e => e.work.some(s => Math.abs(s.L - P) < GRID_TOL));
   const store = P => (u === 'kg' ? String(wIn(P, 'kg')) : num(P));
 
@@ -1469,6 +1589,10 @@ function nextOf(ex, c, today) {
   const how = last.R >= target + UP_REPS
     ? plural(last.R, 'rep') + ' at ' + shown(last.w) + ', ' + UP_REPS + ' or more past the target’s ' + target + '.'
     : 'You rated ' + shown(last.w) + ' × ' + last.R + ' way too easy.';
+  // v76: he said he is building back on this lift: nothing heavier today.
+  if (wouldEarn && heldOf(X, lift)) {
+    return res('same', last.w, trAt(k), [how, 'You said you’re building back on this one, so I’d stay here.'], { stepped });
+  }
   // v74: he said ease off on this lift: nothing heavier today.
   if (wouldEarn && lift.wantNext === 'ease') {
     return res('same', last.w, trAt(k), [how, 'You said ease off on this one, so I’d stay here.'], { stepped });

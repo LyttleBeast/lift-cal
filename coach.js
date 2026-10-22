@@ -54,7 +54,7 @@ import { propose, liveRefusal, buildMenu, swapTo, BUILD_ASK } from './coach-buil
 import { liveRead, setRead, anotherSetRead, fallbackRead, LIVE_NONE, REP_DROP, EFFORT, rateAsk, rateAnswer } from './coach-live.js';
 import { AIMS, EXPERIENCE, energyContext, normGoalLift, goalChecks, AIM_DIR } from './coach-goal.js';
 import { readLift, lighterWeek, recordDay, liftsMoving, prepare, targetsReplay, compareSession, nextTargets,
-         liftTrend, goalLiftRead, bigThree, focusRead, groupDaysAt, nextSetFor, stepFor, targetOfLift, targetSaid } from './coach-overlap.js';
+         liftTrend, goalLiftRead, bigThree, focusRead, groupDaysAt, nextSetFor, stepFor, targetOfLift, targetSaid, dropFor } from './coach-overlap.js';
 import { restRead, usualRun, replay, readinessRows, readinessHas, readinessAnswer, readinessHeavy, sessionRows,
          mergeRows, groupLine, restAnswer, lighterAnswer, groupAnswer, REST_REASON } from './coach-ready.js';
 import { fueledRead, fuelAnswer, fedUnloggedAnswer, fedNoneAnswer, fuelRow, sessionFoodRows, fuelDates, logStyle } from './coach-fuel.js';
@@ -70,8 +70,10 @@ import { workSetsOf, rampLoads, rampProfile } from './coach-ramp.js';
 // v74: wantOf / roughOf (what he is going for on a lift, a rough weight he
 // told me), askQuestion (the two in-the-gym rows steerOf() puts) and their
 // per-lift stamps.
+// v76: dropAskLift (the drop question's gate), backAnswer (what he said this
+// gap was) and idFor (what a question is about in a moment).
 import { ASK_QUESTIONS, normKnow, pickQuestion, debriefPlan, warmAnswer, aimLabel, ID_RE, knowOf, stepAskLift, stepStamp,
-         wantOf, roughOf, askQuestion, wantStamp, roughStamp } from './coach-ask.js';
+         wantOf, roughOf, askQuestion, wantStamp, roughStamp, dropAskLift, backAnswer, idFor } from './coach-ask.js';
 
 const DAY = 864e5;
 
@@ -692,12 +694,24 @@ function derive(input) {
       });
     });
     const days = groupDays();
+    /* v76: what he said about a drop on the lift (knowBy.hold, inside its 42
+       days: 'hold' → holdAt, 'light' → lightAt, 'day' → nothing) and what
+       he said the gap was (know.back 'elsewhere', inside its TTL and given
+       since his newest session — the next session ends it). Each only when
+       he said; coach-prog.js decides which session an answer was about. */
+    const holdFact = id => { const k = knowOf(input.settings, 'hold', String(id), now); return k && !k.expired ? k : null; };
+    const lastAny = Math.max(-Infinity, ...all().filter(s => s.daysAgo >= 0).map(s => s.startedAt));
+    const bk = knowOf(input.settings, 'back', null, now);
+    const back = bk && !bk.expired && bk.v === 'elsewhere' && bk.at > lastAny ? 'elsewhere' : null;
     return [...by.values()].sort((a, b) => (a.exId < b.exId ? -1 : a.exId > b.exId ? 1 : 0))
       .map(l => ({ ...l, groupDaysSince: l.group && days[l.group] != null ? days[l.group] : null,
                    // v74: what he said he is going for on it, while his next
                    // logged session of it has not consumed the answer
                    // (coach-ask.js wantOf) — only when he said.
-                   ...(wantOf(input.settings, l.exId, now, l.lastAt) ? { wantNext: wantOf(input.settings, l.exId, now, l.lastAt) } : null) }));
+                   ...(wantOf(input.settings, l.exId, now, l.lastAt) ? { wantNext: wantOf(input.settings, l.exId, now, l.lastAt) } : null),
+                   ...(holdFact(l.exId) && holdFact(l.exId).v === 'hold' ? { holdAt: holdFact(l.exId).at } : null),
+                   ...(holdFact(l.exId) && holdFact(l.exId).v === 'light' ? { lightAt: holdFact(l.exId).at } : null),
+                   ...(back ? { back } : null) }));
   });
 
   /* THE SHIPPED OVERDUE SHAPE (v42's session.shapeOverdue, byte for byte):
@@ -4295,11 +4309,18 @@ function debriefRead(input, record, extras) {
     const sh = d.all().find(x => x.session === rec);
     const x = extras && typeof extras === 'object' ? extras : {};
     // The open counter rides along: the recap's eyebrow turns on it.
+    // v76: the first lift in the record that came in 15% under, unanswered.
+    let drop = null;
+    try {
+      const dc = dropCtx(d, (Array.isArray(rec.exercises) ? rec.exercises : []).map(e => e && e.exId).filter(Boolean));
+      drop = dc ? dc.drop : null;
+    } catch { drop = null; }
     return { ...debriefPlan(d, rec, s, d.now, d.input.opens, {
       prs: Array.isArray(x.prs) ? x.prs : [],
       harder: feelHarder(rec.feel),
       marked: !!(sh && d.markOf(sh)),
-      u: uOf(d)
+      u: uOf(d),
+      drop
     }), opens: Number.isFinite(d.input.opens) ? d.input.opens : 0 };
   } catch {
     return feelOnly;
@@ -4382,12 +4403,17 @@ const TOPIC_BY_ID = Object.freeze(Object.fromEntries(
     { id: 'ask_next',    label: 'What’s next time?',                 category: 'targets' },
     { id: 'ask_goal',    label: 'How am I tracking toward my goal?', category: 'progression' },
     { id: 'ask_week_volume', label: 'How’s my weekly volume?',       category: 'volume' },
-    { id: 'ask_balance', label: 'Is my training balanced?',          category: 'volume' }
+    { id: 'ask_balance', label: 'Is my training balanced?',          category: 'volume' },
+    /* v76: after a session, the records route (recent_pr, pr_proximity) —
+       raised by a record in the last three days (topicsFor). Its own
+       category, so the starter bubbles' one-per-category pick can put it
+       beside "How did today compare?" rather than behind it. */
+    { id: 'ask_records', label: 'Any records lately?',               category: 'records' }
   ]).map(t => [t.id, Object.freeze(t)])));
 export const STATE_TOPICS = Object.freeze({
   train: Object.freeze({
     pre:        Object.freeze(TRAIN_TOPICS.map(t => t.id).concat(WEEK_TOPICS)),
-    post:       Object.freeze(['ask_compare', 'ask_next', 'ask_lifts', 'ask_build']),
+    post:       Object.freeze(['ask_compare', 'ask_next', 'ask_lifts', 'ask_build', 'ask_records']),
     done_today: Object.freeze(['ask_compare', 'ask_shape', 'ask_build', 'ask_lifts'].concat(WEEK_TOPICS)),
     // rack-v51's list, written out (v52): it was derived from TRAIN_TOPICS,
     // and the pre-workout order moving is not a reason for the live one to.
@@ -5171,18 +5197,122 @@ function answerable(d, routeId) {
 /* The surface's own set. Train gets the training-first promotions and falls
    back to the general three when none of them has an answer today — a sheet
    with no way to ask anything is a worse answer than a broader question. */
+/* v76: THE BUBBLES READ THE DAY (COACH-V2-SPEC §8). The state's list is the
+   base — position 1 weighs 5, then 4, 3, 2, 1, 1 … — and the day moves it:
+   the hour, the days since his last session, a record in the last three
+   days, his aim, a caution on the opener, what he has not logged, and the
+   last five bubbles he tapped on this device (coach-data.js coachTaps, newest
+   first). At most one of them is a question (the opener's pickQuestion()
+   winner, labelled by its `short`), and before a session it is never first:
+   the first bubble is always something he can ask. Picked top first, then
+   the next highest of a category not taken yet, to three; a fourth only at
+   60% of the top's score or more; the rest behind "More" (`more: true`) in
+   score order. A bubble scored at zero or less is never among the first:
+   under a caution "Good day for a record?" goes behind "More". Ties go round
+   on the open counter. Deterministic for a log, a clock, an open count and
+   the taps. Every bubble still has to answer (the shipped filter). */
+const BUBBLE_MORNING = 11, BUBBLE_MIDDAY_END = 16, BUBBLE_PR_DAYS = 3, BUBBLE_TAPS = 5;
+const BUBBLE_FOURTH = 0.6;
+const BUBBLE_FUEL = Object.freeze(['topic_fuel', 'ask_fueled', 'ask_calories']);
+const BUBBLE_RECORDS = Object.freeze(['ask_records', 'ask_record_day']);
+const BUBBLE_AIM = Object.freeze({
+  cut: Object.freeze(['topic_weight', 'ask_rate']),
+  strength: Object.freeze(['ask_lifts', 'ask_records']),
+  powerlifting: Object.freeze(['ask_lifts', 'ask_records']),
+  muscle: Object.freeze(['ask_week_volume', 'ask_balance'])
+});
+// The device's local hour, the clock every time-of-day read in this file uses.
+const localHour = ms => new Date(ms).getHours();
+// A question bubble's id: never a route id, so a tap on it is never routed.
+export const QUESTION_BUBBLE = 'q:';
+
 function topicsFor(d, surface) {
   const general = TOPICS.filter(t => liveTopics(d).includes(t.id));
   const state = d.f('coach.state') || 'pre';
   const live = liveTopics(d);
+  const settings = d.input.settings || {};
   // The general three keep their shipped test (the domain has data); every
   // narrower id is offered only when its own route answers.
   const offered = id => (TOPICS.some(t => t.id === id) ? live.includes(id) : answerable(d, id));
   const label = t => (state === 'done_today' && DONE_LABELS[t.id] ? { ...t, label: DONE_LABELS[t.id] } : t);
-  const list = (STATE_TOPICS[surface === 'train' ? 'train' : 'you'][state] || [])
-    .filter(offered).map(id => label(TOPIC_BY_ID[id]));
-  if (surface !== 'train') return answerable(d, PATTERN_TOPIC.id) ? list.concat(PATTERN_TOPIC) : list;
-  return list.length ? list : general;
+  const ids = STATE_TOPICS[surface === 'train' ? 'train' : 'you'][state] || [];
+
+  // The day, read once.
+  const hour = localHour(d.now);
+  const since = d.f('session.lastDaysAgo');
+  const pr = d.f('lift.recentPr');
+  const prNear = !!pr && Number.isFinite(pr.daysAgo) && pr.daysAgo <= BUBBLE_PR_DAYS;
+  const aimTopics = BUBBLE_AIM[d.f('coach.aim')] || [];
+  const caution = restDay(d) || d.f('session.lighterWeek') != null;
+  const weighIn = d.f('weight.daysSinceWeighIn');
+  const cal = d.f('fuel.calToday');
+  const taps = (Array.isArray(d.input.recentTaps) ? d.input.recentTaps : []).slice(0, BUBBLE_TAPS);
+  const scoreOf = (id, k) => {
+    let s = k < 5 ? 5 - k : 1;
+    if (BUBBLE_FUEL.includes(id) && hour >= BUBBLE_MORNING && hour < BUBBLE_MIDDAY_END) s += 2;
+    if (id === 'ask_shape' && state === 'pre' && hour < BUBBLE_MORNING) s += 2;
+    if (id === 'ask_compare' && state === 'post') s += 3;
+    if (id === 'ask_next' && state === 'post') s += 2;
+    if (id === 'ask_shape' && state === 'pre' && since != null && since >= 2) s += 3;
+    if (BUBBLE_RECORDS.includes(id) && prNear) s += 3;
+    if (aimTopics.includes(id)) s += 1;
+    if (id === 'ask_weighin' && weighIn != null && weighIn >= 4) s += 1;
+    if (id === 'ask_fueled' && state === 'pre' && !cal && !isMuted(settings, 'fuel')) s += 1;
+    if (BUBBLE_RECORDS.includes(id) && caution) s -= 3;
+    if (taps.includes(id)) s -= 2;
+    return s;
+  };
+  const cands = [];
+  ids.forEach((id, k) => {
+    if (!offered(id)) return;
+    const t = label(TOPIC_BY_ID[id]);
+    if (isMuted(settings, t.category)) return;
+    cands.push({ t, score: scoreOf(id, k) });
+  });
+  // The one question bubble: the opener's question, on no caution day — a
+  // day the rest read says rest is not a day to be asked things.
+  const q = caution ? null : pendingQuestion(d);
+  const qv = q ? questionView(q, d, uOf(d)) : null;
+  if (qv) cands.push({ t: { id: QUESTION_BUBBLE + q.id, label: q.short || qv.text, category: 'question', question: qv }, score: 4 });
+
+  // Nothing he can ask (a question alone is never the first bubble before a
+  // session): Train falls back to the general three, You to Patterns.
+  if (!cands.some(c => c.score > 0 && (state === 'post' || c.t.category !== 'question'))) {
+    if (surface !== 'train') return answerable(d, PATTERN_TOPIC.id) ? [PATTERN_TOPIC] : [];
+    return general;
+  }
+  // Sorted by score; a run of ties goes round on the open counter.
+  const byScore = cands.map((c, k) => ({ ...c, k })).sort((a, b) => b.score - a.score || a.k - b.k);
+  const sorted = [];
+  for (let i = 0; i < byScore.length;) {
+    let j = i;
+    while (j < byScore.length && byScore[j].score === byScore[i].score) j++;
+    const run = byScore.slice(i, j);
+    const r = rotate(d.input.opens, run.length);
+    sorted.push(...run.slice(r), ...run.slice(0, r));
+    i = j;
+  }
+  const isQ = c => c.t.category === 'question';
+  const taken = [];
+  const free = c => !taken.includes(c) && c.score > 0 && !taken.some(x => x.t.category === c.t.category) &&
+                    !(isQ(c) && taken.some(isQ));
+  const first = sorted.find(c => c.score > 0 && (state === 'post' || !isQ(c)));
+  if (first) taken.push(first);
+  while (first && taken.length < 3) {
+    const c = sorted.find(free);
+    if (!c) break;
+    taken.push(c);
+  }
+  if (first && taken.length === 3) {
+    const c = sorted.find(free);
+    if (c && c.score >= BUBBLE_FOURTH * first.score) taken.push(c);
+  }
+  const rest = sorted.filter(c => !taken.includes(c));
+  const list = taken.map(c => c.t).concat(rest.map(c => ({ ...c.t, more: true })));
+  if (surface !== 'train') {
+    return answerable(d, PATTERN_TOPIC.id) ? list.concat(taken.length >= 3 ? { ...PATTERN_TOPIC, more: true } : PATTERN_TOPIC) : list;
+  }
+  return list;
 }
 
 function leadQuestion(d, finding) {
@@ -5231,9 +5361,38 @@ function questionUnder(d, where) {
   if (laneOpen(d, 'under:' + where)) return null;
   // v73: under the targets, the step question may be about a lift on the plan.
   const plan = where === 'targets' ? (d.f('lift.targets') || []) : [];
-  const ctx = where === 'targets' ? stepCtx(d, plan.map(t => t.exId), id => { const t = plan.find(x => x.exId === id); return t && t.step ? t.step : null; }) : undefined;
+  let ctx = where === 'targets' ? stepCtx(d, plan.map(t => t.exId), id => { const t = plan.find(x => x.exId === id); return t && t.step ? t.step : null; }) : undefined;
+  // v76: and the drop question may be about a lift on the plan …
+  if (where === 'targets') { const dc = dropCtx(d, plan.map(t => t.exId)); if (dc) ctx = { ...(ctx || {}), ...dc }; }
+  // … and the gap question rides under the first answers back.
+  if (where === 'shape' || where === 'lighter') ctx = backCtx(d);
   const q = pickQuestion(d, 'under:' + where, d.input.settings || {}, d.now, d.input.opens, ctx);
   return q ? { q, ctx } : null;
+}
+
+/* v76: THE DROP QUESTION'S CONTEXT — the first lift among `exIds` (screen
+   order) that came in 15% under last time (coach-overlap.js dropFor) and that
+   he has said nothing about inside the fact's 42 days (coach-ask.js
+   dropAskLift). { drop } or null. */
+function dropCtx(d, exIds) {
+  const i = d.overlap();
+  const cands = [...new Set(Array.isArray(exIds) ? exIds.map(String) : [])].map(id => {
+    const l = i.lifts.find(x => x.exId === id);
+    if (!l) return null;
+    const lib = d.lib && d.lib[id];
+    return { exId: id, name: String((lib && lib.name) || l.name || id), drop: dropFor(i, id, d.now) };
+  }).filter(Boolean);
+  const drop = dropAskLift(cands, d.input.settings || {}, d.now);
+  return drop ? { drop } : null;
+}
+/* v76: THE GAP QUESTION'S CONTEXT — twelve days or more since his newest
+   session and nothing said about this gap yet (coach-ask.js backAnswer).
+   { back: { gap } } or undefined. */
+function backCtx(d) {
+  const gap = d.f('session.lastDaysAgo');
+  if (gap == null || gap < BACK_GAP_DAYS) return undefined;
+  const lastAt = Math.max(-Infinity, ...d.all().filter(s => s.daysAgo >= 0).map(s => s.startedAt));
+  return backAnswer(d.input.settings || {}, d.now, lastAt) == null ? { back: { gap } } : undefined;
 }
 
 /* v73: THE STEP QUESTION'S CONTEXT for a moment — the lifts it may be about,
@@ -5289,9 +5448,11 @@ const questionView = (q, d, u, ctx) => {
   if (q.writes !== 'answers') {
     v.writes = q.writes;
     v.key = q.key || null;
-    v.by = ctx && ctx.id != null ? String(ctx.id) : null;
+    // v76: the lift the row is about by its own idOf (the drop question's
+    // may ride beside the step question's context under the targets).
+    v.by = q.writes === 'knowBy' ? idFor(q, ctx) : null;
     v.stamp = typeof q.stampOf === 'function' ? q.stampOf(ctx) : q.id;
-    if (typeof q.optionsFor === 'function') { try { v.options = q.optionsFor(u); } catch {} }
+    if (typeof q.optionsFor === 'function') { try { v.options = q.optionsFor(u, ctx); } catch {} }
   }
   return v;
 };
@@ -5573,9 +5734,16 @@ function ask(d, u, id) {
     // The targets answer carries the goal question it refines, and (v49) the
     // goal answer carries the focus question — these two routes only.
     if (v) {
-      const where = v.id === 'lift_targets' ? 'targets' : v.id === 'goal_pace' ? 'goal' : v.id === 'fuel_fueled' ? 'fuel' : null;
+      // v76: and the first answers back after a gap — "What should I train
+      // today?" and "Should I rest or go lighter?", whatever answers them —
+      // carry the question about where he was (q_back_what).
+      const where = v.id === 'lift_targets' ? 'targets' : v.id === 'goal_pace' ? 'goal' : v.id === 'fuel_fueled' ? 'fuel'
+        : id === 'ask_shape' ? 'shape' : id === 'ask_lighter' ? 'lighter' : null;
+      // (the gap question's two answers carry the key only when it is put, so
+      // every other answer of theirs is the shape it always was)
+      const under = where ? pickedView(questionUnder(d, where), d, u) : null;
       return { ...v, followups: followupsFor(d, u, id, v.id),
-               ...(where ? { question: pickedView(questionUnder(d, where), d, u) } : null),
+               ...(where && (under || (where !== 'shape' && where !== 'lighter')) ? { question: under } : null),
                ...(v.id === 'session_compare' ? markView(d) : null),
                // v54: a once-only line in the answer (the neglected group,
                // once in four weeks): the sheet stamps `asked` as it draws it.
@@ -5740,6 +5908,8 @@ export function normSettings(v) {
     // wantStamp, roughStamp), the same way.
     if (k.startsWith('q_want_next:') && ID_RE.test(k.slice(12)) && Number.isFinite(rawAsk[k])) asked[k] = rawAsk[k];
     if (k.startsWith('q_rough_weight:') && ID_RE.test(k.slice(15)) && Number.isFinite(rawAsk[k])) asked[k] = rawAsk[k];
+    // v76: and the drop question's per-lift stamps (coach-ask.js dropStamp).
+    if (k.startsWith('q_drop_why:') && ID_RE.test(k.slice(11)) && Number.isFinite(rawAsk[k])) asked[k] = rawAsk[k];
   });
   /* No `lastGreet`. It used to live here and it was the wrong node for it: the
      write fires as the app opens and the app is routinely closed a second or
