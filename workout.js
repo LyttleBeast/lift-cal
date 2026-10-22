@@ -14,7 +14,7 @@ import {
   allSessions, invalidate, detectPRs, sessionMilestones, sameKindComparison,
   sessionReps, isWorking, groupColor,
   mergeSessionExercises, prDetail, normFeel, FEEL_STRENGTH,
-  dropHeads, setsText, keepSets, retypeSet, removeSet, addDrop, repeatOf
+  dropHeads, continuesDrop, setsText, keepSets, retypeSet, removeSet, addDrop, repeatOf
 } from './analytics.js';
 // One-way dependency: this file imports stats.js, stats.js never imports back.
 import { openStats, isStatsOpen, renderStats, refresh as refreshStats } from './stats.js';
@@ -1281,6 +1281,60 @@ function renderBlock(row, editing) {
   return card;
 }
 
+/* v75: the exercise card's ⋯. In a live session it is a menu of two —
+   "Replace exercise" (Micah, 22 Oct: "another common thing my app doesn't
+   have") and "Remove exercise", whose confirm is the one the ⋯ opened on its
+   own before. In an edit of a past session every set is a logged set, so a
+   replace could only ever add a card below and replace nothing: the ⋯ there
+   goes straight to the remove confirm, exactly as it always has. */
+function openExerciseMenu(ex, exIdx) {
+  const remove = () => confirmSheet({
+    title: 'Remove ' + ex.name + '?',
+    body: 'It will be taken out of this workout along with its sets.',
+    confirmLabel: 'Remove',
+    danger: true,
+    onConfirm: () => { session.exercises.splice(exIdx, 1); persistSession(); render(); }
+  });
+  if (!session || session._edit) { remove(); return; }
+  const { sh, close } = sheet();
+  sh.appendChild(el('h2', null, ex.name));
+  // Said before the tap, because the two outcomes look different on screen.
+  if ((ex.sets || []).some(s => s && s.done)) {
+    sh.appendChild(noteEl('Your ticked sets stay where they are. The new exercise goes in below with the sets you have left.'));
+  }
+  const rep = el('button', 'btn btn-ghost btn-block', 'Replace exercise');
+  rep.style.marginTop = '16px';
+  rep.onclick = () => {
+    close();
+    openPicker(chosen => replacePicked(ex.exId, exIdx, chosen),
+               { filter: ex.group, exclude: [ex.exId], single: true, title: 'Replace ' + ex.name });
+  };
+  const rem = el('button', 'btn btn-danger btn-block', 'Remove exercise');
+  rem.style.marginTop = '8px';
+  rem.onclick = () => { close(); remove(); };
+  const cancel = el('button', 'btn btn-ghost btn-block', 'Cancel');
+  cancel.style.marginTop = '8px';
+  cancel.onclick = close;
+  sh.append(rep, rem, cancel);
+}
+
+/* What the picker hands back to "Replace exercise". The card is found again by
+   its index AND its exercise, because the picker is a sheet over a live
+   screen: if the card moved or went while it was open, nothing is replaced
+   rather than the wrong card. Cancel never calls this at all. The session is
+   rebuilt by replaceExercise (below, pure) and saved the way every live edit
+   is — the device copy; the record is written at Finish, through collectFrom,
+   and the history index folds it then, each exercise under its own id. */
+function replacePicked(exId, exIdx, chosen) {
+  const x = (chosen || [])[0];
+  if (!session || session._edit || !x || !x.id) return;
+  const home = session.exercises[exIdx];
+  if (!home || home.exId !== exId) return;
+  const prev = lastEntry(x.id);
+  session.exercises = replaceExercise(session.exercises, exIdx, x, prev ? prev.sets : null);
+  persistSession(); render();
+}
+
 function renderExercise(ex, exIdx) {
   const block = el('div', 'ex-block');
   const color = vibePaint((GROUPS[ex.group] || {}).color || 'var(--dim)');
@@ -1295,16 +1349,8 @@ function renderExercise(ex, exIdx) {
     dir => canMoveExercise(session, exIdx, dir),
     dir => commitBlocks(moveExercise(session, exIdx, dir))));
   const menu = el('button', 'ex-menu', '⋯'); glyphed(menu, 'more');
-  menu.setAttribute('aria-label', 'Remove ' + ex.name);
-  menu.onclick = () => {
-    confirmSheet({
-      title: 'Remove ' + ex.name + '?',
-      body: 'It will be taken out of this workout along with its sets.',
-      confirmLabel: 'Remove',
-      danger: true,
-      onConfirm: () => { session.exercises.splice(exIdx, 1); persistSession(); render(); }
-    });
-  };
+  menu.setAttribute('aria-label', (session._edit ? 'Remove ' : 'More for ') + ex.name);
+  menu.onclick = () => openExerciseMenu(ex, exIdx);
   hd.appendChild(menu);
   block.appendChild(blk('exercise', 'head', hd));
 
@@ -1802,6 +1848,52 @@ export function useNext(exercises, at, t) {
     return list;
   }
   list[at.exIdx] = { ...home, sets: (home.sets || []).concat([{ w: '', r: '', type: 'N', done: false, tw: String(t.tw), tr: String(t.tr) }]) };
+  return list;
+}
+
+/* ---------- replace an exercise (v75) ----------
+
+   THE RULE, Micah's request of 22 Oct 2026, and the native session screen
+   builds to the same words:
+
+     Nothing ticked yet: the card becomes the new exercise, in the same place
+     (and the same lifting block), with as many set rows as it had — a drop
+     set's drops are part of their set, not rows of their own. Something
+     ticked: the old card keeps every set he ticked, exactly as it is, and
+     the new exercise goes in directly below it (same block) with one row for
+     each row he had not started — unticked, both boxes empty, in no drop
+     set. A row he typed into but did not tick stays on the old card: those
+     are his numbers, and Finish's warnings are about them. Either way the new
+     rows are built the way "+ Set" builds them — last time's numbers for the
+     NEW exercise in grey (nextGrey: his warm-ups first, `tl`), or blank when
+     it has no last time — and never one of the old lift's numbers or a
+     routine's targets for it. At least one row, as every added exercise has.
+
+   Pure: the exercises as they should be now, the input untouched (a session
+   started from a routine holds that routine's rows, and the routine is only
+   ever changed in its editor). `prevSets` is the "Last ·" session of the new
+   exercise (lastEntry), or null. Replacing an exercise with itself, or at an
+   index that holds nothing, leaves the list as it was. */
+export function replaceExercise(exercises, exIdx, x, prevSets) {
+  const list = (exercises || []).slice();
+  const old = list[exIdx];
+  if (!old || !x || !x.id || x.id === old.exId) return list;
+  const sets = Array.isArray(old.sets) ? old.sets : [];
+  const heads = dropHeads(sets);
+  const blank = v => v == null || v === '';
+  const unstarted = (s, j) => !!s && !s.done && blank(s.w) && blank(s.r) && heads[j] == null;
+  const logged = sets.some(s => s && s.done);
+  const n = logged ? sets.filter(unstarted).length
+                   : sets.filter((s, j) => s && !continuesDrop(sets, j)).length;
+  const fresh = { exId: x.id, name: x.name, group: x.group, equipment: x.equipment,
+                  ...(old.block ? { block: old.block } : null), sets: [] };
+  for (let k = 0; k < Math.max(1, n); k++) {
+    const t = nextGrey(prevSets, fresh.sets);
+    fresh.sets.push({ w: '', r: '', type: 'N', done: false, ...(t ? { ...t, tl: true } : null) });
+  }
+  if (!logged) { list[exIdx] = fresh; return list; }
+  list[exIdx] = { ...old, sets: keepSets(sets, (s, j) => !unstarted(s, j)) };
+  list.splice(exIdx + 1, 0, fresh);
   return list;
 }
 

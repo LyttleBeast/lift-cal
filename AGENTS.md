@@ -785,6 +785,16 @@ sessions merges a session's exercises by `exId` first
 (`mergeSessionExercises` in `analytics.js`) — one logical entry per exId per
 session, sets concatenated in session order.
 
+**v75: *Replace exercise* adds no field and no node.** The exercise card's ⋯ in
+a live session (`workout.js` `openExerciseMenu` → `replaceExercise`, pure)
+rewrites the live session only — the device copy, `activeSession` — and the
+record reaches `workouts/` at Finish through `collectFrom` like any session.
+With nothing ticked the card becomes the new `exId`; with anything ticked the
+old card keeps its ticked sets untouched and the new `exId` is a new card
+below it, so the record simply holds two exercises and `history/{exId}` folds
+each under its own id. Not offered in an edit of a past session. A routine is
+never written. `tools-check/replace-exercise.mjs`.
+
 **v53: `feel` → `{ e, s, at }`, how the session felt, by his own rating.** The
 recap's *How did that feel?* writes it (Settings → Coach → *After a workout: how
 it felt* hides the card):
