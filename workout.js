@@ -24,11 +24,10 @@ import { initPicker, allExercises, openPicker, openExerciseManager } from './pic
 import { initRoutines, openRoutines, saveSessionAsRoutine } from './routines.js';
 import { coachCard, liveChip, openLiveSheet, noteLiveTick, nudgeLine, dismissNudge } from './coach-ui.js';
 import { initCoachData, coachLogReady, refreshCoachSessions, noteCoachData, coachFinishRead,
-         coachSettings, markSession, coachInput, learnBy, markAsked, answerQuestion } from './coach-data.js';
+         coachSettings, markSession, coachDebrief, learnBy, markAsked, answerQuestion } from './coach-data.js';
 // v53: the check-in's words and gates — pure, and the engine's, so the recap
 // and Coach say his rating the same way and ask the same mark question.
-// v72: and the recap's plan — coach().debrief(record), the three slots.
-import { coach, feelHarder, canMark, isMuted, MARK_ASK, FEEL_S_WORDS } from './coach.js';
+import { feelHarder, canMark, isMuted, MARK_ASK, FEEL_S_WORDS } from './coach.js';
 import { bump } from './usage.js';
 import { wOut, wIn, fmtSetW, fmtSetLoad, fmtVol, volOut, unitW, limW } from './units.js';
 // A group's colour is hex in exercises.js and analytics.js, which the native
@@ -2412,10 +2411,11 @@ function renderSummary() {
      never re-asks). Nothing is written until he taps a chip. */
   if (!summary.debriefSkipped) {
     if (!summary.plan) {
-      const input = coachInput({});
-      summary.opens = (input && input.opens) || 0;
-      let plan = null;
-      try { plan = coach(input).debrief(record, { prs }); } catch { plan = null; }
+      // coach-data.js's coachDebrief(): coach().debrief() on its snapshot, the
+      // feel card alone when anything throws. The eyebrow turns on the device's
+      // open counter, read off the same snapshot.
+      const plan = coachDebrief(record, { prs });
+      summary.opens = plan && Number.isFinite(plan.opens) ? plan.opens : 0;
       summary.plan = plan || { confirm: null, feel: !isMuted(coachSettings(), 'feel'), question: null };
     }
     const card = debriefCard(summary.plan);

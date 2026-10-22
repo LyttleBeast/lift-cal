@@ -165,7 +165,7 @@ function harness(o = {}) {
     coachFinishRead: (rec, extras) => C.finishRead(S.input || inputOf([]), rec, extras),
     // v72: the recap's plan reads the same snapshot through coach().debrief; the
     // three coach-data writers behind its chips are recorded, never run.
-    coachInput: () => S.input || inputOf([]), coach: C.coach,
+    coachDebrief: (rec, extras) => C.coach(S.input || inputOf([])).debrief(rec, extras),
     learnBy: (k, id, v) => { S.learned.push([k, id, v]); return Promise.resolve(true); },
     markAsked: id => { S.asked.push(id); return Promise.resolve(true); },
     answerQuestion: (id, v) => { S.answers.push([id, v]); return Promise.resolve(true); },

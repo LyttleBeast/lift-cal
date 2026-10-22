@@ -40,7 +40,7 @@ import { allExercises, hiddenIds, libraryReady } from './picker.js';
 import { maintenance, effectiveMaint, trendRate, sortedEntries } from './tdee.js';
 import { goalDirection } from './insights.js';
 import { capabilities } from './access.js';
-import { normSettings, isMuted, patternFoodDays, fuelDays, CATEGORIES, finishRead } from './coach.js';
+import { normSettings, isMuted, patternFoodDays, fuelDays, CATEGORIES, finishRead, coach } from './coach.js';
 // v72: the facts' ladder (one more answer → { v, c, at, n }) and the recap's
 // per-lift stamp, from the pure module that owns the shape.
 import { nextFact, KNOW_KEYS } from './coach-ask.js';
@@ -651,6 +651,18 @@ export function coachFinishRead(record, extras) {
     const line = n ? 'Session done: ' + n + (n === 1 ? ' set.' : ' sets.') : 'Session done.';
     return { headline: 'Good work.', line, why: '', earned: false, evidence: [], short: line,
              id: record && record.id != null ? String(record.id) : '' };
+  }
+}
+
+/* v72: THE RECAP'S PLAN — coach().debrief() on this snapshot and the session
+   just saved, the way coachFinishRead() reads the finish line: nothing new is
+   read, the engine adds the record itself. Anything that throws is the feel
+   card alone, because the recap must never be the screen that breaks. */
+export function coachDebrief(record, extras) {
+  try {
+    return coach(coachInput({})).debrief(record, extras || null);
+  } catch {
+    return { confirm: null, feel: !isMuted(settings, 'feel'), question: null };
   }
 }
 

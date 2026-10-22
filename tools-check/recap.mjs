@@ -136,7 +136,7 @@ const STUBS = {
   write: (p, v) => { if (state.refuse) return Promise.reject(new Error('PERMISSION_DENIED')); state.writes.push([p, v]); return Promise.resolve(); },
   // v72: the recap's plan reads the same snapshot through coach().debrief; the
   // three coach-data writers behind its chips are recorded, never run.
-  coachInput: () => state.input, coach: C.coach,
+  coachDebrief: (rec, extras) => C.coach(state.input).debrief(rec, extras),
   learnBy: (k, id, v) => { state.learned.push([k, id, v]); return Promise.resolve(true); },
   markAsked: id => { state.asked.push(id); return Promise.resolve(true); },
   answerQuestion: (id, v) => { state.answers.push([id, v]); return Promise.resolve(true); },

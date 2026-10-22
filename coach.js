@@ -4275,12 +4275,13 @@ function debriefRead(input, record, extras) {
     const d = factStore({ ...i, sessions });
     const sh = d.all().find(x => x.session === rec);
     const x = extras && typeof extras === 'object' ? extras : {};
-    return debriefPlan(d, rec, s, d.now, d.input.opens, {
+    // The open counter rides along: the recap's eyebrow turns on it.
+    return { ...debriefPlan(d, rec, s, d.now, d.input.opens, {
       prs: Array.isArray(x.prs) ? x.prs : [],
       harder: feelHarder(rec.feel),
       marked: !!(sh && d.markOf(sh)),
       u: uOf(d)
-    });
+    }), opens: Number.isFinite(d.input.opens) ? d.input.opens : 0 };
   } catch {
     return feelOnly;
   }

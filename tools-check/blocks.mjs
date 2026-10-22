@@ -529,9 +529,14 @@ const SET_KEYS = ['w', 'r', 'type', 'done'];
   // session's record (workouts/{mk}/{dd}/{id}/feel), never a container.
   // v68, on purpose: one more write of `history` — upgradeHistory(), the
   // one-time rebuild that puts warm-ups on the index — and no new node.
-  check('guards: workout.js writes the four nodes it always did, and v53’s one child of a record',
+  // v72, on purpose: the recap's write-back (rewriteRecord) writes the one
+  // session node again, workouts/{mk}/{dd}/{record.id} — the same node Finish
+  // wrote, never a container — and retagWarmups writes `history` once more,
+  // the day's row retyped. Still no new node.
+  check('guards: workout.js writes the four nodes it always did, v53’s one child of a record, and v72’s rewrite of the one session node',
         JSON.stringify(paths) === JSON.stringify([
-          "'history'", "'history'", "'history'", '`workouts/${mk}/${dd}/${record.id}/feel`', '`workouts/${mk}/${dd}/${session.id}`', '`workouts/${mk}`'
+          "'history'", "'history'", "'history'", "'history'", '`workouts/${mk}/${dd}/${record.id}/feel`', '`workouts/${mk}/${dd}/${record.id}`',
+          '`workouts/${mk}/${dd}/${session.id}`', '`workouts/${mk}`'
         ]), JSON.stringify(paths));
   check('guards: saveMonth still refuses a month this device never read',
         WSRC.includes('if (!hydrated.has(mk)) {') &&
