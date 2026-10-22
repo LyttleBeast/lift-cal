@@ -482,7 +482,7 @@ section('F. v52 — the recovery line at his usual run, the rest bias, and a car
 
   /* The stopping bias for rest: the week-best log, with the row a day ago
      rather than eight — every group he trains is inside its window, the
-     rest read says rest, and "most in five weeks" leaves the card. */
+     rest read says rest, and "a five-week high" leaves the card. */
   // v53: the curls a day earlier, so no session is today's and the card
   // walks its rotation rather than leading with the finish line.
   const restLog = input({ sessions: sortS(Array.from({ length: 10 }, (_, k) => sess(1 + 7 * k, [[ROW, xN(3, 155, 8)]]))

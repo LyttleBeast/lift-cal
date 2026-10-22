@@ -146,7 +146,7 @@ export function coachCard(opts = {}) {
   // the card — a half-loaded paint says why rather than flash one.
   if (!coachReady() && (view.state === 'card_state_clear' || view.state === 'warm')) {
     view = { ...view, tone: 'neutral',
-             text: 'Your training is in. Food and weight have not landed yet.',
+             text: 'Training is in. Food and weight are loading.',
              reason: 'I’d rather say nothing than read half a number.' };
   }
 

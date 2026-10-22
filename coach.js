@@ -3638,7 +3638,7 @@ export const HYPE = Object.freeze([
     gate: d => { const v = d.f('session.weekBest'); return v.n >= 3 && v.prev.every(p => v.n > p); },
     // Rolling words for a rolling count: never "this week" (the defect v43
     // fixed). The brief's own wording ran to ten words; this is nine.
-    text: d => d.f('session.weekBest').n + ' sessions in seven days, most in five weeks.',
+    text: d => d.f('session.weekBest').n + ' sessions in seven days, a five-week high.',
     key: d => 'week:' + d.f('session.weekBest').n,
     why: d => FACT_BY_ID['session.weekBest'].because(d.f('session.weekBest'), d)
   },
@@ -3738,11 +3738,28 @@ export const HYPE = Object.freeze([
     // whose usual run is five.
     gate: d => { const n = d.f('session.streak'), u = d.f('session.usualRun');
                  return n >= 3 && (u == null || n >= u); },
-    text: d => { const n = d.f('session.streak'); return (WORD_NUM[n] || String(n)) + ' straight days. A rest day is well earned.'; },
+    text: d => { const n = d.f('session.streak'); return (WORD_NUM[n] || String(n)) + ' days on. A rest day is well earned.'; },
     key: d => 'streak:' + d.f('session.streak'),
     why: d => 'a session on each of the last ' + plural(d.f('session.streak'), 'day') + ', today included'
   }
 ]);
+
+/* v77: THE CARD LINE'S CHARACTER BUDGET. The card draws its line in two
+   lines at most, and on a 320-point phone at an accessibility text size
+   (native caps card text at 1.6×, so every accessibility size is one box:
+   258 points wide at 22.4) lines of 45 characters and more ran to three and
+   iOS cut them with "…". Measured in the native card's own arithmetic
+   (coach-view.js cardLayout() + textLines(), Archivo's advances) over every
+   line the words fix, 2,227 renderings: the longest that fitted two lines
+   was 47 characters, the shortest that did not was 45 ("3 sessions in seven
+   days, most in five weeks." — digits are wide, and the break falls late),
+   and nothing of 44 or fewer ran over. A count of characters is not a
+   width, so the budget is the largest count with no overlap: 44. Every pool
+   row, warm line, card state and name-free hype line is held to it by
+   tools-check/card-fit.mjs. It fences the words, not the engine: a lift's
+   name is never cut, and the finish line, whose length is the name's, keeps
+   finishCard() here and native's finishFit(). */
+export const CARD_LINE_CHARS = 44;
 
 /* The rendered line's limits: nine words, one number, no exclamation mark. */
 function fitsCard(t) {
@@ -3943,7 +3960,7 @@ export const BACK_LINES = Object.freeze([
      kept, a clause dropped. */
   { id: 'back_glad',      gate: v => !v.trained, text: () => 'Back, and I’m glad. Where to start?' },
   { id: 'back_over',      gate: v => !v.trained, text: () => 'The break’s over when you say it is.' },
-  { id: 'back_time_off',  gate: () => true, text: () => 'Time off is part of training. The log knows that.' },
+  { id: 'back_time_off',  gate: () => true, text: () => 'Time off is part of training. I know that.' },
   { id: 'back_expired',   gate: () => true, text: () => 'Nothing here expired.' },
   { id: 'back_not_test',  gate: v => !v.trained, text: () => 'First session back is a session, not a test.' },
   { id: 'back_pick',      gate: v => !v.trained, text: () => 'Your groups have had their rest. Pick one.' },
@@ -3951,15 +3968,15 @@ export const BACK_LINES = Object.freeze([
   { id: 'back_see',       gate: v => !v.trained, text: () => 'Good to see you. The log is ready.' },
   { id: 'back_twelve',    gate: v => v.n === 12, text: () => 'Twelve days is a rest, not a reset.' },
   { id: 'back_hard_set',  gate: v => v.trained, text: () => 'Coming back is the hard set. Done.' },
-  { id: 'back_here',      gate: () => true, text: () => 'Whatever the break was for, it’s over, and you’re here.' },
+  { id: 'back_here',      gate: () => true, text: () => 'Whatever the break was for, you’re here now.' },
   { id: 'back_habit',     gate: () => true, text: () => 'The habit’s yours. It waited.' },
-  { id: 'back_page',      gate: () => true, text: () => 'A fresh page, and the old ones are all there.' },
+  { id: 'back_page',      gate: () => true, text: () => 'A fresh page. The old ones are all there.' },
   { id: 'back_good_day',  gate: v => !v.trained, text: () => 'Today’s a good day to lift something.' },
-  { id: 'back_rested',    gate: v => !v.trained, text: () => 'Your groups are fully rested. A good starting point.' },
+  { id: 'back_rested',    gate: v => !v.trained, text: () => 'Your groups are fully rested. A good start.' },
   { id: 'back_pick_lift', gate: v => !v.trained, text: () => 'Pick a lift you like. Start there.' },
   { id: 'back_week_open', gate: () => true, text: () => 'Back, and the week is open.' },
-  { id: 'back_before',    gate: v => v.priorGap, text: () => 'You’ve come back from a gap before. It’s in the log.' },
-  { id: 'back_first',     gate: v => !v.trained, text: () => 'The first session back reads as a first session.' },
+  { id: 'back_before',    gate: v => v.priorGap, text: () => 'You came back from a gap like this before.' },
+  { id: 'back_first',     gate: v => !v.trained, text: () => 'The first one back reads as a first session.' },
   { id: 'back_bar',       gate: () => true, text: () => 'The bar’s where it was.' },
   { id: 'back_patient',   gate: () => true, text: () => 'The plan is patient.' },
   { id: 'back_logged',    gate: v => v.trained && v.n != null, text: v => 'First session back in ' + v.n + ' days: logged.' },
@@ -3972,9 +3989,9 @@ export const BACK_LINES = Object.freeze([
 // The card is its only surface, and the card holds a line to nine words, so
 // every row here fits that; 03's longer rest lines are not here.
 export const REST_LINES = Object.freeze([
-  { id: 'rest_three',    gate: v => v.streak === 3, text: () => 'Three days straight. A rest day is well earned.' },
+  { id: 'rest_three',    gate: v => v.streak === 3, text: () => 'Three in a row. A rest day is well earned.' },
   { id: 'rest_option',   gate: () => true, text: () => 'Rest is always an option.' },
-  { id: 'rest_asking',   gate: v => v.call === 'rest', text: () => 'Nothing in your log asks for a session today.' },
+  { id: 'rest_asking',   gate: v => v.call === 'rest', text: () => 'Nothing in your log asks for training today.' },
   { id: 'rest_your_call', gate: v => v.call === 'rest', text: () => 'Rest day by the log. Your call by you.' },
   { id: 'rest_set',      gate: () => true, text: () => 'Rest is a set you don’t have to log.' },
   { id: 'rest_on_plan',  gate: v => v.call === 'rest', text: () => 'Nothing to catch up on. Rest is on plan.' },
