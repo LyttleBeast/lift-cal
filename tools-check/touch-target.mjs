@@ -403,7 +403,15 @@ const BUTTONS = [
      dropAddRow), the workout screen's control in the editor's set list. A
      .btn, so the minimum holds it; its widths join the snapshot tonight. */
   ['Routines · editor', '+ Drop', ['routines.js', /el\('button', 'btn btn-ghost drop-add', '\+ Drop'\)/],
-   'button.btn.btn-ghost.drop-add < div.drop-add-row < div.rt-sets < div.ex-block < div.rt-edit < div.sheet', null]
+   'button.btn.btn-ghost.drop-add < div.drop-add-row < div.rt-sets < div.ex-block < div.rt-edit < div.sheet', null],
+  /* v75, on purpose: the exercise card's ⋯ menu (workout.js openExerciseMenu)
+     — "Replace exercise" and Cancel, ghost, and "Remove exercise", danger,
+     each a full-width .btn in a plain sheet. Never measured in Chrome at v46;
+     their widths join the snapshot as they are tonight. */
+  ['Train · exercise menu', 'Replace exercise / Cancel', ['workout.js', /el\('button', 'btn btn-ghost btn-block', 'Replace exercise'\)/],
+   'button.btn.btn-ghost.btn-block < div.sheet', null],
+  ['Train · exercise menu', 'Remove exercise', ['workout.js', /el\('button', 'btn btn-danger btn-block', 'Remove exercise'\)/],
+   'button.btn.btn-danger.btn-block < div.sheet', null]
 ];
 
 /* The width snapshot, v46 (12b3a9d), produced by this file's own resolver

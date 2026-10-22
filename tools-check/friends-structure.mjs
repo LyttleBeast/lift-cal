@@ -152,7 +152,7 @@ section('G. the docs and the version');
 {
   const SW = /const CACHE='(rack-v\d+)'/.exec(rd('sw.js'))[1], US = /const VERSION = '(rack-v\d+)'/.exec(rd('usage.js'))[1];
   // v69, on purpose: the build moved on, and the two still agree.
-  check('sw.js and usage.js both say rack-v74', SW === 'rack-v74' && US === 'rack-v74', SW + ' / ' + US);
+  check('sw.js and usage.js both say rack-v75', SW === 'rack-v75' && US === 'rack-v75', SW + ' / ' + US);
   const AG = rd('AGENTS.md');
   check('AGENTS.md documents every social node', ['social/codes/{CODE}', 'social/people/{uid}', 'social/shared/{uid}', 'social/inbox/{to}/{from}'].every(k => AG.includes(k)));
   check('README.md and CLAUDE.md name the four files', ['friends.js', 'friends-data.js', 'friends-core.js', 'friends-summary.js'].every(f => rd('README.md').includes(f) && rd('CLAUDE.md').includes(f)));
