@@ -1,0 +1,15 @@
+{
+  "id": "powerlifter_ramp-3125032963-s47-overhead-press",
+  "archetype": "powerlifter_ramp",
+  "seed": 3125032963,
+  "session": 47,
+  "exId": "overhead-press",
+  "surface": null,
+  "forbid": [
+    "V_UNDER",
+    "N_FALSE_STOP",
+    "N_WARMUP_WORK"
+  ],
+  "note": "ramp-to-top working sets are work: 75x7, 80x8, 85x7 climbing to 90x5 after two untagged bar sets, under a 90 target",
+  "added": "2026-10-22"
+}

@@ -23,9 +23,10 @@ node tools-check/battery/repro.mjs --archetype X --seed N --session K --ex id   
 ```
 
 `run-all.sh` writes `out/battery.txt` and `out/report.json` (ignored by git).
-Every `repro:` line in the report is a `repro.mjs` command. `GATE=all` runs
-the stricter gate (see below). `--repo` on any script defaults to the repo
-the battery sits in.
+Every `repro:` line in the report is a `repro.mjs` command. Since rack-v70 the
+gate is `all` — every wrong fails the run; `GATE=engine` runs rack-v69's
+engine-only gate (see below). `--repo` on any script defaults to the repo the
+battery sits in.
 
 ## Verdicts
 
@@ -37,9 +38,31 @@ the battery sits in.
   day on a marked lift). **Wrong must be 0.**
 
 Each wrong carries a `cause`: `engine` (a shipped rule), `untagged-warmup`
-(a W the lifter never typed — the ramp model, rack-v70, is what fixes
-those), or `needs-answer` (judged against a fact Coach has not asked for yet).
-Every code is documented once in `scoring.mjs`.
+(a W the lifter never typed, on a lifter who does not tag them — the ramp
+model of rack-v70 is what reads those), or `needs-answer` (judged against a
+fact Coach has not asked for yet). Every code is documented once in
+`scoring.mjs`.
+
+### The ramp, scored (rack-v70)
+
+The live next set has a `warmup` kind since v70 — "Warming up. The target when
+you get there: …" — and `scoreNextSet` judges it on one thing: was the set
+just ticked really a warm-up? On a true ramp set it is ok; on a true working
+set it is `N_WARMUP_WORK`, a working set read as a warm-up. `N_WARMUP` (a
+warm-up quoted as the next working set) is unchanged, except that a quoted
+load equal to the day's own target is Coach repeating its plan, not reciting
+the ramp — the same sentence the `target` kind says before anything is ticked.
+The live read's `workDone` already counts the truth's `workIdx` only. A target
+whose rows dropped a W row heavier than a reduced top is walked row by row
+against last time's (`T_GHOST`), a dropped W never a ghost.
+
+**`scoreRamp` — not yet.** When a later ship proposes a ramp (the recap's
+"Were 45, 135 and 225 your warm-ups?", rack-v72, and whatever draws his ramp
+rows), the thing to score is the proposal itself: every load it names must be
+a load the lifter has warmed up with on that lift (the truth's `ramp` rows),
+never a generated one, and a lift the truth says he never warms up on gets no
+proposal. Nothing in v70 proposes, so there is nothing to score yet; the hook
+is `scoring.mjs`, beside `scoreNextSet`.
 
 ## The gate (BUILD-PLAN.md)
 
@@ -48,7 +71,7 @@ Every code is documented once in `scoring.mjs`.
 | `properties.mjs` | all four pass (deterministic, order-blind, unit-mirror, ban) |
 | `regress.mjs` | every case passes by the ship that fixes its code |
 | harness **wrong**, cause `engine` | **0** — from rack-v69 on (`--gate engine`) |
-| harness **wrong**, cause `untagged-warmup` | reported in v69; **0** from v70 on (`--gate all`) |
+| harness **wrong**, cause `untagged-warmup` | reported in v69; **0** from v70 on (`--gate all`, the default since v70). rack-v70 shipped at 35 of 110,901 — all on the live next set's first one or two ticks, where the lifter is working at a load Coach's target or his own log says is his warm-up; see SHIP-V70-SUMMARY.md |
 | harness **wrong**, `needsAnswer` | 0 once the question exists (v74); reported until then |
 | harness **miss**, target surface | ≤ 10% of target decisions, and `T_DEFER` on `intermediate_double` ≤ 3% — from v70 on |
 | harness **miss**, nextSet + live | ≤ 1% |

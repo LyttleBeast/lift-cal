@@ -1,0 +1,15 @@
+{
+  "id": "powerlifter_ramp-3125032963-s91-incline-barbell-bench-press",
+  "archetype": "powerlifter_ramp",
+  "seed": 3125032963,
+  "session": 91,
+  "exId": "incline-barbell-bench-press",
+  "surface": null,
+  "forbid": [
+    "V_UNDER",
+    "N_FALSE_STOP",
+    "N_WARMUP_WORK"
+  ],
+  "note": "ramp-to-top working sets are work: 120x7 (86%) up to 140x4 after an untagged 45, 95, 95 ramp, under a 145 target",
+  "added": "2026-10-22"
+}

@@ -9,9 +9,10 @@
 //                    [--gate engine|all]
 //
 // --repo defaults to the repo this file sits in (tools-check/battery/../..).
-// --gate says which wrongs fail the run: `engine` (the default, rack-v69) exits
-// 1 on any wrong whose cause is `engine`; `all` (rack-v70 on) exits 1 on any
-// wrong whose codes are not all `needsAnswer`. Both counts are printed either way.
+// --gate says which wrongs fail the run: `engine` (rack-v69's gate) exits 1 on
+// any wrong whose cause is `engine`; `all` (run-all.sh's default since rack-v70)
+// exits 1 on any wrong whose codes are not all `needsAnswer`. Both counts are
+// printed either way; this script's own default stays `engine`.
 //
 // For each lifter, for each cut-off (a session index), the log before the
 // cut-off is what Coach sees and the session AT the cut-off is the truth

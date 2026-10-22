@@ -855,6 +855,16 @@ index from the log once per device (online only, `readExact`, never while a
 workout is open, flag `historyWarmups`). The published rules take it as they
 are (`history` carries a section-level `.write`).
 
+**v70: Coach reads a ramp he never tagged.** `coach-ramp.js` (pure) decides,
+from the shape of a lift's sets alone and from the loads he only ever warms
+up with on it, which sets typed `N` were the warm-up — and every Coach reader
+(targets, the next set, the live read, the weekly volume, the record day, the
+builder's nudge) counts working sets through it. **Nothing is stored and
+nothing is retyped**: the record keeps the `N` he logged, `analytics.js`
+(volume, e1RM, records, the index) still reads `isWorking` and says what the
+log says, and `tools-check/warmup-leaks.mjs` still holds that a typed `W`
+counts for nothing anywhere. Retagging the record on his word is rack-v72's.
+
 ## `water/log/{YYYY-MM-DD}` → `{ entryId: { ml, t, src } }`
 
 Ids are `wa` + base36 timestamp + 3 random chars. `ml` is **millilitres,
