@@ -373,8 +373,8 @@ export function volumeRead(input) {
 export function volumeAnswer(read) {
   if (!read) return null;
   if (read.state === 'thin') {
-    return { text: 'Coach reads weekly volume from three weeks of your log or more, and yours has ' + plural(read.days, 'day') + ' so far.',
-             reason: 'It won’t guess at a week from less.', more: [], once: null };
+    return { text: 'I read weekly volume from three weeks of your log or more, and yours has ' + plural(read.days, 'day') + ' so far.',
+             reason: 'I won’t guess at a week from less.', more: [], once: null };
   }
   const aimWords = AIM_WORDS[read.aim] != null ? AIM_WORDS[read.aim] : '';
   // v56: a group with no main lift on Get stronger or Powerlifting reads the
@@ -419,7 +419,7 @@ export function volumeAnswer(read) {
     more.push({ text: n.zero8 ? Label(n.group) + ': no hard sets in the last 8 weeks.'
                               : Label(n.group) + ': ' + setsOf(n.sets4) + ' in the last 4 weeks, against a middle of ' + half(n.median4) +
                                 ' across your other groups.',
-                reason: 'Coach mentions this once in four weeks.' });
+                reason: 'I mention this once in four weeks.' });
   }
   return {
     text: lines[0],
@@ -541,8 +541,8 @@ const leftSaid = r => (r.left && r.left.length
 export function balanceAnswer(read) {
   if (!read) return null;
   if (read.state === 'thin') {
-    return { text: 'Coach reads balance from three weeks of your log or more, and yours has ' + plural(read.days, 'day') + ' so far.',
-             reason: 'It won’t guess at a split from less.', more: [] };
+    return { text: 'I read balance from three weeks of your log or more, and yours has ' + plural(read.days, 'day') + ' so far.',
+             reason: 'I won’t guess at a split from less.', more: [] };
   }
   const flagged = read.ratios.filter(r => r.flagged);
   const lines = flagged.map(r => 'Over 8 weeks: ' + SPLIT_WORDS[r.id](r.a, r.b) + SPLIT_TAIL[r.id] + leftSaid(r));
@@ -552,18 +552,18 @@ export function balanceAnswer(read) {
     .map(r => ({ text: 'Over 8 weeks: ' + COUNT_WORDS[r.id](r.a, r.b) + '.' + leftSaid(r), reason: '' }));
   const notes = [];
   if (read.custom > 0) {
-    notes.push({ text: plural(half(read.custom), 'set') + ' on your custom exercises aren’t in this split: Coach doesn’t know their movement.',
+    notes.push({ text: plural(half(read.custom), 'set') + ' on your custom exercises aren’t in this split: I don’t know their movement.',
                  reason: '' });
   }
-  read.skipped.forEach(g => notes.push({ text: 'Your ' + label(g) + ' work is more than a quarter custom exercises, so Coach leaves its split out.',
+  read.skipped.forEach(g => notes.push({ text: 'Your ' + label(g) + ' work is more than a quarter custom exercises, so I leave its split out.',
                                          reason: '' }));
   // v56: where to tell Coach a custom exercise's movement — last, and once in
   // four weeks; the sheet stamps `bal_custom` as it draws it. v57: by the path,
   // in the app's own words — the Train tab, its Exercises button
   // (workout.js), the exercise's row, and its Movement row (picker.js).
   if (read.hint) {
-    notes.push({ text: 'You can set the movement of a custom exercise in Train → Exercises → tap it → Movement, and Coach will count it.',
-                 reason: 'Coach mentions this once in four weeks.' });
+    notes.push({ text: 'You can set the movement of a custom exercise in Train → Exercises → tap it → Movement, and I’ll count it.',
+                 reason: 'I mention this once in four weeks.' });
   }
   const once = read.hint ? 'bal_custom' : null;
   const reason = 'Hard sets from the last 8 weeks, sorted by movement. A split is worth saying when it’s lopsided; there is no exact ratio to aim for.';

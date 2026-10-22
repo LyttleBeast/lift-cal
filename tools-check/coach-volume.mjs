@@ -395,15 +395,15 @@ const chestWeeks = (now, was, o = {}) => weekly(9, k => [nx(o.id || 'pec-deck', 
   const L6 = bal(weekly(9, () => [push(2), pull(2), nx('lat-pulldown', 1), nx('custom-my-press-a1b2c', 1)]));
   const L6a = V.balanceAnswer(L6);
   check('L6: customs are left out of every split, and the answer says so: "8 sets on your custom exercises aren’t in this split…"',
-        L6.custom === 8 && L6a.more.some(m => m.text === '8 sets on your custom exercises aren’t in this split: Coach doesn’t know their movement.'),
+        L6.custom === 8 && L6a.more.some(m => m.text === '8 sets on your custom exercises aren’t in this split: I don’t know their movement.'),
         J(L6a.more.map(m => m.text)));
   hear(L6a);
   const L7 = bal(weekly(9, () => [push(3), pull(2), nx('lat-pulldown', 1), nx('custom-my-row-d3e4f', 2)]));
   score('L7', 'customs over a quarter of a group (back: 16 of 40): its splits — push/pull and the pull split — are skipped',
         { skipped: L7.ratios.filter(r => r.skipped).map(r => r.id).sort(), groups: L7.skipped }, { skipped: ['pull', 'pushPull'], groups: ['back'] });
   const L7a = V.balanceAnswer(L7);
-  check('and said: "Your back work is more than a quarter custom exercises, so Coach leaves its split out."',
-        L7a.more.some(m => m.text === 'Your back work is more than a quarter custom exercises, so Coach leaves its split out.'), J(L7a.more.map(m => m.text)));
+  check('and said: "Your back work is more than a quarter custom exercises, so I leave its split out."',
+        L7a.more.some(m => m.text === 'Your back work is more than a quarter custom exercises, so I leave its split out.'), J(L7a.more.map(m => m.text)));
   hear(L7a);
   const L8 = bal(weekly(9, () => [push(3), pull(1)]), { hidden: ['barbell-row', 'overhead-press'] });
   score('L8', 'hidden exercises still count — hiding takes one out of the picker, not out of the log', L8.ratios.find(r => r.id === 'pushPull'),
@@ -426,10 +426,10 @@ const chestWeeks = (now, was, o = {}) => weekly(9, k => [nx(o.id || 'pec-deck', 
         { text: L11a.text, lines: L11a.more.map(m => m.text) },
         { text: 'Nothing lopsided in the last 8 weeks.',
           lines: ['Over 8 weeks: 24 pushing sets, 24 pulling sets. Your arms work isn’t in this: more than a quarter of it is custom exercises.',
-                  '8 sets on your custom exercises aren’t in this split: Coach doesn’t know their movement.',
+                  '8 sets on your custom exercises aren’t in this split: I don’t know their movement.',
                   // Phase B's line, once in four weeks: tools-check/custom-movement.mjs holds its rules.
                   // v57 (SHIP-V57-PROMPT §C): it names the path now; v56 said "in its settings".
-                  'You can set the movement of a custom exercise in Train → Exercises → tap it → Movement, and Coach will count it.'] });
+                  'You can set the movement of a custom exercise in Train → Exercises → tap it → Movement, and I’ll count it.'] });
   hear(L11a);
   const L13 = bal(weekly(9, () => [nx('barbell-bench-press', 3), nx('triceps-pushdown-rope', 2), nx('custom-my-curl-g5h6i', 1), pull(2)]));
   score('L13', 'the two to one is on what is counted: 24 pushing against 16 pulling is not lopsided — with the arms’ 16 pushdowns it would have been 40',
@@ -442,7 +442,7 @@ const chestWeeks = (now, was, o = {}) => weekly(9, k => [nx(o.id || 'pec-deck', 
   const L14a = V.balanceAnswer(L14);
   check('and both are said: chest out of push : pull, and its own split left out',
         L14a.more.some(m => m.text === 'Over 8 weeks: 24 pushing sets, 24 pulling sets. Your chest work isn’t in this: more than a quarter of it is custom exercises.') &&
-        L14a.more.some(m => m.text === 'Your chest work is more than a quarter custom exercises, so Coach leaves its split out.'), J(L14a.more.map(m => m.text)));
+        L14a.more.some(m => m.text === 'Your chest work is more than a quarter custom exercises, so I leave its split out.'), J(L14a.more.map(m => m.text)));
   hear(L14a);
   LIB['custom-my-raise-j7k8l'] = { name: 'My Raise', group: 'shoulders', equipment: 'cable' };
   const L15 = bal(weekly(9, () => [nx('barbell-bench-press', 1), nx('custom-my-press-a1b2c', 1), push(1), nx('custom-my-raise-j7k8l', 1),
@@ -582,6 +582,7 @@ const chestWeeks = (now, was, o = {}) => weekly(9, k => [nx(o.id || 'pec-deck', 
   const lines = a => [a.text].concat(a.more.map(m => m.text));
   check('M0: rack-v55 reads the reconstruction as he saw it: ' + J(lines(oldBal)),
         J(lines(oldBal)) === J(['Nothing lopsided in the last 8 weeks.', 'Over 8 weeks: 37 squat and lunge and 36 hinge and bridge sets.',
+                                // rack-v55's own words, read out of git: OV predates the first person (v71).
                                 '33 sets on your custom exercises aren’t in this split: Coach doesn’t know their movement.',
                                 'Your arms work is more than a quarter custom exercises, so Coach leaves its split out.']));
   const mBal = bal(micah, mo);
@@ -592,7 +593,7 @@ const chestWeeks = (now, was, o = {}) => weekly(9, k => [nx(o.id || 'pec-deck', 
         { lines: ['Nothing lopsided in the last 8 weeks.',
                   'Over 8 weeks: 96 pushing sets, 160 pulling sets. Your arms work isn’t in this: more than a quarter of it is custom exercises.',
                   'Over 8 weeks: 37 squat and lunge sets, 36 hinge and bridge sets.',
-                  '33 sets on your custom exercises aren’t in this split: Coach doesn’t know their movement.'] });
+                  '33 sets on your custom exercises aren’t in this split: I don’t know their movement.'] });
   hear(newBal);
   const oldVol = OV.volumeAnswer(OV.volumeRead(OC.volumeInput(mIn))), newVol = V.volumeAnswer(V.volumeRead(C.volumeInput(mIn)));
   const lineOf = (a, g) => lines(a).find(t => t.startsWith(g + ':'));
@@ -612,8 +613,8 @@ const chestWeeks = (now, was, o = {}) => weekly(9, k => [nx(o.id || 'pec-deck', 
   // --- too little log ---
   const t1 = vol(weekly(3, () => [nx('pec-deck', 10)]));
   score('T1', 'under three weeks of log: 16 days — it says so, and guesses nothing', t1, { state: 'thin', days: 16 });
-  check('said: "Coach reads weekly volume from three weeks of your log or more, and yours has 16 days so far."',
-        V.volumeAnswer(t1).text === 'Coach reads weekly volume from three weeks of your log or more, and yours has 16 days so far.');
+  check('said: "I read weekly volume from three weeks of your log or more, and yours has 16 days so far."',
+        V.volumeAnswer(t1).text === 'I read weekly volume from three weeks of your log or more, and yours has 16 days so far.');
   const t2 = bal(weekly(3, () => [nx('pec-deck', 10)]));
   check('T2: and balance the same: "…and yours has 16 days so far."', t2.state === 'thin' && /yours has 16 days so far\.$/.test(V.balanceAnswer(t2).text));
   hear(V.volumeAnswer(t1)); hear(V.balanceAnswer(t2));
