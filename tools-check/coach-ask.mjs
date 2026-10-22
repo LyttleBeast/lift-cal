@@ -75,10 +75,10 @@ section('A. the catalog: every question changes a registered rule, and coach.js 
   const bad = Q.ASK_QUESTIONS.filter(q => !Array.isArray(q.changes) || !q.changes.length || !q.changes.every(x => ids.has(x))).map(q => q.id);
   check('every row names at least one registered intent in `changes`: ' + Q.ASK_QUESTIONS.map(q => q.id + ' → ' + q.changes.join('/')).join(', '),
         !bad.length, J(bad));
-  check('ten rows: the shipped seven, the recap’s two, and (v73) the step on a stack in the live lane', Q.ASK_QUESTIONS.length === 10 &&
+  check('twelve rows: the shipped seven, the recap’s two, (v73) the step on a stack in the live lane, and (v74) the two that ride with a live answer that has no number', Q.ASK_QUESTIONS.length === 12 &&
         Q.ASK_QUESTIONS.filter(q => q.writes === 'answers').length === 7 &&
         Q.ASK_QUESTIONS.filter(q => q.moments[0] === 'debrief').map(q => q.id).join(',') === 'q_warm_confirm,q_pr_how' &&
-        Q.ASK_QUESTIONS.filter(q => q.moments[0] === 'live').map(q => q.id).join(',') === 'q_equipment_step');
+        Q.ASK_QUESTIONS.filter(q => q.moments[0] === 'live').map(q => q.id).join(',') === 'q_equipment_step,q_want_next,q_rough_weight');
   check('coach.js QUESTIONS is the `answers` subset, the same objects, in the same order',
         C.QUESTIONS.length === 7 && C.QUESTIONS.every((q, i) => q === Q.ASK_QUESTIONS.filter(x => x.writes === 'answers')[i]));
   check('every row has moments, options (two or more), a gate, a budget letter and a cooldown',

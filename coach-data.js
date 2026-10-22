@@ -545,7 +545,9 @@ async function patchNow(change0, more) {
      week the budget counts, so a stamp outlives its meaning by one cooldown
      and never piles up. The engine reads them by its own clock. */
   // v73: and the step question's `asked.q_equipment_step:<exId>`, the same way.
-  Object.keys(next.asked).forEach(k => { if ((k.startsWith('warm:') || k.startsWith('q_pr_how:') || k.startsWith('q_equipment_step:')) && staleStamp(next.asked[k])) delete next.asked[k]; });
+  // v74: and `asked.q_want_next:<exId>` and `asked.q_rough_weight:<exId>`.
+  Object.keys(next.asked).forEach(k => { if ((k.startsWith('warm:') || k.startsWith('q_pr_how:') || k.startsWith('q_equipment_step:') ||
+    k.startsWith('q_want_next:') || k.startsWith('q_rough_weight:')) && staleStamp(next.asked[k])) delete next.asked[k]; });
 
   try {
     await write('settings/coach', next);

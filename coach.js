@@ -51,10 +51,10 @@ import { GROUPS, GROUP_ORDER } from './exercises.js';
 import { e1rm, isWorking, mergeSessionExercises, exerciseIndex, detectPRs, sessionMilestones, normFeel } from './analytics.js';
 import { labelW, labelRate, unitW, fmtW, fmtSetLoad, labelVol } from './units.js';
 import { propose, liveRefusal, buildMenu, swapTo, BUILD_ASK } from './coach-build.js';
-import { liveRead, setRead, anotherSetRead, LIVE_NONE, REP_DROP, EFFORT, rateAsk, rateAnswer } from './coach-live.js';
+import { liveRead, setRead, anotherSetRead, fallbackRead, LIVE_NONE, REP_DROP, EFFORT, rateAsk, rateAnswer } from './coach-live.js';
 import { AIMS, EXPERIENCE, energyContext, normGoalLift, goalChecks, AIM_DIR } from './coach-goal.js';
 import { readLift, lighterWeek, recordDay, liftsMoving, prepare, targetsReplay, compareSession, nextTargets,
-         liftTrend, goalLiftRead, bigThree, focusRead, groupDaysAt, nextSetFor, stepFor } from './coach-overlap.js';
+         liftTrend, goalLiftRead, bigThree, focusRead, groupDaysAt, nextSetFor, stepFor, targetOfLift, targetSaid } from './coach-overlap.js';
 import { restRead, usualRun, replay, readinessRows, readinessHas, readinessAnswer, readinessHeavy, sessionRows,
          mergeRows, groupLine, restAnswer, lighterAnswer, groupAnswer, REST_REASON } from './coach-ready.js';
 import { fueledRead, fuelAnswer, fedUnloggedAnswer, fedNoneAnswer, fuelRow, sessionFoodRows, fuelDates, logStyle } from './coach-fuel.js';
@@ -67,7 +67,11 @@ import { workSetsOf, rampLoads, rampProfile } from './coach-ramp.js';
 // picker and the recap's plan. It imports units.js and coach-ramp.js, never
 // this file. v73: knowOf (the told step), stepAskLift (the step question's
 // gate) and stepStamp (its per-lift stamp).
-import { ASK_QUESTIONS, normKnow, pickQuestion, debriefPlan, warmAnswer, aimLabel, ID_RE, knowOf, stepAskLift, stepStamp } from './coach-ask.js';
+// v74: wantOf / roughOf (what he is going for on a lift, a rough weight he
+// told me), askQuestion (the two in-the-gym rows steerOf() puts) and their
+// per-lift stamps.
+import { ASK_QUESTIONS, normKnow, pickQuestion, debriefPlan, warmAnswer, aimLabel, ID_RE, knowOf, stepAskLift, stepStamp,
+         wantOf, roughOf, askQuestion, wantStamp, roughStamp } from './coach-ask.js';
 
 const DAY = 864e5;
 
@@ -689,7 +693,11 @@ function derive(input) {
     });
     const days = groupDays();
     return [...by.values()].sort((a, b) => (a.exId < b.exId ? -1 : a.exId > b.exId ? 1 : 0))
-      .map(l => ({ ...l, groupDaysSince: l.group && days[l.group] != null ? days[l.group] : null }));
+      .map(l => ({ ...l, groupDaysSince: l.group && days[l.group] != null ? days[l.group] : null,
+                   // v74: what he said he is going for on it, while his next
+                   // logged session of it has not consumed the answer
+                   // (coach-ask.js wantOf) — only when he said.
+                   ...(wantOf(input.settings, l.exId, now, l.lastAt) ? { wantNext: wantOf(input.settings, l.exId, now, l.lastAt) } : null) }));
   });
 
   /* THE SHIPPED OVERDUE SHAPE (v42's session.shapeOverdue, byte for byte):
@@ -2675,7 +2683,7 @@ const INTENT_BY_ID = Object.freeze(Object.fromEntries(INTENTS.map(i => [i.id, i]
    so the sheet says what the pure layer says rather than a second copy. v54:
    and the effort chips' — the three ratings, the line above them and what
    Coach says after a tap — for the same reason. */
-export { LIVE_NONE, EFFORT, rateAsk, rateAnswer };
+export { LIVE_NONE, EFFORT, rateAsk, rateAnswer, targetSaid };
 
 export const PRO_ADDS = Object.freeze(
   CATEGORIES
@@ -3177,7 +3185,9 @@ export const RESPONSES = Object.freeze({
       const seen = new Set();
       return out.concat((p ? p.exercises : []).filter(e => e.target && !seen.has(e.exId) && seen.add(e.exId))
         .slice(0, 6)
-        .map(e => ({ text: e.name + ' — ' + e.target.line, reason: e.target.why[0] || '' })));
+        // v74: a defer says last time beside its line (coach-prog.js targetSaid),
+        // so "No target this time." never stands alone.
+        .map(e => ({ text: e.name + ' — ' + targetSaid(e.target), reason: e.target.why[0] || '' })));
     }
   },
   // Never rendered through the router — see live_read.
@@ -4968,8 +4978,49 @@ function liveInput(d, session, current) {
     lastRamp: exId => {
       const l = d.overlap().lifts.find(x => x.exId === exId);
       return l ? rampProfile(l.exposures, { warm: l.warm || null }).lastRamp : [];
-    }
+    },
+    /* v74: WHEN I HAVE NO NUMBER (coach-live.js fallbackRead). The lift's
+       target as the builder reads it (coach-overlap.js targetOfLift) — for
+       whether one exists and, when not, why — never a number of its own.
+       A lift the log has never seen is handed its library row and any rough
+       weight he told me, for the first-time target. Off with the targets
+       switch, as nextSet is. */
+    targetOf: d.f('log.confidence') === 'readable' && !isMuted(d.input.settings, 'targets')
+      ? exId => targetOfLift(d.overlap(), exId, d.now, unseenLift(d, exId)) : null,
+    /* The newest logged session of a lift OLDER than the window above, shaped
+       like the window's rows, or null — so "last time" is his last time even
+       when it was four months ago. */
+    older: exId => {
+      const rows = d.all().filter(s => s.daysAgo >= WINDOW_DAYS && s.session &&
+        mergeSessionExercises(s.session.exercises).some(ex => ex && ex.exId === exId && (ex.sets || []).some(isWorking)));
+      return rows.length ? rows[rows.length - 1] : null;
+    },
+    // What he is going for on a lift, unconsumed (coach-ask.js wantOf), and
+    // a rough weight he told me on one the log has never seen (roughOf).
+    want: exId => {
+      const l = d.overlap().lifts.find(x => x.exId === exId);
+      const lastAt = l && l.exposures.length ? Math.max(...l.exposures.map(x => x.startedAt).filter(Number.isFinite)) : null;
+      return wantOf(d.input.settings || {}, String(exId), d.now, Number.isFinite(lastAt) ? lastAt : null);
+    },
+    rough: exId => roughOf(d.input.settings || {}, String(exId), d.now, liftSeen(d, exId) ? 1 : 0),
+    // The questions switch: off, no steer is put (the quote stands alone).
+    asks: !isMuted(d.input.settings, 'questions')
   };
+}
+
+/* v74: whether the log has ever seen a lift (a working set of it, any
+   session), and the library row of one it has not, for its first target. */
+function liftSeen(d, exId) {
+  return d.all().some(s => s.session && mergeSessionExercises(s.session.exercises)
+    .some(ex => ex && ex.exId === exId && (ex.sets || []).some(isWorking)));
+}
+function unseenLift(d, exId) {
+  if (liftSeen(d, exId)) return null;
+  const x = d.lib && d.lib[exId];
+  if (!x) return null;
+  const r = roughOf(d.input.settings || {}, String(exId), d.now, 0);
+  return { exId, name: String(x.name || exId), group: x.group || null, equipment: x.equipment || null,
+           ...(r != null ? { roughTold: r } : null) };
 }
 
 /* The lift's target and step are the builder's, from the same performance
@@ -5247,6 +5298,26 @@ const questionView = (q, d, u, ctx) => {
 // A picked question with its context, as questionUnder()/liveQuestionOf() hand it.
 const pickedView = (p, d, u) => (p ? questionView(p.q, d, u, p.ctx) : null);
 
+/* v74: THE STEER beside a live answer that has no number (coach-live.js
+   `steer`: 'want' | 'rough'), as the sheet's one question row — the catalog's
+   own row (coach-ask.js q_want_next / q_rough_weight) for the lift the
+   answer is about, with what its writer needs. Not picked: an answer with no
+   number always carries its question, until he answers for that lift; the
+   questions switch is read in liveInput (`asks`), so a muted account gets
+   the quote alone. */
+function steered(a, d, u) {
+  if (!a || !a.steer) return a;
+  const exId = a.exId || null;
+  const id = a.steer === 'want' ? 'q_want_next' : a.steer === 'rough' ? 'q_rough_weight' : null;
+  const q = id ? askQuestion(id) : null;
+  const ex = exId ? { exId: String(exId), name: String(a.name || exId) } : null;
+  const ctx = ex ? { id: ex.exId, ...(a.steer === 'want' ? { want: ex } : { rough: ex }) } : null;
+  let ok = false;
+  try { ok = !!(q && ctx && q.when(d, ctx)); } catch { ok = false; }
+  const view = ok ? questionView(q, d, u, ctx) : null;
+  return { ...a, question: view ? { ...view, ...(q.input ? { input: q.input } : null) } : null };
+}
+
 /* ---------- the public face ----------
 
    One evaluation, three views. The You card claims the top finding first and
@@ -5460,7 +5531,17 @@ export function coach(input) {
     another: (session, opts) => (d.f('log.confidence') !== 'readable' || !pro ||
       isMuted(d.input.settings, 'live') ||
       !session || typeof session !== 'object' || session._edit
-      ? null : anotherSetRead(liveInput(d, session, opts && opts.current))),
+      ? null : steered(anotherSetRead(liveInput(d, session, opts && opts.current)), d, u)),
+    /* v74: WHEN I HAVE NO NUMBER (coach-live.js fallbackRead) — what the
+       sheet says where `another`, the habit read and the next set are all
+       silent: his last session of the lift quoted, and one question so he can
+       steer. On the `live` gate, except that an EMPTY log is read too — a
+       first session is exactly when "first time on this lift" is the answer;
+       an unreadable one still silences it. Never a number of its own. */
+    fallback: (session, opts) => (d.f('log.confidence') === 'unknown' || !pro ||
+      isMuted(d.input.settings, 'live') ||
+      !session || typeof session !== 'object' || session._edit
+      ? null : steered(fallbackRead(liveInput(d, session, opts && opts.current)), d, u)),
     /* v73: the one question the live sheet may put — the 'live' lane
        (coach-ask.js pickQuestion), about the lift in hand: today, what one
        step up is on a machine. The same gate again, and the questions switch. */
@@ -5655,6 +5736,10 @@ export function normSettings(v) {
     // v73: and the step question's per-lift stamps, `q_equipment_step:<exId>`
     // (coach-ask.js stepStamp), kept and pruned exactly like `warm:<exId>`.
     if (k.startsWith('q_equipment_step:') && ID_RE.test(k.slice(17)) && Number.isFinite(rawAsk[k])) asked[k] = rawAsk[k];
+    // v74: and the two in-the-gym questions' per-lift stamps (coach-ask.js
+    // wantStamp, roughStamp), the same way.
+    if (k.startsWith('q_want_next:') && ID_RE.test(k.slice(12)) && Number.isFinite(rawAsk[k])) asked[k] = rawAsk[k];
+    if (k.startsWith('q_rough_weight:') && ID_RE.test(k.slice(15)) && Number.isFinite(rawAsk[k])) asked[k] = rawAsk[k];
   });
   /* No `lastGreet`. It used to live here and it was the wrong node for it: the
      write fires as the app opens and the app is routinely closed a second or

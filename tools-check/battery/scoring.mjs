@@ -52,6 +52,9 @@ export function textOffences(texts, u) {
 
 /* Every code, documented once. `v` is the verdict it carries. */
 export const CODES = Object.freeze({
+  // ---------- v74: the fallback's quote chips (coach-live.js fallbackRead) ----------
+  F_QUOTE:      { v: 'wrong', s: 'a numbered chip on the no-number answer that is not a set of the lift’s last logged session — a number I made up' },
+  F_AFTER_STOP: { v: 'wrong', s: 'a numbered chip on the no-number answer after a set typed F, rated too hard, a drop set or a step down today' },
   // ---------- targets (coach-prog.js targetFor, before a session) ----------
   T_JUMP:      { v: 'wrong', s: 'target more than two of the lift’s true steps over the last top load (one step on anything but a lower-body barbell lift)' },
   T_GRID:      { v: 'wrong', s: 'target weight not on the lifter’s own plate / stack grid — a weight he cannot load' },
@@ -301,6 +304,59 @@ export function scoreChips(a, st) {
     });
     if (c.id === 'heavier' && st.steppedDown && !codes.includes('N_STOPPED')) { codes.push('N_STOPPED'); notes.push('heavier after a step down today'); }
   });
+  return { codes, notes };
+}
+
+/* ================================================================
+   v74 — THE DEAD END, AND WHAT STANDS IN FOR IT
+   ================================================================
+   Micah, 22 Oct 2026: "Nothing I can add from your log right now." with four
+   warm-ups ticked and last time's 225 × 4 in the log. A dead end is an ask
+   the sheet answers with nothing he can act on: no line at all (the sheet's
+   last resort, LIVE_NONE), one of the shipped dead lines, or a yes with no
+   number, no quote of his log and no question. Counted as a RATE, not a
+   verdict (it is never harm); the gate holds the live ask's at zero.
+
+   sheet   { an, live, next, fb } — what coach-ui.js openLiveSheet reads: the
+           another read, the habit read (null when another answers its kind),
+           the next set (only when another is null), the fallback (v74; only
+           when the three are silent) */
+export const DEAD_LINES = Object.freeze([/Nothing I can add from your log/, /I’ll name a weight once you’re at your working weight/]);
+export function deadEndOf(sh) {
+  const { an, live, next, fb } = sh || {};
+  const shown = [an, live, next].filter(Boolean);
+  if (!shown.length && fb) shown.push(fb);
+  if (!shown.length) return 'none';
+  const text = shown.map(x => String(x.text || '')).join(' ');
+  if (DEAD_LINES.some(re => re.test(text)) && !/Last time you worked at/.test(text)) return 'line';
+  if (an && !live && (an.answer === 'yes' || an.answer === 'probably') && !(an.chips || []).some(c => c.tw != null) &&
+      !an.question && !/Last time/.test(an.text)) return 'empty';
+  return null;
+}
+/* A target's dead end: no number, and a line that says nothing he can use —
+   a defer drawn without last time beside it. `said` is the line as the sheet
+   draws it (coach-prog.js targetSaid, v74; the bare line before). */
+export function deadTarget(t, said) {
+  if (!t || t.loadLb != null || t.mode !== 'defer') return false;
+  return !/Last time/.test(String(said || ''));
+}
+/* The fallback's chips (v74) after his answer — "Match last time" / "Ease
+   off" — are QUOTES OF LAST TIME: each must be a set of the lift's last
+   logged session, his own w and r (F_QUOTE), and none may stand after a set
+   typed F, rated too hard, a drop set or a step down today (F_AFTER_STOP). */
+export function scoreFallback(fb, st) {
+  const codes = [], notes = [];
+  if (!fb) return { codes, notes };
+  const off = textOffences([fb.text, fb.short].concat(fb.why || [], (fb.chips || []).map(c => c.label)), st.u);
+  if (off.length) { codes.push('L_TEXT'); notes.push(off.join('; ')); }
+  const numbered = (fb.chips || []).filter(c => c.tw != null);
+  const last = Array.isArray(st.lastAll) ? st.lastAll : [];
+  numbered.forEach(c => {
+    if (!last.some(s => String(s.w) === String(c.tw) && String(parseInt(s.r, 10)) === String(c.tr))) {
+      if (!codes.includes('F_QUOTE')) { codes.push('F_QUOTE'); notes.push(c.label + ' is not a set of last time'); }
+    }
+  });
+  if (numbered.length && st.stopToday && !codes.includes('F_AFTER_STOP')) { codes.push('F_AFTER_STOP'); notes.push('a numbered chip after a stop today'); }
   return { codes, notes };
 }
 

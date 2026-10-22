@@ -578,8 +578,13 @@ function liftOf(ex, dials) {
   // v73: and what he said one step up is here, stored pounds (coach.js lifts()
   // from knowBy.step), or null. stepOf() reads it only where the log has no step.
   const stepTold = Number.isFinite(ex.stepTold) && ex.stepTold > 0 ? ex.stepTold : null;
+  // v74: what he said he is going for on it ('push' | 'same' | 'ease', coach.js
+  // lifts() from knowBy.wantNext, unconsumed), and a rough working weight he
+  // told me on a lift the log has never seen (stored pounds, knowBy.rough).
+  const wantNext = ['push', 'same', 'ease'].includes(ex.wantNext) ? ex.wantNext : null;
+  const roughTold = Number.isFinite(ex.roughTold) && ex.roughTold > 0 ? ex.roughTold : null;
   return { exId, tag, assisted, dir: assisted ? -1 : 1, lowerBody, equipment: ex.equipment || null,
-           band: band.slice(), group: ex.group || null, warm, stepTold };
+           band: band.slice(), group: ex.group || null, warm, stepTold, wantNext, roughTold };
 }
 
 /* Everything this file knows about one lift before it decides anything. What
@@ -685,6 +690,19 @@ function decide(ex, c) {
   // 2. Never logged.
   if (!X.length) {
     const [lo, hi] = lift.band;
+    // v74: a rough working weight he told me is said back as his own number —
+    // the line names it, nothing is worked out from it, and no box is filled
+    // (loadLb stays null: a weight I have never seen him lift is not a target).
+    if (lift.roughTold != null) {
+      return out({
+        mode: 'first', code: 'told', loadLb: null, sets: [],
+        line: 'No target yet: you told me you work at about ' + shown(String(lift.roughTold)) + ' here.',
+        why: ['Start around there, at a weight you could do about ' + (hi + 2) + ' times, and stop at ' + hi +
+              '. I’ll set targets from what you log.'],
+        stage: 'none', range: { lo, hi, fixed: false, source: 'default' }, step: null,
+        status: 'holding', slope: null, from: null
+      });
+    }
     return out({
       mode: 'first', code: null, loadLb: null, sets: [],
       line: 'No target yet: first time on this lift.',
@@ -744,9 +762,12 @@ function decide(ex, c) {
     }).join(', then ');
   };
   const lastTime = 'Last time: ' + quote(last.work) + '.';
+  // v74: a defer carries last time's quote on its own (`last`) as well as in
+  // its why, so every view that draws the line draws what I do know beside
+  // it (targetSaid, below) — "No target this time." alone is a dead end.
   const defer = (code, line, why) => out({
     mode: 'defer', code, loadLb: null, sets: [], line, why: why.concat(lastTime),
-    stage: 'none', range: null, step: null, ...common
+    stage: 'none', range: null, step: null, last: lastTime, ...common
   });
 
   /* 3. BODYWEIGHT — every working set at load 0 (or an assisted lift done
@@ -1009,8 +1030,22 @@ function decide(ex, c) {
     : micro ? ' That is ' + band + ', a common starting range, plus two before a jump this size.'
     : ' ' + band + ' is a common starting range.';
 
+  /* v74: EASE OFF — he said so for this lift (q_want_next, unconsumed): a
+     session that earned the step holds at last time's weight instead. */
+  if (hitTop && lift.wantNext === 'ease') {
+    const trs = last.R;
+    return out({ mode: 'hold', code: 'ease', loadLb: last.grid ? loadLbOf(lastW) : null,
+      sets: setsFor(null, trs),
+      line: last.grid ? loadLine(lastW, trs, ' again') : noLoadLine('same weight as last time', trs),
+      why: finish(['You said ease off on this one, so the same weight as last time.'].concat(last.grid ? [] : [offGrid]), last.grid),
+      stage, range: rangeOut, step: stepOut, ...common });
+  }
   if (hitTop) {
-    const need = triples ? 2 : dials.confirm;
+    /* v74: PUSH IT (q_want_next) — one session at the top is enough instead
+       of two, never on a cut, a hard cut or heavy triples, and never more
+       than one step (below). */
+    const pushed = lift.wantNext === 'push' && !triples && c.aim !== 'cut' && c.energy !== 'deep' && dials.confirm > 1;
+    const need = triples ? 2 : pushed ? 1 : dials.confirm;
     // v54: the session before counts by the same two rules — at the top and
     // not rated too hard there, or rated way too easy at its target.
     const prevAt = !!prev && Math.abs(prev.T - T) < GRID_TOL;
@@ -1047,13 +1082,15 @@ function decide(ex, c) {
     let steps = 1;
     // A rating earns one step and never two (v54) — whether it made this
     // session the top or gave the confirm dial its first look.
-    if (!easy && !(need !== 1 && prevEasy) && dials.maxSteps >= 2 && lift.lowerBody && lift.equipment === 'barbell' && !anyF &&
+    if (!pushed && !easy && !(need !== 1 && prevEasy) && dials.maxSteps >= 2 && lift.lowerBody && lift.equipment === 'barbell' && !anyF &&
         last.R.every(r => r >= hiEff + TWO_STEP_REPS)) steps = 2;
     const trs = last.top.map(() => lo);
-    const head = easy ? reached + '.'
+    const head0 = easy ? reached + '.'
       : steps === 2
       ? (last.k === 1 ? 'Your top set went' : 'Every set went') + ' two or more past ' + hiEff + at + shown(lastW) + ', so two jumps.'
       : reached + onDay(last) + (range.fixed ? '.' : topOf());
+    // v74: said when his answer is what made one session at the top enough.
+    const head = pushed && !prevHit ? head0 + ' You said you’re going for more, so once at the top is enough this time.' : head0;
     if (!last.grid || !S) {
       const stepsWord = lift.equipment === 'dumbbell' ? 'the dumbbell steps where you train'
         : ['machine', 'cable', 'plate'].includes(lift.equipment) ? 'this machine’s steps' : 'the steps on this lift';
@@ -1207,6 +1244,16 @@ function weakestHalf(tops) {
    between them, so a reduce read across a marked session — which the log
    without the mark would not make — gives way to the log's own target. A mark
    never produces a reduce. */
+/* v74: A TARGET AS EVERY VIEW SAYS IT — its line, and on a defer the quote
+   of last time beside it ("No target this time. Last time: 3 × 8 at 185
+   lb."). The answer to "I have no number" is what I do have, never the
+   blank alone. The quote is his own logged sets, the same words as the why's
+   last row. '' for no target. */
+export function targetSaid(t) {
+  if (!t || typeof t.line !== 'string') return '';
+  return t.mode === 'defer' && typeof t.last === 'string' && t.last ? t.line + ' ' + t.last : t.line;
+}
+
 export function targetFor(ex, ctx, mark) {
   if (!mark) return prescribe(ex, ctx);
   try {
@@ -1422,6 +1469,10 @@ function nextOf(ex, c, today) {
   const how = last.R >= target + UP_REPS
     ? plural(last.R, 'rep') + ' at ' + shown(last.w) + ', ' + UP_REPS + ' or more past the target’s ' + target + '.'
     : 'You rated ' + shown(last.w) + ' × ' + last.R + ' way too easy.';
+  // v74: he said ease off on this lift: nothing heavier today.
+  if (wouldEarn && lift.wantNext === 'ease') {
+    return res('same', last.w, trAt(k), [how, 'You said ease off on this one, so I’d stay here.'], { stepped });
+  }
   if (wouldEarn && steppedDown) {
     return res('same', last.w, trAt(k), [how, 'I don’t step up after a step down in the same session.'], { stepped });
   }

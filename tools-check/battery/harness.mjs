@@ -38,7 +38,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { stageCoach } from './stage.mjs';
 import { lifters, makeLifter, ARCHETYPE_IDS } from './generator.mjs';
-import { CODES, verdictOf, scoreTarget, scoreNextSet, scoreLive, scoreChips, scoreVolume, scoreRecord, scorePlateau } from './scoring.mjs';
+import { CODES, verdictOf, scoreTarget, scoreNextSet, scoreLive, scoreChips, scoreVolume, scoreRecord, scorePlateau,
+         deadEndOf, deadTarget, scoreFallback } from './scoring.mjs';
 
 const HERE = fileURLToPath(new URL('.', import.meta.url));
 const DAY = 864e5;
@@ -204,6 +205,8 @@ export function runCut(C, L, k, acc) {
     const t2 = lift ? C.prog.targetFor(lift, ctx, lift.mark || null) : null;
     if (JSON.stringify(t) !== JSON.stringify(t2)) note('target', ex.exId, { codes: ['X_NONDET'], notes: [] });
     targets[ex.exId] = t;
+    // v74: a target drawn with nothing he can use — a defer with no last time beside it
+    if (t) acc.deadTarget(deadTarget(t, typeof C.prog.targetSaid === 'function' ? C.prog.targetSaid(t) : t.line), { lifter: L.id, session: k, exId: ex.exId, line: t.line });
     if (!lift && tr.exposures === 0) { acc.tally('target', 'ok'); continue; }     // first time: nothing to judge
     note('target', ex.exId, scoreTarget(t, tr), { mode: t && t.mode, code: t && t.code, line: t && t.line, truth: brief(tr) });
   }
@@ -254,6 +257,40 @@ export function runCut(C, L, k, acc) {
   const coachLive = safe('live', () => C.coach.coach(liveInput));
   if (!coachLive) return;
   const asks = new Set();     // (exIdx) seen with a working set, for 'another'/'next' asks
+  /* v74: THE SHEET AS HE OPENS IT, at any moment — before the first set of an
+     exercise, after a warm-up (tagged or not), after a working set: what
+     coach-ui.js openLiveSheet would draw (another, the habit read, the next
+     set, and the fallback where all three are silent), and whether it is a
+     dead end (scoring.mjs deadEndOf). And the same engine with an answer to
+     "what are you going for?" on every lift of the session — same / ease /
+     more, rotated per cut — so the quote chips that answer brings are scored
+     as quotes of last time (scoreFallback). */
+  const WANTS = ['same', 'ease', 'push'];
+  const want = WANTS[k % 3];
+  const steerSettings = { ...liveInput.settings, knowBy: { ...((liveInput.settings || {}).knowBy || {}),
+    wantNext: Object.fromEntries(next.exercises.map(e => [e.exId, { v: want, c: 1, at: next.startedAt + 10 * 60e3, n: 1 }])) } };
+  const coachSteer = typeof coachLive.fallback === 'function' ? safe('live', () => C.coach.coach({ ...liveInput, settings: steerSettings })) : null;
+  const probe = (xi, e, moment, si) => {
+    const at = { current: xi };
+    const an = safe('live', () => coachLive.another(live, at));
+    let a = safe('live', () => coachLive.live(live, at));
+    if (an && a && (a.kind === 'done' || a.kind === 'another')) a = null;
+    const ls = safe('live', () => coachLive.liveSet(live, at));
+    const nx = !an && ls ? ls.next : null;
+    const fb = !an && !a && !nx && typeof coachLive.fallback === 'function' ? safe('live', () => coachLive.fallback(live, at)) : null;
+    const de = deadEndOf({ an, live: a, next: nx, fb });
+    acc.deadSheet(moment, de, { lifter: L.id, archetype: L.archetype, seed: L.seed, session: k, exId: e.exId, set: si,
+      text: (an || a || nx || fb || {}).text || null });
+    if (!coachSteer || !((fb && fb.steer) || (an && an.steer))) return;
+    const sets = live.exercises[xi].sets.filter(x => x.done);
+    const main = sets.filter(x => x.type !== 'W').map(x => parseFloat(x.w) || 0);
+    const stopToday = sets.some(x => x.type === 'F' || x.type === 'D' || x.rir === 0) || main.some((x, j) => j > 0 && x < main[j - 1] - TOL);
+    const tr = liftTruth(L, k, e.exId, now);
+    const fb2 = fb ? safe('live', () => coachSteer.fallback(live, at)) : safe('live', () => coachSteer.another(live, at));
+    if (fb2) { acc.dead.steered++; acc.dead.quoteChips += (fb2.chips || []).filter(c => c.id === 'last_time').length; }
+    if (fb2) note('live', e.exId, scoreFallback({ ...fb2, chips: (fb2.chips || []).filter(c => c.id === 'last_time') }, { u: L.u, lastAll: tr && tr.lastAll, stopToday }),
+                  { set: si, kind: 'fallback:' + (fb2.kind || fb2.answer) + ':' + want, text: fb2.text, chips: (fb2.chips || []).map(c => c.id + (c.tw != null ? '=' + c.tw + 'x' + c.tr : '')).join(' ') });
+  };
   next.exercises.forEach((e, xi) => {
     const tr = liftTruth(L, k, e.exId, now);
     const tRow = nextT.exercises.find(t => t.exId === e.exId);
@@ -265,11 +302,13 @@ export function runCut(C, L, k, acc) {
     const rampIdx = new Set(tRow.rampIdx);
     const doneLoads = [], mainLoads = [];     // v73: mainLoads — the working-typed sets that are not a drop set's strips
     let stopped = false, firstWorkReps = null, firstWorkLoad = null, lastRepsUnderLo = false, earnedUp = false, lastMainLb = null;
+    probe(xi, e, 'before', -1);
     e.sets.forEach((s, si) => {
       // tick it
       const ls = live.exercises[xi].sets[si];
       ls.w = s.w; ls.r = s.r; ls.done = true; if (s.rir != null) ls.rir = s.rir;
       const isWork = workIdx.has(si), isRamp = rampIdx.has(si);
+      probe(xi, e, isWork ? 'work' : 'warmup', si);
       const r = parseInt(s.r, 10), w = parseFloat(s.w) || 0;
       if (isWork) {
         if (s.type !== 'W') doneLoads.push(w);
@@ -333,6 +372,14 @@ const brief = tr => ({ lastTopLb: tr.lastTopLb, stepLb: tr.stepLb, grid: tr.grid
 export function makeAcc() {
   return {
     counts: {}, byCode: {}, byArch: {}, byCause: {}, wrongs: [], misses: [], n: 0, sessions: 0, cuts: 0,
+    // v74: the dead-end rates — the live sheet by moment, and the targets
+    dead: { sheet: {}, targets: { n: 0, dead: 0 }, samples: [], steered: 0, quoteChips: 0 },
+    deadSheet(moment, kind, info) {
+      const m = this.dead.sheet[moment] || (this.dead.sheet[moment] = { n: 0, dead: 0, by: {} });
+      m.n++;
+      if (kind) { m.dead++; m.by[kind] = (m.by[kind] || 0) + 1; if (this.dead.samples.length < 40) this.dead.samples.push({ moment, kind, ...info }); }
+    },
+    deadTarget(dead, info) { this.dead.targets.n++; if (dead) { this.dead.targets.dead++; if (this.dead.samples.length < 40) this.dead.samples.push({ moment: 'target', kind: 'defer', ...info }); } },
     tally(surface, v) { const c = this.counts[surface] || (this.counts[surface] = { ok: 0, miss: 0, wrong: 0 }); c[v]++; },
     record(r) {
       // Why it went wrong, where the harness can say: an untagged warm-up
@@ -390,6 +437,15 @@ function summary(acc, ms, opts) {
   const n = T.ok + T.miss + T.wrong;
   lines.push(pad('TOTAL', 10) + num(n, 10) + num(T.ok, 8) + num(T.miss, 8) + num(T.wrong, 8) + num(n ? (T.ok / n * 100).toFixed(1) : '-', 8));
   lines.push('');
+  // v74: how often an ask ends in nothing he can act on
+  const pct = (a, b) => (b ? (a / b * 100).toFixed(2) + '%' : '-');
+  const sh = acc.dead.sheet, all = Object.values(sh).reduce((x, m) => ({ n: x.n + m.n, dead: x.dead + m.dead }), { n: 0, dead: 0 });
+  lines.push('dead ends (v74): live sheet ' + all.dead + ' of ' + all.n + ' asks = ' + pct(all.dead, all.n) +
+             '  [' + ['before', 'warmup', 'work'].map(m => m + ' ' + ((sh[m] || {}).dead || 0) + '/' + ((sh[m] || {}).n || 0) +
+               (sh[m] && Object.keys(sh[m].by).length ? ' (' + Object.entries(sh[m].by).map(([k, v]) => k + ' ' + v).join(', ') + ')' : '')).join('; ') + ']');
+  lines.push('                  targets ' + acc.dead.targets.dead + ' of ' + acc.dead.targets.n + ' = ' + pct(acc.dead.targets.dead, acc.dead.targets.n));
+  lines.push('                  answered "what are you going for?" ' + acc.dead.steered + ' times, ' + acc.dead.quoteChips + ' quote chips of last time scored');
+  lines.push('');
   lines.push('by cause: ' + Object.keys(acc.byCause).sort().map(k => k + ' ' + acc.byCause[k]).join('  '));
   lines.push('engine wrongs: ' + (acc.byCause['wrong:engine'] || 0) + ', untagged-warmup wrongs: ' + (acc.byCause['wrong:untagged-warmup'] || 0) +
              ', needs-answer wrongs: ' + (acc.byCause['wrong:needs-answer'] || 0) + '  (gate: ' + opts.gate + ')');
@@ -441,13 +497,19 @@ if (MAIN) {
   const sample = acc.misses.filter(r => { const c = r.codes[0]; seen[c] = (seen[c] || 0) + 1; return seen[c] <= Math.ceil(opts.missN / Math.max(1, Object.keys(acc.byCode).filter(k => acc.byCode[k].v === 'miss').length)); }).slice(0, opts.missN);
   sample.forEach(r => console.log(fmtOne(r)));
   mkdirSync(dirname(opts.out), { recursive: true });
-  writeFileSync(opts.out, JSON.stringify({ opts, counts: acc.counts, byCode: acc.byCode, byArch: acc.byArch, byCause: acc.byCause, wrongs: acc.wrongs, misses: acc.misses, ms }, null, 1));
+  writeFileSync(opts.out, JSON.stringify({ opts, counts: acc.counts, dead: acc.dead, byCode: acc.byCode, byArch: acc.byArch, byCause: acc.byCause, wrongs: acc.wrongs, misses: acc.misses, ms }, null, 1));
   console.log('\nreport → ' + opts.out);
   // The gate. `engine`: any wrong a shipped rule caused fails the run; the
   // untagged-warmup wrongs are reported and wait for the ramp model (v70).
   // `all`: any wrong whose codes are not all needsAnswer fails it.
   const hardWrong = acc.wrongs.filter(r => !r.codes.every(c => CODES[c].needsAnswer));
   const gateWrong = opts.gate === 'engine' ? acc.wrongs.filter(r => r.cause === 'engine') : hardWrong;
-  console.log('gate ' + opts.gate + ': ' + (gateWrong.length ? 'FAIL (' + gateWrong.length + ' wrong)' : 'PASS'));
-  process.exit(gateWrong.length ? 1 : 0);
+  // v74: and under `all`, no dead end in the live sheet — the answer to "I
+  // don't have a number" is never "I have nothing". Off with --no-dead-gate
+  // (to measure a build from before v74).
+  const deadN = Object.values(acc.dead.sheet).reduce((a, m) => a + m.dead, 0);
+  const deadFail = opts.gate === 'all' && !args.includes('--no-dead-gate') && deadN > 0;
+  if (deadN) { console.log('\nDEAD ENDS, a sample (' + Math.min(10, acc.dead.samples.length) + '):'); acc.dead.samples.filter(x => x.moment !== 'target').slice(0, 10).forEach(x => console.log('  ' + JSON.stringify(x))); }
+  console.log('gate ' + opts.gate + ': ' + (gateWrong.length ? 'FAIL (' + gateWrong.length + ' wrong)' : deadFail ? 'FAIL (' + deadN + ' dead ends in the live sheet)' : 'PASS'));
+  process.exit(gateWrong.length || deadFail ? 1 : 0);
 }

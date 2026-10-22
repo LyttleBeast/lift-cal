@@ -95,7 +95,20 @@ export const KNOW_KEYS = Object.freeze({
      the log's own. */
   step:     Object.freeze({ by: 'exId',  range: Object.freeze([0.5, 100000]),              ttlDays: 365 }),
   hold:     Object.freeze({ by: 'exId',  options: Object.freeze(['hold', 'light', 'day']), ttlDays: 42 }),
-  wantNext: Object.freeze({ by: 'shape', options: Object.freeze(['same', 'push', 'ease']), ttlDays: 14 })
+  /* v74: what he is going for on a lift, asked in the gym when I have no
+     number for it (q_want_next). Keyed by the LIFT, not the shape v72
+     declared it under: the question is about the lift in hand, and a shape
+     key cannot be worked out mid-session before the session is finished.
+     `by: 'lift'` reads an exId and, so a node written to the v72 shape still
+     normalises, a shape key too — nothing reads one of those.
+     Read only while unconsumed (wantOf, below): his next logged session of
+     the lift is the one it was about. */
+  wantNext: Object.freeze({ by: 'lift',  options: Object.freeze(['same', 'push', 'ease']), ttlDays: 14 }),
+  /* v74: a rough working weight he told me on a lift his log has never
+     seen (q_rough_weight), in stored pounds on the two-decimal grid. Read by
+     coach-prog.js only while the log has no session of the lift — THE LOG
+     WINS the moment one is logged. */
+  rough:    Object.freeze({ by: 'exId',  range: Object.freeze([1, 2000]),                  ttlDays: 90 })
 });
 // An id's shape (coach.js MARK_ID's), and a shape key's (group+group).
 export const ID_RE = /^[A-Za-z0-9_-]{1,40}$/, SHAPE_RE = /^[a-z]+(\+[a-z]+){0,5}$/;
@@ -103,7 +116,8 @@ export const ID_RE = /^[A-Za-z0-9_-]{1,40}$/, SHAPE_RE = /^[a-z]+(\+[a-z]+){0,5}
 const KEY_RE = /^[a-z][A-Za-z0-9]{0,23}$/;
 const MAX_C = 3, MAX_N = 9, MAX_IDS = 60, MAX_TALLY = 999;
 
-const idOk = (spec, id) => (spec.by === 'shape' ? SHAPE_RE.test(id) && id.length <= 40 : ID_RE.test(id));
+const idOk = (spec, id) => (spec.by === 'shape' ? SHAPE_RE.test(id) && id.length <= 40
+  : spec.by === 'lift' ? ID_RE.test(id) || (SHAPE_RE.test(id) && id.length <= 40) : ID_RE.test(id));
 // v73: a ranged fact is a stored weight (`step`, pounds), so it is any number
 // on the two-decimal grid every stored weight sits on — a 2.5-lb step, or a
 // kilo account's 1 kg stored as 2.2 — not an integer, which v72's bounds said.
@@ -583,8 +597,91 @@ export const ASK_QUESTIONS = Object.freeze([
     stampOf: ctx => (ctx && ctx.step ? stepStamp(ctx.step.exId) : 'q_equipment_step'),
     ack: 'Noted. I’ll use that as the step here until your log shows me another.',
     when: (d, ctx) => !!(ctx && ctx.step)
+  },
+
+  /* ---------- v74: when I have no number ----------
+     Micah, 22 Oct 2026: "imagine paying a personal coach and they just tell
+     you idk." When the lift in hand has no number I am sure of, the live
+     answer says what I do know — his own last session of it, quoted — and
+     asks one of these two, so he can steer. Both are BUDGET C: they are put
+     in the gym about the lift under the bar, every time I have no number for
+     it, until he answers for that lift (the gate) — counted against the day's
+     two stored-answer questions they would leave his third lift with nothing.
+     Neither is picked by pickQuestion(): coach.js steerOf() puts the row
+     beside the answer it belongs to, and the questions switch silences both. */
+  /* WHAT ARE YOU GOING FOR? (COACH-V2-SPEC §3.4 q_want_next, asked live.)
+     Go for more (`push`; the spec's "Push it", relabelled because "push" is
+     a word the in-gym copy is fenced against — coach-voice.mjs): the confirm dial reads one session at the top instead of two on
+     this lift's targets (never more than one step; a cut, a hard cut and
+     heavy triples still want it twice) — coach-prog.js decide(). Match last
+     time: nothing moves. Ease off: the targets hold at last time's weight and
+     the next set never steps up. Consumed by his next logged session of the
+     lift (wantOf), or in 14 days. */
+  {
+    id: 'q_want_next',
+    moments: Object.freeze(['live']),
+    text: (d, u, ctx) => (ctx && ctx.want ? 'What are you going for on ' + ctx.want.name + ' today?' : ''),
+    options: Object.freeze([
+      { value: 'push', label: 'Go for more',     ack: 'Noted. I’ll put no number on it that your log can’t back, and one good session at the top is enough for me to step it up.' },
+      { value: 'same', label: 'Match last time', ack: 'Noted. Last time’s sets are the plan.' },
+      { value: 'ease', label: 'Ease off',        ack: 'Noted. Nothing heavier than last time on it today.' }
+    ]),
+    writes: 'knowBy', key: 'wantNext',
+    // The targets (coach-prog.js: the confirm dial, the ease hold) and the
+    // live read (nextSet never `up` on ease; the answer's quote chips).
+    changes: Object.freeze(['lift_targets', 'live_read']),
+    cooldownDays: 0, budget: 'C',
+    stampOf: ctx => (ctx && ctx.want ? wantStamp(ctx.want.exId) : 'q_want_next'),
+    ack: 'Noted.',
+    when: (d, ctx) => !!(ctx && ctx.want && ID_RE.test(String(ctx.want.exId)))
+  },
+  /* A ROUGH WORKING WEIGHT, on a lift his log has never seen. The sheet draws
+     a number box (`input: 'weight'`, his unit) above the chips: Save stores
+     the box, in pounds, at knowBy.rough.<exId>; "I’ll log a set first"
+     stores nothing. coach-prog.js's first-time target names it back to him —
+     his own number, never one I work out — until the first session is logged. */
+  {
+    id: 'q_rough_weight',
+    moments: Object.freeze(['live']),
+    text: (d, u, ctx) => (ctx && ctx.rough ? 'Roughly what do you work at on ' + ctx.rough.name + '?' : ''),
+    input: 'weight',
+    options: Object.freeze([
+      { value: 'input', label: 'Save' },
+      { value: null,    label: 'I’ll log a set first', ack: 'Sounds good. I’ll set targets from the first one.' }
+    ]),
+    writes: 'knowBy', key: 'rough',
+    changes: Object.freeze(['lift_targets', 'live_read']),
+    cooldownDays: 0, budget: 'C',
+    stampOf: ctx => (ctx && ctx.rough ? roughStamp(ctx.rough.exId) : 'q_rough_weight'),
+    ack: 'Noted. I’ll start you there and set targets from what you log.',
+    when: (d, ctx) => !!(ctx && ctx.rough && ID_RE.test(String(ctx.rough.exId)))
   }
 ]);
+
+/* v74: the two in-the-gym questions' small parts. */
+export const wantStamp = exId => 'q_want_next:' + exId;
+export const roughStamp = exId => 'q_rough_weight:' + exId;
+/* A session runs for hours, not days: an exposure that started up to six
+   hours before the answer is the session he answered in. */
+export const WANT_SESSION_MS = 6 * 3600e3;
+/* What he is going for on a lift, as the engine reads it: 'push' | 'same' |
+   'ease', or null when he has not said, the answer has expired, or it has
+   been CONSUMED — a logged session of the lift that started after the answer
+   (or in the six hours before it: the session he answered in). `lastAt` is
+   the startedAt of the lift's newest logged exposure, or null. */
+export function wantOf(settings, exId, now, lastAt) {
+  const k = knowOf(settings, 'wantNext', exId, now);
+  if (!k || k.expired) return null;
+  if (Number.isFinite(lastAt) && lastAt >= k.at - WANT_SESSION_MS) return null;
+  return k.v;
+}
+/* The rough weight he told me on a lift, stored pounds, or null — read only
+   while the log has no session of it (`exposures` 0), and inside its TTL. */
+export function roughOf(settings, exId, now, exposures) {
+  if (Number(exposures) > 0) return null;
+  const k = knowOf(settings, 'rough', exId, now);
+  return k && !k.expired ? k.v : null;
+}
 
 const BY_ID = Object.freeze(Object.fromEntries(ASK_QUESTIONS.map(q => [q.id, q])));
 export const askQuestion = id => BY_ID[id] || null;

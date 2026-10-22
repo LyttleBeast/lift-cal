@@ -1069,7 +1069,9 @@ children of the already-granted `settings/coach`, **so no rules change** —
   like every stored weight, so a 2.5-lb step is `2.5` and a kilo account's 1 kg
   is `2.2` (v72 said "integer"; v73 corrected it when it became the first
   writer) (365 d); `hold` ∈ hold|light|day (42 d); `wantNext` ∈ same|push|ease
-  (14 d). **v72 writes `knowBy.warm` only; v73 adds `knowBy.step` and `tally`**;
+  (14 d; v74 keys it by the lift); `rough` a weight 1–2000 lb (90 d, v74).
+  **v72 writes `knowBy.warm` only; v73 adds `knowBy.step` and `tally`; v74
+  adds `knowBy.wantNext` and `knowBy.rough`**;
   the other keys are declared so the native rules block is written once.
 - `normKnow()` in `coach-ask.js` is the only reader of the shape, called by
   `normSettings()`: `v` must be one of the key's options or an integer in its
@@ -1165,6 +1167,42 @@ are written for the first time:
 
 The native block above already takes all three (`v` is a number ≤ 100000 there,
 so a 2.5 passes).
+
+**v74 — when I have no number: `knowBy.wantNext`, `knowBy.rough`, two more
+stamps.** Still `v: 2`, still children of the already-granted
+`settings/coach`, **so no rules change** — `database.rules.json` and
+`database.rules.OPTIONAL-LOCK.json` are byte-identical to rack-v73. Written
+for the first time, both through `coach-data.js` `learnBy()`:
+
+- `knowBy.wantNext.<exId>` — his answer to *What are you going for on Barbell
+  Bench Press today?* (`coach-ask.js` `q_want_next`), asked in the live sheet
+  beside an answer that has no number: `push` (chip *Go for more*) | `same`
+  (*Match last time*) | `ease` (*Ease off*), TTL 14 days. **Keyed by the lift,
+  not the shape v72 declared** (`KNOW_KEYS.wantNext.by` is `'lift'`: an exId,
+  or a shape key so a v72-shaped node still normalises; nothing reads one of
+  those). Read by `coach-ask.js` `wantOf()` only while **unconsumed** — no
+  logged session of the lift started after the answer, or in the six hours
+  before it (the session he answered in). `coach.js` `lifts()` puts it on the
+  lift as `wantNext`; `coach-prog.js` reads it: `ease` holds a target that
+  would step up (mode `hold`, code `ease`) and the next set never says `up`;
+  `push` lets one session at the top earn the step where the goal wanted two
+  (never on a cut, a hard cut or heavy triples; never two steps); `same`
+  changes nothing.
+- `knowBy.rough.<exId>` — *Roughly what do you work at on Barbell Bench
+  Press?* (`q_rough_weight`), asked beside the answer for a lift the log has
+  never seen: a number box in his unit, **pounds stored** (two-decimal grid,
+  1–2000), TTL 90 days; *I'll log a set first* writes nothing. Read by
+  `roughOf()` only while the log has no session of the lift — **the log wins**
+  the moment one is logged. The first-time target names it back (mode
+  `first`, code `told`, `loadLb` null: no box is filled).
+- `asked.q_want_next:<exId>`, `asked.q_rough_weight:<exId>` — per-lift stamps,
+  stamped when the row is drawn, kept by `normSettings()` and pruned at 56 days
+  by `patchNow()` like `q_equipment_step:<exId>`. Both questions are budget
+  `C` (uncounted): an answer with no number carries its question on every ask
+  until he answers for that lift, and the questions switch silences both. If
+  the native rules enumerate `asked`, the `$id` rule needs
+  `q_want_next:[A-Za-z0-9_-]{1,40}` and `q_rough_weight:[A-Za-z0-9_-]{1,40}` as
+  two more alternatives. The native block above already takes both values.
 
 **v52's food reads — when, how many, and for whom.** *Am I fueled?*, *Should I
 rest or go lighter?* and *How did today compare?* read `food/log/{date}`

@@ -324,6 +324,16 @@ section('E. v72 — normSettings: a v1 node reads as v2 with no know; a v2 node 
   check('v73: the q_equipment_step:<exId> stamp and a 2.5 / 2.2 lb step round-trip byte for byte', JSON.stringify(C.normSettings(v73)) === JSON.stringify(v73), JSON.stringify(C.normSettings(v73)));
   const j73 = C.normSettings({ ...v73, asked: { ...v73.asked, 'q_equipment_step:a/b': 1, 'q_equipment_step:': 2 }, knowBy: { step: { x: { v: 2.555, c: 1, at: 1, n: 1 } } } });
   check('     a bad id on the stamp and a step off the two-decimal grid are dropped', !('q_equipment_step:a/b' in j73.asked) && !('q_equipment_step:' in j73.asked) && !('knowBy' in j73));
+  // v74: the two in-the-gym questions' per-lift stamps, and their facts — wantNext by the lift, rough in pounds.
+  const v74 = { ...v2, asked: { ...v2.asked, 'q_want_next:barbell-bench-press': 1790000000003, 'q_rough_weight:barbell-row': 1790000000004 },
+                knowBy: { ...v2.knowBy, wantNext: { ...v2.knowBy.wantNext, 'barbell-bench-press': { v: 'same', c: 1, at: 1790000000003, n: 1 } },
+                          rough: { 'barbell-row': { v: 132.28, c: 1, at: 1790000000004, n: 1 } } } };
+  check('v74: the q_want_next:<exId> and q_rough_weight:<exId> stamps, wantNext keyed by a lift and a rough weight in pounds round-trip byte for byte',
+        JSON.stringify(C.normSettings(v74)) === JSON.stringify(v74), JSON.stringify(C.normSettings(v74)));
+  const j74 = C.normSettings({ ...v74, asked: { ...v74.asked, 'q_want_next:a/b': 1, 'q_rough_weight:': 2 },
+                               knowBy: { rough: { x: { v: 2001, c: 1, at: 1, n: 1 }, y: { v: 0.5, c: 1, at: 1, n: 1 } }, wantNext: { z: { v: 'harder', c: 1, at: 1, n: 1 } } } });
+  check('     a bad id on either stamp, a rough weight past 2000 or under 1, and an answer off the options are dropped',
+        !('q_want_next:a/b' in j74.asked) && !('q_rough_weight:' in j74.asked) && !('knowBy' in j74), JSON.stringify(j74));
   check('never throws', (() => { try { [null, 1, 'x', [], { know: 1, knowBy: 'x', tally: [] }].forEach(C.normSettings); return true; } catch { return false; } })());
 }
 

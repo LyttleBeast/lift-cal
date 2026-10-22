@@ -1074,9 +1074,12 @@ section('K. v73 — anotherSetRead: done → stop → warmup → counts → the 
   const tail = FL.sessions.map(s => ({ ...s, exercises: s.exercises.map(e => e.exId !== B || s !== FL.sessions.filter(x => x.exercises.some(z => z.exId === B)).pop() ? e
     : { ...e, sets: [{ w: '205', r: '5', type: 'N', done: true }, { w: '175', r: '8', type: 'N', done: true }, { w: '175', r: '8', type: 'N', done: true }] }) }));
   const defer = an(FL, sess(FL, B, [[185, 8]]), { sessions: tail });
-  check('a lift Coach cannot target (a defer) and a set under his last top (185 under a 205 top set): no number at all — the set may be a rung — only That’s the last one and Done for today, and the why says why',
-        !!defer && J(labels(defer)) === J(['last', 'done']) && defer.short === 'Another set?' && /I’ll name a weight once you’re at your working weight\.$/.test(defer.text) &&
-        defer.why.some(t => /sits under your last top here/.test(t)), J(defer));
+  // v74: never a blank where the number would be — last time, quoted, and the question.
+  check('a lift Coach cannot target (a defer) and a set under his last top (185 under a 205 top set): no number of mine — the set may be a rung — only That’s the last one and Done for today; v74: last time quoted and "what are you going for?" put, and the why says why',
+        !!defer && J(labels(defer)) === J(['last', 'done']) && defer.short === 'Another set?' &&
+        /Last time you worked at 205 lb × 5, then 2 sets of 175 lb × 8\. I don’t have a number for this one yet — what are you going for\?$/.test(defer.text) &&
+        !/I’ll name a weight once/.test(defer.text) && defer.steer === 'want' && defer.question && defer.question.id === 'q_want_next' &&
+        defer.why.some(t => /sits under your last top here/.test(t)) && defer.why.some(t => /a record, not a plan/.test(t)), J(defer));
   const deferTop = an(FL, sess(FL, B, [[205, 5]]), { sessions: tail });
   check('… and at his last top (205 × 5), plainly work: the quote chip, Same again, 205 lb × 5', !!deferTop && J(labels(deferTop)) === J(['same=205x5', 'last', 'done']), J(labels(deferTop)));
   const deferTwo = an(FL, sess(FL, B, [[185, 8], [185, 8]]), { sessions: tail });
@@ -1148,6 +1151,173 @@ section('K. v73 — anotherSetRead: done → stop → warmup → counts → the 
   check('swept over ' + swept + ' generated live sessions, both units: every chip’s tw is a ticked set’s w or the nextSet() tw', swept > 600 && !offChips.length, list(offChips));
   check('after a stop (F, rir 0, a rep drop) the answer is `stop` and no chip is heavier than the heaviest set done', !heavyAfter.length, list(heavyAfter));
   check('no heavier chip after a step down today (' + heavies + ' heavier chips swept)', heavies > 20 && !upAfterDown.length, list(upAfterDown));
+}
+
+/* ================= M. v74 — WHEN I HAVE NO NUMBER ================= */
+section('M. v74 — the answer to "I don’t have a number" is never "I have nothing": his last session quoted, and one question');
+{
+  const Q = await import(JSON.parse(at('coach-ask.js')));
+  const { deadEndOf } = await import(pathToFileURL(join(ROOT, 'tools-check', 'battery', 'scoring.mjs')).href);
+  const BID = 'barbell-bench-press';
+  const ML = { [BID]: { name: 'Barbell Bench Press', group: 'chest', equipment: 'barbell' },
+               'treadmill-run': { name: 'Treadmill Run', group: 'legs', equipment: 'cardio' },
+               'barbell-row': { name: 'Barbell Row', group: 'back', equipment: 'barbell' } };
+  const st = (w, r, t, x) => ({ w: String(w), r: String(r), type: t || 'N', done: true, ...(x || {}) });
+  const bex = sets => ({ exId: BID, ...ML[BID], sets });
+  // His last bench: a ramp he typed, then 225 × 4 and 225 × 2 — the heavy defer.
+  const LAST = () => [st(45, 10, 'W'), st(135, 5, 'W'), st(185, 3, 'W'), st(225, 4), st(225, 2)];
+  const hist = n => Array.from({ length: n }, (_, k) => ({ id: 'mb' + k, startedAt: NOW - (4 + 7 * k) * DAY, _date: key(NOW - (4 + 7 * k) * DAY), exercises: [bex(LAST())] }))
+    .sort((a, b) => a.startedAt - b.startedAt);
+  const mIn = (extra) => input({ lib: ML, sessions: hist(1), settings: { v: 2, mute: {}, answers: {}, asked: {} }, ...extra });
+  const told = (key2, v, atMs) => ({ v: 2, mute: {}, answers: {}, asked: {}, knowBy: { [key2]: { [BID]: { v, c: 1, at: atMs == null ? NOW - 60e3 : atMs, n: 1 } } } });
+  // Micah's sets, 22 Oct 2026: 45 × 2, 135 × 10, 135 × 5, 185 × 5, all typed W and ticked, an empty row under them.
+  const MICAH = () => ({ id: 'wmicah', startedAt: NOW - 20 * 60e3,
+    exercises: [bex([st(45, 2, 'W'), st(135, 10, 'W'), st(135, 5, 'W'), st(185, 5, 'W'), { w: '', r: '', type: 'N', done: false }])] });
+  const sheetOf = (c, s) => {
+    const o = { current: 0 };
+    const an = c.another(s, o);
+    let a = c.live(s, o);
+    if (an && a && (a.kind === 'done' || a.kind === 'another')) a = null;
+    const nx = an ? null : ((c.liveSet(s, o) || {}).next || null);
+    const fb = !an && !a && !nx ? c.fallback(s, o) : null;
+    return { an, live: a, next: nx, fb };
+  };
+
+  for (const n of [1, 4]) {
+    const c = C.coach(mIn({ sessions: hist(n) }));
+    const sh = sheetOf(c, MICAH());
+    const fb = sh.fb;
+    check('Micah’s bench (' + n + ' session' + (n > 1 ? 's' : '') + ' of 225 × 4, 225 × 2; four typed warm-ups ticked): another, the habit read and the next set are silent, so the fallback answers',
+          !sh.an && !sh.live && !sh.next && !!fb && fb.kind === 'warmup' && deadEndOf(sh) === null, J(sh));
+    check('… with exactly: "Warm-ups on Barbell Bench Press so far. Last time you worked at 225 lb × 4, then 225 lb × 2. I don’t have a number for today yet, so tell me what you’re going for."',
+          !!fb && fb.text === 'Warm-ups on Barbell Bench Press so far. Last time you worked at 225 lb × 4, then 225 lb × 2. I don’t have a number for today yet, so tell me what you’re going for.', fb && fb.text);
+    check('… no chip with a number, and the one question row: "What are you going for on Barbell Bench Press today?" — Go for more · Match last time · Ease off, by the lift, its per-lift stamp, writes knowBy.wantNext',
+          !!fb && !fb.chips.some(x => x.tw != null) && fb.steer === 'want' && !!fb.question && fb.question.id === 'q_want_next' &&
+          fb.question.text === 'What are you going for on Barbell Bench Press today?' &&
+          J(fb.question.options.map(o => o.label)) === J(['Go for more', 'Match last time', 'Ease off']) &&
+          J(fb.question.options.map(o => o.value)) === J(['push', 'same', 'ease']) &&
+          fb.question.by === BID && fb.question.stamp === 'q_want_next:' + BID && fb.question.writes === 'knowBy' && fb.question.key === 'wantNext', J(fb && fb.question));
+    check('… and Why? says, in the first person, what I am missing (heavy sets I won’t call blind), that the quote is a record, and what an answer changes',
+          !!fb && /^I have no number for Barbell Bench Press today\. Heavy sets like last time’s are too close to an all-out set/.test(fb.why[0]) &&
+          fb.why.some(t => /a record, not a plan/.test(t)) && fb.why.some(t => /^Tell me what you’re going for and I’ll answer from it/.test(t)), J(fb && fb.why));
+    const nums = String(fb && [fb.text].concat(fb.why).join(' ')).match(/\d+(\.\d+)?(?= lb)/g) || [];
+    check('… every weight it says is one of his logged sets (225), never one I worked out', nums.length > 0 && nums.every(x => x === '225'), J(nums));
+  }
+  const kgFb = C.coach(mIn({ u: 'kg' })).fallback(MICAH(), { current: 0 });
+  check('in kilos the quote is his set through units.js, and no "lb" is said', !!kgFb && /Last time you worked at [\d.]+ kg × 4, then [\d.]+ kg × 2\./.test(kgFb.text) && !/\blb\b/.test(kgFb.text), kgFb && kgFb.text);
+
+  // His answer, read back.
+  const ans = v => C.coach(mIn({ settings: told('wantNext', v) })).fallback(MICAH(), { current: 0 });
+  const same = ans('same'), ease = ans('ease'), more = ans('push');
+  check('Match last time: "… You said match last time, so last time’s sets are the plan." and one chip, Last time’s set 1, 225 lb × 4 — a quote of last time; no question',
+        !!same && /225 lb × 2\. You said match last time, so last time’s sets are the plan\.$/.test(same.text) && same.steer === null && !same.question &&
+        J(same.chips) === J([{ id: 'last_time', label: 'Last time’s set 1, 225 lb × 4', tw: '225', tr: '4' }]), J(same));
+  check('Ease off: "… nothing heavier than that today." and the same quote chip',
+        !!ease && /You said ease off, so nothing heavier than that today\.$/.test(ease.text) && J(ease.chips.map(x => x.id + '=' + x.tw + 'x' + x.tr)) === J(['last_time=225x4']), J(ease));
+  check('Going for more: his call — no number from me at all, and the why says the jump is his',
+        !!more && /You said you’re going for more\./.test(more.text) && !more.chips.length && more.why.some(t => /the jump is yours to choose today/.test(t)), J(more));
+  const blockedFb = C.coach(mIn({ settings: told('wantNext', 'same') })).fallback(
+    { ...MICAH(), exercises: [bex([st(45, 2, 'W'), st(135, 10, 'W', { rir: 0 }), { w: '', r: '', type: 'N', done: false }])] }, { current: 0 });
+  check('after a set rated too hard today, no quote chip even with "Match last time" said', !!blockedFb && !blockedFb.chips.length, J(blockedFb));
+  // Consumed by his next logged session of the lift; expired after 14 days.
+  const after = C.coach(mIn({ sessions: hist(1).concat([{ id: 'mnext', startedAt: NOW - 3600e3, _date: key(NOW - 3600e3), exercises: [bex(LAST())] }]),
+                               settings: told('wantNext', 'same', NOW - 2 * DAY) })).fallback(MICAH(), { current: 0 });
+  check('an answer is consumed by his next logged session of the lift: the question is back', !!after && after.steer === 'want' && !!after.question, J(after && after.text));
+  check('wantOf: unconsumed inside the session he answered in (a start up to six hours before), consumed by one after, gone at 15 days',
+        Q.wantOf(told('wantNext', 'ease'), BID, NOW, NOW - 3 * 3600e3 - 60e3 - 7 * DAY) === 'ease' &&
+        Q.wantOf(told('wantNext', 'ease'), BID, NOW, NOW - 60e3 - 5 * 3600e3) === null &&
+        Q.wantOf(told('wantNext', 'ease', NOW - 15 * DAY), BID, NOW, null) === null && Q.wantOf(told('wantNext', 'ease'), BID, NOW, null) === 'ease');
+  const muted = C.coach(mIn({ settings: { v: 2, mute: { questions: true }, answers: {}, asked: {} } })).fallback(MICAH(), { current: 0 });
+  check('questions switched off: the quote alone — "… 225 lb × 2. I don’t have a number for this one yet." and no question row',
+        !!muted && /225 lb × 2\. I don’t have a number for this one yet\.$/.test(muted.text) && !muted.question && muted.steer === null, J(muted));
+
+  // Nothing ticked yet, with history: next up and the quote.
+  const idle = C.coach(mIn()).fallback({ id: 'wi', startedAt: NOW - 60e3, exercises: [bex([{ w: '', r: '', type: 'N', done: false }])] }, { current: 0 });
+  check('nothing ticked on it yet: "Next up, Barbell Bench Press. Last time you worked at 225 lb × 4, then 225 lb × 2. …" and the question',
+        !!idle && idle.kind === 'idle' && /^Next up, Barbell Bench Press\. Last time you worked at 225 lb × 4, then 225 lb × 2\./.test(idle.text) && !!idle.question, J(idle));
+
+  // A lift with no history at all.
+  const fresh = { id: 'wf', startedAt: NOW - 60e3, exercises: [bex([st(45, 10, 'W'), { w: '', r: '', type: 'N', done: false }])] };
+  const rowOnly = [{ id: 'mr', startedAt: NOW - 3 * DAY, _date: key(NOW - 3 * DAY), exercises: [{ exId: 'barbell-row', ...ML['barbell-row'], sets: [st(135, 8), st(135, 8)] }] }];
+  const noneSh = sheetOf(C.coach(mIn({ sessions: rowOnly })), fresh);
+  const first = noneSh.fb;
+  check('no history at all on the lift: never "nothing" — what he can do (log a first set) and the rough-weight question',
+        !!first && first.kind === 'first' && deadEndOf(noneSh) === null &&
+        first.text === 'This is the first time I’ve seen Barbell Bench Press in your log. Log a first set at a weight you could do a couple more times with, and I’ll set targets from it — or tell me roughly what you work at.' &&
+        !!first.question && first.question.id === 'q_rough_weight' && first.question.input === 'weight' && first.question.key === 'rough' &&
+        J(first.question.options.map(o => o.label)) === J(['Save', 'I’ll log a set first']) && !first.chips.length, J(first));
+  const emptyLog = C.coach(mIn({ sessions: [], log: 'empty' })).fallback(fresh, { current: 0 });
+  check('an empty log (a first session ever): the same first-time answer, not silence', !!emptyLog && emptyLog.kind === 'first', J(emptyLog));
+  const roughSaid = C.coach(mIn({ sessions: rowOnly, settings: told('rough', 135) })).fallback(fresh, { current: 0 });
+  check('a rough weight he told me (135 lb) is said back as his number — "You told me you work at about 135 lb on Barbell Bench Press. Start around there…" — and no question',
+        !!roughSaid && roughSaid.text === 'You told me you work at about 135 lb on Barbell Bench Press. Start around there, and I’ll set targets from what you log.' &&
+        !roughSaid.question && !roughSaid.chips.length, J(roughSaid));
+  const roughTarget = C.coach(mIn({ sessions: rowOnly, settings: told('rough', 135) }));
+  const tFirst = P.targetFor({ exId: BID, ...ML[BID], exposures: [], groupDaysSince: null, roughTold: 135 }, { now: NOW, u: 'lb' }, null);
+  check('… it seeds the first-time target’s line (coach-prog.js), with no box filled: loadLb stays null', !!tFirst && tFirst.mode === 'first' && tFirst.code === 'told' &&
+        tFirst.line === 'No target yet: you told me you work at about 135 lb here.' && tFirst.loadLb === null && !!roughTarget, J(tFirst));
+  check('… and the log wins: once a session of the lift is logged the told weight is not read', Q.roughOf(told('rough', 135), BID, NOW, 1) === null && Q.roughOf(told('rough', 135), BID, NOW, 0) === 135);
+
+  // The other corners: cardio, an empty list, the gate, junk.
+  const cardio = C.coach(mIn()).fallback({ id: 'wc', startedAt: NOW - 60e3, exercises: [{ exId: 'treadmill-run', ...ML['treadmill-run'], sets: [{ w: '', r: '1', type: 'N', done: true }] }] }, { current: 0 });
+  check('cardio in hand: what to do ("Log it as you go…"), the two closing chips, no number', !!cardio && cardio.kind === 'cardio' && J(cardio.chips.map(x => x.id)) === J(['last', 'done']), J(cardio));
+  const empty = C.coach(mIn()).fallback({ id: 'we', startedAt: NOW - 60e3, exercises: [] }, {});
+  check('an empty list: "Add an exercise and I’ll read it against your log."', !!empty && empty.kind === 'empty' && empty.text === 'Add an exercise and I’ll read it against your log.', J(empty));
+  check('the gate: Basic, "In the gym" off, an edit, an unreadable log — null',
+        C.coach(mIn({ tier: { pro: false } })).fallback(MICAH(), {}) === null && C.coach(mIn({ log: 'unknown' })).fallback(MICAH(), {}) === null &&
+        C.coach(mIn({ settings: { v: 2, mute: { live: true }, answers: {}, asked: {} } })).fallback(MICAH(), {}) === null &&
+        C.coach(mIn()).fallback({ ...MICAH(), _edit: { mk: '2026-09', dd: '01' } }, {}) === null);
+  check('fallbackRead survives junk', [null, undefined, {}, { session: 5 }, { session: { exercises: [null, {}] } }].every(x => { try { const r = L.fallbackRead(x); return r === null || typeof r.text === 'string'; } catch { return false; } }));
+  check('the dead line is gone from the file: LIVE_NONE is the last resort and says what to do', !/Nothing I can add/.test(src('coach-live.js').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')) &&
+        L.LIVE_NONE.text === 'Tick a set and I’ll read it against your log.');
+
+  // The engine reads the answer only as the spec says (coach-prog.js decide, nextSet).
+  const FB = fence('lb');
+  const OI = C.overlapInput(FB.input);
+  const addLift = OI.lifts.find(l => { if (l.exId === 'assisted-pull-up') return false; const t = P.targetFor(l, { now: NOW, u: 'lb' }, null); return t && t.mode === 'add' && t.loadLb != null; });
+  const ctx0 = { now: NOW, u: 'lb', aim: null, exp: null, energy: null, rateWk: null };
+  const tAdd = addLift && P.targetFor(addLift, ctx0, null);
+  const tEase = addLift && P.targetFor({ ...addLift, wantNext: 'ease' }, ctx0, null);
+  check('ease off: a target that would step up holds at last time’s weight instead (code ease), and says why in his words',
+        !!tAdd && !!tEase && tEase.mode === 'hold' && tEase.code === 'ease' && tEase.loadLb < tAdd.loadLb &&
+        /^You said ease off on this one, so the same weight as last time\./.test(tEase.why[0]), J(tEase));
+  // Bench at 3 × 8, five pounds a step, the last session the first one at 185:
+  // on Stay consistent I want it twice — unless he said he is going for more.
+  const one = [170, 175, 175, 180, 180, 185].map((w, k) => ({ id: 'mp' + k, startedAt: NOW - (3 + 7 * (5 - k)) * DAY, _date: key(NOW - (3 + 7 * (5 - k)) * DAY),
+    exercises: [bex([st(w, 8), st(w, 8), st(w, 8)])] }));
+  const pl = { exId: BID, ...ML[BID], exposures: P.exposuresFor(one, BID), groupDaysSince: null };
+  const tg = (aim, w) => P.targetFor({ ...pl, ...(w ? { wantNext: w } : null) }, { ...ctx0, aim }, null);
+  const mHold = tg('maintain'), mPush = tg('maintain', 'push'), cHold = tg('cut'), cPush = tg('cut', 'push'), nPush = tg(null, 'push'), nAdd = tg(null);
+  check('going for more: on Stay consistent one session at the top is enough (190, one step, and the why says so); a cut still wants two; with nothing to change it changes nothing',
+        mHold.mode === 'hold' && mHold.code === 'confirm' && mPush.mode === 'add' && mPush.loadLb === 190 &&
+        /You said you’re going for more, so once at the top is enough this time\.$/.test(mPush.why[0]) &&
+        J(cPush) === J(cHold) && cHold.code === 'confirm' && J(nPush) === J(nAdd), J([mHold.mode, mPush.mode, mPush.loadLb, mPush.why[0], cPush.code]));
+  const nxEase = addLift && P.nextSet({ ...addLift, wantNext: 'ease' }, { ...ctx0, repDrop: L.REP_DROP },
+    Array.from({ length: 1 }, () => ({ w: String(tAdd.loadLb), r: String(parseInt(tAdd.sets.find(x => x.type !== 'W').tr, 10) + 3), type: 'N' })));
+  check('and with ease off the next set never steps up, however easy the set went', !!nxEase && nxEase.kind !== 'up', J(nxEase));
+
+  // THE SWEEP: no dead end in the sheet, at any moment, over generated sessions — warm-ups typed or not.
+  const deads = [];
+  let asked = 0;
+  for (const u of ['lb', 'kg']) {
+    const F = fence(u);
+    let seed = u === 'kg' ? 74 : 47;
+    const rnd = k => { seed = (seed * 1103515245 + 12345) % 2147483648; return Math.floor(seed / 65536) % k; };
+    for (let k = 0; k < 300; k++) {
+      const id = F.ids[rnd(F.ids.length)];
+      const sets = [];
+      const nW = rnd(4), nN = rnd(3);
+      for (let j = 0; j < nW; j++) sets.push({ w: F.store(F.logged[id][0] * (0.3 + 0.15 * j)), r: String(5 + rnd(6)), type: rnd(2) ? 'W' : 'N', done: true });
+      for (let j = 0; j < nN; j++) sets.push({ w: F.store(F.logged[id][rnd(F.logged[id].length)]), r: String(Math.max(1, F.reps[id] + rnd(5) - 2)), type: 'N', done: true });
+      sets.push({ w: '', r: '', type: 'N', done: false });
+      const s = { id: 'wdead', startedAt: NOW - 1800e3, exercises: [F.ex(id, sets)] };
+      const sh2 = sheetOf(C.coach(F.input), s);
+      asked++;
+      const d = deadEndOf(sh2);
+      if (d) deads.push(u + ' ' + id + ' ' + d + ': ' + J(sets.filter(z => z.done).map(z => z.type + z.w + 'x' + z.r)));
+    }
+  }
+  check('swept ' + asked + ' generated asks, both units, warm-ups typed and untyped: no dead end in the sheet', asked === 600 && !deads.length, list(deads));
 }
 
 /* ---------- report ---------- */

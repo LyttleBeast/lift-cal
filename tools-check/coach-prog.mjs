@@ -674,6 +674,16 @@ if (MAIN) {
       const last = exposures[exposures.length - 1];
       return !!(t && last && t.sets.length && t.sets.length !== last.allSets.length);
     };
+    /* v74: a defer carries its quote of last time as `last` too — the same
+       words as its why's last row, which is what this checks — so the old
+       files are compared with it taken off, and nothing else. */
+    const lastOff = [];
+    const v74 = t => {
+      if (!t || t.mode !== 'defer') return t;
+      const { last, ...rest } = t;
+      if (last !== t.why[t.why.length - 1]) lastOff.push(t.exId + ': ' + last);
+      return rest;
+    };
     const hold = (label, meta, sessions, group, ctx) => {
       const exposures = P.exposuresFor(sessions, meta.exId);
       const ex = { ...meta, exposures, groupDaysSince: group };
@@ -681,13 +691,13 @@ if (MAIN) {
       const b = P.baselines(ex, ctx), b48 = P48.baselines(ex, ctx);
       const moved = v69Of(t, b, b48) || v70Of(t, exposures, assistedOf(meta));
       if (moved) touched++;
-      const now = JSON.stringify(t), then = JSON.stringify(voiced(P48.prescribe(ex, ctx)));
+      const now = JSON.stringify(v74(t)), then = JSON.stringify(voiced(P48.prescribe(ex, ctx)));
       // Moved with a v69 reason: expected (rowsMoved). Moved without one: a
       // change this ship did not mean to make (unfenced).
       if (now !== then) (moved ? rowsMoved : unfenced).push(label);
       const v51 = JSON.stringify(voiced(P51.prescribe(ex, ctx)));
-      if (!moved && (now !== v51 || JSON.stringify(P.targetFor(ex, ctx, null)) !== v51)) rows51.push(label);
-      if (moved && JSON.stringify(P.targetFor(ex, ctx, null)) !== now) rows51.push(label + ' (targetFor differs from prescribe)');
+      if (!moved && (now !== v51 || JSON.stringify(v74(P.targetFor(ex, ctx, null))) !== v51)) rows51.push(label);
+      if (moved && JSON.stringify(v74(P.targetFor(ex, ctx, null))) !== now) rows51.push(label + ' (targetFor differs from prescribe)');
       if (!moved && JSON.stringify(pick(b, OLD)) !== JSON.stringify(pick(b48, OLD))) basesMoved.push(label);
       if (moved && JSON.stringify(pick(b, OLD.filter(k => k !== 'range' && k !== 'step'))) !== JSON.stringify(pick(b48, OLD.filter(k => k !== 'range' && k !== 'step')))) basesMoved.push(label + ' (a field other than range/step)');
       if (!b) return;
@@ -734,6 +744,7 @@ if (MAIN) {
     check('and every field baselines() already returned is too, range and step aside where v69 moved them', !basesMoved.length, list(basesMoved));
     check('v52: prescribe() and targetFor() with no mark are rack-v51’s prescribe(), byte for byte, on every untouched row and history — and each other’s everywhere',
           rows >= 57 && !rows51.length, list(rows51));
+    check('v74: every defer’s `last` is its why’s last row, word for word — the quote of last time, never new words', !lastOff.length, list(lastOff));
     check('the new fields agree with the status beside them — a best in the last three is progressing, ' +
           'a stall has none in its last four, the series is the window after the last layoff, oldest first',
           !inconsistent.length, list(inconsistent));
@@ -980,7 +991,9 @@ if (MAIN) {
                     ex.exposures.some(e => RAMP.rampOf(e.allSets, { assisted }).probable > 0) ||
                     !!(t && last && t.sets.length && t.sets.length !== last.allSets.length);
       if (moved) touched53++;
-      if (JSON.stringify(t) !== JSON.stringify(voiced(P53.prescribe(ex, ctx)))) (moved ? movedOk : diff).push(label);
+      // v74: a defer's `last` (its why's last row again) taken off, as in D.
+      const t74 = t && t.mode === 'defer' ? (({ last, ...r }) => r)(t) : t;
+      if (JSON.stringify(t74) !== JSON.stringify(voiced(P53.prescribe(ex, ctx)))) (moved ? movedOk : diff).push(label);
     };
     for (const c of cases()) {
       const { exposures } = run(P, c);

@@ -145,14 +145,16 @@ export const REP_DROP = 0.25;
    had its usual, then one more set, then the next exercise. */
 export const LIVE_KINDS = Object.freeze(['done', 'switch', 'another', 'next']);
 
-/* What the sheet says when none of the four has earned a sentence. Here rather
-   than in the view, so the same fences that read every other line in this file
-   read this one. */
+/* The sheet's LAST RESORT, under fallbackRead() (v74), which answers every
+   ask with a lift in hand: what to do, never "nothing". Until v74 this was
+   "Nothing I can add from your log right now." — the dead end Micah met with
+   four warm-ups ticked and last time's 225 × 4 in the log. Here rather than in
+   the view, so the same fences that read every other line in this file read
+   this one. */
 export const LIVE_NONE = Object.freeze({
-  text: 'Nothing I can add from your log right now.',
+  text: 'Tick a set and I’ll read it against your log.',
   why: Object.freeze([
-    'I answer from your own sessions of this kind, and want three of them in the last twelve weeks ' +
-    'before I call anything usual.'
+    'I answer about the exercise in hand from your own sessions of it, and there’s nothing on this session for me to read yet.'
   ])
 });
 
@@ -957,7 +959,7 @@ export function anotherSetRead(input, exId) {
     // the set he just did and the step rides on its own chip; on `down` the
     // same, with the lighter logged weight on its own chip.
     const chips = [];
-    let tw = quote.tw, tr = quote.tr, loadLb = null, numbered = null;
+    let tw = quote.tw, tr = quote.tr, loadLb = null, numbered = null, steer = null;
     if (nx && (nx.kind === 'same' || nx.kind === 'up' || nx.kind === 'down')) {
       tw = nx.tw; tr = nx.tr; loadLb = nx.loadLb;
       const yes = nx.kind === 'same' ? { tw: nx.tw, tr: nx.tr } : { tw: quote.tw, tr: nx.tr };
@@ -974,11 +976,17 @@ export function anotherSetRead(input, exId) {
       why.push('I have no target on this lift today, so the one number I’ll name is the set you just did.');
     } else {
       // The set he just did may be a rung on the way up (no target to read the
-      // ramp against, and the shape alone is a reading): no number at all.
-      numbered = ' I’ll name a weight once you’re at your working weight.';
+      // ramp against, and the shape alone is a reading): no number of mine —
+      // v74: but never nothing. What I do have is his last session of it,
+      // quoted, and a question so he can steer (fallbackRead's own words).
+      const fb = steerWords(i, cur, u, cur.sets.length, 'defer');
+      numbered = ' ' + fb.text;
       why.push('I have no target on this lift today, and the set you just did sits under your last top here, so I won’t quote it as a working set.');
+      why = why.concat(fb.why);
+      chips.push(...fb.chips);
+      steer = fb.steer;
     }
-    const yesChip = chips[0] || null;
+    const yesChip = chips.find(c => c.id === 'yes' || c.id === 'same') || null;
     chips.push(LAST_CHIP, DONE_CHIP);
     return {
       answer, text: 'Another set of ' + cur.name + usualLine + numbered,
@@ -986,8 +994,182 @@ export function anotherSetRead(input, exId) {
         ? 'Another set? ' + said(yesChip.tw, yesChip.tr) + '.' : yesChip ? 'Another set, same weight?' : 'Another set?',
       why, tw, tr, loadLb,
       usual: of >= MIN_SESSIONS ? { n, more, of } : null,
-      chips
+      chips,
+      // v74: which question rides with the answer — 'want' (what are you going
+      // for?) — and the lift it is about; absent when none rides. coach.js puts it.
+      ...(steer ? { steer, exId: cur.exId, name: cur.name } : null)
     };
+  } catch {
+    return null;
+  }
+}
+
+/* ================================================================
+   WHEN I HAVE NO NUMBER (v74)
+   ================================================================
+   Micah, 22 Oct 2026, from the bench: warm-ups ticked (45 × 2, 135 × 10,
+   135 × 5, 185 × 5, all typed W), last time 225 × 4 and 225 × 2, and the
+   whole answer to "What should I do next?" was "Nothing I can add from your
+   log right now." — "imagine paying a personal coach and they just tell you
+   idk." The answer to "I don't have a number" is never "I have nothing".
+
+   The ladder, in order, and nothing below it ever works a number out:
+     (a) the engine's number when it is sure — anotherSetRead(), nextSet(),
+         the target — untouched; this section runs only where they are silent
+     (b) what I do know: his last logged session of the lift, QUOTED — his
+         own sets in his unit, said as a record ("Last time you worked at 225
+         lb × 4, then 225 lb × 2."), never as a plan
+     (c) one question so he can steer — what he is going for today
+         (coach-ask.js q_want_next) on a lift with history, roughly what he
+         works at (q_rough_weight) on one with none. coach.js puts the row
+         (`steer`); with the questions switch off the quote stands alone.
+   After he answers, the answer reads it back, and "Match last time" / "Ease
+   off" put last time's next set on a chip — a quote, as every chip here is.
+   No chip at all after a set typed F, rated too hard, a drop set or a step
+   down today: nothing that could be heavier is offered over those.
+
+   fallbackRead(input, exId) -> null | {
+     answer 'none'
+     kind   'warmup'  warm-ups ticked on the lift and nothing working yet
+            'idle'    nothing ticked on the lift yet
+            'first'   the log has never seen the lift
+            'cardio'  a cardio exercise: no weight to set
+            'empty'   nothing on the list at all
+     text, short, why, chips, steer ('want' | 'rough' | null), exId, name,
+     tw/tr/loadLb/usual null (the shape anotherSetRead's answers have)
+   }
+   Null only on junk or with no live session; every other ask gets words. */
+// His newest logged session of a lift — the window first, then (coach.js
+// `older`) anything before it — as its working sets through the same ramp
+// split every reader here uses, a drop set's strips left out. Null when none.
+function lastOf(i, exId) {
+  const known = knownOf(i);
+  const readRow = row => {
+    if (!row || !row.session) return null;
+    const ex = mergeSessionExercises(row.session.exercises).find(e => e && e.exId === exId);
+    if (!ex) return null;
+    const work = workingOf(i, ex, (ex.sets || []).filter(s => s && reps(s) > 0), known).filter(s => !(s.type === 'D' && s.dp === 1));
+    return work.length ? { startedAt: row.startedAt, sets: work } : null;
+  };
+  const rows = (Array.isArray(i.sessions) ? i.sessions : []).filter(s => s && s.session && Number.isFinite(s.startedAt))
+    .slice().sort((a, b) => b.startedAt - a.startedAt);
+  for (const row of rows) { const r = readRow(row); if (r) return r; }
+  if (typeof i.older === 'function') { try { return readRow(i.older(exId)); } catch { return null; } }
+  return null;
+}
+// "225 lb × 4, then 225 lb × 2", or "3 sets of 185 lb × 8, then 165 lb × 10":
+// runs of one load and reps, in the order logged, four runs at most.
+function quoteOf(sets, u) {
+  const runs = [];
+  sets.forEach(s => {
+    const k = String(s.w) + '|' + reps(s);
+    const r = runs[runs.length - 1];
+    if (r && r.k === k) { r.n++; return; }
+    runs.push({ k, w: s.w, r: reps(s), n: 1 });
+  });
+  const said = runs.slice(0, 4).map(x => (x.n > 1 ? x.n + ' sets of ' : '') + loadSaid(x.w, u) + ' × ' + x.r);
+  const more = runs.slice(4).reduce((a, x) => a + x.n, 0);
+  return said.join(', then ') + (more ? ', and ' + plural(more, 'more set') : '');
+}
+// Whether anything today on the lift forbids a chip that could be heavier.
+function blocked(cur) {
+  const t = (cur && cur.ticked) || [];
+  if (t.some(s => s.type === 'F' || s.type === 'D' || s.rir === 0)) return true;
+  const main = t.filter(s => s.type !== 'W');
+  return main.some((s, j) => j > 0 && load(s) < load(main[j - 1]) - GRID_TOL);
+}
+/* Why the target has no number, in the target's own words (coach-prog.js),
+   made to stand on its own: a defer's first reason, or the row of a
+   numberless target that says what it won't guess. Null when there is none. */
+function reasonOf(t) {
+  if (!t || t.loadLb != null || t.mode === 'first' || !Array.isArray(t.why)) return null;
+  if (t.mode === 'defer') return t.why[0] ? String(t.why[0]).replace(/^They’re /, 'Heavy sets like last time’s are ') : null;
+  const w = t.why.find(x => /won’t (guess|work)/.test(String(x)));
+  return w ? String(w) : null;
+}
+const WHAT_IT_CHANGES = 'Tell me what you’re going for and I’ll answer from it: match last time and I’ll line up last time’s sets; ' +
+  'ease off and I won’t name anything heavier than last time today; go for more and one good session at the top is enough for me ' +
+  'to step it up, where your goal allows it. Your answer counts for this lift until you next log it.';
+/* The words for a lift with history and no number of mine: the quote, the
+   reason there is no number, and either the question or his answer read back.
+   `k` is how many working sets of it are ticked today — the chip after an
+   answer is last time's set k + 1, when last time had one. */
+function steerWords(i, cur, u, k, where) {
+  const last = lastOf(i, cur.exId);
+  const want = typeof i.want === 'function' ? (() => { try { return i.want(cur.exId); } catch { return null; } })() : null;
+  const asks = i.asks !== false;
+  const t = typeof i.targetOf === 'function' ? (() => { try { return i.targetOf(cur.exId); } catch { return null; } })() : null;
+  const reason = reasonOf(t);
+  const why = ['I have no number for ' + cur.name + ' today' + (reason ? '. ' + reason : ', and I won’t make one up.')];
+  if (!last) return { text: 'I don’t have a number for this one yet.', why, chips: [], steer: null };
+  const quote = 'Last time you worked at ' + quoteOf(last.sets, u) + '.';
+  why.push('What I do have is your last session of it, quoted the way you logged it — a record, not a plan.');
+  const next = last.sets[k] || null;
+  const chip = next && !blocked(cur) && (want === 'same' || want === 'ease')
+    ? [{ id: 'last_time', label: 'Last time’s set ' + (k + 1) + ', ' + loadSaid(next.w, u) + ' × ' + reps(next),
+         tw: next.w == null ? '' : String(next.w), tr: String(reps(next)) }] : [];
+  if (want === 'same') return { text: quote + ' You said match last time, so last time’s sets are the plan.', why, chips: chip, steer: null };
+  if (want === 'ease') return { text: quote + ' You said ease off, so nothing heavier than that today.', why, chips: chip, steer: null };
+  // The third answer: going for more (q_want_next's first option). Its stored
+  // value is a word the in-gym copy is fenced against, so it is not spelled here.
+  if (want != null) {
+    return { text: quote + ' You said you’re going for more. Put on what you’re going for and rate the set — I’ll read the rest of today from there.',
+             why: why.concat('I won’t pick a heavier number than your log backs, so the jump is yours to choose today.'), chips: [], steer: null };
+  }
+  if (!asks) return { text: quote + ' I don’t have a number for this one yet.', why, chips: [], steer: null };
+  return { text: quote + (where === 'defer' ? ' I don’t have a number for this one yet — what are you going for?'
+                                            : ' I don’t have a number for today yet, so tell me what you’re going for.'),
+           why: why.concat(WHAT_IT_CHANGES), chips: [], steer: 'want' };
+}
+
+export function fallbackRead(input, exId) {
+  try {
+    const i = input || {};
+    const raw = i.session && Array.isArray(i.session.exercises) ? i.session.exercises : null;
+    if (!raw) return null;
+    const u = i.u === 'kg' ? 'kg' : 'lb';
+    const t = todayOf(i);
+    const base = { answer: 'none', tw: null, tr: null, loadLb: null, usual: null };
+    if (!t.entries.length) {
+      return { ...base, kind: 'empty', exId: null, name: null, steer: null, chips: [],
+               text: 'Add an exercise and I’ll read it against your log.', short: 'Add an exercise.',
+               why: ['I answer about the exercise in hand, and the list is empty.'] };
+    }
+    // The lift in hand: the one named, the one at `current`, the last one
+    // with a ticked set, else the first one with nothing ticked — next up.
+    const cur = (typeof exId === 'string' && t.entries.find(e => e.exId === exId)) || t.current ||
+      t.entries.slice().reverse().find(e => e.ticked.length) || t.entries.find(e => !e.ticked.length) || t.entries[0];
+    const named = { exId: cur.exId, name: cur.name };
+    if (cur.cardio) {
+      return { ...base, ...named, kind: 'cardio', steer: null, chips: [LAST_CHIP, DONE_CHIP],
+               text: 'I don’t set numbers for cardio. Log it as you go, and I’ll read the lifting around it.', short: 'Log it as you go.',
+               why: ['I read weights and reps; cardio has no weight for me to set.'] };
+    }
+    if (!lastOf(i, cur.exId)) {
+      const rough = typeof i.rough === 'function' ? (() => { try { return i.rough(cur.exId); } catch { return null; } })() : null;
+      if (rough != null) {
+        return { ...base, ...named, kind: 'first', steer: null, chips: [],
+                 text: 'You told me you work at about ' + loadSaid(String(rough), u) + ' on ' + cur.name + '. Start around there, and I’ll set targets from what you log.',
+                 short: 'Start around ' + loadSaid(String(rough), u) + '.',
+                 why: ['This is the first time I’ve seen ' + cur.name + ' in your log, so the one number I have is the one you told me.',
+                       'Your first logged sets replace it: from then on your targets come from your sessions.'] };
+      }
+      return { ...base, ...named, kind: 'first', steer: i.asks !== false ? 'rough' : null, chips: [],
+               text: 'This is the first time I’ve seen ' + cur.name + ' in your log. Log a first set at a weight you could do a couple more times with, and I’ll set targets from it' +
+                     (i.asks !== false ? ' — or tell me roughly what you work at.' : '.'),
+               short: 'First time on it here.',
+               why: ['I set targets from your own sessions of a lift, and I don’t have one of this yet.',
+                     'One logged set gives me a weight and reps to work from.' +
+                     (i.asks !== false ? ' A rough weight from you gives me a place to start you until then.' : '')] };
+    }
+    const warm = cur.ticked.length > 0 && !cur.sets.length;
+    const fb = steerWords(i, cur, u, cur.sets.length, warm ? 'warmup' : 'idle');
+    const allW = warm && cur.ticked.every(s => s.type === 'W');
+    const lead = warm ? (allW ? 'Warm-ups on ' + cur.name + ' so far. ' : 'That reads as a warm-up on ' + cur.name + '. ')
+                      : 'Next up, ' + cur.name + '. ';
+    return { ...base, ...named, kind: warm ? 'warmup' : 'idle', steer: fb.steer,
+             chips: fb.chips,
+             text: lead + fb.text, short: warm ? 'Warming up.' : 'Next up, ' + cur.name + '.', why: fb.why };
   } catch {
     return null;
   }

@@ -2277,6 +2277,74 @@ section('O. v54 — the live sheet in its order: the answer, the next set, "How 
   sh = openO(S0);
   check('nothing ticked yet: another is null, so the shipped next-set bubble stands — "Next set: 190 lb × 8." — and no chip row',
         eng2.another(S0, { current: 0 }) === null && order(sh).includes('coach: Next set: 190 lb × 8.') && !chipsOf(sh).length, J_(order(sh)));
+  /* v74: MICAH'S BENCH, 22 Oct 2026 — four typed warm-ups ticked (45 × 2,
+     135 × 10, 135 × 5, 185 × 5), last time 225 × 4 and 225 × 2, no target
+     (the heavy defer). The sheet said "Nothing I can add from your log right
+     now." It now says what I do know and asks what he is going for. */
+  const W = { type: 'W' };
+  const mh = [{ id: 'om', startedAt: NOW - 4 * DAY, _date: key(NOW - 4 * DAY), exercises: [{ exId: 'barbell-bench-press', ...OL['barbell-bench-press'],
+    sets: [['45', '10', 'W'], ['135', '5', 'W'], ['185', '3', 'W'], ['225', '4', 'N'], ['225', '2', 'N']].map(([w, r, t]) => ({ w, r, type: t, done: true })) }] }];
+  state.input = { ...OIN, sessions: mh, settings: { v: 2, mute: {}, answers: {}, asked: {} } };
+  state.calls.length = 0;
+  const SM = liveO([['barbell-bench-press', [[45, 2, true, W], [135, 10, true, W], [135, 5, true, W], [185, 5, true, W], ['', '', false]]]]);
+  const usedM = [];
+  body.children.length = 0;
+  UI.liveChip({ ...optsO(SM), useNext: (at2, t) => usedM.push([at2, t]) }).onclick();
+  sh = sheetO();
+  const FBT = 'Warm-ups on Barbell Bench Press so far. Last time you worked at 225 lb × 4, then 225 lb × 2. I don’t have a number for today yet, so tell me what you’re going for.';
+  check('v74, Micah’s bench: never "Nothing I can add" — his question, then "' + FBT + '", Why?, and the question row in the ask host',
+        J_(order(sh).slice(0, 3)) === J_(['you', 'coach: ' + FBT, 'chips: Why?']) &&
+        !find(sh, 'coach-bub-t').some(x => /Nothing I can add/.test(x.textContent) || x.textContent === C.LIVE_NONE.text), J_(order(sh)));
+  const askM = find(sh, 'coach-live-ask')[0];
+  check('… the one question: "What are you going for on Barbell Bench Press today?" — Go for more · Match last time · Ease off — stamped per lift as it is drawn, and no other question',
+        (find(askM, 'coach-bub-t')[0] || {}).textContent === 'What are you going for on Barbell Bench Press today?' &&
+        J_(buttonsIn(askM).map(b => b.textContent)) === J_(['Go for more', 'Match last time', 'Ease off']) &&
+        J_(state.calls.filter(c => c[0] === 'markAsked')) === J_([['markAsked', 'q_want_next:barbell-bench-press']]) && !chipsOf(sh).length, J_(state.calls));
+  btn(sh, 'Why?').onclick();
+  check('… Why? says what I am missing, that the quote is a record, and what an answer changes',
+        find(sh, 'coach-bub-r').some(x => /a record, not a plan/.test(x.textContent)) &&
+        find(sh, 'coach-bub-r').some(x => /^Tell me what you’re going for/.test(x.textContent)), J_(find(sh, 'coach-bub-r').map(x => x.textContent)));
+  // His answer: the fact through learnBy, the ack, then the answer read again with it in.
+  state.input = { ...state.input, settings: { v: 2, mute: {}, answers: {}, asked: {}, knowBy: { wantNext: { 'barbell-bench-press': { v: 'same', c: 1, at: NOW - 1000, n: 1 } } } } };
+  buttonsIn(askM).find(b => b.textContent === 'Match last time').onclick();
+  await new Promise(r => setTimeout(r, 0));
+  check('… "Match last time": learnBy(wantNext, barbell-bench-press, same), his bubble, "Noted. Last time’s sets are the plan.", the answer read back and a quote chip of last time',
+        J_(state.calls.filter(c => c[0] === 'learnBy')) === J_([['learnBy', 'wantNext', 'barbell-bench-press', 'same']]) &&
+        J_(find(askM, 'coach-bub-t').map(x => x.textContent).slice(1)) === J_(['Match last time', 'Noted. Last time’s sets are the plan.']) &&
+        /You said match last time, so last time’s sets are the plan\.$/.test(find(sh, 'coach-bub-t')[1].textContent) &&
+        J_(chipsOf(sh)) === J_(['Last time’s set 1, 225 lb × 4']), J_(order(sh)) + ' ' + J_(chipsOf(sh)));
+  btn(sh, 'Last time’s set 1, 225 lb × 4').onclick();
+  check('… and the chip goes through the shipped useNext path, after his last ticked row: exactly last time’s 225 × 4',
+        !sheetO() && J_(usedM) === J_([[{ exIdx: 0, setIdx: 3 }, { tw: '225', tr: '4' }]]), J_(usedM));
+  // No history at all on the lift: what he can do, and a weight he can type.
+  state.input = { ...OIN, sessions: [], log: 'empty', settings: { v: 2, mute: {}, answers: {}, asked: {} } };
+  state.calls.length = 0;
+  const SF = liveO([['barbell-bench-press', [['', '', false]]]]);
+  sh = openO(SF);
+  const askF = find(sh, 'coach-live-ask')[0];
+  // The number box sits between the question's words and its chips (this DOM keeps no tag names).
+  const boxOf = host => (find(host, 'coach-bub')[0] || { children: [] }).children.find(c => 'placeholder' in c && c.type === 'number') || null;
+  const boxF = boxOf(askF);
+  check('v74, a lift the log has never seen: "This is the first time I’ve seen Barbell Bench Press in your log. …", and "Roughly what do you work at on Barbell Bench Press?" with a number box in his unit, Save and I’ll log a set first',
+        /^coach: This is the first time I’ve seen Barbell Bench Press in your log\./.test(order(sh)[1]) &&
+        (find(askF, 'coach-bub-t')[0] || {}).textContent === 'Roughly what do you work at on Barbell Bench Press?' && !!boxF && boxF.placeholder === 'lb' &&
+        J_(buttonsIn(askF).map(b => b.textContent)) === J_(['Save', 'I’ll log a set first']), J_(order(sh)));
+  btn(askF, 'Save').onclick();
+  check('… Save with the box empty stores nothing and keeps the row', !state.calls.some(c => c[0] === 'learnBy') && buttonsIn(askF).length === 2);
+  boxF.value = '135';
+  btn(askF, 'Save').onclick();
+  await new Promise(r => setTimeout(r, 0));
+  check('… 135 typed: learnBy(rough, barbell-bench-press, 135) — pounds — his bubble "135 lb" and the ack',
+        J_(state.calls.filter(c => c[0] === 'learnBy')) === J_([['learnBy', 'rough', 'barbell-bench-press', 135]]) &&
+        J_(find(askF, 'coach-bub-t').map(x => x.textContent).slice(1)) === J_(['135 lb', 'Noted. I’ll start you there and set targets from what you log.']), J_(state.calls));
+  state.input = { ...OIN, sessions: [], log: 'empty', u: 'kg', settings: { v: 2, mute: {}, answers: {}, asked: {} } };
+  state.calls.length = 0;
+  sh = openO(SF);
+  const askK = find(sh, 'coach-live-ask')[0];
+  boxOf(askK).value = '60';
+  btn(askK, 'Save').onclick();
+  check('… on a kilo account 60 typed is stored as pounds (132.28), through units.js', J_(state.calls.filter(c => c[0] === 'learnBy')) === J_([['learnBy', 'rough', 'barbell-bench-press', 132.28]]), J_(state.calls));
+  state.input = OIN; state.calls.length = 0;
   // The log not read yet: the shipped waiting line, no chips, no number.
   state.logKnown = false;
   sh = openO(S2);

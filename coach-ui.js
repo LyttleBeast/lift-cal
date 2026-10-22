@@ -27,7 +27,7 @@
 import { el, sheet, noteEl, toast } from './ui.js';
 import { GROUPS } from './exercises.js';
 import { coach, CATEGORIES, QUESTIONS, PRO_ADDS, LIVE_NONE, isMuted, TOPICS_SHOWN, MARK_ASK, FUEL_ROUTES,
-         EFFORT, rateAsk, rateAnswer } from './coach.js';
+         EFFORT, rateAsk, rateAnswer, targetSaid } from './coach.js';
 import { coachInput, coachReady, coachLogKnown, rememberGreeting, rememberHype, coachSettings, coachSettingsKnown,
          setCategoryMuted, answerQuestion, markAsked, liveSessionOnDevice, coachPro, setAim, setGoalLift,
          markSession, loadFuel, fuelNeedsRead, learn, learnBy, learnTally } from './coach-data.js';
@@ -1312,14 +1312,22 @@ export function openLiveSheet(opts = {}) {
   const first = setNow();
   // Never a number off a log not read yet; the chips need none.
   const next = known && first && !an ? first.next : null;
+  /* v74: and where all three are silent — no another, no habit read, no next
+     set — WHEN I HAVE NO NUMBER (coach-live.js fallbackRead): his last
+     session of the lift quoted, and one question so he can steer. Never
+     "Nothing I can add": the answer to "I don't have a number" is what I do
+     have. LIVE_NONE is the last resort under it, and says what to do. */
+  const fallbackNow = () => { try { return coach(coachInput({ live: true })).fallback(opts.session, at); } catch { return null; } };
+  let fb = known && !an && !a && !next ? fallbackNow() : null;
   // With nothing from his habits to say, the next set IS the answer, rather
-  // than "Nothing Coach can add" above a number Coach just added.
+  // than an empty line above a number I just added.
   let coachBub = null;
   if (an) coachBub = bubble('coach', an.text);
-  if (a || (!an && !next)) bubble('coach', a ? a.text : known ? LIVE_NONE.text : LIVE_WAIT);
+  else if (fb) coachBub = bubble('coach', fb.text);
+  if (a || (!an && !fb && !next)) bubble('coach', a ? a.text : known ? LIVE_NONE.text : LIVE_WAIT);
   if (next) bubble('coach', next.text);
 
-  let why = (an ? an.why : []).concat(a ? a.why : !an && known && !next ? LIVE_NONE.why : [], next ? next.why : []);
+  let why = (an ? an.why : fb ? fb.why : []).concat(a ? a.why : !an && !fb && known && !next ? LIVE_NONE.why : [], next ? next.why : []);
   const row = el('div', 'coach-chips');
   if (why.length) {
     const w = el('button', 'coach-chip', 'Why?');
@@ -1428,24 +1436,61 @@ export function openLiveSheet(opts = {}) {
     rateHost.appendChild(chips);
   };
   drawRate(first);
-  drawChips(an, first && first.rated);
+  drawChips(an || fb, first && first.rated);
 
   /* v73: THE ONE QUESTION the live lane may put — what one step up is on the
      machine in hand (coach-ask.js q_equipment_step). Stamped as asked the
      moment it is drawn, like every question; a tap writes the fact through
      learnBy() and says the ack; "Not sure" stores nothing beyond the stamp. */
-  if (question) {
-    markAsked(question.stamp || question.id).catch(() => {});
-    const qb = bubble('coach ask', question.text, askHost);
+  /* v74: or, where the answer has no number, ITS question — what he is going
+     for on the lift (q_want_next), or roughly what he works at on one the log
+     has never seen (q_rough_weight). One question row a sheet: the step
+     question, when it is put, changes more and goes first. After his answer
+     the answer above is read again, so it says his answer back and — on
+     "Match last time" or "Ease off" — offers last time's next set on a chip. */
+  const steer = !question ? ((an && an.question) || (fb && fb.question) || null) : null;
+  const reread = () => {
+    const fresh = an ? anotherNow() : fallbackNow();
+    if (!fresh) return;
+    if (an) an = fresh; else fb = fresh;
+    if (coachBub && coachBub.children[0]) coachBub.children[0].textContent = fresh.text;
+    why = fresh.why.concat(a ? a.why : []);
+    drawChips(fresh, first && first.rated);
+  };
+  const put = question || steer;
+  if (put) {
+    markAsked(put.stamp || put.id).catch(() => {});
+    const qb = bubble('coach ask', put.text, askHost);
     const qrow = el('div', 'coach-chips');
-    question.options.forEach(op => {
+    // A weight he types (q_rough_weight): his unit in the box, pounds stored.
+    let box = null;
+    if (put.input === 'weight') {
+      box = el('input');
+      box.type = 'number'; box.inputMode = 'decimal'; box.min = '0'; box.step = 'any';
+      box.setAttribute('aria-label', 'Weight in ' + unitW(u));
+      box.placeholder = unitW(u);
+      // The app's own input look (rack.css styles every input); just room for it here.
+      box.style.marginTop = '8px'; box.style.width = '100%';
+      qb.appendChild(box);
+    }
+    put.options.forEach(op => {
       const b = el('button', 'coach-chip', op.label);
       b.onclick = () => {
+        let pick = op;
+        if (op.value === 'input') {
+          const v = parseFloat(box && box.value);
+          const lb = Number.isFinite(v) && v > 0 ? Math.round(wIn(v, u) * 100) / 100 : null;
+          if (lb == null || lb < 1 || lb > 2000) { try { box.focus(); } catch {} return; }
+          pick = { ...op, value: lb, label: fmtW(lb, u) + ' ' + unitW(u) };
+        }
         qrow.remove();
-        bubble('you', op.label, askHost);
-        writeAnswer(question, op).catch(() => {});
-        const ack = op.ack !== undefined ? op.ack : question.ack;
+        if (box) box.remove();
+        bubble('you', pick.label, askHost);
+        const ack = pick.ack !== undefined ? pick.ack : put.ack;
         if (ack) bubble('coach', ack, askHost);
+        const w = writeAnswer(put, pick);
+        if (put === steer && pick.value != null) w.then(reread).catch(() => {});
+        else w.catch(() => {});
         try { sh.scrollTop = sh.scrollHeight; } catch {}
       };
       qrow.appendChild(b);

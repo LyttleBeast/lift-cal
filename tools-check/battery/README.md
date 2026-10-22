@@ -61,6 +61,25 @@ saying nothing on a working set it cannot tell from one costs a miss, never a
 wrong. Each next-set row in the report carries the day's `target` (pounds),
 its `mode` and `today` (the ticks so far), for reading a report by hand.
 
+### Dead ends (rack-v74)
+
+Micah's bench, 22 Oct 2026: four typed warm-ups ticked, last time 225 × 4 and
+225 × 2, and the sheet said "Nothing I can add from your log right now." The
+harness now opens the sheet as he would at every moment — before the first set
+of each exercise, after every tick, warm-ups included — and reads what
+`coach-ui.js` would draw (another, the habit read, the next set, and since v74
+the fallback where all three are silent). `scoring.mjs` `deadEndOf()` calls it
+a dead end when nothing is drawn, a shipped dead line is drawn, or a yes has no
+number, no quote and no question; `deadTarget()` when a target is a defer drawn
+without last time beside it. Both are printed as rates (`dead ends (v74):`),
+and under `--gate all` a dead end in the live sheet fails the run
+(`--no-dead-gate` measures an older build). The fallback's answers are scored
+too: the harness answers "what are you going for?" on every lift of the cut
+(same / ease / more, rotated), and every quote chip it brings must be a set of
+the lift's last logged session (`F_QUOTE`) and never stand after a stop today
+(`F_AFTER_STOP`). rack-v73 measured 20.35% of live asks (40.8% after a warm-up)
+and 23.39% of targets; rack-v74 measures 0.
+
 ### What he said (rack-v72)
 
 Since v72 a lifter can carry `settings.knowBy.warm` — what he told Coach about

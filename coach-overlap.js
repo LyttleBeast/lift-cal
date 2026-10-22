@@ -65,7 +65,10 @@
 // session MATH of analytics.js (the e1rm the set row prints). coach.js imports
 // this; nothing imports back.
 
-import { baselines, exposuresFor, targetFor, nextSet } from './coach-prog.js';
+import { baselines, exposuresFor, targetFor, nextSet, targetSaid } from './coach-prog.js';
+// v74: a target as every view says it (its line, and a defer's quote of last
+// time), handed on to coach.js, which reaches coach-prog.js only through here.
+export { targetSaid };
 import { bwAt, energyBand, volumeFloor, paceFor, MAIN_LIFTS, mainLiftGroups } from './coach-goal.js';
 import { labelW, labelRate, wOut } from './units.js';
 import { GROUPS, GROUP_ORDER, EXERCISE_BY_ID } from './exercises.js';
@@ -1094,6 +1097,25 @@ export function stepFor(input, exId, now) {
     if (!l || !Number.isFinite(now)) return null;
     const b = baselinesOf(i, l, ctxOf(i, now));
     return b && b.step ? { value: b.step.value, n: b.step.n, source: b.step.source } : null;
+  } catch {
+    return null;
+  }
+}
+
+/* v74: THE TARGET on one lift of the prepared log — coach-prog.js
+   targetFor() with the lift's marks, as the builder reads it — or null when
+   the lift is not in the log. For the live answer when I have no number
+   (coach-live.js fallbackRead): whether one exists, and the reason when it
+   does not. Here for the same reason nextSetFor() is. */
+export function targetOfLift(input, exId, now, unseen) {
+  try {
+    const i = prepare(input || {});
+    const l = i.lifts.find(x => x.exId === exId);
+    if (!Number.isFinite(now)) return null;
+    // A lift the log has never seen: its first-time target, from the library
+    // row coach.js hands in (`unseen`, with the rough weight he told me).
+    if (!l) return unseen && unseen.exId === exId ? targetFor({ ...unseen, exposures: [], groupDaysSince: null }, ctxOf(i, now), null) : null;
+    return targetFor(l, ctxOf(i, now), l.mark || null);
   } catch {
     return null;
   }
