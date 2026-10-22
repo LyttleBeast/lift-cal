@@ -58,6 +58,8 @@
 //   goal        { aim, exp }: his answers to Coach's two goal questions
 //   energy      { context, rateWk }: the weight trend, read by coach-goal.js
 //   targetsOn   whether the targets category is on. Off, no row has a target
+//   wantNext    (v74) shape key -> 'same' | 'push' | 'ease', what he answered
+//               after that shape's last session; 'ease' takes a set per lift
 //
 // Imports exercises.js, units.js, blocks.js, coach-tags.js, coach-prog.js
 // (the targets), coach-ramp.js (v70: which sets were the warm-up) and the
@@ -251,6 +253,31 @@ const copySet = s => ({
   type: (s && s.type) || 'N',
   ...dpOf(s)
 });
+
+/* v74: EASING OFF. What he answered "Next time on … — same plan, push it, or
+   ease off?" for the shape being built: `i.wantNext` is a map by shape key
+   (coach.js builderInput, inside the fact's TTL and only until the shape's
+   next session), or one word for whatever is built. A group focus has no
+   shape and no answer. */
+export const EASE_MIN_SETS = 2;
+export const EASE_LINE = 'One set fewer per lift — you asked to ease off.';
+function wantOf(i, focus) {
+  const w = i.wantNext;
+  if (!w) return null;
+  if (typeof w === 'string') return w;
+  return focus && focus.kind === 'shape' && typeof w === 'object' ? w[focus.key] || null : null;
+}
+/* A row's sets less its last working run — a drop set with its drops, through
+   analytics.js dropRuns — when at least EASE_MIN_SETS working runs remain. The
+   warm-ups (W) are his and stand. Every set object is the one handed in. */
+export function easeSets(sets) {
+  const list = Array.isArray(sets) ? sets : [];
+  const runs = dropRuns(list);
+  const work = runs.map((run, k) => [run, k]).filter(([run]) => run[0] && run[0].type !== 'W');
+  if (work.length <= EASE_MIN_SETS) return list;
+  const gone = new Set(work[work.length - 1][0]);
+  return list.filter(s => !gone.has(s));
+}
 
 /* ================================================================
    HOW IT READS
@@ -587,6 +614,16 @@ function build(i, o, top) {
     };
   });
 
+  /* v74: "EASE OFF" (coach-ask.js q_want_next, knowBy.wantNext for this
+     shape, answered after its last session): every lifting row loses its
+     last working set — the whole last run, so a drop set goes with its
+     drops — and keeps at least two. Cardio rows and his warm-ups stand.
+     `wantNext` is the shape's answer: a map by shape key from coach.js, or
+     one word for whatever is built (the verifier's shape). */
+  const eased = wantOf(i, focus) === 'ease';
+  const trimmed = eased ? chosen.map(e => (e.equipment === 'cardio' ? e : { ...e, sets: easeSets(e.sets) })) : chosen;
+  const easedAny = eased && trimmed.some((e, k) => e.sets.length !== chosen[k].sets.length);
+
   /* v54: HIS FOCUS COMES FIRST (spec §6.5, SHIP-V54-PROMPT §7). With a focus
      group set (Settings → Coach → Your goal), the proposal's exercises of
      that group move to the top, and everything else follows — each side in
@@ -595,10 +632,10 @@ function build(i, o, top) {
      structure, and it is never split to move one exercise. A proposal with
      none of the group, or nothing else, is as it was. */
   const fg = typeof i.focusGroup === 'string' && GROUPS[i.focusGroup] ? i.focusGroup : null;
-  const mine = fg ? chosen.filter(e => e.group === fg) : [];
-  const ordered = fg && !chosen.some(e => e.block) && mine.length && mine.length < chosen.length
-    ? mine.concat(chosen.filter(e => e.group !== fg)) : chosen;
-  const focusMoved = ordered.some((e, k) => e !== chosen[k]);
+  const mine = fg ? trimmed.filter(e => e.group === fg) : [];
+  const ordered = fg && !trimmed.some(e => e.block) && mine.length && mine.length < trimmed.length
+    ? mine.concat(trimmed.filter(e => e.group !== fg)) : trimmed;
+  const focusMoved = ordered.some((e, k) => e !== trimmed[k]);
 
   // The block annotations come across exactly as he recorded them; a drop
   // that empties a block renumbers the rest the way every other editor of a
@@ -645,7 +682,12 @@ function build(i, o, top) {
       : 'Worked out from ' + sessionDay(t.from.date, t.from.daysAgo) + ', the last time you did this lift.');
     return { ...t, why };
   };
-  const targets = laid.map(targetOf);
+  // v74: eased, a target's rows lose the same last set the proposal's did, so
+  // "Start with Coach's targets" starts the same workout the rows show.
+  const targets = laid.map(e => {
+    const t = targetOf(e);
+    return t && eased && e.equipment !== 'cardio' && t.sets.length ? { ...t, sets: easeSets(t.sets) } : t;
+  });
 
   /* THE THREE VIEWS OF THE NUMBERS, one proposal.
 
@@ -723,7 +765,8 @@ function build(i, o, top) {
   const headline = 'Built from ' + sessionWhen(base.daysAgo, base.date) + ' — ' +
     (focus.kind === 'shape'
       ? 'your most recent ' + focus.name + '.'
-      : 'the most recent with two or more working sets for ' + groupWord(focus.group) + '.');
+      : 'the most recent with two or more working sets for ' + groupWord(focus.group) + '.') +
+    (easedAny ? ' ' + EASE_LINE : '');
 
   const reason = [];
   if (focus.kind === 'shape' && focus.overdue && i.overdueWhy) {

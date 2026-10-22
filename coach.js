@@ -54,7 +54,7 @@ import { propose, liveRefusal, buildMenu, swapTo, BUILD_ASK } from './coach-buil
 import { liveRead, setRead, anotherSetRead, LIVE_NONE, REP_DROP, EFFORT, rateAsk, rateAnswer } from './coach-live.js';
 import { AIMS, EXPERIENCE, energyContext, normGoalLift, goalChecks, AIM_DIR } from './coach-goal.js';
 import { readLift, lighterWeek, recordDay, liftsMoving, prepare, targetsReplay, compareSession, nextTargets,
-         liftTrend, goalLiftRead, bigThree, focusRead, groupDaysAt, nextSetFor, stepFor } from './coach-overlap.js';
+         liftTrend, goalLiftRead, bigThree, focusRead, groupDaysAt, nextSetFor, stepFor, dropFor } from './coach-overlap.js';
 import { restRead, usualRun, replay, readinessRows, readinessHas, readinessAnswer, readinessHeavy, sessionRows,
          mergeRows, groupLine, restAnswer, lighterAnswer, groupAnswer, REST_REASON } from './coach-ready.js';
 import { fueledRead, fuelAnswer, fedUnloggedAnswer, fedNoneAnswer, fuelRow, sessionFoodRows, fuelDates, logStyle } from './coach-fuel.js';
@@ -66,8 +66,10 @@ import { workSetsOf, rampLoads, rampProfile } from './coach-ramp.js';
 // is its `answers` subset), the stored facts' normaliser and reader, the
 // picker and the recap's plan. It imports units.js and coach-ramp.js, never
 // this file. v73: knowOf (the told step), stepAskLift (the step question's
-// gate) and stepStamp (its per-lift stamp).
-import { ASK_QUESTIONS, normKnow, pickQuestion, debriefPlan, warmAnswer, aimLabel, ID_RE, knowOf, stepAskLift, stepStamp } from './coach-ask.js';
+// gate) and stepStamp (its per-lift stamp). v74: idFor (what a question is
+// about in a moment) and dropStamp (the drop question's per-lift stamp).
+import { ASK_QUESTIONS, normKnow, pickQuestion, debriefPlan, warmAnswer, aimLabel, ID_RE, knowOf, stepAskLift, stepStamp,
+         idFor, dropStamp } from './coach-ask.js';
 
 const DAY = 864e5;
 
@@ -385,6 +387,22 @@ function derive(input) {
      answer about a machine he may not use any more is a prior there and
      nothing here. */
   const stepToldOf = ex => { const k = knowOf(input.settings, 'step', String((ex && ex.exId) || ''), now); return k && !k.expired ? k.v : null; };
+  /* v74: three more of his answers, each read inside its TTL only
+     (coach-ask.js KNOW_KEYS) and handed to coach-prog.js as one word:
+       hold      knowBy.hold.<exId> — 'hold' | 'light'; 'day' changes nothing
+                 and is not put on the lift
+       wantNext  knowBy.wantNext.<shapeKey> for the shape the lift was LAST
+                 done in, and only while the answer is newer than that
+                 exposure — the next session of the shape consumes it
+       back      know.back 'elsewhere', the same way: only until the lift is
+                 done again (the re-entry it changes has happened then) */
+  const holdOf = ex => { const k = knowOf(input.settings, 'hold', String((ex && ex.exId) || ''), now); return k && !k.expired && k.v !== 'day' ? k.v : null; };
+  const wantNextAt = (shapeKey, lastAt) => {
+    if (!shapeKey) return null;
+    const k = knowOf(input.settings, 'wantNext', shapeKey, now);
+    return k && !k.expired && k.at > lastAt && k.v !== 'same' ? k.v : null;
+  };
+  const backAt = lastAt => { const k = knowOf(input.settings, 'back', null, now); return k && !k.expired && k.at > lastAt && k.v === 'elsewhere' ? k.v : null; };
 
   /* v70: his ramp loads per lift (coach-ramp.js rampLoads) over the whole log,
      oldest first — the loads he only ever warms up with — so every working-set
@@ -683,13 +701,49 @@ function derive(input) {
           ...(warmOf(ex) ? { warm: warmOf(ex) } : null),
           // v73: and what he said one step up is (knowBy.step, pounds), the
           // same way — read inside its TTL only; stepOf() prefers the log.
-          ...(stepToldOf(ex) != null ? { stepTold: stepToldOf(ex) } : null)
+          ...(stepToldOf(ex) != null ? { stepTold: stepToldOf(ex) } : null),
+          // v74: why it came in under, what next time on its last shape
+          // should be, and what the gap was — each only when he said.
+          ...(holdOf(ex) ? { hold: holdOf(ex) } : null),
+          ...(wantNextAt(shapeKeyOf(s), s.startedAt) ? { wantNext: wantNextAt(shapeKeyOf(s), s.startedAt) } : null),
+          ...(backAt(s.startedAt) ? { back: backAt(s.startedAt) } : null)
         });
       });
     });
     const days = groupDays();
     return [...by.values()].sort((a, b) => (a.exId < b.exId ? -1 : a.exId > b.exId ? 1 : 0))
       .map(l => ({ ...l, groupDaysSince: l.group && days[l.group] != null ? days[l.group] : null }));
+  });
+  /* v74: the recurring shape a shaped session belongs to — the one among
+     shapes() whose cluster holds its signature — as { key, name, count }, or
+     null when the session recurs in nothing. One definition, for the lifts
+     above, the recap's question and the builder. */
+  const shapeOf = s => {
+    const sig = s && Array.isArray(s.signature) && s.signature.length ? s.signature.join('+') : null;
+    if (!sig) return null;
+    const sh = shapes().find(x => x.members.includes(sig));
+    return sh ? { key: sh.key, name: sh.name, count: sh.count } : null;
+  };
+  const shapeKeyOf = s => { const sh = shapeOf(s); return sh ? sh.key : null; };
+  /* v74: the lighter sessions he named per lift (knowBy.hold 'light', inside
+     its TTL), as { exId: [startedAt] } — the newest exposure at or before the
+     answer, which is the session the recap asked after — for
+     coach-overlap.js's lift-only light weeks. */
+  const lightMarks = () => once('lightMarks', () => {
+    const out = {};
+    const by = (input.settings && input.settings.knowBy && input.settings.knowBy.hold) || {};
+    Object.keys(by && typeof by === 'object' ? by : {}).forEach(id => {
+      const k = knowOf(input.settings, 'hold', id, now);
+      if (!k || k.expired || k.v !== 'light') return;
+      let at = null;
+      all().forEach(s => {
+        if (s.startedAt > k.at) return;
+        if (!mergeSessionExercises((s.session && s.session.exercises) || []).some(ex => ex && ex.exId === id && (ex.sets || []).some(isWorking))) return;
+        if (at == null || s.startedAt > at) at = s.startedAt;
+      });
+      if (at != null) out[id] = [at];
+    });
+    return out;
   });
 
   /* THE SHIPPED OVERDUE SHAPE (v42's session.shapeOverdue, byte for byte):
@@ -725,7 +779,7 @@ function derive(input) {
     now, lib, input, once,
     all, inWindow, shapes, groupDays, groupGap,
     setsThisWeek, setsTrailing, sessionsIn, sessionGap, index,
-    pDays, pSessions, trainedDays, pLift, lifts,
+    pDays, pSessions, trainedDays, pLift, lifts, shapeOf, lightMarks,
     groupOf, equipOf, knownOf, warmOf,
     marks, markOf, idOf, perf, stalestOf, overdue
   };

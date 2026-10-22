@@ -65,7 +65,7 @@
 // session MATH of analytics.js (the e1rm the set row prints). coach.js imports
 // this; nothing imports back.
 
-import { baselines, exposuresFor, targetFor, nextSet } from './coach-prog.js';
+import { baselines, exposuresFor, targetFor, nextSet, dropOf } from './coach-prog.js';
 import { bwAt, energyBand, volumeFloor, paceFor, MAIN_LIFTS, mainLiftGroups } from './coach-goal.js';
 import { labelW, labelRate, wOut } from './units.js';
 import { GROUPS, GROUP_ORDER, EXERCISE_BY_ID } from './exercises.js';
@@ -231,6 +231,13 @@ function baselinesOf(i, ex, c) {
   const own = i && Array.isArray(i.lifts) && i.lifts.find(l => l.exId === ex.exId) === ex;
   return own ? memo(i, 'b|' + ex.exId + '|' + ctxKey(c), () => baselines(ex, c)) : baselines(ex, c);
 }
+// v74: the week numbers of the lighter sessions he named on one lift
+// (input.lightMarks, from coach.js: knowBy.hold 'light' inside its TTL), as
+// blocksOf counts weeks — a Set, empty when none.
+function lightWeeksOf(i, exId, now) {
+  const at = i && i.lightMarks && typeof i.lightMarks === 'object' ? i.lightMarks[exId] : null;
+  return new Set((Array.isArray(at) ? at : []).filter(Number.isFinite).map(ms => Math.floor(daysBetween(ms, now) / 7)).filter(k => k >= 0));
+}
 // The weeks and the light ones, once per moment.
 function weeksOf(i, now) {
   return memo(i, 'w|' + now, () => { const blocks = blocksOf(i.shaped, now); return { blocks, ...lightOf(blocks) }; });
@@ -320,8 +327,12 @@ function fatigueOf(blocks, light, g) {
      ex     { exId, name, group, equipment, exposures, groupDaysSince } — the
             shape coach-prog.js's prescribe() takes
      ctx    { now, u, aim, exp, energy, rateWk } — prescribe()'s context
-     input  { shaped, weighIns, lifts, hidden, goalDir, goalRateWk, targetsOn }
+     input  { shaped, weighIns, lifts, hidden, goalDir, goalRateWk, targetsOn,
+              lightMarks }
             shaped: coach.js's shaped sessions (sets and fsets per group)
+            lightMarks (v74): exId -> [startedAt…], the lighter sessions he
+              named on a lift (knowBy.hold 'light'), light weeks for that
+              lift's own read only
             weighIns: [{ lb, t }]
             lifts: every lift he has logged, for a variation from his own log
 
@@ -353,7 +364,12 @@ function readOne(ex0, c, i) {
   if (b.status === 'progressing') return none('progressing', { b });
 
   const { blocks, light } = weeksOf(i, now);
-  const inLight = ms => light.has(Math.floor(daysBetween(ms, now) / 7));
+  /* v74: and the lighter week he named on THIS lift (coach-ask.js q_drop_why
+     'light', threaded in as input.lightMarks { exId: [startedAt…] }) — a
+     second source of light weeks for the lift's own read only, beside the
+     volume one every read shares. */
+  const marks = lightWeeksOf(i, ex.exId, now);
+  const inLight = ms => { const k = Math.floor(daysBetween(ms, now) / 7); return light.has(k) || marks.has(k); };
 
   const S = b.series;
   const lastAt = S[S.length - 1].startedAt;
@@ -807,6 +823,8 @@ function record(i, now) {
        in that marked session went unread too). coach.js liftsOf() sets
        mark.latest exactly when the newest exposure is marked. */
     if (ex.mark && ex.mark.latest) return;
+    // v74: nor a lift in the lighter week he named (lightMarks) this week.
+    if (lightWeeksOf(i, ex.exId, now).has(0)) return;
     const b = baselinesOf(i, ex, ctx);
     if (!b || b.assisted || b.exposures < RECORD_MIN_EXPOSURES || b.status === 'declining') return;
     const tops = b.tops;
@@ -1094,6 +1112,23 @@ export function stepFor(input, exId, now) {
     if (!l || !Number.isFinite(now)) return null;
     const b = baselinesOf(i, l, ctxOf(i, now));
     return b && b.step ? { value: b.step.value, n: b.step.n, source: b.step.source } : null;
+  } catch {
+    return null;
+  }
+}
+
+/* v74: THE DROP on one lift of the prepared log — coach-prog.js dropOf(): the
+   last two exposures trip the shape test with the newer one lower, inside its
+   gap — with the lift's name, for the drop question's gate and text
+   (coach-ask.js q_drop_why). { exId, name, pct, w, prevW, at } or null. Here
+   for the reason stepFor() is. */
+export function dropFor(input, exId, now) {
+  try {
+    const i = prepare(input || {});
+    const l = i.lifts.find(x => x.exId === exId);
+    if (!l || !Number.isFinite(now)) return null;
+    const d = dropOf(l, ctxOf(i, now));
+    return d ? { exId: l.exId, name: String(l.name || l.exId), ...d } : null;
   } catch {
     return null;
   }

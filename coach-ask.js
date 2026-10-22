@@ -16,9 +16,12 @@
 //                  the stored shape and drops junk, never throws.
 //   THE CATALOG    every question Coach may ask — the seven that shipped before
 //                  v72 (moved here from coach.js, unchanged in meaning; coach.js
-//                  QUESTIONS is the `answers` subset of this table) and the two
+//                  QUESTIONS is the `answers` subset of this table), the two
 //                  the recap asks: were those your warm-ups, and did that record
-//                  have more in it. A question names the rules its answer
+//                  have more in it, (v73) the step on a machine, and (v74) the
+//                  three the log cannot supply: what next time on this kind of
+//                  day should be, why a lift came in 15% under, and whether a
+//                  gap was time off. A question names the rules its answer
 //                  changes (`changes`), and tools-check/coach-registry.mjs
 //                  fails one that changes nothing — a survey is not a question.
 //   THE ENGINE     pickQuestion(): one question for one moment, scored and
@@ -356,6 +359,9 @@ export const ASK_QUESTIONS = Object.freeze([
     id: 'q_goal_direction',
     moments: Object.freeze(['open']),
     text: 'Which way are you trying to go right now?',
+    // v74: the sheet's starter bubbles may carry the opener as one chip
+    // (coach.js topicsFor); `short` is its label there.
+    short: 'Which way are you going?',
     options: Object.freeze([
       { value: 'down', label: 'Down' },
       { value: 'hold', label: 'Holding' },
@@ -454,6 +460,7 @@ export const ASK_QUESTIONS = Object.freeze([
   {
     id: 'q_goal_check_weight',
     moments: Object.freeze(['open']),
+    short: 'Did your goal change?',
     text: (d, u) => {
       const w = (d.f('coach.goalChecks') || {}).weeks || [];
       const moved = w.length ? w[w.length - 1].to - w[0].from : 0;
@@ -474,6 +481,7 @@ export const ASK_QUESTIONS = Object.freeze([
   {
     id: 'q_goal_check_targets',
     moments: Object.freeze(['open']),
+    short: 'Did your goal change?',
     text: (d, u) => {
       const g = d.f('weight.goalRateWk');
       return 'You set ' + aimLabel(d.f('coach.aim')) + ', and your food targets are set to ' +
@@ -583,8 +591,120 @@ export const ASK_QUESTIONS = Object.freeze([
     stampOf: ctx => (ctx && ctx.step ? stepStamp(ctx.step.exId) : 'q_equipment_step'),
     ack: 'Noted. I’ll use that as the step here until your log shows me another.',
     when: (d, ctx) => !!(ctx && ctx.step)
+  },
+
+  /* ---------- v74: the three the log cannot answer ---------- */
+  /* WHAT NEXT TIME SHOULD BE, on this kind of day. Asked on the recap of a
+     session whose shape recurs (ctx.shape: the shape among session.shapes
+     the record belongs to, with its name), never after a bad-day mark or a
+     "harder" rating — those days have their own line. One answer per shape,
+     consumed by the shape's next session or in 14 days (coach.js reads the
+     fact only while its `at` is after the lift's last exposure). `push`
+     turns the confirm dial to one look for that shape's lifts (never two
+     steps; a cut, maintain or deep deficit still see it twice); `ease` holds
+     the targets and the builder takes a set per lift; `same` is a stored
+     "nothing to change", so it is not asked again for a fortnight. */
+  {
+    id: 'q_want_next',
+    moments: Object.freeze(['debrief']),
+    text: (d, u, ctx) => (ctx && ctx.shape ? 'Next time on ' + ctx.shape.name + ' — same plan, push it, or ease off?' : ''),
+    short: 'Same plan next time?',
+    options: Object.freeze([
+      { value: 'same', label: 'Same plan', ack: 'Noted.' },
+      { value: 'push', label: 'Push it',   ack: 'Noted. I’ll confirm once instead of twice next time, and lead with the jumps you’ve earned.' },
+      { value: 'ease', label: 'Ease off',  ack: 'Noted. Next time holds the weights and drops a set per lift.' }
+    ]),
+    writes: 'knowBy', key: 'wantNext',
+    idOf: ctx => (ctx && ctx.shape ? ctx.shape.key : null),
+    // The targets (coach-prog.js decide: the confirm dial, the ease hold) and
+    // the builder's set counts (coach-build.js, its registered response).
+    changes: Object.freeze(['lift_targets', 'resp_build']),
+    cooldownDays: 7, budget: 'D',
+    ack: 'Noted.',
+    when: (d, ctx) => !!(ctx && ctx.shape && SHAPE_RE.test(String(ctx.shape.key)) && !ctx.marked && !ctx.harder &&
+                         Number(ctx.shape.count) >= WANT_MIN_SESSIONS && !liveFact(d, 'wantNext', ctx.shape.key))
+  },
+  /* WHY A LIFT CAME IN 15% UNDER. The shape test (coach-prog.js, defer
+     'shape') sees the drop and cannot know the reason, and the reason changes
+     the rule: building back (`hold`) caps the target at the lower load for 42
+     days — a top he reaches there never earns the step up until he takes it
+     higher himself; a lighter week (`light`) makes the lower session not the
+     `prev` for the shape test, and a light week for the lift's own reads; just
+     that day (`day`) changes nothing and ends the asking. Asked on the recap
+     about a lift in the record, or under "What should I lift today?" about one
+     on the plan (ctx.drop: coach-overlap.js dropFor). Nothing medical is in
+     it: the question is about the load, and the answers are about the plan.
+     THE ONE PERCENTAGE Coach prints, and it is a share of his own two loads. */
+  {
+    id: 'q_drop_why',
+    moments: Object.freeze(['debrief', 'under:targets']),
+    text: (d, u, ctx) => (ctx && ctx.drop ? ctx.drop.name + ' came in ' + ctx.drop.pct + '% under last time. On purpose?' : ''),
+    short: 'Why the lighter session?',
+    options: Object.freeze([
+      { value: 'hold',  label: 'Building back up — hold it' },
+      { value: 'light', label: 'Lighter week', ack: 'Noted. I’ll read that as a lighter week, not a new programme.' },
+      { value: 'day',   label: 'Just that day', ack: 'Noted.' }
+    ]),
+    // The hold's ack names the lift and the load it holds at, through units.js.
+    optionsFor: (u, ctx) => dropOptions(u, ctx),
+    writes: 'knowBy', key: 'hold',
+    idOf: ctx => (ctx && ctx.drop ? ctx.drop.exId : null),
+    // The targets (coach-prog.js: the held add, the shape test's prev) and
+    // the lighter-week read (coach-overlap.js: a light week for the lift).
+    changes: Object.freeze(['lift_targets', 'lighter_week']),
+    cooldownDays: 0, budget: 'D',
+    stampOf: ctx => (ctx && ctx.drop ? dropStamp(ctx.drop.exId) : 'q_drop_why'),
+    ack: 'Noted.',
+    when: (d, ctx) => !!(ctx && ctx.drop && ID_RE.test(String(ctx.drop.exId)) && !liveFact(d, 'hold', ctx.drop.exId))
+  },
+  /* WHAT THE GAP WAS. Twelve days or more since a session (BACK_GAP_DAYS,
+     coach.js's own comeback clock) and the log cannot say whether he trained
+     somewhere it cannot see or took the time off — and the re-entry rule
+     (coach-prog.js) differs: `elsewhere` starts the weights a little under
+     (REENTER_NEAR whatever the gap), `off` leaves the shipped ladder. Asked
+     under the sheet's first two answers back — "What should I train today?"
+     and "Should I rest or go lighter?" — once per gap: the fact expires with
+     the next session (coach.js reads it only while `at` is after the lift's
+     last exposure) and in 14 days. */
+  {
+    id: 'q_back_what',
+    moments: Object.freeze(['under:shape', 'under:lighter']),
+    text: 'Good to have you back. Training somewhere I can’t see, or time off?',
+    short: 'Were you training elsewhere?',
+    options: Object.freeze([
+      { value: 'elsewhere', label: 'Training elsewhere', ack: 'Noted. I’ll start you a little under where you were, not a lot.' },
+      { value: 'off',       label: 'Time off',           ack: 'Noted. I’ll start the weights lighter and work back up with you.' }
+    ]),
+    writes: 'know', key: 'back',
+    changes: Object.freeze(['lift_targets', 'returning_from_layoff']),
+    cooldownDays: 0, budget: 'D',
+    ack: 'Noted.',
+    when: d => { const g = d.f('session.lastDaysAgo'); return g != null && g >= BACK_GAP_DAYS && !liveFact(d, 'back'); }
   }
 ]);
+
+/* v74: the three questions' small parts, kept beside the step question's. */
+// coach.js BACK_GAP_DAYS: a comeback is a session after twelve days away.
+export const BACK_GAP_DAYS = 12;
+// The recurrence bar a shape clears before Coach asks about "this kind of
+// day" — coach-live.js MIN_SESSIONS, a count, not imported (coach-ramp.js's
+// own note on it).
+export const WANT_MIN_SESSIONS = 3;
+export const dropStamp = exId => 'q_drop_why:' + exId;
+// A fact of his inside its TTL, read off the moment's settings.
+const liveFact = (d, key, id) => { const f = knowOf((d && d.input && d.input.settings) || {}, key, id, d && d.now); return !!(f && !f.expired); };
+/* The drop question's chips: the hold's ack names the lift and the load it
+   will hold at — the lower top's stored weight, through units.js — so he
+   hears the number he is agreeing to. */
+export function dropOptions(u, ctx) {
+  const q = BY_ID.q_drop_why;
+  const drop = ctx && ctx.drop;
+  return q.options.map(op => (op.value === 'hold' && drop
+    ? { ...op, ack: 'Noted. I’ll hold ' + drop.name + ' at ' + labelW(parseFloat(drop.w) || 0, u === 'kg' ? 'kg' : 'lb') + ' until you take it higher yourself.' }
+    : op));
+}
+// What a question is about in this moment: its own `idOf(ctx)`, else ctx.id.
+export const idFor = (q, ctx) => (typeof q.idOf === 'function' ? q.idOf(ctx) : ctx && ctx.id != null ? String(ctx.id) : null);
 
 const BY_ID = Object.freeze(Object.fromEntries(ASK_QUESTIONS.map(q => [q.id, q])));
 export const askQuestion = id => BY_ID[id] || null;
@@ -662,7 +782,7 @@ export function pickQuestion(d, moment, settings, now, opens, ctx) {
     if (!ok) return;
     let staleness = 0;
     if (q.writes === 'know' || q.writes === 'knowBy') {
-      const f = knowOf(s, q.key, ctx && ctx.id, now);
+      const f = knowOf(s, q.key, idFor(q, ctx), now);
       staleness = f ? (f.expired ? 2 : f.c === 1 ? 1 : 0) : 0;
     } else if (q.writes === 'answers') {
       const a = (s.answers || {})[q.id];
@@ -750,9 +870,12 @@ export function prSetOf(record, prs) {
      record    the session just saved
      settings  settings/coach
      now, opens
-     ctx       { prs, harder, marked, u } — the records workout.js worked out
-               for this session, feelHarder(record.feel), whether the session
-               is marked, and the display unit
+     ctx       { prs, harder, marked, u, shape, drop } — the records
+               workout.js worked out for this session, feelHarder(record.feel),
+               whether the session is marked, the display unit, and (v74) the
+               record's recurring shape ({ key, name, count }) and the first
+               lift in it that came in 15% under (coach-overlap.js dropFor),
+               both coach.js's to work out
 
    confirm   warmRamp()'s row, or null; null account-wide when warmStyle is
              'none'; with warmStyle 'ramp' it carries oneTap: true (the row is
@@ -795,12 +918,20 @@ export function debriefPlan(d, record, settings, now, opens, ctx) {
                      !(record && record.id != null && sh.session && sh.session.id === record.id))) return out;
   if (c.harder || c.marked) return out;
   const pr = prSetOf(record, c.prs);
-  const q = pickQuestion(d, 'debrief', s, now, opens, { pr, ramp: null });
+  // v74: the record's recurring shape and its first lift that dropped, as
+  // coach.js worked them out (debriefRead), for q_want_next and q_drop_why.
+  const qc = { pr, ramp: null, shape: c.shape || null, drop: c.drop || null, marked: !!c.marked, harder: !!c.harder };
+  const q = pickQuestion(d, 'debrief', s, now, opens, qc);
   if (!q) return out;
+  const u = c.u === 'kg' ? 'kg' : 'lb';
   let text = q.text;
-  if (typeof text === 'function') { try { text = String(text(d, c.u === 'kg' ? 'kg' : 'lb', { pr }) || ''); } catch { text = ''; } }
+  if (typeof text === 'function') { try { text = String(text(d, u, qc) || ''); } catch { text = ''; } }
   if (!text) return out;
-  out.question = { id: q.id, text, options: q.options, ack: q.ack || null, writes: q.writes,
-                   stamp: typeof q.stampOf === 'function' ? q.stampOf({ pr }) : q.id, ...(q.id === 'q_pr_how' ? { pr } : null) };
+  let options = q.options;
+  if (typeof q.optionsFor === 'function') { try { options = q.optionsFor(u, qc); } catch { options = q.options; } }
+  out.question = { id: q.id, text, options, ack: q.ack || null, writes: q.writes,
+                   stamp: typeof q.stampOf === 'function' ? q.stampOf(qc) : q.id, ...(q.id === 'q_pr_how' ? { pr } : null),
+                   // v74: what a fact question's writer needs (learnBy / learn).
+                   ...(q.writes === 'knowBy' || q.writes === 'know' ? { key: q.key || null, by: idFor(q, qc) } : null) };
   return out;
 }
