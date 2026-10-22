@@ -981,6 +981,175 @@ section('J. v70 — an untagged ramp is not working sets: fatigue, the counts an
   check('a light set he rated too hard is not a warm-up — "one more set" is never said over it', !!h && h.kind !== 'another', J(h && h.kind));
 }
 
+/* ================= K. v73 — ANOTHER SET, AND AT WHAT WEIGHT? ================= */
+section('K. v73 — anotherSetRead: done → stop → warmup → counts → the number; every chip a quote or a nextSet() target; never heavier after a stop');
+{
+  /* COACH-V2-SPEC §5.1, driven through c.another — the call the sheet and the
+     quiet line make — on fence()'s log (bench's target 190 lb × 8, his 5-lb
+     step) and on HISTORY (bench done for 4 sets every time). */
+  const FL = fence('lb'), FK = fence('kg');
+  const B = 'barbell-bench-press';
+  const sess = (F, id, rows, extra) => ({ id: 'wk', name: 'K', startedAt: NOW - 1800e3, ...(extra || null),
+    exercises: [F.ex(id, rows.map(([w, r, x]) => ({ w: w === '' ? '' : F.store(w), r: r === '' ? '' : String(r), type: (x && x.type) || 'N',
+      done: !(x && x.open), ...(x && x.rir != null ? { rir: x.rir } : null) })))] });
+  const an = (F, s, extra, opts) => C.coach({ ...F.input, ...(extra || null) }).another(s, opts || { current: 0 });
+  const labels = a => (a ? a.chips.map(c => c.id + (c.tw != null ? '=' + c.tw + 'x' + c.tr : '')) : null);
+
+  // 1. The order. DONE first: HISTORY's chest day at its usual 16 working sets.
+  const full = live([['bench', n('bench', 4)], ['incline', n('incline', 3)], ['fly', n('fly', 3)], ['curl', n('curl', 3)], ['pushdown', n('pushdown', 3)]]);
+  const d0 = C.coach(input()).another(full, { current: 0 });
+  check('done first: answer `no`, the done read’s words, one chip — Done for today — and no number',
+        !!d0 && d0.answer === 'no' && d0.text === read(full, {}, { current: 0 }).text && d0.short === read(full, {}, { current: 0 }).short &&
+        J(labels(d0)) === J(['done']) && d0.tw === null && d0.loadLb === null && d0.usual === null, J(d0));
+  // STOP second: a set to failure, rated too hard, or a quarter of the reps gone.
+  const stops = [
+    ['a set typed F', [[190, 8], [190, 8, { type: 'F' }]], 'A set taken to failure.'],
+    ['a set rated too hard', [[190, 8, { rir: 0 }]], 'A set you rated too hard.'],
+    ['reps down a quarter', [[190, 8], [190, 6]], 'Reps from 8 to 6 at the same or a lighter weight.']
+  ];
+  stops.forEach(([label, rows, why0]) => {
+    const a = an(FL, sess(FL, B, rows));
+    check('stop after ' + label + ': "That’s probably the set. Stay at 190 lb or call it there." — Same weight (a quote) and That’s the last one, no heavier chip',
+          !!a && a.answer === 'stop' && a.text === 'That’s probably the set. Stay at 190 lb or call it there.' && a.short === 'That’s probably the set.' &&
+          a.why[0] === why0 && a.why[1] === 'Nothing heavier on it today. Stopping a set early costs nothing.' &&
+          J(labels(a)) === J(['same=190x' + rows[rows.length - 1][1], 'last']) && a.chips[0].label === 'Same weight, 190 lb' && a.tw === null, J(a));
+  });
+  check('a stop rated way too easy afterwards is still a stop — the rating never reopens a heavier set',
+        (an(FL, sess(FL, B, [[190, 8, { rir: 0 }], [190, 8, { rir: 4 }]])) || {}).answer === 'stop');
+  check('and a stop outranks his usual: three sets ticked on HISTORY’s bench with the last to failure is a stop, not "one more"',
+        (C.coach(input()).another(live([['bench', [[185, 8], [185, 8], [185, 8, 'F']]]]), { current: 0 }) || {}).answer === 'stop');
+  // WARMING UP third: a warm-up ticked and nothing working yet.
+  const w1 = an(FL, sess(FL, B, [[95, 10, { type: 'W' }], ['', '', { open: true }]]));
+  check('warming up: the next set’s own words, and one chip — Go to the working set, 190 lb × 8 — the target’s numbers; no next-warm-up chip on a log with no ramp',
+        !!w1 && w1.answer === 'warmup' && /^Warming up\. The target when you get there: 190 lb × 8\.$/.test(w1.text) && w1.short === w1.text &&
+        J(labels(w1)) === J(['to_work=190x8']) && w1.chips[0].label === 'Go to the working set, 190 lb × 8', J(w1));
+  // With his own last ramp in the log: the next warm-up chip quotes its next row.
+  const rampLog = FL.sessions.map(s => ({ ...s, exercises: s.exercises.map(e => (e.exId !== B ? e
+    : { ...e, sets: [{ w: '45', r: '10', type: 'W', done: true }, { w: '95', r: '8', type: 'W', done: true }, { w: '135', r: '5', type: 'W', done: true }].concat(e.sets) })) }));
+  const w2 = an(FL, sess(FL, B, [[45, 10, { type: 'W' }], ['', '', { open: true }]]), { sessions: rampLog });
+  check('with his last logged ramp 45 → 95 → 135 and the 45 ticked: Next warm-up, 95 lb × 8 — a quote of his own ramp — then the working set',
+        !!w2 && w2.answer === 'warmup' && J(labels(w2)) === J(['next_warmup=95x8', 'to_work=190x8']) && w2.chips[0].label === 'Next warm-up, 95 lb × 8', J(w2));
+  const w3 = an(FL, sess(FL, B, [[45, 10, { type: 'W' }], [95, 8, { type: 'W' }], [135, 5, { type: 'W' }], ['', '', { open: true }]]), { sessions: rampLog });
+  check('… and once his three are ticked, only the working set is offered', !!w3 && J(labels(w3)) === J(['to_work=190x8']), J(labels(w3)));
+
+  // 4. THE COUNTS. fence's bench: 3 sets every session (8 of them).
+  const y1 = an(FL, sess(FL, B, [[190, 8]]));
+  check('one set in, his usual three: `yes` — "is in line with what you usually do: 2 or more in 8 of your 8 sessions of it. I’d stay at 190 lb."',
+        !!y1 && y1.answer === 'yes' && y1.text === 'Another set of Barbell Bench Press is in line with what you usually do: 2 or more in 8 of your 8 sessions of it. I’d stay at 190 lb.' &&
+        y1.short === 'Another set? 190 lb × 8.' && J(y1.usual) === J({ n: 1, more: 8, of: 8 }) && y1.tw === '190' && y1.tr === '8' && y1.loadLb === 190, J(y1));
+  const p1 = an(FL, sess(FL, B, [[190, 8], [190, 8], [190, 8]]));
+  check('three sets in, where every session stopped: `probably` — "You usually stop about here: 3 sets in 8 of 8."',
+        !!p1 && p1.answer === 'probably' && p1.text === 'Another set of Barbell Bench Press? You usually stop about here: 3 sets in 8 of 8. I’d stay at 190 lb.' &&
+        p1.short === 'Another set? 190 lb × 8.' && J(p1.usual) === J({ n: 3, more: 0, of: 8 }) && !/usually do/.test(p1.text) &&
+        J(labels(p1)) === J(['yes=190x8', 'last', 'done']), J(p1));
+  const thin = an(FL, sess(FL, B, [[190, 8]]), { sessions: FL.sessions.slice(-6) });
+  check('under three sessions of it: `yes` with no "usually" — "One more is fine by the log; I don’t know your usual on this one yet." — and usual null',
+        !!thin && thin.answer === 'yes' && thin.usual === null && /^Another set of Barbell Bench Press\? One more is fine by the log; I don’t know your usual on this one yet\./.test(thin.text) &&
+        !/usually/.test(thin.text) && thin.why[0] === 'Fewer than 3 sessions of it in the last twelve weeks, so I have no usual length to read.', J(thin));
+
+  // 5. THE NUMBER: same / up / down, and the chips each draws.
+  check('same: Yes carries nextSet’s tw/tr; then That’s the last one and Done for today', J(labels(y1)) === J(['yes=190x8', 'last', 'done']) && y1.chips[0].label === 'Yes, 190 lb × 8');
+  const up = an(FL, sess(FL, B, [[190, 10]]));
+  check('up (190 × 10, two past the target): Yes stays at the set he did — 190 × 8 — and Heavier carries the step, 195 lb × 8; tw/tr/loadLb are the up number',
+        !!up && up.answer === 'yes' && J(labels(up)) === J(['yes=190x8', 'heavier=195x8', 'last', 'done']) && up.chips[1].label === 'Heavier, 195 lb × 8' &&
+        up.tw === '195' && up.loadLb === 195 && up.short === 'Another set? 190 lb × 8.' &&
+        up.text === 'Another set of Barbell Bench Press is in line with what you usually do: 2 or more in 8 of your 8 sessions of it. I’d put 190 lb × 8 on it — or one step up, 195 lb × 8, if you want it.', J(up));
+  const dn = an(FL, sess(FL, B, [[190, 7]]));
+  check('down (190 × 7, under his range): Yes at the set he did, Lighter carries 185 lb × 8 — a weight he has logged',
+        !!dn && J(labels(dn)) === J(['yes=190x8', 'lighter=185x8', 'last', 'done']) && dn.chips[1].label === 'Lighter, 185 lb × 8' && dn.tw === '185' &&
+        /I’d put 190 lb × 8 on it, or step down to 185 lb\.$/.test(dn.text), J(dn));
+  const stepped = an(FL, sess(FL, B, [[190, 10], [195, 10]]));
+  check('the step used today: no second heavier chip — Yes at 195 × 8 and nothing else numbered', !!stepped && J(labels(stepped)) === J(['yes=195x8', 'last', 'done']), J(labels(stepped)));
+  const down = an(FL, sess(FL, B, [[190, 8], [185, 12]]));
+  check('a step down today, then a set well past the target’s reps: no heavier chip (nextSet never says `up` after a `down`), and not a stop',
+        !!down && down.answer !== 'stop' && !down.chips.some(c => c.id === 'heavier') && J(labels(down)) === J(['yes=185x8', 'last', 'done']), J(down));
+  // No nextSet: the quote and nothing else.
+  const muted = an(FL, sess(FL, B, [[190, 8]]), { settings: { v: 1, mute: { targets: true }, answers: {}, asked: {} } });
+  check('"Weight and rep targets" off: the one numbered chip is Same again, 190 lb × 8 — a quote of the set he ticked, never a target; the short says "same weight?"',
+        !!muted && muted.answer === 'yes' && J(labels(muted)) === J(['same=190x8', 'last', 'done']) && muted.chips[0].label === 'Same again, 190 lb × 8' &&
+        muted.short === 'Another set, same weight?' && /Same weight again\.$/.test(muted.text) && muted.loadLb === null &&
+        muted.why.some(t => /the one number I’ll name is the set you just did/.test(t)), J(muted));
+  const asst = an(FL, sess(FL, 'assisted-pull-up', [[45, 8]]));
+  check('an assisted lift (no next set, ever): the quote chip only', !!asst && J(labels(asst)) === J(['same=45x8', 'last', 'done']), J(labels(asst)));
+  const tail = FL.sessions.map(s => ({ ...s, exercises: s.exercises.map(e => e.exId !== B || s !== FL.sessions.filter(x => x.exercises.some(z => z.exId === B)).pop() ? e
+    : { ...e, sets: [{ w: '205', r: '5', type: 'N', done: true }, { w: '175', r: '8', type: 'N', done: true }, { w: '175', r: '8', type: 'N', done: true }] }) }));
+  const defer = an(FL, sess(FL, B, [[185, 8]]), { sessions: tail });
+  check('a lift Coach cannot target (a defer) and a set under his last top (185 under a 205 top set): no number at all — the set may be a rung — only That’s the last one and Done for today, and the why says why',
+        !!defer && J(labels(defer)) === J(['last', 'done']) && defer.short === 'Another set?' && /I’ll name a weight once you’re at your working weight\.$/.test(defer.text) &&
+        defer.why.some(t => /sits under your last top here/.test(t)), J(defer));
+  const deferTop = an(FL, sess(FL, B, [[205, 5]]), { sessions: tail });
+  check('… and at his last top (205 × 5), plainly work: the quote chip, Same again, 205 lb × 5', !!deferTop && J(labels(deferTop)) === J(['same=205x5', 'last', 'done']), J(labels(deferTop)));
+  const deferTwo = an(FL, sess(FL, B, [[185, 8], [185, 8]]), { sessions: tail });
+  check('… a second set at 185 does not make it plain (the bar is doubled on most ramps): still no number', !!deferTwo && J(labels(deferTwo)) === J(['last', 'done']), J(labels(deferTwo)));
+  const deferReps = an(FL, sess(FL, B, [[185, 14]]), { sessions: tail });
+  check('… while 14 reps at 185 — more than any warm-up — is plain: Same again, 185 lb × 14', !!deferReps && J(labels(deferReps)) === J(['same=185x14', 'last', 'done']), J(labels(deferReps)));
+  // The stricter drop: against any earlier set at the same or a heavier load, not only the first.
+  const dropTop = an(FL, sess(FL, B, [[165, 5], [190, 3], [190, 3], [190, 1]]));
+  check('a drop at the top behind a lighter opener (165 × 5, 190 × 3, 190 × 3, 190 × 1): a stop, never another set', !!dropTop && dropTop.answer === 'stop' && !dropTop.chips.some(c => c.id === 'yes' || c.id === 'heavier'), J(dropTop));
+  // Kilos, through units.js.
+  const kg = an(FK, sess(FK, B, [[87.5, 8, { rir: 4 }]]));
+  check('in kilos: Yes, 87.5 kg × 8 · Heavier, 90 kg × 8, the stored strings pounds',
+        !!kg && kg.chips[0].label === 'Yes, 87.5 kg × 8' && kg.chips[1].label === 'Heavier, 90 kg × 8' && kg.chips[1].tw === String(U.wIn(90, 'kg')) &&
+        kg.short === 'Another set? 87.5 kg × 8.', J(kg));
+
+  // The gates: exactly the live gate's.
+  const one = sess(FL, B, [[190, 8]]);
+  check('an edit, Basic, "In the gym" off, an unreadable log: null — the live gate exactly',
+        an(FL, { ...one, _edit: { mk: '2026-09', dd: '01' } }) === null && an(FL, one, { tier: { pro: false } }) === null &&
+        an(FL, one, { settings: { v: 1, mute: { live: true }, answers: {}, asked: {} } }) === null && an(FL, one, { log: 'unknown' }) === null);
+  check('nothing ticked on any exercise: null, as liveRead is', an(FL, sess(FL, B, [['', '', { open: true }]])) === null);
+  check('the exercise in hand is the caller’s: named on a cardio row it is null; unnamed it is the last worked',
+        C.coach(input()).another(live([['bench', n('bench', 1)], ['tread', [['', 1]]]]), { current: 1 }) === null &&
+        C.coach(input()).another(live([['bench', n('bench', 1)], ['incline', n('incline', 1)]])).text.includes('Incline Dumbbell'));
+  check('deterministic, and the session untouched', (() => { const s = sess(FL, B, [[190, 8]]); const before = J(s); const a = J(an(FL, s)); return a === J(an(FL, s)) && J(s) === before && a !== 'null'; })());
+  check('anotherSetRead survives junk', [null, undefined, {}, { session: 5 }, { session: { exercises: [null, {}] } }].every(x => L.anotherSetRead(x) === null));
+
+  // 6. THE SWEEP: every chip's tw is a ticked set's w, nextSet's tw, or a row of his last ramp.
+  const offChips = [], heavyAfter = [], upAfterDown = [];
+  let swept = 0, heavies = 0;
+  for (const u of ['lb', 'kg']) {
+    const F = fence(u);
+    let seed = u === 'kg' ? 73 : 37;
+    const rnd = k => { seed = (seed * 1103515245 + 12345) % 2147483648; return Math.floor(seed / 65536) % k; };
+    for (let k = 0; k < 500; k++) {
+      const id = F.ids[rnd(F.ids.length)];
+      const T = F.target[id], S = F.step[id];
+      const loads = T == null ? F.logged[id] : [T, T, T, S ? T + S : T, F.logged[id][rnd(F.logged[id].length)]];
+      const count = 1 + rnd(4);
+      const sets = [];
+      for (let j = 0; j < count; j++) {
+        const ld = loads[rnd(loads.length)];
+        const r = Math.max(1, F.reps[id] + rnd(5) - 2);
+        const type = rnd(9) === 0 ? 'F' : 'N';
+        const rir = [null, null, 4, 2, 0][rnd(5)];
+        sets.push({ w: F.store(ld), r: String(r), type, done: true, ...(rir == null ? null : { rir }) });
+      }
+      sets.push({ w: '', r: '', type: 'N', done: false });
+      const s = { id: 'wsweep', name: 'Sweep', startedAt: NOW - 1800e3, exercises: [F.ex(id, sets)] };
+      const c = C.coach(F.input);
+      const a = c.another(s, { current: 0 });
+      if (!a) continue;
+      swept++;
+      const nx = (c.liveSet(s, { current: 0 }) || {}).next;
+      const ok = new Set(sets.filter(z => z.done).map(z => String(z.w)).concat(nx ? [String(nx.tw)] : []));
+      a.chips.forEach(ch => { if (ch.tw != null && !ok.has(String(ch.tw))) offChips.push(u + ' ' + id + ': ' + ch.id + ' ' + ch.tw + ' not in ' + [...ok].join('/')); });
+      const lu = w => Math.round(U.wOut(parseFloat(w) || 0, u) * 100) / 100;
+      const done = sets.filter(z => z.done);
+      const first = done[0];
+      const stop = done.some(z => z.type === 'F' || z.rir === 0) ||
+        done.slice(1).some(z => lu(z.w) <= lu(first.w) && Number(z.r) <= Number(first.r) * (1 - L.REP_DROP));
+      const maxDone = Math.max(...done.map(z => lu(z.w)));
+      // done wins over stop, as everywhere: a `no` has no number on it at all
+      if (stop && ((a.answer !== 'stop' && a.answer !== 'no') || a.chips.some(ch => ch.tw != null && lu(ch.tw) > maxDone + 0.01))) heavyAfter.push(u + ' ' + id + ': ' + a.answer + ' ' + J(labels(a)));
+      const steppedDown = done.some((z, j) => j > 0 && lu(z.w) < lu(done[j - 1].w) - 0.01);
+      if (a.chips.some(ch => ch.id === 'heavier')) { heavies++; if (steppedDown) upAfterDown.push(u + ' ' + id + ': ' + J(labels(a))); }
+    }
+  }
+  check('swept over ' + swept + ' generated live sessions, both units: every chip’s tw is a ticked set’s w or the nextSet() tw', swept > 600 && !offChips.length, list(offChips));
+  check('after a stop (F, rir 0, a rep drop) the answer is `stop` and no chip is heavier than the heaviest set done', !heavyAfter.length, list(heavyAfter));
+  check('no heavier chip after a step down today (' + heavies + ' heavier chips swept)', heavies > 20 && !upAfterDown.length, list(upAfterDown));
+}
+
 /* ---------- report ---------- */
 console.log('\nCoach in the gym says what it can back with his own log, and nothing about the bar\n');
 console.log(results.join('\n'));

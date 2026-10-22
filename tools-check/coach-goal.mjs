@@ -371,11 +371,22 @@ writeFileSync(join(dir, 'coach-ask.js'), src('coach-ask.js').replace("from './un
         !!q0 && q0.id === 'q_goal_aim' && q0.options.length === 6 && q0.ack === 'Noted. I’ll set your targets with that in mind.');
   const q1 = C.coach(input(settings({ q_goal_aim: 'muscle' }, { q_goal_aim: NOW - DAY }))).ask('ask_targets').question;
   check('once the aim is answered, the experience question is next', !!q1 && q1.id === 'q_experience', q1 && q1.id);
-  check('and with both answered, nothing is asked',
-        C.coach(input(settings({ q_goal_aim: 'muscle', q_experience: 'some' }))).ask('ask_targets').question === null);
+  /* v73: with both answered, the lane is not silent any more — the cable
+     pushdown on the plan (ten exposures, no step the log could learn, no
+     default for a cable) earns the step question (coach-ask.js
+     q_equipment_step); nothing else is asked, and nothing is asked when the
+     plan has no such lift. */
+  const qBoth = C.coach(input(settings({ q_goal_aim: 'muscle', q_experience: 'some' }))).ask('ask_targets').question;
+  check('and with both answered, the one question left under the targets is the step on the cable pushdown (v73)',
+        !!qBoth && qBoth.id === 'q_equipment_step' && qBoth.text === 'On Triceps Pushdown (Rope), what’s one step up?' &&
+        qBoth.by === 'triceps-pushdown-rope' && qBoth.stamp === 'q_equipment_step:triceps-pushdown-rope', JSON.stringify(qBoth));
+  check('and with the pushdown told (knowBy.step), nothing is asked',
+        C.coach(input({ settings: { v: 2, mute: {}, answers: { q_goal_aim: 'muscle', q_experience: 'some' }, asked: {},
+          knowBy: { step: { 'triceps-pushdown-rope': { v: 10, c: 1, at: NOW - DAY, n: 1 } } } } })).ask('ask_targets').question === null);
   check('asked yesterday and not answered: quiet for the week — one at a time, the shipped cooldown',
         C.coach(input(settings({}, { q_goal_aim: NOW - DAY }))).ask('ask_targets').question === null &&
-        C.coach(input(settings({}, { q_goal_aim: NOW - 8 * DAY }))).ask('ask_targets').question.id === 'q_goal_aim');
+        // v73: eight days on, the aim question carries its repeat penalty and the step question outscores it on the picker; the aim comes first on a fresh lane
+        ['q_goal_aim', 'q_equipment_step'].includes(C.coach(input(settings({}, { q_goal_aim: NOW - 8 * DAY }))).ask('ask_targets').question.id));
   check('questions switched off: none under the answer either, and the targets are still there',
         C.coach(input(settings({}, {}, { questions: true }))).ask('ask_targets').question === null &&
         C.coach(input(settings({}, {}, { questions: true }))).ask('ask_targets').id === 'lift_targets');

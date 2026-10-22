@@ -318,6 +318,12 @@ section('E. v72 — normSettings: a v1 node reads as v2 with no know; a v2 node 
     asked: { ...v1.asked, 'warm:bad/id': 5, 'warm:x': 6, 'q_pr_how:': 7 } });
   check('junk know, knowBy and tally dropped — and with nothing surviving, no key at all', !('know' in junk) && !('knowBy' in junk) && !('tally' in junk), JSON.stringify(junk));
   check('asked keeps warm:x, drops warm:bad/id and an empty q_pr_how:', junk.asked['warm:x'] === 6 && !('warm:bad/id' in junk.asked) && !('q_pr_how:' in junk.asked));
+  // v73: the step question's per-lift stamp, and a step that is a weight (2.5 lb, a kilo account's 2.2) rather than an integer.
+  const v73 = { ...v2, asked: { ...v2.asked, 'q_equipment_step:lat-pulldown': 1790000000002 },
+    knowBy: { ...v2.knowBy, step: { 'lat-pulldown': { v: 2.5, c: 1, at: 1790000000000, n: 1 }, 'leg-press': { v: 2.2, c: 1, at: 1790000000000, n: 1 } } } };
+  check('v73: the q_equipment_step:<exId> stamp and a 2.5 / 2.2 lb step round-trip byte for byte', JSON.stringify(C.normSettings(v73)) === JSON.stringify(v73), JSON.stringify(C.normSettings(v73)));
+  const j73 = C.normSettings({ ...v73, asked: { ...v73.asked, 'q_equipment_step:a/b': 1, 'q_equipment_step:': 2 }, knowBy: { step: { x: { v: 2.555, c: 1, at: 1, n: 1 } } } });
+  check('     a bad id on the stamp and a step off the two-decimal grid are dropped', !('q_equipment_step:a/b' in j73.asked) && !('q_equipment_step:' in j73.asked) && !('knowBy' in j73));
   check('never throws', (() => { try { [null, 1, 'x', [], { know: 1, knowBy: 'x', tally: [] }].forEach(C.normSettings); return true; } catch { return false; } })());
 }
 

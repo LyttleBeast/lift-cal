@@ -396,7 +396,12 @@ section('E. the chips: in the live sheet only, over a ticked working set, on the
   check('a live session with a ticked working set: the sheet asks "Set 1 · 190 lb × 8. How was it?" over three chips',
         !!chip && (find(sh, 'coach-rate-q')[0] || {}).textContent === 'Set 1 · 190 lb × 8. How was it?' &&
         J(chipsOf(sh).map(b => b.textContent)) === J(['Way too easy', 'About right', 'Too hard']), J(bubs));
-  check('and the next set above them: "Next set: 190 lb × 8."', bubs.includes('Next set: 190 lb × 8.'), J(bubs));
+  // v73: with a working set ticked the sheet answers "another set, and at what weight?" and its chip row carries the number;
+  // the shipped next-set bubble stands only when that read is null (nothing ticked yet).
+  const anotherChips = sh_ => (sh_ ? buttonsIn(sh_).filter(b => b.classList.contains('coach-another-chip')).map(b => b.textContent) : []);
+  check('and the another read above them, ending "I’d stay at 190 lb.", with its chip row — Yes, 190 lb × 8 — and no next-set bubble',
+        bubs.some(t => /I’d stay at 190 lb\.$/.test(t)) && !bubs.includes('Next set: 190 lb × 8.') &&
+        J(anotherChips(sh)) === J(['Yes, 190 lb × 8', 'That’s the last one', 'Done for today']), J(bubs) + J(anotherChips(sh)));
   check('nothing chosen yet', chipsOf(sh).every(b => !b.classList.contains('on') && b.getAttribute('aria-pressed') === 'false'));
   chipsOf(sh)[0].onclick();
   check('a tap on "Way too easy" rates that set through the callback workout.js hands in — 4, on set 1',
@@ -406,10 +411,11 @@ section('E. the chips: in the live sheet only, over a ticked working set, on the
         (find(after, 'coach-bub-t')[0] || {}).textContent === 'Strong set. Next one: 195 lb × 8.', after && find(after, 'coach-bub-t').map(x => x.textContent).join(' / '));
   check('and the chosen chip reads as chosen', chipsOf(sh)[0].classList.contains('on') && chipsOf(sh)[0].getAttribute('aria-pressed') === 'true' &&
         !chipsOf(sh)[1].classList.contains('on'));
-  const use = buttonsIn(after).find(b => b.textContent === 'Use it for my next set');
-  check('with one button: "Use it for my next set"', !!use);
+  check('with no button under it — the chip row redrew instead: Yes, 190 lb × 8 · Heavier, 195 lb × 8 · That’s the last one · Done for today',
+        !buttonsIn(after).length && J(anotherChips(sh)) === J(['Yes, 190 lb × 8', 'Heavier, 195 lb × 8', 'That’s the last one', 'Done for today']), J(anotherChips(sh)));
+  const use = buttonsIn(sh).find(b => b.textContent === 'Heavier, 195 lb × 8');
   use.onclick();
-  check('which hands workout.js the target — tw/tr only — and closes the sheet',
+  check('Heavier hands workout.js the next set’s target — tw/tr only — and closes the sheet',
         J(calls.pop()) === J(['useNext', { exIdx: 0, setIdx: 0 }, { tw: '195', tr: '8' }]) && !sheetIn() &&
         J(S1.exercises[0].sets[1]) === J({ w: '', r: '', type: 'N', done: false, tw: '195', tr: '8' }), J(S1.exercises[0].sets[1]));
   ({ sh } = openOn(S1));
@@ -449,7 +455,7 @@ section('E. the chips: in the live sheet only, over a ticked working set, on the
   check('nothing pops up: every chip, answer and button is drawn inside the one sheet the chip opened',
         !/\btoast\(/.test((UI_SRC.split('export function openLiveSheet')[1] || '').split('\nfunction nudgeKey')[0]));
   check('and the screen hands the sheet both callbacks, for a live session only',
-        /const liveOpts = current => \(\{ session, add: addPicked, rate: rateLive, useNext: useNextLive, current \}\);/.test(WSRC) &&
+        /const liveOpts = current => \(\{ session, add: addPicked, rate: rateLive, useNext: useNextLive, shown: shownLive, done: doneLive, current \}\);/.test(WSRC) &&
         /function rateLive\(at, rir\) \{\n  const ex = session && !session\._edit/.test(WSRC) && /function useNextLive\(at, t\) \{\n  if \(!session \|\| session\._edit\) return;/.test(WSRC));
 }
 

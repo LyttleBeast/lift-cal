@@ -1237,6 +1237,70 @@ if (MAIN) {
     check('    swept over 1200 histories: no reduce or re-entry carries a W row heavier than its load, and no W row is rewritten', !sweepDrop.length, list(sweepDrop));
   }
 
+  section('L. v73 — a told step (knowBy.step → ex.stepTold): used only where the log has none seen twice, dropped when the log learns another, ignored off the grid; nextOf never `up` after a `down`');
+  {
+    /* A lat pulldown (cable: no default step) at 120 × 10 for four sessions —
+       the top of a muscle 8–12 band reached, so an add is earned, but no step
+       is learnable from a flat line. Told 10 lb, the target names 130; told
+       nothing, "the next setting up". */
+    const pulldown = metaOf('lat-pulldown');
+    const ctx = { aim: 'muscle', exp: 'some', energy: null, rateWk: null };
+    const flat = [xN(3, 120, 12), xN(3, 120, 12), xN(3, 120, 12), xN(3, 120, 12)];
+    const T = (sets, extra) => run(P, { meta: { ...pulldown, ...(extra || null) }, u: 'lb', sessions: logOf(pulldown, sets), ctx }).t;
+    const t0 = T(flat), t10 = T(flat, { stepTold: 10 });
+    check('(a) told nothing on a cable lift at its top: an add with no number — "the next setting up"', !!t0 && t0.mode === 'add' && t0.loadLb == null && t0.step === null, JSON.stringify(t0 && [t0.mode, t0.loadLb, t0.line]));
+    check('    told 10 lb: the add names 130 lb, the step reads source `told`, and the why says "You told me one step up here is 10 lb."',
+          !!t10 && t10.mode === 'add' && t10.loadLb === 130 && t10.step && t10.step.source === 'told' && t10.step.value === 10 && t10.step.n === 0 &&
+          t10.why.some(w => w === 'You told me one step up here is 10 lb.'), JSON.stringify(t10 && [t10.line, t10.step, t10.why]));
+    const b10 = P.baselines({ ...pulldown, stepTold: 10, exposures: P.exposuresFor(logOf(pulldown, flat), pulldown.exId) }, { now: NOW, u: 'lb', ...ctx });
+    check('    baselines() reads the same told step', !!b10 && b10.step && b10.step.source === 'told' && b10.step.value === 10, JSON.stringify(b10 && b10.step));
+    // The log wins: the same lift with two 15-lb rises in it learns 15 and ignores the 10 he said.
+    const climbed = [xN(3, 105, 12), xN(3, 120, 12), xN(3, 120, 12), xN(3, 135, 12), xN(3, 135, 12)];
+    const tL = T(climbed, { stepTold: 10 });
+    check('(b) a jump seen twice (15 lb) outranks the told 10: source `yours`, value 15, the target 150 — the stale fact is inert, nothing written',
+          !!tL && tL.step && tL.step.source === 'yours' && tL.step.value === 15 && tL.loadLb === 150, JSON.stringify(tL && [tL.line, tL.step]));
+    check('    and a jump seen once does not: the told step still stands', (() => { const t = T([xN(3, 120, 12), xN(3, 135, 12), xN(3, 135, 12), xN(3, 135, 12)], { stepTold: 10 }); return !!t && t.step && t.step.source === 'told' && t.loadLb === 145; })());
+    // Off the display grid: a 2.5-lb answer read on a kilo account is 1.13 kg — ignored, not converted.
+    const kgLog = logOf(pulldown, flat.map(s => s.map(x => ({ ...x, w: String(Math.round(parseFloat(x.w) / 2.2046226218 * 2) / 2 * 2.2046226218 * 100) / 100 }))));
+    const tKgOff = P.prescribe({ ...pulldown, stepTold: 2.5, exposures: P.exposuresFor(kgLog, pulldown.exId), groupDaysSince: 3 }, { now: NOW, u: 'kg', ...ctx });
+    const tKgOn = P.prescribe({ ...pulldown, stepTold: 5.51, exposures: P.exposuresFor(kgLog, pulldown.exId), groupDaysSince: 3 }, { now: NOW, u: 'kg', ...ctx });
+    check('(c) in kilos, a told 2.5 lb (1.13 kg) is off the half-kilo grid: ignored, no number; a told 5.51 lb (2.5 kg) is on it and names the step',
+          !!tKgOff && tKgOff.loadLb == null && tKgOff.step === null && !!tKgOn && tKgOn.step && tKgOn.step.source === 'told' && tKgOn.step.value === 2.5 && tKgOn.loadLb != null,
+          JSON.stringify([tKgOff && [tKgOff.line, tKgOff.step], tKgOn && [tKgOn.line, tKgOn.step]]));
+    check('    junk told values are ignored: 0, −10, NaN, a string', [0, -10, NaN, '10', null].every(v => { const t = T(flat, { stepTold: v }); return !!t && t.step === null && t.loadLb == null; }));
+    // The next set with a told step: the heavier set after an earned up, "the step you told me"; and never `up` after a `down`.
+    const exOf = (sets, told) => ({ ...pulldown, exposures: P.exposuresFor(logOf(pulldown, sets), pulldown.exId), groupDaysSince: 3, ...(told != null ? { stepTold: told } : null) });
+    const C = { now: NOW, u: 'lb', ...ctx, repDrop: 0.25 };
+    const live = (w, r, type, extra) => ({ w: String(w), r: String(r), type: type || 'N', done: true, ...(extra || null) });
+    // Under a hold-the-reps target (120 × 12 reached once more is the same), 14 reps earns the step.
+    const nUp = P.nextSet(exOf(flat, 10), C, [live(130, 14)]);
+    const nNo = P.nextSet(exOf(flat), C, [live(130, 14)]);
+    check('(d) nextSet with a told step: 130 × 14 under a 130 target earns `up` to 140 — "the step you told me"; told nothing, the target has no number and there is no next set at all',
+          !!nUp && nUp.kind === 'up' && nUp.tw === '140' && nUp.why.some(w => /the step you told me/.test(w)) && nNo === null, JSON.stringify([nUp, nNo]));
+    const nAfterDown = P.nextSet(exOf(flat, 10), C, [live(130, 12), live(120, 14)]);
+    check('    a step down today (130 then 120) and 14 reps at 120: never `up` — the same at 120', !!nAfterDown && nAfterDown.kind !== 'up' && nAfterDown.tw === '120', JSON.stringify(nAfterDown));
+    // Swept: no `up` after a `down` on any seeded history, told step or not.
+    const upAfterDown = [];
+    let downs = 0;
+    for (const u of ['lb', 'kg']) for (let s = 1; s <= 300; s++) {
+      const h = history(s * 104729 + (u === 'kg' ? 7 : 0), u);
+      const { exposures, t } = drive(h, h.sessions);
+      if (!t || t.loadLb == null) continue;
+      const L = w => Math.round(lu(w, u) * 100) / 100;
+      const top = t.sets.filter(x => x.type !== 'W' && !x.ramp && x.tw !== '').map(x => L(x.tw));
+      if (!top.length) continue;
+      const TL = Math.max(...top), S = t.step ? t.step.value : (u === 'kg' ? 2.5 : 5);
+      const lower = Math.max(0.5, TL - S);
+      const todayRows = [live(t.sets.find(x => x.type !== 'W' && x.tw !== '').tw, 10), live(u === 'kg' ? String(Math.round(lower * 2.2046226218 * 100) / 100) : String(lower), 20)];
+      const ex = { ...h.meta, exposures, groupDaysSince: 3, stepTold: s % 2 ? (u === 'kg' ? 5.51 : 10) : undefined };
+      const n = P.nextSet(ex, { now: NOW, u, aim: h.ctx && h.ctx.aim, exp: h.ctx && h.ctx.exp, energy: null, rateWk: null, repDrop: 0.25 }, todayRows);
+      if (!n) continue;
+      downs++;
+      if (n.kind === 'up' || L(n.tw) > L(todayRows[1].w) + 0.01) upAfterDown.push(u + ' seed ' + s + ': ' + n.kind + ' ' + n.text);
+    }
+    check('    swept over 600 histories with a step down today and 20 reps after it: never `up`, never heavier than the set just done (' + downs + ' read)', downs > 100 && !upAfterDown.length, list(upAfterDown));
+  }
+
   console.log('\nCoach names a weight only when it is one he can load\n');
   console.log(results.join('\n'));
   console.log('\n' + pass + ' passed, ' + fail + ' failed\n');

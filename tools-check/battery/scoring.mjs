@@ -257,13 +257,50 @@ export function scoreNextSet(n, st) {
 export function scoreLive(a, st) {
   const codes = [], notes = [];
   if (!a) return { codes, notes };
-  const off = textOffences([a.text, a.short].concat(a.why || []), st.u);
+  const off = textOffences([a.text, a.short].concat(a.why || [], (a.chips || []).map(c => c.label)), st.u);
   if (off.length) { codes.push('L_TEXT'); notes.push(off.join('; ')); }
-  if (a.kind === 'another') {
+  // v73: the "another set?" read answers the same question with `answer`
+  // (yes / probably / no / stop / warmup); the shipped four-answer read with
+  // `kind`. A yes or a probably over a failure or a true rep drop is the same
+  // wrong as "one more set" was.
+  const another = a.kind === 'another' || a.answer === 'yes' || a.answer === 'probably';
+  if (another) {
     if (st.curF) codes.push('L_ANOTHER_F');
     if (st.curDrop) codes.push('L_ANOTHER_DROP');
   }
-  if (a.kind === 'done' && st.planned > 0 && st.workDone < st.planned * 0.5) { codes.push('L_DONE_EARLY'); notes.push(st.workDone + ' of ' + st.planned); }
+  if ((a.kind === 'done' || a.answer === 'no') && st.planned > 0 && st.workDone < st.planned * 0.5) { codes.push('L_DONE_EARLY'); notes.push(st.workDone + ' of ' + st.planned); }
+  return { codes, notes };
+}
+
+/* v73: THE CHIPS of the "another set?" read, each with a number scored as the
+   next-set answer of its kind — heavier as `up`, lighter as `down`, the rest
+   as `same` — through scoreNextSet, so a chip can never say what the next set
+   may not; and a heavier chip after a step down today is N_STOPPED. `st` is
+   scoreNextSet's, plus `steppedDown`. Codes are pooled and de-duplicated. */
+export function scoreChips(a, st) {
+  const codes = [], notes = [];
+  if (!a || !Array.isArray(a.chips)) return { codes, notes };
+  a.chips.forEach(c => {
+    if (c.tw == null) return;
+    // the two warm-up chips name the target he is working up to, or his own
+    // next ramp row: judged as the `warmup` kind is — was the set just ticked
+    // really a warm-up? — never against the loads done so far
+    const kind = c.id === 'heavier' ? 'up' : c.id === 'lighter' ? 'down' : c.id === 'to_work' || c.id === 'next_warmup' ? 'warmup' : 'same';
+    const n = { kind, tw: String(c.tw), tr: String(c.tr), loadLb: parseFloat(c.tw) || 0, text: c.label, why: [] };
+    const sc = scoreNextSet(n, st);
+    // A `same` chip is a QUOTE of the set he just ticked, never a prescription:
+    // its reps are his own (N_REPS) and its load is one he just lifted (N_GRID
+    // — a kilo account's 65-lb set is still the set he did). What a quote CAN
+    // get wrong is to call a warm-up his working set (N_WARMUP) — unless the
+    // set sits at his last top on the lift, which no lifter calls a warm-up.
+    const quote = c.id === 'same';
+    const atTop = quote && st.lastTopLb > 0 && n.loadLb >= 0.93 * st.lastTopLb - TOL;
+    sc.codes.forEach(x => {
+      if (x === 'N_NOSTEP' || (quote && (x === 'N_REPS' || x === 'N_GRID' || (x === 'N_WARMUP' && atTop)))) return;
+      if (!codes.includes(x)) { codes.push(x); notes.push(c.id + ': ' + (sc.notes.join('; ') || c.label)); }
+    });
+    if (c.id === 'heavier' && st.steppedDown && !codes.includes('N_STOPPED')) { codes.push('N_STOPPED'); notes.push('heavier after a step down today'); }
+  });
   return { codes, notes };
 }
 

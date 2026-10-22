@@ -617,6 +617,27 @@ export function makeLifter(seed, archetypeId, opts = {}) {
   }
   if (Object.keys(warmBy).length) { settings.v = 2; settings.knowBy = { warm: warmBy }; }
 
+  /* ---------- v73: what he told Coach about his machines' steps ----------
+     A second fork, drawn after the first so every seed above keeps its
+     lifter. A bodybuilder_volume lifter has read the step off one to three of
+     his machine, cable or plate lifts (settings.knowBy.step, POUNDS — the
+     truth's own step, so the scorer's T_JUMP/N_HEAVY read it as his), which
+     is what lets a target name a number on a stack the log alone could not
+     step. `at` is the run's own now, inside the fact's year. */
+  const K2 = R.fork();
+  if (archetypeId === 'bodybuilder_volume') {
+    const stacks = Object.keys(EX).filter(id => ['machine', 'cable', 'plate'].includes(EX[id].equipment) && !EX[id].assisted && EX[id].step > 0);
+    const stepBy = {};
+    const n = Math.min(stacks.length, K2.int(1, 3));
+    const pool = stacks.slice();
+    for (let i = 0; i < n; i++) {
+      const id = pool.splice(Math.floor(K2.f() * pool.length), 1)[0];
+      const lb = u === 'kg' ? r2(EX[id].step * LB_PER_KG) : EX[id].step;
+      stepBy[id] = { v: lb, c: K2.int(1, 3), at: END, n: K2.int(1, 3) };
+    }
+    if (Object.keys(stepBy).length) { settings.v = 2; settings.knowBy = { ...(settings.knowBy || {}), step: stepBy }; }
+  }
+
   const weight = latest ? {
     latestLb: latest.lb, latestAt: latest.t,
     rateWk: r2(bwRate), rateSeWk: 0.3, rateDays: Math.min(21, weighIns.length), rateSpanDays: 21,

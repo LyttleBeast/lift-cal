@@ -38,7 +38,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { stageCoach } from './stage.mjs';
 import { lifters, makeLifter, ARCHETYPE_IDS } from './generator.mjs';
-import { CODES, verdictOf, scoreTarget, scoreNextSet, scoreLive, scoreVolume, scoreRecord, scorePlateau } from './scoring.mjs';
+import { CODES, verdictOf, scoreTarget, scoreNextSet, scoreLive, scoreChips, scoreVolume, scoreRecord, scorePlateau } from './scoring.mjs';
 
 const HERE = fileURLToPath(new URL('.', import.meta.url));
 const DAY = 864e5;
@@ -263,7 +263,7 @@ export function runCut(C, L, k, acc) {
     const straight = !!(t && t.loadLb != null && t.sets.filter(s => s.type !== 'W' && Math.abs(parseFloat(s.tw) - t.loadLb) < TOL).length >= 2);
     const workIdx = new Set(tRow.workIdx);
     const rampIdx = new Set(tRow.rampIdx);
-    const doneLoads = [];
+    const doneLoads = [], mainLoads = [];     // v73: mainLoads — the working-typed sets that are not a drop set's strips
     let stopped = false, firstWorkReps = null, firstWorkLoad = null, lastRepsUnderLo = false, earnedUp = false, lastMainLb = null;
     e.sets.forEach((s, si) => {
       // tick it
@@ -273,6 +273,7 @@ export function runCut(C, L, k, acc) {
       const r = parseInt(s.r, 10), w = parseFloat(s.w) || 0;
       if (isWork) {
         if (s.type !== 'W') doneLoads.push(w);
+        if (s.type !== 'W' && s.type !== 'D' && !s.dp) mainLoads.push(w);
         if (s.type === 'F' || s.rir === 0) stopped = true;
         if (s.type !== 'D' && !s.dp) {
           if (firstWorkReps == null) { firstWorkReps = r; firstWorkLoad = w; }
@@ -286,24 +287,37 @@ export function runCut(C, L, k, acc) {
       // the next set, as the live sheet asks it after this tick
       const today = live.exercises[xi].sets.filter(x => x.done && x.type !== 'W').map(x => ({ w: x.w, r: x.r, type: x.type, ...(x.rir != null ? { rir: x.rir } : null) }));
       const n = safe('nextSet', () => C.overlap.nextSetFor(ov, e.exId, today, C.live.REP_DROP));
+      const st = { doneLoadsLb: doneLoads.slice(), lastDone: { w, r, isRamp, isWork }, stoppedTruth: stopped, lastRepsUnderLo,
+                   trueWLb: tRow.unit === 'kg' ? r2(tRow.W * LB_PER_KG) : tRow.W, stepLb: tr.stepLb, gridDisp: tr.gridDisp, lo: tr.lo, hi: tr.hi,
+                   bodyweight: tr.bodyweight, assisted: tr.assisted, u: L.u, hadTarget: !!(t && t.loadLb != null), targetLb: t && t.loadLb != null ? t.loadLb : null,
+                   straight, exposures: tr.exposures, earnedUp, lastMainLb,
+                   targetReps: t && t.sets && t.sets[si] && t.sets[si].type !== 'W' ? parseInt(t.sets[si].tr, 10) || null : null,
+                   // v73: a working set ticked lighter than the one before it today — no heavier chip after one.
+                   // A drop set's strips (D) fall by design and are not a step down (coach-prog.js reads `done` without them).
+                   steppedDown: mainLoads.some((x, j) => j > 0 && x < mainLoads[j - 1] - TOL),
+                   lastTopLb: tr.lastTopLb };
       if (n !== undefined) {
-        const st = { doneLoadsLb: doneLoads.slice(), lastDone: { w, r, isRamp, isWork }, stoppedTruth: stopped, lastRepsUnderLo,
-                     trueWLb: tRow.unit === 'kg' ? r2(tRow.W * LB_PER_KG) : tRow.W, stepLb: tr.stepLb, gridDisp: tr.gridDisp, lo: tr.lo, hi: tr.hi,
-                     bodyweight: tr.bodyweight, assisted: tr.assisted, u: L.u, hadTarget: !!(t && t.loadLb != null), targetLb: t && t.loadLb != null ? t.loadLb : null,
-                     straight, exposures: tr.exposures, earnedUp, lastMainLb,
-                     targetReps: t && t.sets && t.sets[si] && t.sets[si].type !== 'W' ? parseInt(t.sets[si].tr, 10) || null : null };
         note('nextSet', e.exId, scoreNextSet(n, st), { set: si, kind: n && n.kind, text: n && n.text, ticked: s.type + s.w + '×' + s.r, target: st.targetLb, mode: t && t.mode, today: today.map(x => x.type + x.w + '×' + x.r).join(' '), truth: { isWork, isRamp, stopped, W: tRow.W } });
       }
-      // the four-answer read
+      // the four-answer read, and (v73) the one answer with chips — "another set, and at what weight?"
+      const doneSets = live.exercises[xi].sets.filter(x => x.done);
+      const curF = doneSets.some((x, j) => (x.type === 'F' || x.rir === 0) && workIdx.has(j));
+      const workDone = live.exercises.reduce((acc2, ex2, xj) => acc2 + ex2.sets.filter((x, j) => x.done && (nextT.exercises.find(q => q.exId === ex2.exId) || { workIdx: [] }).workIdx.includes(j)).length, 0);
+      const planned = nextT.exercises.reduce((acc2, q) => acc2 + q.workIdx.filter(i => i >= 0).length, 0);
+      const liveSt = { curF, curDrop: stopped && !curF, workDone, planned, u: L.u };
       if (isWork || isRamp) {
         const a = safe('live', () => coachLive.live(live, { current: xi }));
-        if (a !== undefined) {
-          const doneSets = live.exercises[xi].sets.filter(x => x.done);
-          const curF = doneSets.some((x, j) => (x.type === 'F' || x.rir === 0) && workIdx.has(j));
-          const workDone = live.exercises.reduce((acc2, ex2, xj) => acc2 + ex2.sets.filter((x, j) => x.done && (nextT.exercises.find(q => q.exId === ex2.exId) || { workIdx: [] }).workIdx.includes(j)).length, 0);
-          const planned = nextT.exercises.reduce((acc2, q) => acc2 + q.workIdx.filter(i => i >= 0).length, 0);
-          note('live', e.exId, scoreLive(a, { curF, curDrop: stopped && !curF, workDone, planned, u: L.u }), { set: si, kind: a && a.kind, text: a && a.short });
-        }
+        if (a !== undefined) note('live', e.exId, scoreLive(a, liveSt), { set: si, kind: a && a.kind, text: a && a.short });
+      }
+      const an = safe('live', () => coachLive.another(live, { current: xi }));
+      if (an !== undefined) {
+        const an2 = coachLive.another(live, { current: xi });
+        const sc = scoreLive(an, liveSt);
+        const chips = scoreChips(an, st);
+        if (JSON.stringify(an) !== JSON.stringify(an2)) sc.codes.push('X_NONDET');
+        note('live', e.exId, { codes: sc.codes.concat(chips.codes), notes: sc.notes.concat(chips.notes) },
+             { set: si, kind: an && 'another:' + an.answer, text: an && an.short, chips: an && an.chips.map(c => c.id + (c.tw != null ? '=' + c.tw + 'x' + c.tr : '')).join(' '),
+               ticked: s.type + s.w + '×' + s.r, today: today.map(x => x.type + x.w + '×' + x.r).join(' '), truth: { isWork, isRamp, stopped, W: tRow.W } });
       }
     });
     asks.add(xi);

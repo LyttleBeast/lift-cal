@@ -25,6 +25,8 @@
 //      second session; q_pr_how only with a record set and no rir; warmStyle
 //      'ramp' makes the confirm a one-tap, 'none' removes it
 
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { stage, harness, J } from './lib/stage.mjs';
 
 const { check, section, done } = harness('coach-ask.js — the questions and the facts (v72)');
@@ -73,9 +75,10 @@ section('A. the catalog: every question changes a registered rule, and coach.js 
   const bad = Q.ASK_QUESTIONS.filter(q => !Array.isArray(q.changes) || !q.changes.length || !q.changes.every(x => ids.has(x))).map(q => q.id);
   check('every row names at least one registered intent in `changes`: ' + Q.ASK_QUESTIONS.map(q => q.id + ' → ' + q.changes.join('/')).join(', '),
         !bad.length, J(bad));
-  check('nine rows: the shipped seven and the recap’s two', Q.ASK_QUESTIONS.length === 9 &&
+  check('ten rows: the shipped seven, the recap’s two, and (v73) the step on a stack in the live lane', Q.ASK_QUESTIONS.length === 10 &&
         Q.ASK_QUESTIONS.filter(q => q.writes === 'answers').length === 7 &&
-        Q.ASK_QUESTIONS.filter(q => q.moments[0] === 'debrief').map(q => q.id).join(',') === 'q_warm_confirm,q_pr_how');
+        Q.ASK_QUESTIONS.filter(q => q.moments[0] === 'debrief').map(q => q.id).join(',') === 'q_warm_confirm,q_pr_how' &&
+        Q.ASK_QUESTIONS.filter(q => q.moments[0] === 'live').map(q => q.id).join(',') === 'q_equipment_step');
   check('coach.js QUESTIONS is the `answers` subset, the same objects, in the same order',
         C.QUESTIONS.length === 7 && C.QUESTIONS.every((q, i) => q === Q.ASK_QUESTIONS.filter(x => x.writes === 'answers')[i]));
   check('every row has moments, options (two or more), a gate, a budget letter and a cooldown',
@@ -310,6 +313,75 @@ section('F. debriefPlan — through coach().debrief(record)');
   const direct = Q.debriefPlan(d, prDay, SETTINGS(), NOW, 0, { prs: pr.prs, harder: false, marked: false, u: 'lb' });
   check('debriefPlan direct, with the context handed in: the same three slots', !!direct.confirm && direct.feel === true && !!direct.question && direct.question.id === 'q_pr_how');
   check('and q_pr_how is never drawn without a record in the context', Q.debriefPlan(d, prDay, SETTINGS(), NOW, 0, { prs: [] }).question === null);
+}
+
+/* ================= G. v73 — THE STEP ON A STACK ================= */
+section('G. v73 — q_equipment_step: the gate (stepAskLift), its chips from wIn(), the live lane through coach().liveQuestion, and the fact’s shape');
+{
+  const U = await st.load('units.js');
+  const q = Q.askQuestion('q_equipment_step');
+  check('the row: moments live then under:targets, writes knowBy.step, a D with a 28-day per-lift stamp, two intents in `changes`',
+        !!q && J(q.moments) === J(['live', 'under:targets']) && q.writes === 'knowBy' && q.key === 'step' && q.budget === 'D' &&
+        q.cooldownDays === 28 && q.stampOf({ step: { exId: 'lat-pulldown' } }) === 'q_equipment_step:lat-pulldown' && q.stampOf() === 'q_equipment_step' &&
+        J(q.changes) === J(['lift_targets', 'live_read']), J(q && [q.moments, q.writes, q.key, q.budget, q.cooldownDays]));
+  check('its words: "On Lat Pulldown, what’s one step up?"', q.text(fakeD(), 'lb', { step: { name: 'Lat Pulldown' } }) === 'On Lat Pulldown, what’s one step up?' && q.text(fakeD(), 'lb', {}) === '');
+  check('the pound chips: 2.5 · 5 · 10 · 15 lb, values the pounds stored, and Not sure (null)',
+        J(q.options.map(o => [o.value, o.label])) === J([[2.5, '2.5 lb'], [5, '5 lb'], [10, '10 lb'], [15, '15 lb'], [null, 'Not sure']]) && J(q.optionsFor('lb')) === J(q.options), J(q.options));
+  const kg = q.optionsFor('kg');
+  check('the kilo chips: 1 · 2.5 · 5 kg, each value wIn()’s pounds — never a typed constant — and the labels through labelW',
+        J(kg.map(o => o.value)) === J([U.wIn(1, 'kg'), U.wIn(2.5, 'kg'), U.wIn(5, 'kg'), null]) && J(kg.map(o => o.label)) === J(['1 kg', '2.5 kg', '5 kg', 'Not sure']) &&
+        kg.slice(0, 3).every(o => U.labelW(o.value, 'kg') === o.label), J(kg));
+  const askSrc = readFileSync(fileURLToPath(new URL('../coach-ask.js', import.meta.url)), 'utf8');
+  check('and the source types none of them: no 2.2, 5.51 or 11.02 in coach-ask.js — the kilo values come from wIn()', askSrc.length > 0 && !/2\.20|5\.51|11\.02/.test(askSrc) && /wIn\(v, unit\)/.test(askSrc));
+  // The fact's shape: a 2.5-lb step and a kilo step survive normKnow; junk does not.
+  const kept = Q.normKnow({ knowBy: { step: { a: { v: 2.5, c: 1, at: 5, n: 1 }, b: { v: 2.2, c: 1, at: 5, n: 1 }, c: { v: 10, c: 1, at: 5, n: 1 },
+                                              d: { v: 2.555, c: 1, at: 5, n: 1 }, e: { v: 0.25, c: 1, at: 5, n: 1 }, f: { v: '10', c: 1, at: 5, n: 1 }, g: { v: 200000, c: 1, at: 5, n: 1 } } } });
+  check('normKnow keeps a step of 2.5, 2.2 (1 kg) or 10 pounds and drops 2.555 (off the two-decimal grid), 0.25, a string and 200000',
+        J(Object.keys(kept.knowBy.step || {})) === J(['a', 'b', 'c']), J(kept));
+  // The gate, lift by lift.
+  const lift = (exId, equipment, exposures, step) => ({ exId, name: LIB[exId] ? LIB[exId].name : exId, equipment, exposures, step });
+  const S0 = SETTINGS();
+  check('stepAskLift: a cable lift with three exposures and no learned step is asked about; its name comes back',
+        J(Q.stepAskLift([lift('lat-pulldown', 'cable', 3, null)], S0, NOW, 'lb')) === J({ exId: 'lat-pulldown', name: 'Lat Pulldown', equipment: 'cable' }));
+  check('a machine and a plate lift qualify; a barbell, a dumbbell (on pounds), bodyweight, a band and cardio do not',
+        !!Q.stepAskLift([lift('leg-press', 'machine', 3, null)], S0, NOW, 'lb') && !!Q.stepAskLift([lift('svend-press', 'plate', 3, null)], S0, NOW, 'lb') &&
+        ['barbell', 'dumbbell', 'bodyweight', 'band', 'cardio', 'kettlebell'].every(e => Q.stepAskLift([lift('x-lift', e, 9, null)], S0, NOW, 'lb') === null));
+  check('a dumbbell on a kilo account qualifies (no kilo dumbbell default), and not on pounds',
+        !!Q.stepAskLift([lift('dumbbell-row', 'dumbbell', 3, { source: 'default' })], S0, NOW, 'kg') && Q.stepAskLift([lift('dumbbell-row', 'dumbbell', 3, { source: 'default' })], S0, NOW, 'lb') === null);
+  check('two exposures: not yet; the step learned from the log (source yours): never', Q.stepAskLift([lift('lat-pulldown', 'cable', 2, null)], S0, NOW, 'lb') === null &&
+        Q.stepAskLift([lift('lat-pulldown', 'cable', 9, { source: 'yours' })], S0, NOW, 'lb') === null);
+  check('a told step inside its year: not asked again; past its TTL it is', Q.stepAskLift([lift('lat-pulldown', 'cable', 5, { source: 'told' })], SETTINGS({ knowBy: { step: { 'lat-pulldown': { v: 10, c: 1, at: NOW - DAY, n: 1 } } } }), NOW, 'lb') === null &&
+        !!Q.stepAskLift([lift('lat-pulldown', 'cable', 5, { source: 'default' })], SETTINGS({ knowBy: { step: { 'lat-pulldown': { v: 10, c: 1, at: NOW - 400 * DAY, n: 1 } } } }), NOW, 'lb'));
+  check('asked ten days ago on that lift (Not sure): quiet for 28; the next lift on the list is asked about instead',
+        Q.stepAskLift([lift('lat-pulldown', 'cable', 5, null)], SETTINGS({ asked: { 'q_equipment_step:lat-pulldown': NOW - 10 * DAY } }), NOW, 'lb') === null &&
+        Q.stepAskLift([lift('lat-pulldown', 'cable', 5, null), lift('leg-press', 'machine', 5, null)], SETTINGS({ asked: { 'q_equipment_step:lat-pulldown': NOW - 10 * DAY } }), NOW, 'lb').exId === 'leg-press' &&
+        !!Q.stepAskLift([lift('lat-pulldown', 'cable', 5, null)], SETTINGS({ asked: { 'q_equipment_step:lat-pulldown': NOW - 29 * DAY } }), NOW, 'lb'));
+  check('junk lifts are skipped, never thrown on', Q.stepAskLift([null, {}, { exId: 'a/b', equipment: 'cable', exposures: 9 }, 5], S0, NOW, 'lb') === null && Q.stepAskLift(null, null, NOW, 'lb') === null);
+  check('the catalog’s gate reads ctx.step and nothing else', q.when(fakeD(), { step: { exId: 'x' } }) === true && !q.when(fakeD(), {}) && !q.when(fakeD()));
+  // Through the engine: the live lane, on the live gate, about the lift in hand.
+  const pullLog = [];
+  for (let k = 0; k < 6; k++) pullLog.push(rec(3 + 7 * k, [ex('lat-pulldown', xN(3, 120, 10)), ex('barbell-row', xN(3, 155, 8))]));
+  const liveS = { id: 'wl', name: 'L', startedAt: NOW - 1800e3, exercises: [ex('barbell-row', [S(155, 8)]), ex('lat-pulldown', [S(120, 10), { w: '', r: '', type: 'N', done: false }])] };
+  const engine = (settings, extra) => C.coach(inputOf(pullLog, settings, { live: { active: true }, ...(extra || null) }));
+  const lq = engine().liveQuestion(liveS, { current: 1 });
+  check('coach().liveQuestion on the pulldown in hand: "On Lat Pulldown, what’s one step up?", by lat-pulldown, the per-lift stamp, writes knowBy, the pound chips',
+        !!lq && lq.id === 'q_equipment_step' && lq.text === 'On Lat Pulldown, what’s one step up?' && lq.by === 'lat-pulldown' && lq.stamp === 'q_equipment_step:lat-pulldown' &&
+        lq.writes === 'knowBy' && lq.key === 'step' && J(lq.options.map(o => o.label)) === J(['2.5 lb', '5 lb', '10 lb', '15 lb', 'Not sure']) &&
+        lq.ack === 'Noted. I’ll use that as the step here until your log shows me another.', J(lq));
+  check('on the barbell row in hand: nothing', engine().liveQuestion(liveS, { current: 0 }) === null);
+  check('in kilos the same question carries the kilo chips', J((engine(null, { u: 'kg' }).liveQuestion(liveS, { current: 1 }) || { options: [] }).options.map(o => o.label)) === J(['1 kg', '2.5 kg', '5 kg', 'Not sure']));
+  check('the live gate: Basic, "In the gym" off, an edit, an unreadable log, questions off — null',
+        engine(null, { tier: { pro: false } }).liveQuestion(liveS, { current: 1 }) === null &&
+        engine(SETTINGS({ mute: { live: true } })).liveQuestion(liveS, { current: 1 }) === null &&
+        engine().liveQuestion({ ...liveS, _edit: { mk: '2026-10' } }, { current: 1 }) === null &&
+        engine(null, { log: 'unknown' }).liveQuestion(liveS, { current: 1 }) === null &&
+        engine(SETTINGS({ mute: { questions: true } })).liveQuestion(liveS, { current: 1 }) === null);
+  check('told 10 lb already: nothing asked in the live lane',
+        engine(SETTINGS({ knowBy: { step: { 'lat-pulldown': { v: 10, c: 1, at: NOW - DAY, n: 1 } } } })).liveQuestion(liveS, { current: 1 }) === null);
+  check('the budget: two D-questions stamped today → nothing in the live lane either',
+        engine(SETTINGS({ asked: { q_goal_aim: NOW - 3600e3, q_experience: NOW - 7200e3 } })).liveQuestion(liveS, { current: 1 }) === null);
+  check('and the shipped seven read exactly as before: pickQuestion for `open` on the fixture is unchanged by the new row',
+        Q.pickQuestion(fakeD({ 'weight.rateWk': 0.5, 'weight.goalDir': null }), 'open', SETTINGS(), NOW, 0) === Q.askQuestion('q_goal_direction'));
 }
 
 done(st.cleanup);

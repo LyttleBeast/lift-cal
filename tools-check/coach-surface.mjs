@@ -192,6 +192,10 @@ const IMPL = {
   setCategoryMuted:   (id, m) => { state.calls.push(['setCategoryMuted', id, m]); return Promise.resolve(true); },
   answerQuestion:     (id, v) => { state.calls.push(['answerQuestion', id, v]); return Promise.resolve(true); },
   markAsked:          id => { state.calls.push(['markAsked', id]); return Promise.resolve(true); },
+  // v73: the facts and the tally — what he told Coach (the step on a machine) and the "another set" counts.
+  learn:              (k, v) => { state.calls.push(['learn', k, v]); return Promise.resolve(true); },
+  learnBy:            (k, id, v) => { state.calls.push(['learnBy', k, id, v]); return Promise.resolve(true); },
+  learnTally:         d => { state.calls.push(['learnTally', d]); return Promise.resolve(true); },
   // v52: the bad-day mark, written or cleared through coach-data.js.
   markSession:        (sess, r) => { state.calls.push(['markSession', sess, r]); return Promise.resolve(true); },
   // v52, Phase B: "Am I fueled?" reads first when there is something to read.
@@ -1007,20 +1011,31 @@ section('G. in a live session: a chip when asked, one quiet line once, nothing f
   check('no session: no chip', UI.liveChip({ add }) === null);
 
   /* ---- the sheet ---- */
+  /* v73: the sheet answers the literal question first — "another set, and at
+     what weight?" (coach-live.js anotherSetRead, c.another) — and the habit
+     read's switch or next exercise is still its own bubble under it, with Add
+     it. With the targets switch off the only numbered chip is the quote of the
+     set he just did. */
   const want = eng().live(NEXT);
+  const an = eng().another(NEXT);
   let sh = tapChip(chip);
   const said = sh ? saidIn(sh) : [];
-  check('the chip opens a sheet that asks "What should I do next?" and answers at once, in the engine’s words',
-        !!sh && said.length === 2 && said[0].who === 'you' && said[0].t === 'What should I do next?' &&
-        said[1].who === 'coach' && !!want && said[1].t === want.text, said.map(x => x.t).join(' / '));
+  check('the chip opens a sheet that asks "What should I do next?" and answers at once, in the engine’s words — the another read, then the habit read',
+        !!sh && said.length === 3 && said[0].who === 'you' && said[0].t === 'What should I do next?' &&
+        said[1].who === 'coach' && !!an && said[1].t === an.text && said[2].who === 'coach' && !!want && said[2].t === want.text,
+        said.map(x => x.t).join(' / '));
   check('the answer here is the next exercise — the fixture’s true one', !!want && want.kind === 'next' && want.exId === 'fly',
         want && want.kind);
-  check('and the sheet offers exactly Why?, Add it and Close — nothing else to tap',
-        !!sh && J_(buttonsIn(sh).map(b => b.textContent)) === J_(['Why?', 'Add it', 'Close']), sh && list(buttonsIn(sh).map(b => b.textContent)));
+  check('v73: and the another read on the incline at its usual three, targets off: "probably", quoting the set he just did',
+        !!an && an.answer === 'probably' && an.text === 'Another set of Incline Dumbbell Bench Press? You usually stop about here: 3 sets in 10 of 10. Same weight again.' &&
+        J_(an.chips.map(c => c.label)) === J_(['Same again, 65 lb × 10', 'That’s the last one', 'Done for today']), an && J_(an));
+  check('and the sheet offers exactly Why?, the three chips, Add it and Close — nothing else to tap',
+        !!sh && J_(buttonsIn(sh).map(b => b.textContent)) === J_(['Why?', 'Same again, 65 lb × 10', 'That’s the last one', 'Done for today', 'Add it', 'Close']),
+        sh && list(buttonsIn(sh).map(b => b.textContent)));
   btn(sh, 'Why?').onclick();
   const why = saidIn(sh).pop();
-  check('"Why?" shows the engine’s reasons, all of them, once',
-        why && why.who === 'coach' && J_([why.t].concat(why.r)) === J_(want.why) && !btn(sh, 'Why?'),
+  check('"Why?" shows the engine’s reasons, all of them, once — the another read’s, then the habit read’s',
+        why && why.who === 'coach' && J_([why.t].concat(why.r)) === J_(an.why.concat(want.why)) && !btn(sh, 'Why?'),
         why && [why.t].concat(why.r).join(' / '));
   adds.length = 0;
   btn(sh, 'Add it').onclick();
@@ -1031,18 +1046,37 @@ section('G. in a live session: a chip when asked, one quiet line once, nothing f
 
   const ANOTHER = liveS([['bench', 3]]);
   sh = tapChip(UI.liveChip({ session: ANOTHER, add }));
-  check('"one more set" is answered, with Why? and no Add it — the exercise is already in hand',
-        saidIn(sh)[1].t === eng().live(ANOTHER).text && eng().live(ANOTHER).kind === 'another' &&
-        !btn(sh, 'Add it') && !!btn(sh, 'Why?'));
+  check('"one more set" is answered once — the another read’s yes, the habit read’s same answer not said twice — with Why? and no Add it',
+        saidIn(sh).length === 2 && saidIn(sh)[1].t === eng().another(ANOTHER).text && eng().another(ANOTHER).answer === 'yes' &&
+        eng().live(ANOTHER).kind === 'another' && !btn(sh, 'Add it') && !!btn(sh, 'Why?'), saidIn(sh).map(x => x.t).join(' / '));
   const SWITCH = liveS([['bench', 4], ['incline', 3], ['fly', 3]]);
   sh = tapChip(UI.liveChip({ session: SWITCH, add }));
   adds.length = 0;
   const sw = eng().live(SWITCH);
-  check('a switch offers Add it for the exercise that usually opens the next group',
-        sw && sw.kind === 'switch' && saidIn(sh)[1].t === sw.text && !!btn(sh, 'Add it'), sw && sw.kind);
+  check('a switch offers Add it for the exercise that usually opens the next group, under the another read',
+        sw && sw.kind === 'switch' && saidIn(sh)[2].t === sw.text && !!btn(sh, 'Add it'), sw && sw.kind);
+  // v73: the live lane's one question, about the lift in hand — the cable fly, ten exposures, no step a log of flat 40s could teach.
+  const askRow = find(sh, 'coach-live-ask')[0];
+  const askBub = find(askRow, 'coach-bub-t').map(x => x.textContent);
+  check('v73: under the chips, the live question about the cable crossover in hand — "On Cable Crossover, what’s one step up?" with 2.5 · 5 · 10 · 15 lb · Not sure — stamped as asked when drawn',
+        J_(askBub) === J_(['On Cable Crossover, what’s one step up?']) && J_(buttonsIn(askRow).map(b => b.textContent)) === J_(['2.5 lb', '5 lb', '10 lb', '15 lb', 'Not sure']) &&
+        J_(state.calls.filter(c => c[0] === 'markAsked').pop()) === J_(['markAsked', 'q_equipment_step:fly']), J_(askBub) + J_(state.calls.slice(-3)));
+  state.calls.length = 0;
+  buttonsIn(askRow).find(b => b.textContent === '10 lb').onclick();
+  check('a tap on 10 lb: learnBy(step, fly, 10) — the pounds — his bubble, the ack, the chips gone',
+        J_(state.calls) === J_([['learnBy', 'step', 'fly', 10]]) && J_(find(askRow, 'coach-bub-t').map(x => x.textContent)) ===
+          J_(['On Cable Crossover, what’s one step up?', '10 lb', 'Noted. I’ll use that as the step here until your log shows me another.']) && !buttonsIn(askRow).length, J_(state.calls));
   btn(sh, 'Add it').onclick();
   check('and adds it through the same callback',
         adds.length === 1 && Array.isArray(adds[0]) && !!adds[0][0] && adds[0][0].id === 'curl', J_(adds));
+  // Not sure: nothing stored beyond the stamp.
+  state.calls.length = 0;
+  sh = tapChip(UI.liveChip({ session: liveS([['bench', 4], ['incline', 3], ['pushdown', 3]]), add }));
+  const ask2 = find(sh, 'coach-live-ask')[0];
+  buttonsIn(ask2).find(b => b.textContent === 'Not sure').onclick();
+  check('Not sure on the pushdown: the stamp alone, no fact written, nothing said back',
+        J_(state.calls.filter(c => c[0] !== 'rememberGreeting')) === J_([['markAsked', 'q_equipment_step:pushdown']]) &&
+        J_(find(ask2, 'coach-bub-t').map(x => x.textContent)) === J_(['On Triceps Pushdown (Rope), what’s one step up?', 'Not sure']), J_(state.calls));
   const DONE = liveS([['bench', 4], ['incline', 3], ['fly', 3], ['curl', 3], ['pushdown', 3]]);
   sh = tapChip(UI.liveChip({ session: DONE, add }));
   check('"you’re probably good for today" has nothing to add', eng().live(DONE).kind === 'done' &&
@@ -1051,9 +1085,13 @@ section('G. in a live session: a chip when asked, one quiet line once, nothing f
   state.input = { ...LIVEX, sessions: LIVEX.sessions.slice(-4) };
   sh = tapChip(UI.liveChip({ session: NEXT, add }));
   const none = C.coach({ ...state.input, live: { active: true }, tier: { pro: true } }).live(NEXT);
-  check('thin history: the sheet says it has nothing to add, and why — never a guess',
-        none === null && saidIn(sh)[1].t === C.LIVE_NONE.text && !btn(sh, 'Add it') && !!btn(sh, 'Why?'),
-        saidIn(sh)[1] && saidIn(sh)[1].t);
+  const thinAn = C.coach({ ...state.input, live: { active: true }, tier: { pro: true } }).another(NEXT);
+  check('thin history: no habit answer, and the another read says it has no usual to read — a quote of the set, never a guess',
+        none === null && !!thinAn && thinAn.answer === 'yes' && thinAn.usual === null &&
+        thinAn.text === 'Another set of Incline Dumbbell Bench Press? One more is fine by the log; I don’t know your usual on this one yet. Same weight again.' &&
+        saidIn(sh)[1].t === thinAn.text && saidIn(sh).length === 2 && !btn(sh, 'Add it') && !!btn(sh, 'Why?') &&
+        !saidIn(sh).some(x => x.t === C.LIVE_NONE.text),
+        saidIn(sh).map(x => x.t).join(' / '));
   state.input = LIVEX;
   state.logKnown = false;
   sh = tapChip(UI.liveChip({ session: NEXT, add }));
@@ -1065,17 +1103,22 @@ section('G. in a live session: a chip when asked, one quiet line once, nothing f
   // Incline's last set has just been ticked; bench was finished before it.
   const s1 = liveS([['bench', 4], ['incline', 3]]);
   const before = J_(s1);
+  state.calls.length = 0;
   const st1 = UI.noteLiveTick(s1, 1, 2);
-  check('ticking the LAST set of an exercise raises one line, the engine’s short answer for it',
-        !!st1.nudge && st1.nudge.short === eng().live(s1, { current: 1 }).short && st1.shown.includes('incline#0'),
+  // v73: the line is the another read's short — "Another set, same weight?" here, targets off.
+  check('ticking the LAST set of an exercise raises one line, the engine’s short answer to "another set?" for it',
+        !!st1.nudge && st1.nudge.short === eng().another(s1, { current: 1 }).short && st1.nudge.short === 'Another set, same weight?' &&
+        st1.nudge.kind === 'probably' && st1.shown.includes('incline#0'),
         J_(st1));
   check('and noteLiveTick hands back a new state — the session it was given is untouched', J_(s1) === before);
+  check('v73: raising the line writes nothing — no learnTally, no learnBy, no markAsked on paint', !state.calls.some(c => ['learnTally', 'learnBy', 'learn', 'markAsked'].includes(c[0])), J_(state.calls));
   s1._coach = st1;
   const line = UI.nudgeLine(s1, 1, { open() { line.opened = true; }, dismiss() { line.dismissed = true; } });
   check('drawn under that exercise, in the swipe hint’s own box — same slot, same height, no row moves',
         !!line && line.classList.contains('swipe-hint') && line.classList.contains('coach-nudge') &&
         textOf(line).includes(st1.nudge.short), line ? line.className + ' · ' + textOf(line) : 'null');
   check('and under no other exercise', UI.nudgeLine(s1, 0, {}) === null);
+  check('and drawing the line writes nothing either', !state.calls.some(c => ['learnTally', 'learnBy', 'learn', 'markAsked'].includes(c[0])));
   const [lt, lx_] = buttonsIn(line);
   lt.onclick(); lx_.onclick();
   check('tapping it opens the sheet, and × dismisses it', line.opened === true && line.dismissed === true);
@@ -1113,9 +1156,12 @@ section('G. in a live session: a chip when asked, one quiet line once, nothing f
   check('and none drawn, even over state left on it', UI.nudgeLine({ ...edit, _coach: st1 }, 1, {}) === null);
   state.input = { ...LIVEX, sessions: LIVEX.sessions.slice(-4) };
   const thin = UI.noteLiveTick(liveS([['bench', 4], ['incline', 3]]), 1, 2);
-  check('nothing to say: no line, and the exercise is not marked shown — silence is not a use of its once',
-        thin.nudge === null && !thin.shown.length, J_(thin));
+  check('v73: thin history still answers the literal question — "Another set, same weight?" — once, and the exercise is marked shown',
+        !!thin.nudge && thin.nudge.short === 'Another set, same weight?' && thin.nudge.kind === 'yes' && thin.shown.includes('incline#0'), J_(thin));
   state.input = LIVEX;
+  // Nothing ticked on the lift in hand at all: the another read is null, and so is the line.
+  const bare = UI.noteLiveTick({ ...liveS([['bench', 4, 0]]), exercises: liveS([['bench', 1]]).exercises.map(e => ({ ...e, sets: [{ w: '', r: '', type: 'N', done: true }] })) }, 0, 0);
+  check('a tick with no reps on the only exercise: nothing to read, no line, nothing marked shown', bare.nudge === null && !bare.shown.length, J_(bare));
   check('a set that is not the exercise’s last raises nothing',
         UI.noteLiveTick(liveS([['bench', 4, 3], ['incline', 3]]), 0, 2).nudge === null);
   check('and an untick raises nothing', UI.noteLiveTick(liveS([['bench', 4, 3]]), 0, 3).nudge === null);
@@ -1126,7 +1172,7 @@ section('G. in a live session: a chip when asked, one quiet line once, nothing f
   // liveOpts() — Add it's is still addPicked, beside the rating's two.
   check('"+ Add exercise" and Coach’s Add it are the same function — the picker’s own path, never a parallel one',
         /add\.onclick = \(\) => openPicker\(addPicked\);/.test(WS) &&
-        /const liveOpts = current => \(\{ session, add: addPicked, rate: rateLive, useNext: useNextLive, current \}\);/.test(WS) &&
+        /const liveOpts = current => \(\{ session, add: addPicked, rate: rateLive, useNext: useNextLive, shown: shownLive, done: doneLive, current \}\);/.test(WS) &&
         /liveChip\(liveOpts\(nudgedAt\(session\)\)\)/.test(WS) && /openLiveSheet\(liveOpts\(exIdx\)\)/.test(WS));
   check('and that function appends at the end of the session, outside any block',
         /function addPicked\(chosen\) \{[\s\S]{0,200}session\.exercises\.push\(newExercise\(x, !!session\._edit\)\)/.test(WS));
@@ -1988,7 +2034,12 @@ section('N. v52 — the caution before a proposal, the mark’s chips, and "Shou
      headed groups, and the group's box is You's own section box (rack.css
      .you-sec, which already carries the heading above it). Reused, not new. */
   const V2610 = ['you-sec'];
-  const added = [...cls(src('coach-ui.js'))].filter(c => !was.has(c) && !V54.includes(c) && !V55.includes(c) && !V2610.includes(c));
+  /* v73, on purpose: the live sheet's "another set?" chip row and the live
+     lane's one question sit in two hosts of their own, laid out as the effort
+     row is (rack.css, 44px chips, no gap while empty); the chips are Coach
+     chips with one class for the height and the Yes chip's accent. */
+  const V73 = ['coach-another', 'coach-live-ask', 'coach-another-chip', 'primary'];
+  const added = [...cls(src('coach-ui.js'))].filter(c => !was.has(c) && !V54.includes(c) && !V55.includes(c) && !V2610.includes(c) && !V73.includes(c));
   check('no new CSS class: the caution and the mark are Coach bubbles and chips', !added.length, list(added));
   // ---- Phase B: "Am I fueled?" ----
   /* A month of food logged as he goes, training every other day; now is
@@ -2106,55 +2157,132 @@ section('O. v54 — the live sheet in its order: the answer, the next set, "How 
       : n.classList.contains('coach-rate-after') ? (n.children.length ? 'after' : '(after, empty)')
       : n.classList.contains('coach-chips') ? 'chips: ' + buttonsIn(n).map(b => b.textContent).join('/') : n.className);
 
+  /* v73 (COACH-V2-SPEC §5.2): the thread is his question, the answer to
+     "another set, and at what weight?" (c.another), Why?, "How was it?", then
+     the chip row from the read's chips — Yes, 190 lb × 8 · That's the last one
+     · Done for today — and the live lane's question host. The shipped next-set
+     bubble is drawn only when `another` is null. */
   const S2 = liveO([['barbell-bench-press', [[190, 8], [190, 8], ['', '', false]]]]);
   const eng2 = C.coach({ ...OIN, live: { active: true }, tier: { pro: true } });
-  const a2 = eng2.live(S2, { current: 0 }), n2 = eng2.liveSet(S2, { current: 0 });
+  const an2 = eng2.another(S2, { current: 0 }), n2 = eng2.liveSet(S2, { current: 0 });
+  const chipsOf = sh => buttonsIn(find(sh, 'coach-another')[0]).map(b => b.textContent);
   let sh = openO(S2);
   const got = order(sh);
-  check('top to bottom: his question, the answer, the next set, Why?, "How was it?" — and nothing after a tap yet',
-        !!a2 && !!n2.next && J_(got) === J_(['you', 'coach: ' + a2.text, 'coach: Next set: 190 lb × 8.', 'chips: Why?', 'rate', '(after, empty)']),
+  check('top to bottom: his question, the another answer, Why?, "How was it?", nothing after a tap yet, the chip row, the question host',
+        !!an2 && an2.answer === 'yes' && !!n2.next &&
+        J_(got) === J_(['you', 'coach: ' + an2.text, 'chips: Why?', 'rate', '(after, empty)', 'coach-another', 'coach-live-ask']),
         J_(got));
-  check('then Add it (when the answer names one) and Close, below the thread',
-        J_(buttonsIn(sh).filter(b => !b.classList.contains('coach-chip')).map(b => b.textContent)) === J_((a2.add ? ['Add it'] : []).concat(['Close'])),
+  check('the answer: "Another set of Barbell Bench Press is in line with what you usually do: 3 or more in 8 of your 8 sessions of it. I’d stay at 190 lb."',
+        an2.text === 'Another set of Barbell Bench Press is in line with what you usually do: 3 or more in 8 of your 8 sessions of it. I’d stay at 190 lb.', an2.text);
+  check('the chip row: Yes, 190 lb × 8 · That’s the last one · Done for today — the Yes chip the only numbered one, its number the next set’s',
+        J_(chipsOf(sh)) === J_(['Yes, 190 lb × 8', 'That’s the last one', 'Done for today']) &&
+        an2.chips[0].tw === n2.next.tw && an2.chips[0].tr === n2.next.tr && n2.next.kind === 'same', J_(chipsOf(sh)));
+  check('no next-set bubble beside it, and no Add it; Close below the thread',
+        !find(sh, 'coach-bub-t').some(x => /^Next set/.test(x.textContent)) &&
+        J_(buttonsIn(sh).filter(b => !b.classList.contains('coach-chip')).map(b => b.textContent)) === J_(['Close']),
         J_(buttonsIn(sh).map(b => b.textContent)));
+  check('drawing a numbered yes counted one offer, and nothing else was written',
+        J_(state.calls.filter(c => c[0] === 'learnTally')) === J_([['learnTally', { extraOffered: 1 }]]), J_(state.calls));
   btn(sh, 'Why?').onclick();
   const why = find(sh, 'coach-bub').pop();
-  check('Why? shows the answer’s reasons and then the next set’s, once',
-        J_([(find(why, 'coach-bub-t')[0] || {}).textContent].concat(find(why, 'coach-bub-r').map(x => x.textContent))) === J_(a2.why.concat(n2.next.why)),
+  check('Why? shows the another read’s reasons, once — the counts, the fatigue rule, the next set’s',
+        J_([(find(why, 'coach-bub-t')[0] || {}).textContent].concat(find(why, 'coach-bub-r').map(x => x.textContent))) === J_(an2.why),
         find(why, 'coach-bub-r').map(x => x.textContent).join(' / '));
-  check('under the chip it replaced, with "How was it?" still below them',
-        J_(order(sh).slice(3)) === J_(['chips: ', 'coach: ' + a2.why[0], 'rate', '(after, empty)']), J_(order(sh)));
+  check('under the chip it replaced, with "How was it?" and the chip row still below them',
+        J_(order(sh).slice(2)) === J_(['chips: ', 'coach: ' + an2.why[0], 'rate', '(after, empty)', 'coach-another', 'coach-live-ask']), J_(order(sh)));
   const rq = find(sh, 'coach-rate')[0];
   check('"Set 2 · 190 lb × 8. How was it?" over Way too easy, About right, Too hard',
         (find(rq, 'coach-rate-q')[0] || {}).textContent === 'Set 2 · 190 lb × 8. How was it?' &&
         J_(buttonsIn(rq).map(b => b.textContent)) === J_(['Way too easy', 'About right', 'Too hard']));
   buttonsIn(rq).find(b => b.textContent === 'About right').onclick();
-  check('a tap: the rating through the callback, and the answer and "Use it for my next set" under the chips',
+  check('a tap: the rating through the callback, the shipped answer line under the chips, and no "Use it" button — the chip row is the way on',
         J_(rates.pop()) === J_([{ exIdx: 0, setIdx: 1 }, 2]) &&
-        J_(order(sh).slice(-2)) === J_(['rate', 'after']) &&
         J_(find(find(sh, 'coach-rate-after')[0], 'coach-bub-t').map(x => x.textContent)) === J_(['Good. Same again: 190 lb × 8.']) &&
-        buttonsIn(find(sh, 'coach-rate-after')[0]).map(b => b.textContent).join() === 'Use it for my next set', J_(order(sh)));
+        !buttonsIn(find(sh, 'coach-rate-after')[0]).length && J_(chipsOf(sh)) === J_(['Yes, 190 lb × 8', 'That’s the last one', 'Done for today']), J_(order(sh)));
+  // Way too easy: the heavier chip appears, with nextSet's `up` number; the Yes chip stays at the set he did.
+  buttonsIn(find(sh, 'coach-rate')[0]).find(b => b.textContent === 'Way too easy').onclick();
+  const anEasy = eng2.another(S2, { current: 0 });
+  check('rated Way too easy: the answer redraws — "Yes, 190 lb × 8" stays and "Heavier, 195 lb × 8" appears, nextSet’s own step',
+        anEasy.answer === 'yes' && J_(chipsOf(sh)) === J_(['Yes, 190 lb × 8', 'Heavier, 195 lb × 8', 'That’s the last one', 'Done for today']) &&
+        find(sh, 'coach-bub-t')[1].textContent === anEasy.text && /one step up, 195 lb × 8, if you want it\.$/.test(anEasy.text) &&
+        eng2.liveSet(S2, { current: 0 }).next.kind === 'up', J_(chipsOf(sh)) + ' · ' + anEasy.text);
+  // Too hard: stop — no heavier chip, "Stay at 190 lb or call it there."
+  buttonsIn(find(sh, 'coach-rate')[0]).find(b => b.textContent === 'Too hard').onclick();
+  const anHard = eng2.another(S2, { current: 0 });
+  check('rated Too hard: "That’s probably the set. Stay at 190 lb or call it there." — Same weight and That’s the last one, never a heavier chip',
+        anHard.answer === 'stop' && anHard.text === 'That’s probably the set. Stay at 190 lb or call it there.' &&
+        J_(chipsOf(sh)) === J_(['Same weight, 190 lb', 'That’s the last one']) && find(sh, 'coach-bub-t')[1].textContent === anHard.text,
+        J_(chipsOf(sh)) + ' · ' + anHard.text);
+  check('the offer was counted once for the whole open, not again on each redraw',
+        state.calls.filter(c => c[0] === 'learnTally').length === 1, J_(state.calls.filter(c => c[0] === 'learnTally')));
+  // The Yes chip: the shipped useNext path, one row, and the tally.
+  state.calls.length = 0;
+  const S3 = liveO([['barbell-bench-press', [[190, 8], [190, 8], ['', '', false]]]]);
+  const used = [];
+  body.children.length = 0;
+  UI.liveChip({ ...optsO(S3), useNext: (at, t) => used.push([at, t]) }).onclick();
+  sh = sheetO();
+  btn(sh, 'Yes, 190 lb × 8').onclick();
+  check('Yes: the sheet closes and useNext is handed the rated set’s position and exactly the chip’s tw/tr — nothing else',
+        !sheetO() && J_(used) === J_([[{ exIdx: 0, setIdx: 1 }, { tw: '190', tr: '8' }]]), J_(used));
+  check('and the tally counts one taken beside the one offered',
+        J_(state.calls.filter(c => c[0] === 'learnTally').map(c => c[1])) === J_([{ extraOffered: 1 }, { extraTaken: 1 }]), J_(state.calls));
+  // That's the last one, and Done for today: the two callbacks, nothing written.
+  state.calls.length = 0;
+  const shownAt = [], dones = [];
+  body.children.length = 0;
+  UI.liveChip({ ...optsO(S3), shown: i => shownAt.push(i), done: () => dones.push(1) }).onclick();
+  btn(sheetO(), 'That’s the last one').onclick();
+  check('That’s the last one: closes, marks the exercise shown through the callback, writes nothing',
+        !sheetO() && J_(shownAt) === J_([0]) && !dones.length && !state.calls.some(c => c[0] === 'learnTally' && c[1].extraTaken), J_(shownAt));
+  body.children.length = 0;
+  UI.liveChip({ ...optsO(S3), shown: i => shownAt.push(i), done: () => dones.push(1) }).onclick();
+  btn(sheetO(), 'Done for today').onclick();
+  check('Done for today: closes and calls the done callback — the screen marks every exercise shown and scrolls to Finish',
+        !sheetO() && dones.length === 1 && shownAt.length === 1);
+  check('markNudgeShown / markAllShown: the state as it should be — the one key, then every key, no line up',
+        J_(UI.markNudgeShown(S3, 0)) === J_({ shown: ['barbell-bench-press#0'], nudge: null }) &&
+        J_(UI.markAllShown({ ...SD_(), _coach: { shown: [], nudge: { key: 'x', short: 's' } } })) ===
+          J_({ shown: ['barbell-bench-press#0', 'incline-dumbbell-bench-press#0', 'cable-crossover#0', 'barbell-curl#0'], nudge: null }));
+  function SD_() { return liveO([['barbell-bench-press', [[190, 8]]], ['incline-dumbbell-bench-press', [[60, 10]]], ['cable-crossover', [[40, 12]]], ['barbell-curl', [[75, 10]]]]); }
 
-  // Done first: the session at its usual length has no next-set number.
-  const SD = liveO([['barbell-bench-press', [[190, 8], [190, 8], [190, 8]]], ['incline-dumbbell-bench-press', [[60, 10], [60, 10], [60, 10]]],
-                    ['cable-crossover', [[40, 12], [40, 12], [40, 12]]], ['barbell-curl', [[75, 10], [75, 10], [75, 10]]]]);
-  const aD = C.coach({ ...OIN, live: { active: true }, tier: { pro: true } }).live(SD, { current: 0 });
+  // Done first: the session at its usual length — the answer is `no`, one chip, no number.
+  const SD = SD_(); SD.exercises.forEach(e => { e.sets = [e.sets[0], { ...e.sets[0] }, { ...e.sets[0] }]; });
+  const aD = eng2.another(SD, { current: 0 });
   sh = openO(SD);
-  check('"you’re probably good for today": the answer, and no next set — the chips still there for the set just done',
-        !!aD && aD.kind === 'done' && !find(sh, 'coach-bub-t').some(x => /^Next set/.test(x.textContent)) && !!find(sh, 'coach-rate')[0].children.length,
-        J_(order(sh)));
-  // Thin habits, a target in hand: the next set is the answer.
+  check('"you’re probably good for today": the answer is `no`, Done for today its one chip, no number anywhere — the effort chips still there for the set just done',
+        !!aD && aD.answer === 'no' && /^You’re probably good for today/.test(aD.text) && aD.tw === null &&
+        J_(chipsOf(sh)) === J_(['Done for today']) && !find(sh, 'coach-bub-t').some(x => /^Next set/.test(x.textContent)) && !!find(sh, 'coach-rate')[0].children.length,
+        J_(order(sh)) + ' ' + J_(chipsOf(sh)));
+  // Thin habits, a target in hand: the another read still answers, with no usual and the target's number.
   state.input = { ...OIN, sessions: ohist.slice(-2) };
   const S1 = liveO([['barbell-bench-press', [[190, 8], ['', '', false]]]]);
-  const thinA = C.coach({ ...state.input, live: { active: true }, tier: { pro: true } }).live(S1, { current: 0 });
+  const thinE = C.coach({ ...state.input, live: { active: true }, tier: { pro: true } });
   sh = openO(S1);
-  check('nothing from his habits, a target in hand: the next set IS the answer — never "Nothing I can add" above a number',
-        thinA === null && J_(order(sh).slice(0, 2)) === J_(['you', 'coach: ' + C.coach({ ...state.input, live: { active: true }, tier: { pro: true } }).liveSet(S1, { current: 0 }).next.text]) &&
-        !find(sh, 'coach-bub-t').some(x => x.textContent === C.LIVE_NONE.text), J_(order(sh)));
+  check('thin habits, a target in hand: "One more is fine by the log; I don’t know your usual on this one yet. I’d stay at 190 lb." — never "Nothing I can add" above a number',
+        thinE.live(S1, { current: 0 }) === null && thinE.another(S1, { current: 0 }).usual === null &&
+        J_(order(sh).slice(0, 2)) === J_(['you', 'coach: Another set of Barbell Bench Press? One more is fine by the log; I don’t know your usual on this one yet. I’d stay at 190 lb.']) &&
+        !find(sh, 'coach-bub-t').some(x => x.textContent === C.LIVE_NONE.text) &&
+        // the Yes chip's reps are the next set's own for that position (coach-prog.js), read, never typed here
+        J_(chipsOf(sh)) === J_(['Yes, 190 lb × ' + thinE.liveSet(S1, { current: 0 }).next.tr, 'That’s the last one', 'Done for today']),
+        J_(order(sh)) + ' ' + J_(chipsOf(sh)));
   state.input = { ...state.input, settings: { v: 1, mute: { targets: true }, answers: {}, asked: {} } };
   sh = openO(S1);
-  check('and with the targets switch off, exactly as before: "Nothing I can add…", then the chips',
-        J_(order(sh).slice(0, 2)) === J_(['you', 'coach: ' + C.LIVE_NONE.text]) && order(sh).includes('rate'), J_(order(sh)));
+  check('and with the targets switch off: the same answer with no target — "Same weight again." and a quote chip, never a target',
+        J_(order(sh).slice(0, 2)) === J_(['you', 'coach: Another set of Barbell Bench Press? One more is fine by the log; I don’t know your usual on this one yet. Same weight again.']) &&
+        order(sh).includes('rate') && J_(chipsOf(sh)) === J_(['Same again, 190 lb × 8', 'That’s the last one', 'Done for today']), J_(order(sh)) + J_(chipsOf(sh)));
+  // Nothing ticked yet: `another` is null and the shipped layout stands — the session's target as the next-set bubble.
+  state.input = OIN;
+  const S0 = liveO([['barbell-bench-press', [['', '', false], ['', '', false]]]]);
+  sh = openO(S0);
+  check('nothing ticked yet: another is null, so the shipped next-set bubble stands — "Next set: 190 lb × 8." — and no chip row',
+        eng2.another(S0, { current: 0 }) === null && order(sh).includes('coach: Next set: 190 lb × 8.') && !chipsOf(sh).length, J_(order(sh)));
+  // The log not read yet: the shipped waiting line, no chips, no number.
+  state.logKnown = false;
+  sh = openO(S2);
+  check('a log not read yet: the waiting line, no chip row, no number', order(sh).includes('coach: ' + 'I’m reading your log — ask again in a moment.') && !chipsOf(sh).length, J_(order(sh)));
+  state.logKnown = true;
+  state.calls.length = 0;
   state.input = BASE; body.children.length = 0;
 }
 

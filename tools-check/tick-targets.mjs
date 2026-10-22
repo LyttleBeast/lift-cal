@@ -87,7 +87,7 @@ for (const [file, text] of sources) {
       return base && REAL.includes(base) ? `from './${base.replace(/\.js$/, '.mjs')}'` : `from './stub.mjs'`;
     }));
 }
-const { tickSet, unsavedTicks, collectFrom, recordGroups } = await import(pathToFileURL(join(dir, 'workout.mjs')).href);
+const { tickSet, unsavedTicks, collectFrom, recordGroups, useNext } = await import(pathToFileURL(join(dir, 'workout.mjs')).href);
 
 /* ---------- harness ---------- */
 let pass = 0, fail = 0;
@@ -463,6 +463,49 @@ section('H. Log, Save and Add keep the 54px the stylesheet gives them');
 }
 
 /* ---------- report ---------- */
+/* ================= J. v73 — A CHIP TAP IN THE LIVE SHEET ================= */
+section('J. v73 — a chip tap pre-fills exactly one row with the chip’s tw/tr through useNext: never ticks it, never a W or D row, never a box he typed in');
+{
+  /* The live sheet's chip row (coach-ui.js openLiveSheet, COACH-V2-SPEC §5.2)
+     calls the shipped useNext with { tw, tr } from the read's chip and the
+     rated set's position — the same path as "Use it for my next set". Driven
+     here on the real workout.js useNext with the shapes a chip carries: a
+     target's number, a quote of the set he ticked, a ramp row. */
+  const chips = [{ id: 'yes', tw: '185', tr: '8' }, { id: 'heavier', tw: '190', tr: '8' }, { id: 'same', tw: '185', tr: '8' }, { id: 'next_warmup', tw: '95', tr: '8' }, { id: 'to_work', tw: '185', tr: '8' }];
+  const tap = (list, at, c) => useNext(list, at, { tw: c.tw, tr: c.tr });
+  const base = () => [ex('bench', [set('185', '8', { done: true }), set('', '', { tw: '185', tr: '8', tl: true }), set('', '', { tw: '185', tr: '8' })])];
+  const diff = (a, b) => a.flatMap((e, i) => e.sets.map((s, k) => [i, k, J(s) === J(b[i].sets[k])])).filter(x => !x[2]).map(x => x[0] + ':' + x[1]);
+  const bad = [];
+  chips.forEach(c => {
+    const before = base();
+    const after = tap(before, { exIdx: 0, setIdx: 0 }, c);
+    const changed = diff(before, after);
+    const row = after[0].sets[1];
+    if (!(changed.length === 1 && changed[0] === '0:1' && row.tw === c.tw && row.tr === c.tr && row.done === false && row.w === '' && row.r === '' && !('tl' in row))) bad.push(c.id + ': ' + J(after[0].sets));
+  });
+  check('each chip kind — yes, heavier, same, next_warmup, to_work — changes exactly the next unticked row: its tw/tr the chip’s, not ticked, boxes still empty, last time’s grey gone', !bad.length, bad.join(' | '));
+  const typed = [ex('bench', [set('185', '8', { done: true }), set('200', '', {}), set('', '', {})])];
+  const t2 = tap(typed, { exIdx: 0, setIdx: 0 }, chips[0]);
+  check('a box he typed into keeps what he typed: only tw/tr land on the row, w and r untouched', t2[0].sets[1].w === '200' && t2[0].sets[1].tw === '185' && t2[0].sets[1].tr === '8' && t2[0].sets[1].done === false);
+  const wd = [ex('bench', [set('185', '8', { done: true }), set('', '', { type: 'W' }), set('', '', { type: 'D', dp: 1 }), set('', '', {})])];
+  const t3 = tap(wd, { exIdx: 0, setIdx: 0 }, chips[1]);
+  check('a W row and a D row are passed over: the number lands on the next N row', J(diff(wd, t3)) === J(['0:3']) && t3[0].sets[3].tw === '190' && t3[0].sets[1].tw === undefined && t3[0].sets[2].tw === undefined, J(t3[0].sets));
+  const full = [ex('bench', [set('185', '8', { done: true }), set('185', '8', { done: true })])];
+  const t4 = tap(full, { exIdx: 0, setIdx: 1 }, chips[0]);
+  check('no row left: one new unticked row is added with the chip’s tw/tr, and no row he ticked moves',
+        t4[0].sets.length === 3 && J(t4[0].sets.slice(0, 2)) === J(full[0].sets) && J(t4[0].sets[2]) === J({ w: '', r: '', type: 'N', done: false, tw: '185', tr: '8' }), J(t4[0].sets));
+  // Mid-ramp, nothing working ticked: the sheet hands the last ticked row's position (or −1), and the number lands after it.
+  const ramp = [ex('bench', [set('45', '10', { type: 'W', done: true }), set('', '', { type: 'W' }), set('', '', { tw: '185', tr: '8' })])];
+  const t5 = tap(ramp, { exIdx: 0, setIdx: 0 }, chips[3]);
+  check('mid-ramp from the last ticked row: the next W row is passed over too, so the next warm-up’s numbers land on the first N row (a warm-up he then ticks as N)',
+        J(diff(ramp, t5)) === J(['0:2']) && t5[0].sets[2].tw === '95' && t5[0].sets[2].tr === '8', J(t5[0].sets));
+  const t6 = tap(ramp, { exIdx: 0, setIdx: -1 }, chips[1]);
+  check('from before the first row (−1): the same first N row', J(diff(ramp, t6)) === J(['0:2']) && t6[0].sets[2].tw === '190', J(t6[0].sets));
+  check('the exercises handed in are never mutated', (() => { const b = base(); const s = J(b); tap(b, { exIdx: 0, setIdx: 0 }, chips[0]); return J(b) === s; })());
+  check('nothing is ever ticked by a chip: across every case above, no `done` moved from false to true',
+        [t2, t3, t4, t5, t6].every(l => l[0].sets.filter(s => s.done).length === l[0].sets.filter((s, k) => s.done && (k < 2)).length));
+}
+
 console.log('\na ticked set keeps what it was told\n');
 console.log(results.join('\n'));
 console.log('\n' + pass + ' passed, ' + fail + ' failed\n');
