@@ -138,10 +138,10 @@ export const LIVE_KINDS = Object.freeze(['done', 'switch', 'another', 'next']);
    than in the view, so the same fences that read every other line in this file
    read this one. */
 export const LIVE_NONE = Object.freeze({
-  text: 'Nothing Coach can add from your log right now.',
+  text: 'Nothing I can add from your log right now.',
   why: Object.freeze([
-    'It answers from your own sessions of this kind, and wants three of them in the last twelve weeks ' +
-    'before it calls anything usual.'
+    'I answer from your own sessions of this kind, and want three of them in the last twelve weeks ' +
+    'before I call anything usual.'
   ])
 });
 
@@ -449,7 +449,7 @@ function doneRead(i, t, history, shape, day = NO_DAY) {
         ' in the last twelve weeks, the median is ' + one(usual) + '.');
   }
   if (tired) lastTwo.forEach(x => why.push(x.e.name + ': ' + fatigueWords(x.f) + '.'));
-  why.push('Coach leans to stopping when the log points both ways: a set left undone costs nothing.');
+  why.push('I lean to stopping when the log points both ways: a set left undone costs nothing.');
 
   return {
     kind: 'done', exId: null, add: null,

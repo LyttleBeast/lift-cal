@@ -2146,12 +2146,12 @@ section('O. v54 — the live sheet in its order: the answer, the next set, "How 
   const S1 = liveO([['barbell-bench-press', [[190, 8], ['', '', false]]]]);
   const thinA = C.coach({ ...state.input, live: { active: true }, tier: { pro: true } }).live(S1, { current: 0 });
   sh = openO(S1);
-  check('nothing from his habits, a target in hand: the next set IS the answer — never "Nothing Coach can add" above a number',
+  check('nothing from his habits, a target in hand: the next set IS the answer — never "Nothing I can add" above a number',
         thinA === null && J_(order(sh).slice(0, 2)) === J_(['you', 'coach: ' + C.coach({ ...state.input, live: { active: true }, tier: { pro: true } }).liveSet(S1, { current: 0 }).next.text]) &&
         !find(sh, 'coach-bub-t').some(x => x.textContent === C.LIVE_NONE.text), J_(order(sh)));
   state.input = { ...state.input, settings: { v: 1, mute: { targets: true }, answers: {}, asked: {} } };
   sh = openO(S1);
-  check('and with the targets switch off, exactly as before: "Nothing Coach can add…", then the chips',
+  check('and with the targets switch off, exactly as before: "Nothing I can add…", then the chips',
         J_(order(sh).slice(0, 2)) === J_(['you', 'coach: ' + C.LIVE_NONE.text]) && order(sh).includes('rate'), J_(order(sh)));
   state.input = BASE; body.children.length = 0;
 }
