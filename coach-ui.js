@@ -30,7 +30,7 @@ import { coach, CATEGORIES, QUESTIONS, PRO_ADDS, LIVE_NONE, isMuted, TOPICS_SHOW
          EFFORT, rateAsk, rateAnswer } from './coach.js';
 import { coachInput, coachReady, coachLogKnown, rememberGreeting, rememberHype, coachSettings, coachSettingsKnown,
          setCategoryMuted, answerQuestion, markAsked, liveSessionOnDevice, coachPro, setAim, setGoalLift,
-         markSession, loadFuel, fuelNeedsRead } from './coach-data.js';
+         markSession, loadFuel, fuelNeedsRead, learn, learnBy, learnTally } from './coach-data.js';
 import { wIn, fmtW, unitW, limW } from './units.js';
 import { normGoalLift, GOAL_LB_MAX } from './coach-goal.js';
 // The two marks, from the vibe's icon set (vibes/icons/v1.js has today's), and
@@ -41,6 +41,19 @@ import { paint as vibePaint, icon, glyphed } from './vibe.js';
 // (the October 2026 redesign); the table that says which is settings-registry.js.
 import { tile } from './tiles.js';
 import { coachSections, COACH_ICONS } from './settings-registry.js';
+
+/* v73: WHERE AN ANSWER GOES. The aim goes through setAim(), which clears the
+   goal-change answers in the same write (v49); a question that writes a fact
+   (`writes: 'knowBy'` — the step on a machine) goes through learnBy(), and its
+   "Not sure" (value null) stores nothing beyond the asked stamp; every other
+   answer is just an answer. One function, because the opener, the question
+   under an answer and the live sheet all put questions. */
+function writeAnswer(question, op) {
+  if (question.id === 'q_goal_aim') return setAim(op.value);
+  if (question.writes === 'knowBy') return op.value == null ? Promise.resolve(true) : learnBy(question.key, question.by, op.value);
+  if (question.writes === 'know') return op.value == null ? Promise.resolve(true) : learn(question.key, op.value);
+  return answerQuestion(question.id, op.value);
+}
 
 /* The two marks: the speech bubble, and the lock. Built as they always were —
    the <svg> made here, its drawing written in as markup. */
@@ -649,7 +662,7 @@ export function openCoachSheet(opts = {}) {
      rather than appearing every single time the sheet opens, which is the
      difference between being asked and being nagged. */
   function askQuestion(question) {
-    markAsked(question.id).catch(() => {});
+    markAsked(question.stamp || question.id).catch(() => {});
     const q = bubble('coach ask', question.text,
       'I ask at most one thing, and only something that changes what I can tell you.');
     const row = el('div', 'coach-chips');
@@ -658,10 +671,10 @@ export function openCoachSheet(opts = {}) {
       b.onclick = () => {
         row.remove();
         bubble('you', op.label);
-        // The aim goes through setAim(), which clears the goal-change answers
-        // in the same write (v49); every other answer is just an answer.
-        (question.id === 'q_goal_aim' ? setAim(op.value) : answerQuestion(question.id, op.value)).catch(() => {});
-        bubble('coach', question.ack || 'Noted. That changes how I read your weight.',
+        writeAnswer(question, op).catch(() => {});
+        // v73: an option may carry its own ack (null: nothing to say back).
+        const ack = op.ack !== undefined ? op.ack : question.ack;
+        if (ack !== null) bubble('coach', ack || 'Noted. That changes how I read your weight.',
           'Nothing else about it is stored, and you can change it any time from Settings → Coach.');
         scroll();
         // "Yes, update my goal" opens Your goal, and afterwards reads like
@@ -1251,6 +1264,18 @@ const LIVE_WAIT = 'I’m reading your log — ask again in a moment.';
    he opened. A rating is an edit to the live session, and Coach never writes
    the session itself — workout.js hands in `opts.rate` (and `opts.useNext`)
    the way it hands in `opts.add`. */
+/* v73 (COACH-V2-SPEC §5): when the engine can answer the literal question —
+   "another set, and at what weight?" (coach.js c.another, coach-live.js
+   anotherSetRead) — the thread is his bubble, Coach's answer, Why?, the effort
+   row for the last unrated set, then a CHIP ROW from the answer's chips: a chip
+   with a number pre-fills the next row through the shipped "Use it for my next
+   set" path (opts.useNext, workout.js useNext — one row, tw/tr, never ticked);
+   *That's the last one* closes and marks the exercise shown; *Done for today*
+   closes, marks every exercise shown and scrolls to Finish. After an effort
+   tap the answer and the chips are read again, so a *Too hard* removes the
+   heavier chip. No chip ever carries a number that is not the read's tw/tr.
+   The shipped layout — the habit answer and the next-set bubble — stands only
+   when `another` is null: nothing ticked yet, or a log not read yet. */
 export function openLiveSheet(opts = {}) {
   const { sh, close } = sheet();
   sh.classList.add('coach-sheet', 'coach-live');
@@ -1265,26 +1290,36 @@ export function openLiveSheet(opts = {}) {
   };
 
   bubble('you', LIVE_ASK);
-  let a = null;
+  let a = null, an = null, question = null;
   const known = coachLogKnown();
+  const at = { current: opts.current };
+  // The answer to "another set, and at what weight?", read again after every rating.
+  const anotherNow = () => { try { return coach(coachInput({ live: true })).another(opts.session, at); } catch { return null; } };
   if (known) {
-    try { a = coach(coachInput({ live: true })).live(opts.session, { current: opts.current }); } catch { a = null; }
+    an = anotherNow();
+    try { a = coach(coachInput({ live: true })).live(opts.session, at); } catch { a = null; }
+    // The habit read's done and "one more set" are what `another` now answers;
+    // a switch or a next exercise is still its own bubble, with Add it.
+    if (an && a && (a.kind === 'done' || a.kind === 'another')) a = null;
+    try { question = coach(coachInput({ live: true })).liveQuestion(opts.session, at); } catch { question = null; }
   }
   // The set in hand and the next one, read again after every rating.
   let u = 'lb';
   const setNow = () => {
-    try { const c = coach(coachInput({ live: true })); u = c.u; return c.liveSet(opts.session, { current: opts.current }); }
+    try { const c = coach(coachInput({ live: true })); u = c.u; return c.liveSet(opts.session, at); }
     catch { return null; }
   };
   const first = setNow();
   // Never a number off a log not read yet; the chips need none.
-  const next = known && first ? first.next : null;
+  const next = known && first && !an ? first.next : null;
   // With nothing from his habits to say, the next set IS the answer, rather
   // than "Nothing Coach can add" above a number Coach just added.
-  if (a || !next) bubble('coach', a ? a.text : known ? LIVE_NONE.text : LIVE_WAIT);
+  let coachBub = null;
+  if (an) coachBub = bubble('coach', an.text);
+  if (a || (!an && !next)) bubble('coach', a ? a.text : known ? LIVE_NONE.text : LIVE_WAIT);
   if (next) bubble('coach', next.text);
 
-  const why = (a ? a.why : known && !next ? LIVE_NONE.why : []).concat(next ? next.why : []);
+  let why = (an ? an.why : []).concat(a ? a.why : !an && known && !next ? LIVE_NONE.why : [], next ? next.why : []);
   const row = el('div', 'coach-chips');
   if (why.length) {
     const w = el('button', 'coach-chip', 'Why?');
@@ -1294,7 +1329,7 @@ export function openLiveSheet(opts = {}) {
       why.slice(1).forEach(t => b.appendChild(el('div', 'coach-bub-r', t)));
       // v54: the reasons belong under what they explain, so "How was it?" and
       // anything said after a tap move back below them.
-      [rateHost, afterHost].forEach(n => { n.remove(); thread.appendChild(n); });
+      [rateHost, afterHost, chipHost, askHost].forEach(n => { n.remove(); thread.appendChild(n); });
       try { sh.scrollTop = sh.scrollHeight; } catch {}
     };
     row.appendChild(w);
@@ -1307,9 +1342,50 @@ export function openLiveSheet(opts = {}) {
      now, and offers it for the next row — applied only on that tap. */
   const rateHost = el('div', 'coach-rate');
   const afterHost = el('div', 'coach-rate-after');
+  const chipHost = el('div', 'coach-another');
+  const askHost = el('div', 'coach-live-ask');
   thread.appendChild(rateHost);
   thread.appendChild(afterHost);
+  thread.appendChild(chipHost);
+  thread.appendChild(askHost);
   const clear = host => [...host.children].forEach(c => c.remove());
+  // Where a chip's number lands: after the set the chips rate, or — with no
+  // working set ticked yet on this lift (mid-ramp) — after its last ticked row.
+  const placeOf = rated => {
+    if (rated) return { exIdx: rated.exIdx, setIdx: rated.setIdx };
+    const list = (opts.session && opts.session.exercises) || [];
+    const exIdx = Number.isInteger(opts.current) && list[opts.current] ? opts.current : list.length - 1;
+    const sets = (list[exIdx] && list[exIdx].sets) || [];
+    let setIdx = -1;
+    sets.forEach((s, k) => { if (s && s.done) setIdx = k; });
+    return { exIdx, setIdx };
+  };
+  let offered = false;
+  const drawChips = (ans, rated) => {
+    clear(chipHost);
+    if (!ans || !Array.isArray(ans.chips) || !ans.chips.length) return;
+    const chips = el('div', 'coach-chips');
+    const numbered = (ans.answer === 'yes' || ans.answer === 'probably') && ans.chips.some(c => c.id === 'yes');
+    // The tally — offered once per open, when a numbered yes/probably is on
+    // screen; taken on the Yes chip. After the draw, never on paint of the line.
+    if (numbered && !offered) { offered = true; learnTally({ extraOffered: 1 }).catch(() => {}); }
+    ans.chips.forEach(c => {
+      const b = el('button', 'coach-chip coach-another-chip' + (c.id === 'yes' ? ' primary' : ''), c.label);
+      b.onclick = () => {
+        if (c.tw != null && c.tr != null) {
+          if (c.id === 'yes') learnTally({ extraTaken: 1 }).catch(() => {});
+          close();
+          if (typeof opts.useNext === 'function') opts.useNext(placeOf(rated), { tw: c.tw, tr: c.tr });
+          return;
+        }
+        close();
+        if (c.id === 'last' && typeof opts.shown === 'function') opts.shown(placeOf(rated).exIdx);
+        if (c.id === 'done' && typeof opts.done === 'function') opts.done();
+      };
+      chips.appendChild(b);
+    });
+    chipHost.appendChild(chips);
+  };
   const drawRate = s => {
     clear(rateHost);
     const rated = s && s.rated;
@@ -1328,9 +1404,18 @@ export function openLiveSheet(opts = {}) {
         clear(afterHost);
         const n2 = v == null ? null : s2 && s2.next;
         bubble('coach', rateAnswer(v, n2, u), afterHost);
-        // v70: a `warmup` next names the target he is working up to, not the
-        // row he wants next — that row is a warm-up v68 already greyed in.
-        if (n2 && n2.kind !== 'warmup' && typeof opts.useNext === 'function') {
+        if (an) {
+          // v73: the answer and its chips, read again with the rating in.
+          const an2 = anotherNow();
+          if (an2) {
+            an = an2;
+            if (coachBub && coachBub.children[0]) coachBub.children[0].textContent = an2.text;
+            why = an2.why.concat(a ? a.why : []);
+          }
+          drawChips(an, s2 && s2.rated);
+        } else if (n2 && n2.kind !== 'warmup' && typeof opts.useNext === 'function') {
+          // v70: a `warmup` next names the target he is working up to, not the
+          // row he wants next — that row is a warm-up v68 already greyed in.
           const use = el('button', 'btn btn-primary btn-block', 'Use it for my next set');
           use.style.marginTop = '10px';
           use.onclick = () => { close(); opts.useNext({ exIdx: rated.exIdx, setIdx: rated.setIdx }, { tw: n2.tw, tr: n2.tr }); };
@@ -1343,6 +1428,30 @@ export function openLiveSheet(opts = {}) {
     rateHost.appendChild(chips);
   };
   drawRate(first);
+  drawChips(an, first && first.rated);
+
+  /* v73: THE ONE QUESTION the live lane may put — what one step up is on the
+     machine in hand (coach-ask.js q_equipment_step). Stamped as asked the
+     moment it is drawn, like every question; a tap writes the fact through
+     learnBy() and says the ack; "Not sure" stores nothing beyond the stamp. */
+  if (question) {
+    markAsked(question.stamp || question.id).catch(() => {});
+    const qb = bubble('coach ask', question.text, askHost);
+    const qrow = el('div', 'coach-chips');
+    question.options.forEach(op => {
+      const b = el('button', 'coach-chip', op.label);
+      b.onclick = () => {
+        qrow.remove();
+        bubble('you', op.label, askHost);
+        writeAnswer(question, op).catch(() => {});
+        const ack = op.ack !== undefined ? op.ack : question.ack;
+        if (ack) bubble('coach', ack, askHost);
+        try { sh.scrollTop = sh.scrollHeight; } catch {}
+      };
+      qrow.appendChild(b);
+    });
+    qb.appendChild(qrow);
+  }
 
   /* ADD IT goes through the picker's own path — workout.js hands in the very
      function the "+ Add exercise" button hands openPicker — with the library
@@ -1400,16 +1509,34 @@ export function noteLiveTick(session, exIdx, setIdx) {
   const key = nudgeKey(session, exIdx);
   if (!key || was.shown.includes(key)) return quiet;
   if (!coachLogKnown()) return quiet;
+  // v73: the line is the answer to "another set, and at what weight?" — its
+  // short: "Another set? 185 lb × 8." / "That’s probably the set." / "You’re
+  // probably good for today: …" (coach-live.js anotherSetRead, on the live gate).
   let a = null;
-  try { a = coach(coachInput({ live: true })).live(session, { current: exIdx }); } catch { a = null; }
+  try { a = coach(coachInput({ live: true })).another(session, { current: exIdx }); } catch { a = null; }
   if (!a || !a.short) return quiet;
-  return { shown: was.shown.concat(key), nudge: { key, kind: a.kind, short: a.short } };
+  return { shown: was.shown.concat(key), nudge: { key, kind: a.answer, short: a.short } };
 }
 
 // Dismissed: the line goes, and the exercise stays counted as shown.
 export function dismissNudge(state) {
   const was = nudgeState(state);
   return { shown: was.shown, nudge: null };
+}
+
+/* v73: "That's the last one" — the exercise counts as shown and any line up
+   goes; "Done for today" — every exercise on the list counts as shown, so no
+   line is raised for the rest of the session. Both pure: the state as it
+   should be now, assigned by workout.js the way dismissNudge's is. */
+export function markNudgeShown(session, exIdx) {
+  const was = nudgeState(session && session._coach);
+  const key = nudgeKey(session, exIdx);
+  return { shown: key && !was.shown.includes(key) ? was.shown.concat(key) : was.shown, nudge: null };
+}
+export function markAllShown(session) {
+  const was = nudgeState(session && session._coach);
+  const keys = ((session && session.exercises) || []).map((e, k) => nudgeKey(session, k)).filter(k => k && !was.shown.includes(k));
+  return { shown: was.shown.concat(keys), nudge: null };
 }
 
 /* The line itself, or null — in which case the caller draws its swipe hint as

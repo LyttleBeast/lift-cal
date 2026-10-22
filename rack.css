@@ -2636,6 +2636,14 @@ body.peeking .view.active { padding-bottom: 65px; }
 .coach-rate-q { font-size: 14px; color: var(--chalk); }
 .coach-effort { min-height: 44px; }
 .coach-effort.on { border-color: var(--accent); color: var(--accent); }
+/* v73: the "another set?" chip row and the live lane's one question, under the
+   effort row — each chip a 44px target like the effort chips (he is under a
+   bar), the Yes chip drawn in the accent so the one that writes a row reads as
+   the main one. Empty hosts take no gap in the thread. */
+.coach-another, .coach-live-ask { display: flex; flex-direction: column; gap: 10px; }
+.coach-another:empty, .coach-live-ask:empty { display: none; }
+.coach-another-chip { min-height: 44px; }
+.coach-another-chip.primary { border-color: var(--accent); color: var(--accent); }
 
 /* ---------- the workout builder's proposal ----------
    Drawn with the recap's own list (.day-ex) and the workout screen's block

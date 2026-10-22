@@ -22,7 +22,7 @@ import { openStats, isStatsOpen, renderStats, refresh as refreshStats } from './
 // use them without importing this file back.
 import { initPicker, allExercises, openPicker, openExerciseManager } from './picker.js';
 import { initRoutines, openRoutines, saveSessionAsRoutine } from './routines.js';
-import { coachCard, liveChip, openLiveSheet, noteLiveTick, nudgeLine, dismissNudge } from './coach-ui.js';
+import { coachCard, liveChip, openLiveSheet, noteLiveTick, nudgeLine, dismissNudge, markNudgeShown, markAllShown } from './coach-ui.js';
 import { initCoachData, coachLogReady, refreshCoachSessions, noteCoachData, coachFinishRead,
          coachSettings, markSession, coachDebrief, learnBy, markAsked, answerQuestion } from './coach-data.js';
 // v53: the check-in's words and gates — pure, and the engine's, so the recap
@@ -1040,8 +1040,24 @@ function useNextLive(at, t) {
   session.exercises = useNext(session.exercises, at, t);
   persistSession(); render();
 }
+/* v73: the live sheet's two ways of saying no (coach-ui.js openLiveSheet).
+   "That's the last one" marks the exercise shown, so its line is not raised
+   again; "Done for today" marks every exercise shown and brings the Finish
+   button into view — nothing else: stopping early is not a bad day, and the
+   recap asks nothing because of it. */
+function shownLive(exIdx) {
+  if (!session || session._edit) return;
+  session._coach = markNudgeShown(session, exIdx);
+  persistSession(); render();
+}
+function doneLive() {
+  if (!session || session._edit) return;
+  session._coach = markAllShown(session);
+  persistSession(); render();
+  try { const fin = document.getElementById('wkFinish'); if (fin) fin.scrollIntoView({ block: 'nearest' }); } catch {}
+}
 // Everything the live sheet is handed, from the chip and from the line.
-const liveOpts = current => ({ session, add: addPicked, rate: rateLive, useNext: useNextLive, current });
+const liveOpts = current => ({ session, add: addPicked, rate: rateLive, useNext: useNextLive, shown: shownLive, done: doneLive, current });
 
 function renderSession() {
   const editing = !!session._edit;
@@ -1082,6 +1098,7 @@ function renderSession() {
   }
 
   const fin = el('button', 'btn btn-primary', editing ? 'Save' : 'Finish');
+  fin.id = 'wkFinish';   // v73: "Done for today" in the live sheet brings it into view
   fin.onclick = editing ? saveEdit : finishWorkout;
   bar.appendChild(fin);
   wrap.appendChild(bar);
