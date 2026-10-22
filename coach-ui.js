@@ -108,7 +108,7 @@ export function coachCard(opts = {}) {
     card.classList.add('loading');
     card.appendChild(header(null));
     card.appendChild(el('div', 'coach-greet', ''));
-    card.appendChild(el('div', 'coach-line', 'Coach couldn’t read your log just now.'));
+    card.appendChild(el('div', 'coach-line', 'I couldn’t read your log just now.'));
     card.appendChild(el('div', 'coach-why', 'Every tab below draws from its own data.'));
     card.appendChild(goRow(null));
     card.disabled = true;
@@ -134,7 +134,7 @@ export function coachCard(opts = {}) {
   if (!coachReady() && (view.state === 'card_state_clear' || view.state === 'warm')) {
     view = { ...view, tone: 'neutral',
              text: 'Your training is in. Food and weight have not landed yet.',
-             reason: 'Coach would rather say nothing than read half a number.' };
+             reason: 'I’d rather say nothing than read half a number.' };
   }
 
   /* Pinned for the rest of the app open, and written down once.
@@ -267,7 +267,7 @@ export function openCoachSheet(opts = {}) {
   } catch {
     sh.appendChild(el('div', 'eyebrow', 'Coach'));
     sh.appendChild(el('h2', null, 'Coach'));
-    sh.appendChild(noteEl('Coach couldn’t read your log just now. Every tab draws from its own data.'));
+    sh.appendChild(noteEl('I couldn’t read your log just now. Every tab draws from its own data.'));
     return;
   }
 
@@ -396,7 +396,7 @@ export function openCoachSheet(opts = {}) {
     }
     if (!said) bubble('you', label);
     if (!a) {
-      bubble('coach', 'Coach can’t answer that one.', 'It only says things it can back with a number from your own log.');
+      bubble('coach', 'I can’t answer that one.', 'I say what I can back with a number from your own log, and nothing else.');
     } else {
       bubble('coach', a.text, a.reason);
       // An answer that says more than one thing — Patterns says every check
@@ -651,7 +651,7 @@ export function openCoachSheet(opts = {}) {
   function askQuestion(question) {
     markAsked(question.id).catch(() => {});
     const q = bubble('coach ask', question.text,
-      'Coach asks at most one thing, and only something that changes what it can tell you.');
+      'I ask at most one thing, and only something that changes what I can tell you.');
     const row = el('div', 'coach-chips');
     question.options.forEach(op => {
       const b = el('button', 'coach-chip', op.label);
@@ -661,7 +661,7 @@ export function openCoachSheet(opts = {}) {
         // The aim goes through setAim(), which clears the goal-change answers
         // in the same write (v49); every other answer is just an answer.
         (question.id === 'q_goal_aim' ? setAim(op.value) : answerQuestion(question.id, op.value)).catch(() => {});
-        bubble('coach', question.ack || 'Noted. That changes how Coach reads your weight.',
+        bubble('coach', question.ack || 'Noted. That changes how I read your weight.',
           'Nothing else about it is stored, and you can change it any time from Settings → Coach.');
         scroll();
         // "Yes, update my goal" opens Your goal, and afterwards reads like
@@ -692,10 +692,10 @@ export function openCoachSheet(opts = {}) {
   else thread.appendChild(proPanel());
 
   sh.appendChild(noteEl(
-    'Coach reads your own log and nothing else — your sessions, your food, your ' +
-    'weigh-ins and your steps, against the targets you set. It is not medical or ' +
-    'nutritional advice, it does not know anything about you that you have not ' +
-    'logged, and it will say nothing rather than guess.'));
+    'I read your own log and nothing else — your sessions, your food, your ' +
+    'weigh-ins and your steps, against the targets you set. I am not medical or ' +
+    'nutritional advice, I know nothing about you that you have not ' +
+    'logged, and I will say nothing rather than guess.'));
 
   const done = el('button', 'btn btn-ghost btn-block', 'Close');
   done.style.marginTop = '10px';
@@ -720,7 +720,7 @@ export function openCoachSheet(opts = {}) {
    goes where the comment is and nothing else in this file has to move. */
 function proPanel() {
   const b = el('div', 'coach-bub pro');
-  b.appendChild(el('div', 'coach-bub-t', 'What else Coach reads on Pro'));
+  b.appendChild(el('div', 'coach-bub-t', 'What else I read on Pro'));
   b.appendChild(el('div', 'coach-bub-r',
     'The finding above is the free half. Pro is the comparisons — your log ' +
     'against your own history rather than a readout of today.'));
@@ -775,9 +775,9 @@ function proPanel() {
      Save as routine             saveSessionAsRoutine(record), named for the
                                  shape — absent if the card cannot save
      Change something            the follow-ups; absent if there are none */
-const BUILD_NONE = 'Coach can’t build that one.';
-const BUILD_NONE_WHY = 'Nothing in your log fits it, and Coach would rather say so than guess.';
-const SWAP_NONE = 'Coach can’t swap that one in.';
+const BUILD_NONE = 'I can’t build that one.';
+const BUILD_NONE_WHY = 'Nothing in your log fits it, and I’d rather say so than guess.';
+const SWAP_NONE = 'I can’t swap that one in.';
 const SOMETHING_ELSE = 'Something else…';
 
 function proposalBlock(p, on) {
@@ -825,7 +825,7 @@ function proposalBlock(p, on) {
     b.onclick = fn;
     acts.appendChild(b);
   };
-  if (p.targets) button('Start with Coach’s targets', true, () => on.start(p.targets));
+  if (p.targets) button('Start with my targets', true, () => on.start(p.targets));
   button('Start it', !p.targets, () => on.start(p.placeholders));
   if (p.lastNumbers) button('Start with my last numbers', false, () => on.start(p.lastNumbers));
   if (on.save) button('Save as routine', false, () => on.save(p.record));
@@ -877,12 +877,12 @@ function proposalBlock(p, on) {
    about it. */
 export function coachToggleRows(host, onChange) {
   if (!coachReady()) {
-    host.appendChild(noteEl('Still reading Coach’s settings. Give it a moment and reopen this.'));
+    host.appendChild(noteEl('My settings are loading. Give it a moment and reopen this.'));
   } else if (!coachSettingsKnown()) {
     // Switches showing this file's defaults over a node nobody could read is a
     // screen that invites somebody to "fix" a setting that was never broken.
     host.appendChild(noteEl(
-      'Coach’s settings couldn’t be read from this device just now. These are the ' +
+      'My settings couldn’t be read from this device just now. These are the ' +
       'defaults — a change made here won’t save until it can reach the database.'));
   }
   const list = el('div', 'set-list');
@@ -915,10 +915,10 @@ export function coachSwitchRows() {
    to coach.js is never unreachable. */
 export function coachToggleGroups(host, onChange) {
   if (!coachReady()) {
-    host.appendChild(noteEl('Still reading Coach’s settings. Give it a moment and reopen this.'));
+    host.appendChild(noteEl('My settings are loading. Give it a moment and reopen this.'));
   } else if (!coachSettingsKnown()) {
     host.appendChild(noteEl(
-      'Coach’s settings couldn’t be read from this device just now. These are the ' +
+      'My settings couldn’t be read from this device just now. These are the ' +
       'defaults — a change made here won’t save until it can reach the database.'));
   }
   const cats = new Map(CATEGORIES.filter(c => c.mutable).map(c => [c.id, c]));
@@ -1001,7 +1001,7 @@ function toggle(cat, onChange) {
    phone it read as a question with no reason behind it. Here rather than in
    coach.js: this is how Settings words it, and native draws its own. */
 const ROW_NOTES = Object.freeze({
-  q_focus_group: 'Coach reports this group’s weekly sets and its main lifts when you ask how you’re tracking toward your goal.'
+  q_focus_group: 'I report this group’s weekly sets and its main lifts when you ask how you’re tracking toward your goal.'
 });
 
 /* v55: the Your goal screen, tidied (Micah, 24 Sep, on the phone: "this UI
@@ -1147,7 +1147,7 @@ function liftTargetRow(host, onChange) {
        The limit is limW's, rounded inward, so the number shown is one the
        check accepts (labelW rounds outward: 907.2 kg is itself refused). */
     const lb = wIn(lbs, u);
-    if (lb > GOAL_LB_MAX) { toast('Coach takes lift targets up to ' + limW([0, GOAL_LB_MAX], u)[1].toLocaleString() + ' ' + unitW(u) + '.'); return; }
+    if (lb > GOAL_LB_MAX) { toast('I take lift targets up to ' + limW([0, GOAL_LB_MAX], u)[1].toLocaleString() + ' ' + unitW(u) + '.'); return; }
     const sent = normGoalLift({ exId, lb, reps, at: Date.now() });
     if (!sent) { toast('Couldn’t save that'); return; }
     // "Saved" only when what is stored is what was sent.
@@ -1169,7 +1169,7 @@ function liftTargetRow(host, onChange) {
       .catch(() => toast('Couldn’t clear that'));
     f.appendChild(clearBtn);
   }
-  f.appendChild(noteEl('Coach tracks your estimated max on it against the target’s, as a range of weeks — never a date.'));
+  f.appendChild(noteEl('I track your estimated max on it against the target’s, as a range of weeks — never a date.'));
   host.appendChild(f);
   return f;
 }
@@ -1236,7 +1236,7 @@ export function liveChip(opts = {}) {
 }
 
 const LIVE_ASK = 'What should I do next?';
-const LIVE_WAIT = 'Coach is reading your log — ask again in a moment.';
+const LIVE_WAIT = 'I’m reading your log — ask again in a moment.';
 
 /* The compact sheet: the question, answered at once, and at most two ways on —
    the reasons behind the answer, and, when the answer names an exercise he

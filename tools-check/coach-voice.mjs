@@ -817,7 +817,7 @@ section('G. the workout builder — sheet-only, and under the ban anyway');
   const uiCopy = from !== -1 && to > from ? literals(decomment(UIS.slice(from, to))).filter(t => /[a-z]{3}/i.test(t) && /\s/.test(t)) : [];
   const uiBad = uiCopy.map(t => ({ t, w: offence(t) })).filter(x => x.w);
   check('the proposal’s own copy in coach-ui.js was found and read (' + uiCopy.length + ' strings)',
-        uiCopy.length >= 6 && ['Start with Coach’s targets', 'Start it', 'Start with my last numbers', 'Save as routine',
+        uiCopy.length >= 6 && ['Start with my targets', 'Start it', 'Start with my last numbers', 'Save as routine',
                                'Change something'].every(l => uiCopy.includes(l)), list(uiCopy));
   check('and carries no banned word', !uiBad.length, list(uiBad.map(x => '“' + x.w + '” in: ' + x.t)));
 

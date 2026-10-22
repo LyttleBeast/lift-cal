@@ -427,15 +427,15 @@ function openRestSheet(onEdit, who) {
 function openCoachSettings(onEdit, who) {
   const { sh, close } = subSheet('Coach', onEdit, who);
   sh.appendChild(noteEl(
-    'What Coach may bring up. It only ever compares you against numbers you set ' +
-    'or against your own trailing average, and a rule with thin data stays quiet ' +
+    'What I may bring up. I compare you against numbers you set ' +
+    'or against your own trailing average, nothing else, and a rule with thin data stays quiet ' +
     'rather than guessing.'));
   coachToggleGroups(sh, onEdit);
 
   const told = el('div');
   if (coachAnswerRows(told, onEdit) != null) {
     const sec = el('div', 'you-sec');
-    sec.appendChild(el('div', 'you-sec-t', 'What you’ve told Coach'));
+    sec.appendChild(el('div', 'you-sec-t', 'What you’ve told me'));
     sec.appendChild(told);
     sh.appendChild(sec);
   }

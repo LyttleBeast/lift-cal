@@ -709,7 +709,7 @@ section('F. the workout on the sheet, and the four ways out of it');
      answer — the targets are the main way into a workout. With none, the row
      is the shipped four exactly. Which row a proposal gets is its own
      `targets`, read here rather than assumed. */
-  const TARGETS = 'Start with Coach’s targets';
+  const TARGETS = 'Start with my targets';
   const rowFor = pp => (pp && pp.targets ? [TARGETS].concat(FOUR) : FOUR);
   const yellow = box => buttonsIn(box).filter(b => b.classList.contains('btn') && b.classList.contains('btn-primary'))
     .map(b => b.textContent);
@@ -1420,7 +1420,7 @@ section('J. an answer that repeats the opening is not printed twice; "Something 
   const before = namesIn(box0(sh));
   if (picks.length) picks[0].done([{ id: 'bike', ...NAMED.bike }]);
   check('cardio for a lift: refused in the thread with the engine’s reason, and the workout stays as it was',
-        coachTexts(sh).includes('Coach can’t swap that one in.') &&
+        coachTexts(sh).includes('I can’t swap that one in.') &&
         find(sh, 'coach-bub-r').some(n => n.textContent === C.coach({ ...BUILD, tier: { pro: true } }).swapTo({}, 'bench', 'bike').why) &&
         JSON.stringify(namesIn(box0(sh))) === JSON.stringify(before), list(coachTexts(sh).slice(-2)));
 
@@ -1782,12 +1782,12 @@ section('M. v49 — the card encourages and the sheet opens on the finding; "Mor
   };
   const lb2001 = await trySave('lb', 2001);
   check('2,001 lb: nothing written, the old target intact, and the toast names the limit in pounds',
-        lb2001.wrote.length === 0 && J_(lb2001.kept) === J_(OLD) && lb2001.toast === 'Coach takes lift targets up to 2,000 lb.',
+        lb2001.wrote.length === 0 && J_(lb2001.kept) === J_(OLD) && lb2001.toast === 'I take lift targets up to 2,000 lb.',
         J_(lb2001));
   const kgLimit = limWOf([0, GOAL_MAX], 'kg')[1];
   const kgOver = await trySave('kg', 908);
   check('908 kg: nothing written, the old target intact, and the toast names the limit in kilos — limW, rounded inward',
-        kgOver.wrote.length === 0 && J_(kgOver.kept) === J_(OLD) && kgOver.toast === 'Coach takes lift targets up to ' + kgLimit + ' kg.',
+        kgOver.wrote.length === 0 && J_(kgOver.kept) === J_(OLD) && kgOver.toast === 'I take lift targets up to ' + kgLimit + ' kg.',
         J_(kgOver));
   const kgAt = await trySave('kg', kgLimit);
   check('and the number that toast shows is one Coach accepts: ' + kgLimit + ' kg saves',
@@ -1819,7 +1819,7 @@ section('M. v49 — the card encourages and the sheet opens on the finding; "Mor
   const qsh = openBare(U2);
   const opener = find(qsh, 'coach-bub').find(b => b.classList.contains('ask'));
   check('a Pro account building muscle whose weight has fallen three weeks running is asked, once, with his numbers',
-        !!opener && /^You set Build muscle, and your weight has come down about [\d.]+ lb over the last 3 weeks\. Did the goal change\?$/.test(textOf(opener).split('Coach asks')[0].trim()),
+        !!opener && /^You set Build muscle, and your weight has come down about [\d.]+ lb over the last 3 weeks\. Did the goal change\?$/.test(textOf(opener).split('I ask at most')[0].trim()),
         opener ? textOf(opener) : 'no question');
   if (opener) tap(opener, 'Yes, update my goal');
   const sheets = body.children.filter(x => x.classList.contains('sheet'));
