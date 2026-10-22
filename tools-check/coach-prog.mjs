@@ -612,6 +612,26 @@ if (MAIN) {
     check('both units were read (' + kgSaid + ' kilo strings)', kgSaid > 2000);
   }
 
+  /* v71: Coach speaks in the first person (SHIP-V71-PROMPT §3), and every
+     `why` an older prescribe() wrote in the third person is read through this
+     one map before the byte-for-byte comparisons below (D against v48 and v51,
+     the rating section against v53) — so the promise is still "byte for
+     byte", up to exactly these documented sentence pairs, and a number, a
+     mode or a set that moved would still fail. The pairs are the ship's own
+     rewrite table for coach-prog.js; anything the map does not cover stays a
+     difference. */
+  const VOICE = [
+    [/Coach is learning this lift \((\d+ sessions?) so far\)\./g, 'I’m learning this lift: $1 so far.'],
+    [/for Coach to call/g, 'for me to call'], [/and Coach won’t call/g, 'and I won’t call'],
+    [/Coach sets targets from there/g, 'I’ll set targets from there'], [/Coach will learn yours/g, 'I’ll learn yours'],
+    [/so Coach won’t work/g, 'so I won’t work'], [/Coach doesn’t have a lighter/g, 'I don’t have a lighter'],
+    [/Coach needs a few more sessions of this lift to know your rep range\./g, 'A few more sessions of this lift and I’ll know your rep range.'],
+    [/Coach wants to see it twice/g, 'I want to see it twice'],
+    [/Coach doesn’t know (.*?) yet, so it won’t guess/g, 'I don’t know $1 yet, so I won’t guess']
+  ];
+  const voiced = t => (t == null ? t : JSON.parse(JSON.stringify(t), (k, v) =>
+    (typeof v === 'string' ? VOICE.reduce((s, [a, b]) => s.replace(a, b), v) : v)));
+
   /* ================= D. v49 — WHAT BASELINES() ADDED, AND WHAT IT DID NOT MOVE ================= */
   section('D. v49 — baselines() gains its stage-two fields, and v48’s targets do not move');
   {
@@ -659,11 +679,11 @@ if (MAIN) {
       const b = P.baselines(ex, ctx), b48 = P48.baselines(ex, ctx);
       const moved = v69Of(t, b, b48) || v70Of(t, exposures, assistedOf(meta));
       if (moved) touched++;
-      const now = JSON.stringify(t), then = JSON.stringify(P48.prescribe(ex, ctx));
+      const now = JSON.stringify(t), then = JSON.stringify(voiced(P48.prescribe(ex, ctx)));
       // Moved with a v69 reason: expected (rowsMoved). Moved without one: a
       // change this ship did not mean to make (unfenced).
       if (now !== then) (moved ? rowsMoved : unfenced).push(label);
-      const v51 = JSON.stringify(P51.prescribe(ex, ctx));
+      const v51 = JSON.stringify(voiced(P51.prescribe(ex, ctx)));
       if (!moved && (now !== v51 || JSON.stringify(P.targetFor(ex, ctx, null)) !== v51)) rows51.push(label);
       if (moved && JSON.stringify(P.targetFor(ex, ctx, null)) !== now) rows51.push(label + ' (targetFor differs from prescribe)');
       if (!moved && JSON.stringify(pick(b, OLD)) !== JSON.stringify(pick(b48, OLD))) basesMoved.push(label);
@@ -958,7 +978,7 @@ if (MAIN) {
                     ex.exposures.some(e => RAMP.rampOf(e.allSets, { assisted }).probable > 0) ||
                     !!(t && last && t.sets.length && t.sets.length !== last.allSets.length);
       if (moved) touched53++;
-      if (JSON.stringify(t) !== JSON.stringify(P53.prescribe(ex, ctx))) (moved ? movedOk : diff).push(label);
+      if (JSON.stringify(t) !== JSON.stringify(voiced(P53.prescribe(ex, ctx)))) (moved ? movedOk : diff).push(label);
     };
     for (const c of cases()) {
       const { exposures } = run(P, c);
@@ -1152,7 +1172,7 @@ if (MAIN) {
     const n1 = P.nextSet(exR, C, [live(45, 8)]);
     check('(b) nothing ticked: the target. One N set of 45 × 8 ticked, 45 among his ramp loads: `warmup`, with the target’s own tw and tr, and "Warming up. The target when you get there: 320 lb × 6."',
           !!n0 && n0.kind === 'target' && n0.tw === '320' && n0.tr === '6' && !!n1 && n1.kind === 'warmup' && n1.tw === n0.tw && n1.tr === n0.tr && n1.loadLb === 320 && n1.warmup === true &&
-          n1.text === 'Warming up. The target when you get there: 320 lb × 6.' && n1.why[0] === n0.why[0] && /^Coach’s target for this lift today: /.test(n1.why[0]), JSON.stringify(n1));
+          n1.text === 'Warming up. The target when you get there: 320 lb × 6.' && n1.why[0] === n0.why[0] && /^My target for this lift today: /.test(n1.why[0]), JSON.stringify(n1));
     check('    the same 45 × 8 on a log with no warm-up in it: UNSURE — null, never "Warming up" off the tiers alone and never "Next set: 45 lb × 8"', P.nextSet(ex, C, [live(45, 8)]) === null);
     const n3 = P.nextSet(exR, C, [live(45, 8), live(135, 5), live(225, 3)]);
     check('    45, 135, 225 ticked, his ramp: still warming up — never "Next set: 225 lb × 3"', !!n3 && n3.kind === 'warmup' && n3.loadLb === 320, JSON.stringify(n3));
@@ -1182,7 +1202,7 @@ if (MAIN) {
     const nUp = P.nextSet(ex, C, [live(45, 8), live(135, 5), live(225, 3), live(320, 8)]);
     check('    …and 320 × 8 after the ramp earns the step: `up` to 325, the ramp never "a step down"', !!nUp && nUp.kind === 'up' && nUp.tw === '325', JSON.stringify(nUp));
     const nDown = P.nextSet(ex, C, [live(320, 6), live(325, 6), live(320, 8)]);
-    check('    a step down in the session (325 then 320) and 8 reps at 320, which would have earned the step: no `up` — "Coach doesn’t step up after a step down in the same session."',
+    check('    a step down in the session (325 then 320) and 8 reps at 320, which would have earned the step: no `up` — "I don’t step up after a step down in the same session."',
           !!nDown && nDown.kind === 'same' && nDown.tw === '320' && nDown.why.some(w => /step up after a step down/.test(w)), JSON.stringify(nDown));
     const nDownW = P.nextSet(ex, C, [live(320, 6), live(325, 6), live(320, 8, 'W')]);
     check('    (a ticked W after them is not a step down — it is not a working set at all)', !!nDownW && nDownW.kind === 'same' && !nDownW.why.some(w => /step down/.test(w)), JSON.stringify(nDownW));

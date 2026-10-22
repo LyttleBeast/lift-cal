@@ -666,7 +666,7 @@ function decide(ex, c) {
       mode: 'first', code: null, loadLb: null, sets: [],
       line: 'No target yet: first time on this lift.',
       why: ['Pick a weight you could do about ' + (hi + 2) + ' times and stop at ' + hi +
-            '. Coach sets targets from there.'],
+            '. I’ll set targets from there.'],
       stage: 'none', range: { lo, hi, fixed: false, source: 'default' }, step: null,
       status: 'holding', slope: null, from: null
     });
@@ -771,7 +771,7 @@ function decide(ex, c) {
   const heavyLine = 'No target for heavy singles, doubles or triples on their own.';
   if (isHeavy(last)) {
     return defer('heavy', heavyLine,
-      ['They’re too close to an all-out set for Coach to call without knowing how hard they were.']);
+      ['They’re too close to an all-out set for me to call without knowing how hard they were.']);
   }
 
   // The baselines, needed by every branch from here on.
@@ -781,18 +781,18 @@ function decide(ex, c) {
   // its "add" would be a heavier single or double. No target off it.
   if (range.lo <= HEAVY_REPS) {
     return defer('heavy', heavyLine,
-      ['Your rep range here reads as singles or doubles, and Coach won’t call a heavier one of those.']);
+      ['Your rep range here reads as singles or doubles, and I won’t call a heavier one of those.']);
   }
   const step = stepOf(X, lift.dir, lift.equipment, lift.lowerBody, u);
   const S = step ? step.value : null;
   const stage = weakest(range.stage, step ? step.stage : 'learning');
-  const learning = n => 'Coach is learning this lift (' + plural(n, 'session') + ' so far).';
+  const learning = n => 'I’m learning this lift: ' + plural(n, 'session') + ' so far.';
   const finish = (why, loadNamed) => {
     const w = why.slice();
     if (loadNamed && step) {
       w.push(step.source === 'yours'
         ? 'Your usual jump here is ' + stepText(step) + ' (from ' + plural(step.n, 'increase') + ' in your log).'
-        : stepText(step) + ' is a common starting jump for this kind of lift. Coach will learn yours.');
+        : stepText(step) + ' is a common starting jump for this kind of lift. I’ll learn yours.');
     }
     if (stage === 'learning') w.push(learning(X.length));
     return w;
@@ -801,7 +801,7 @@ function decide(ex, c) {
                      ...(range.held ? { held: range.held } : null) };
   const lo = range.lo;
   const offGrid = 'Last time’s weight doesn’t land on a half-' + (u === 'kg' ? 'kilo' : 'pound') +
-    ' step, so Coach won’t work a new number out from it.';
+    ' step, so I won’t work a new number out from it.';
 
   /* The sets for a target. Top sets carry it; every other set keeps last
      time's numbers — except that coming down (a reduction or a re-entry) no
@@ -865,7 +865,7 @@ function decide(ex, c) {
     if (P == null) {
       return out({ mode: 'reenter', code: null, loadLb: null, sets: setsFor(null, repsNow),
         line: noLoadLine('lighter than last time (' + shown(lastW) + ')', repsNow),
-        why: finish([days + (last.grid ? ' Coach doesn’t have a lighter weight of yours to point to.' : ' ' + offGrid)], false),
+        why: finish([days + (last.grid ? ' I don’t have a lighter weight of yours to point to.' : ' ' + offGrid)], false),
         stage, range: rangeOut, step: step ? { value: step.value, n: step.n, source: step.source } : null, ...common });
     }
     const tw = store(P);
@@ -898,7 +898,7 @@ function decide(ex, c) {
   }
   // A starting band last time does not sit inside is a band he never chose.
   if (!range.usable) {
-    return defer('range', 'No target yet.', ['Coach needs a few more sessions of this lift to know your rep range.']);
+    return defer('range', 'No target yet.', ['A few more sessions of this lift and I’ll know your rep range.']);
   }
 
   /* ---------- the decision ---------- */
@@ -997,20 +997,20 @@ function decide(ex, c) {
     if (!(need === 1 || prevHit)) {
       // Wanting a second look: say which of the reasons asked for it.
       let because;
-      if (triples) because = 'With sets this heavy, Coach wants to see it twice.';
+      if (triples) because = 'With sets this heavy, I want to see it twice.';
       else if (c.energy === 'deep') {
         because = (Number.isFinite(c.rateWk) && c.rateWk < 0
           ? 'Your weight is coming down about ' + labelRate(-c.rateWk, u) + ' a week'
-          : 'Your weight is coming down fast') + ', so Coach wants to see it twice before adding weight.';
-      } else if (c.aim === 'cut') because = 'You’re cutting, so Coach wants to see it twice before adding weight.';
-      else if (c.aim === 'maintain') because = 'You set Stay consistent, so Coach wants to see it twice before adding weight.';
+          : 'Your weight is coming down fast') + ', so I want to see it twice before adding weight.';
+      } else if (c.aim === 'cut') because = 'You’re cutting, so I want to see it twice before adding weight.';
+      else if (c.aim === 'maintain') because = 'You set Stay consistent, so I want to see it twice before adding weight.';
       else {
         // The fitted move across the window, in his unit; under one unit it
         // is said as level rather than as "about 0 lb".
         const mv = prog.moveLb != null ? Math.abs(prog.moveLb) : 0;
         because = 'Your estimated max here has ' +
           (Math.round(wOut(mv, u)) === 0 ? 'held about level' : 'moved about ' + labelW(mv, u)) +
-          ' over your last ' + plural(prog.points, 'session') + ', so Coach wants to see it twice.';
+          ' over your last ' + plural(prog.points, 'session') + ', so I want to see it twice.';
       }
       const trs = last.R;
       return out({ mode: 'hold', code: 'confirm', loadLb: last.grid ? loadLbOf(lastW) : null,
@@ -1034,7 +1034,7 @@ function decide(ex, c) {
         : ['machine', 'cable', 'plate'].includes(lift.equipment) ? 'this machine’s steps' : 'the steps on this lift';
       return out({ mode: 'add', code: null, loadLb: null, sets: setsFor(null, trs),
         line: noLoadLine('the next setting up', trs),
-        why: finish([head, last.grid ? 'Coach doesn’t know ' + stepsWord + ' yet, so it won’t guess a number.' : offGrid], false),
+        why: finish([head, last.grid ? 'I don’t know ' + stepsWord + ' yet, so I won’t guess a number.' : offGrid], false),
         stage, range: rangeOut, step: stepOut, ...common });
     }
     const P = r2(T + lift.dir * steps * S);
@@ -1050,7 +1050,7 @@ function decide(ex, c) {
        the heavy gate and the range fence; it is the line a verifier holds. */
     if (trs.some(r => r <= HEAVY_REPS) && lift.dir * (P - T) > GRID_TOL) {
       return defer('heavy', heavyLine,
-        ['The next step here would be a heavier set of ' + Math.min(...trs) + ', and Coach won’t call one of those.']);
+        ['The next step here would be a heavier set of ' + Math.min(...trs) + ', and I won’t call one of those.']);
     }
     const tw = store(P);
     return out({ mode: 'add', code: null, loadLb: loadLbOf(tw), sets: setsFor(tw, trs),
@@ -1099,7 +1099,7 @@ function decide(ex, c) {
     if (P == null) {
       return out({ mode: 'reduce', code: null, loadLb: null, sets: setsFor(null, trs),
         line: noLoadLine('one setting lighter', trs),
-        why: finish([head + ' ' + (last.grid ? 'Coach doesn’t know the steps on this one yet, so it won’t guess a lighter number.' : offGrid)], false),
+        why: finish([head + ' ' + (last.grid ? 'I don’t know the steps on this one yet, so I won’t guess a lighter number.' : offGrid)], false),
         stage, range: rangeOut, step: stepOut, ...common });
     }
     const tw = store(P);
@@ -1354,7 +1354,7 @@ function nextOf(ex, c, today) {
     exId: lift.exId, kind, tw: String(tw), tr: String(tr), loadLb: loadLbOf(tw), reps: tr,
     text: 'Next set: ' + shown(tw) + ' × ' + tr + '.', why, stepped: false, ...extra
   });
-  const targetLine = 'Coach’s target for this lift today: ' + t.line.replace(/^Target: /, '');
+  const targetLine = 'My target for this lift today: ' + t.line.replace(/^Target: /, '');
 
   // v70: WARMING UP — a warm-up ticked (typed W, or read as one) and nothing
   // working yet. The target is named, as the thing he is working up to, and
@@ -1398,10 +1398,10 @@ function nextOf(ex, c, today) {
     ? plural(last.R, 'rep') + ' at ' + shown(last.w) + ', ' + UP_REPS + ' or more past the target’s ' + target + '.'
     : 'You rated ' + shown(last.w) + ' × ' + last.R + ' way too easy.';
   if (wouldEarn && steppedDown) {
-    return res('same', last.w, trAt(k), [how, 'Coach doesn’t step up after a step down in the same session.'], { stepped });
+    return res('same', last.w, trAt(k), [how, 'I don’t step up after a step down in the same session.'], { stepped });
   }
   if (earned && stepped) {
-    return res('same', last.w, trAt(k), [how, 'Coach goes up one step in a session, and today’s is used.'], { stepped: true });
+    return res('same', last.w, trAt(k), [how, 'I go up one step in a session, and today’s is used.'], { stepped: true });
   }
   if (earned && S) {
     const P = r2(TL + S);
@@ -1426,6 +1426,6 @@ function nextOf(ex, c, today) {
 
   // Otherwise: the same weight, at the target's reps.
   return res('same', last.w, trAt(k), [earned
-    ? how + ' Coach doesn’t know this lift’s steps yet, so it won’t guess a heavier number.'
+    ? how + ' I don’t know this lift’s steps yet, so I won’t guess a heavier number.'
     : plural(last.R, 'rep') + ' at ' + shown(last.w) + ' against the target’s ' + target + '. The same again.'], { stepped });
 }
