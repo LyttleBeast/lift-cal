@@ -125,6 +125,9 @@ writeFileSync(join(dir, 'coach-volume.mjs'), src('coach-volume.js')
   .replace("from './coach-goal.js'", 'from ' + real('coach-goal.js'))
   .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href)));
 const C = await import(pathToFileURL(join(dir, 'coach.mjs')).href);
+// v72: the catalog itself, the module coach.js reads QUESTIONS off.
+const Q = await import(pathToFileURL(join(dir, 'coach-ask.js')).href);
+const { EXERCISES } = await import(JSON.parse(real('exercises.js')));
 
 /* ---------- harness ---------- */
 let pass = 0, fail = 0;
@@ -292,17 +295,24 @@ section('E. every category maps to exactly one toggle');
 /* ================= F. QUESTIONS ================= */
 section('F. Coach asks nothing whose answer changes nothing');
 {
-  const qIds = QUESTIONS.map(q => q.id);
+  /* v72: the whole catalog (coach-ask.js ASK_QUESTIONS) — the recap's two
+     rows beside the seven that store an answer — carries the id, text, option
+     and `changes` checks; the fact checks below run over the seven, which are
+     coach.js's QUESTIONS, the `answers` subset. */
+  const ALL = Q.ASK_QUESTIONS;
+  const qIds = ALL.map(q => q.id);
   check('no question id is registered twice', new Set(qIds).size === qIds.length);
   check('every question id is shaped q_*', qIds.every(id => /^q_[a-z_]+$/.test(id)), list(qIds));
+  check('coach.js QUESTIONS is the catalog’s `answers` subset: ' + QUESTIONS.map(q => q.id).join(', '),
+        QUESTIONS.length === ALL.filter(q => q.writes === 'answers').length && QUESTIONS.every(q => ALL.includes(q)));
 
-  const bad = QUESTIONS.filter(q =>
+  const bad = ALL.filter(q =>
     !q.text || !Array.isArray(q.options) || q.options.length < 2 ||
     typeof q.when !== 'function' || !Array.isArray(q.changes) || !q.changes.length).map(q => q.id);
   check('every question has text, at least two options, a gate and a `changes` list', !bad.length, list(bad));
 
   // THE CHECK THE BRIEF ASKS FOR, in both directions.
-  const unref = QUESTIONS.filter(q => !q.changes.every(x => intentSet.has(x))).map(q => q.id);
+  const unref = ALL.filter(q => !q.changes.every(x => intentSet.has(x))).map(q => q.id);
   check('every question names registered rules in `changes`', !unref.length, list(unref));
   const noFact = QUESTIONS.filter(q => !factSet.has(q.fact)).map(q => q.id);
   check('and names the registered fact its answer feeds', !noFact.length, list(noFact));
@@ -491,6 +501,59 @@ section('K. v52, Phase B — "Am I fueled?": four selectors, and q_log_timing wi
 }
 
 /* ---------- report ---------- */
+section('L. v72 — what he said about warm-ups drives the ramp model: knowBy.warm no, through coach().debrief and the targets');
+{
+  const LIB = {};
+  EXERCISES.forEach(x => { LIB[x.id] = { name: x.name, group: x.group, equipment: x.equipment }; });
+  const DAY = 864e5, NOW = new Date(2026, 9, 22, 19).getTime();
+  const key = ms => { const d = new Date(ms), p = n => String(n).padStart(2, '0'); return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()); };
+  const S = (w, r, type = 'N') => ({ w: String(w), r: String(r), type, done: true });
+  const SQ = 'back-squat-low-bar';
+  const RAMP = [S(45, 10), S(45, 8), S(135, 5), S(135, 5), S(225, 3)];
+  let sid = 0;
+  const day = (ago, top) => { const t = NOW - ago * DAY - 3 * 3600e3; return { id: 'd' + (++sid), name: 'Legs', startedAt: t, endedAt: t + 3600e3, durationSec: 3600, _date: key(t),
+    exercises: [{ exId: SQ, ...LIB[SQ], sets: RAMP.concat([S(top, 5), S(top, 5), S(top, 5)]) }, { exId: 'leg-press', ...LIB['leg-press'], sets: [S(400, 10), S(400, 10), S(400, 10)] }] }; };
+  const prior = [7, 14, 21, 28, 35].map(a => day(a, 315));
+  const today = day(0, 315);
+  const input = settings => ({ now: NOW, opens: 0, recentGreets: [], recentHype: [], u: 'lb', log: 'readable', sessions: prior.slice().sort((a, b) => a.startedAt - b.startedAt),
+    lib: LIB, hidden: [], libReady: true, routines: [], live: { active: false }, tier: { pro: true }, targets: null, targetsSet: null, summaries: {}, steps: { days: {} }, weighIns: [],
+    weight: { latestLb: null, latestAt: null, rateWk: null, rateDays: null, goalDir: null, goalRateWk: null },
+    settings: C.normSettings({ v: 2, ...settings }) });
+  const said = C.normSettings({ v: 2, knowBy: { warm: { [SQ]: { v: 'no', c: 1, at: NOW - DAY, n: 1 } } } });
+  check('the stored answer survives normSettings and reads back through coach-ask.js knowOf', !!said.knowBy && said.knowBy.warm[SQ].v === 'no' && Q.knowOf(said, 'warm', SQ, NOW).v === 'no');
+  // The recap's confirm row: asked without the answer, silent with it.
+  const before = C.coach(input({})).debrief(today, { prs: [] });
+  const after = C.coach(input({ knowBy: said.knowBy })).debrief(today, { prs: [] });
+  check('before the answer the recap asks about his five untagged squat sets', !!before.confirm && before.confirm.exId === SQ && before.confirm.idx.length === 5, JSON.stringify(before.confirm));
+  check('with knowBy.warm no on the squat the ramp model stops flagging — no confirm row', after.confirm === null, JSON.stringify(after.confirm));
+  // The targets: every set a working set once he said so.
+  const ov0 = C.overlapInput(input({})), ov1 = C.overlapInput(input({ knowBy: said.knowBy }));
+  const lift = ov => ov.lifts.find(l => l.exId === SQ);
+  check('the lift handed to the targets carries warm: no — and nothing when he has not said',
+        lift(ov1).warm === 'no' && !('warm' in lift(ov0)), JSON.stringify(Object.keys(lift(ov1))));
+  const T = await import(pathToFileURL(join(dir, 'coach-prog.mjs')).href);
+  const ctx = ov => ({ now: ov.now, u: ov.u, aim: ov.aim, exp: ov.exp, energy: ov.energy, rateWk: ov.rateWk });
+  const t0 = T.targetFor(lift(ov0), ctx(ov0), null), t1 = T.targetFor(lift(ov1), ctx(ov1), null);
+  check('before: the target reads the five as a ramp (rows marked ramp), the top 315 from three working sets',
+        !!t0 && t0.sets.filter(s => s.ramp).length === 5 && t0.sets.length === 8, JSON.stringify(t0 && t0.sets));
+  check('after: every row a working set — no row marked ramp, eight rows, the same top',
+        !!t1 && t1.sets.filter(s => s.ramp).length === 0 && t1.sets.length === 8 && t1.loadLb === t0.loadLb, JSON.stringify(t1 && { sets: t1.sets, why: t1.why }));
+  // The count every sentence reads: the recap's "done: N sets".
+  const fin0 = C.finishRead(input({}), today, { prs: [], milestones: [] }), fin1 = C.finishRead(input({ knowBy: said.knowBy }), today, { prs: [], milestones: [] });
+  check('the finish line counts 6 working sets before and 11 after — the ramp is work on a lift he says has none', /6 sets/.test(fin0.line) && /11 sets/.test(fin1.line), fin0.line + ' / ' + fin1.line);
+  // The fact drive, the shipped way: write the answer, watch the fact move.
+  check('a yes on three lifts and none no → warmStyle ramp; the recap’s row becomes one tap',
+        C.coach(input({ knowBy: { warm: { a: { v: 'yes', c: 1, at: NOW, n: 1 }, b: { v: 'yes', c: 1, at: NOW, n: 1 }, c: { v: 'yes', c: 1, at: NOW, n: 1 } } } })).debrief(today, { prs: [] }).confirm.oneTap === true);
+  check('normSettings: a v1 node reads as v2 with no know / knowBy / tally; a v2 node keeps them; junk is dropped',
+        (() => { const v1 = C.normSettings({ v: 1, mute: {}, answers: { q_goal_aim: 'strength' }, asked: {} });
+                 const v2 = C.normSettings({ v: 2, know: { back: { v: 'off', c: 1, at: 5, n: 1 } }, knowBy: { warm: { x: { v: 'yes', c: 2, at: 5, n: 2 }, 'a/b': { v: 'yes', c: 1, at: 5, n: 1 } } }, tally: { extraOffered: 3, bad: -1 } });
+                 return v1.v === 2 && !('know' in v1) && !('knowBy' in v1) && !('tally' in v1) &&
+                        JSON.stringify(v2.know) === '{"back":{"v":"off","c":1,"at":5,"n":1}}' && JSON.stringify(v2.knowBy) === '{"warm":{"x":{"v":"yes","c":2,"at":5,"n":2}}}' && JSON.stringify(v2.tally) === '{"extraOffered":3}'; })());
+  check('asked keeps warm:<id> and q_pr_how:<id> stamps with an id’s shape, drops one with a slash',
+        (() => { const n = C.normSettings({ asked: { ['warm:' + SQ]: 5, 'warm:bad/id': 6, 'q_pr_how:r1': 7, 'q_pr_how:x/y': 8, 'warm:': 9 } });
+                 return JSON.stringify(n.asked) === JSON.stringify({ ['warm:' + SQ]: 5, 'q_pr_how:r1': 7 }); })());
+}
+
 console.log('\nCoach’s registries agree with each other\n');
 console.log(results.join('\n'));
 console.log('\n' + pass + ' passed, ' + fail + ' failed\n');

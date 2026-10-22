@@ -86,7 +86,7 @@ writeFileSync(join(dir, 'analytics.mjs'), src('analytics.js')
   .replace("from './units.js'", 'from ' + real('units.js')));
 // v54: and coach-volume.js, which coach.js imports (the staging edit).
 // v70: and coach-ramp.js, the ramp model, staged with the rest.
-const COACH_DEPS = ['coach-ramp', 'coach-prog', 'coach-overlap', 'coach-fuel', 'coach-ready', 'coach-build', 'coach-live', 'coach-volume'];
+const COACH_DEPS = ['coach-ramp', 'coach-ask', 'coach-prog', 'coach-overlap', 'coach-fuel', 'coach-ready', 'coach-build', 'coach-live', 'coach-volume'];
 COACH_DEPS.concat(['coach']).forEach(name => writeFileSync(join(dir, name + '.mjs'), src(name + '.js')
   .replace(/from '\.\/([\w-]+)\.js'/g, (w, n) => 'from ' + (n === 'analytics' || COACH_DEPS.includes(n) || n === 'coach'
     ? at(n + '.mjs') : real(n + '.js')))));
@@ -109,7 +109,9 @@ function lift(name) {
 }
 const LIFTED = ['collectFrom', 'computeVolume', 'recordGroups', 'unsavedTicks', 'historyRows', 'foldSessionIntoHistory', 'trimHistory',
   'loadMonth', 'watchMonth', 'saveMonth', 'refuseUnread', 'hydrateForWrite', 'deleteSession',
-  'finishWorkout', 'runFinish', 'saveEdit', 'feelCard', 'saveFeel', 'renderSummary'];
+  'finishWorkout', 'runFinish', 'saveEdit', 'feelCard', 'saveFeel', 'renderSummary',
+  // v72: the recap's check-in card and the two whole-record writers behind its chips.
+  'rewriteRecord', 'retagWarmups', 'retagHistory', 'setRirOnRecord', 'debriefCard'];
 
 /* RTDB's set(), modelled: a node replaced outright, {} and null a delete. */
 function makeDb(seed) {
@@ -127,7 +129,7 @@ function makeDb(seed) {
 
 function harness(o = {}) {
   const db = makeDb(o.seed);
-  const S = { writes: [], toasts: [], marks: [], renders: 0, refreshes: 0, settings: o.settings || { v: 1, mute: {}, answers: {}, asked: {} },
+  const S = { writes: [], toasts: [], marks: [], learned: [], asked: [], answers: [], renders: 0, refreshes: 0, settings: o.settings || { v: 1, mute: {}, answers: {}, asked: {} },
               input: o.input || null, hold: null, refuse: null };
   const stubs = {
     read: async (p, f = null) => { const v = db.getAt(p); return v === undefined ? f : clone(v); },
@@ -161,6 +163,13 @@ function harness(o = {}) {
     markSession: (sess, r) => { S.marks.push([sess, r]); return Promise.resolve(true); },
     // coach-data.js's coachFinishRead(): finishRead() on the snapshot.
     coachFinishRead: (rec, extras) => C.finishRead(S.input || inputOf([]), rec, extras),
+    // v72: the recap's plan reads the same snapshot through coach().debrief; the
+    // three coach-data writers behind its chips are recorded, never run.
+    coachInput: () => S.input || inputOf([]), coach: C.coach,
+    learnBy: (k, id, v) => { S.learned.push([k, id, v]); return Promise.resolve(true); },
+    markAsked: id => { S.asked.push(id); return Promise.resolve(true); },
+    answerQuestion: (id, v) => { S.answers.push([id, v]); return Promise.resolve(true); },
+    retypeSet: A.retypeSet,
     saveSessionAsRoutine: () => {}, refreshStats: async () => {}, openStats: async () => {}
   };
   const NAMES = Object.keys(stubs);

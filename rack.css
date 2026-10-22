@@ -1067,6 +1067,18 @@ body.peeking .view.active { padding-bottom: 65px; }
 .feel-ask { font-size: 14px; color: var(--chalk); }
 .feel-sub { font-size: 11px; color: var(--dim); margin: 2px 0 8px; }
 .feel-ack { font-size: 13px; color: var(--steel); margin-top: 8px; }
+/* v72: the check-in — three stacked rows in one card (the warm-up
+   confirmation, the shipped feel card as a row, one question) with a small
+   "Not now" under them. The feel card inside it drops its own card chrome so
+   the three read as one thing; its chips keep their 44px. */
+.debrief-card .feel-card { background: none; border: 0; border-radius: 0; padding: 0; margin: 0; }
+.debrief-row + .debrief-row, .debrief-row + .feel-card, .feel-card + .debrief-row {
+  margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--collar);
+}
+.debrief-row .eyebrow { margin-bottom: 6px; }
+.debrief-row .feel-ask { margin-bottom: 8px; }
+.debrief-row .coach-chip { min-height: 44px; }
+.debrief-skip { display: block; margin: 10px auto 0; font-size: 12px; color: var(--dim); }
 /* v53: "Compared with sessions like this" — two plain lines in body colour,
    deliberately no big number and no green/steel verdict. */
 .summary-like-row { font-size: 13px; color: var(--chalk); line-height: 1.45; }

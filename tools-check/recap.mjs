@@ -88,7 +88,7 @@ writeFileSync(join(dir, 'analytics.mjs'), src('analytics.js')
   .replace("from './units.js'", 'from ' + real('units.js')));
 // v54: and coach-volume.js, which coach.js imports (the staging edit).
 // v70: and coach-ramp.js, the ramp model, staged with the rest.
-const COACH_DEPS = ['coach-ramp', 'coach-prog', 'coach-overlap', 'coach-fuel', 'coach-ready', 'coach-build', 'coach-live', 'coach-volume'];
+const COACH_DEPS = ['coach-ramp', 'coach-ask', 'coach-prog', 'coach-overlap', 'coach-fuel', 'coach-ready', 'coach-build', 'coach-live', 'coach-volume'];
 COACH_DEPS.concat(['coach']).forEach(name => writeFileSync(join(dir, name + '.mjs'), src(name + '.js')
   .replace(/from '\.\/([\w-]+)\.js'/g, (w, n) => 'from ' + (n === 'analytics' || COACH_DEPS.includes(n) || n === 'coach'
     ? at(n + '.mjs') : real(n + '.js')))));
@@ -109,13 +109,14 @@ function lift(name) {
   const m = new RegExp('^(?:export )?(?:async )?function ' + name + '\\(', 'm').exec(WSRC);
   if (!m) throw new Error('recap: ' + name + '() is gone from workout.js — the recap or this check is stale');
   const end = WSRC.indexOf('\n}\n', m.index);
-  return WSRC.slice(m.index, end + 2);
+  return WSRC.slice(m.index, end + 2).replace(/^export /, '');
 }
 // renderSummary and whatever top-level helpers it calls that live in
 // workout.js (the feel card, from Phase D, when it exists).
-const LIFTED = ['renderSummary'].concat(['feelCard', 'saveFeel'].filter(n =>
-  new RegExp('^(?:async )?function ' + n + '\\(', 'm').test(WSRC)));
-const state = { input: null, u: 'lb', writes: [], marks: [], renders: 0, settings: null };
+// v72: and the check-in card with the two whole-record writers behind its chips.
+const LIFTED = ['renderSummary'].concat(['feelCard', 'saveFeel', 'rewriteRecord', 'retagWarmups', 'retagHistory', 'setRirOnRecord', 'debriefCard'].filter(n =>
+  new RegExp('^(?:export )?(?:async )?function ' + n + '\\(', 'm').test(WSRC)));
+const state = { input: null, u: 'lb', writes: [], marks: [], learned: [], asked: [], answers: [], renders: 0, settings: null, refuse: false, history: {} };
 const STUBS = {
   el: UI.el, noteEl: UI.noteEl, toast: () => {}, fmtDateFull: UI.fmtDateFull, fmtDuration: UI.fmtDuration,
   todayKey: d => { const p = n => String(n).padStart(2, '0'); return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()); },
@@ -132,17 +133,27 @@ const STUBS = {
   invalidate: () => {},
   coachSettings: () => state.settings || (state.input && state.input.settings) || {},
   markSession: (s, r) => { state.marks.push([s, r]); return Promise.resolve(true); },
-  write: (p, v) => { state.writes.push([p, v]); return Promise.resolve(); },
+  write: (p, v) => { if (state.refuse) return Promise.reject(new Error('PERMISSION_DENIED')); state.writes.push([p, v]); return Promise.resolve(); },
+  // v72: the recap's plan reads the same snapshot through coach().debrief; the
+  // three coach-data writers behind its chips are recorded, never run.
+  coachInput: () => state.input, coach: C.coach,
+  learnBy: (k, id, v) => { state.learned.push([k, id, v]); return Promise.resolve(true); },
+  markAsked: id => { state.asked.push(id); return Promise.resolve(true); },
+  answerQuestion: (id, v) => { state.answers.push([id, v]); return Promise.resolve(true); },
+  retypeSet: A.retypeSet, detectPRs: A.detectPRs, sessionMilestones: A.sessionMilestones,
+  computeVolume: done => Math.round(done.reduce((s, ex) => s + ex.sets.filter(A.isWorking).reduce((a, x) => a + (parseFloat(x.w) || 0) * (parseInt(x.r) || 0), 0), 0)),
+  recordGroups: done => [...new Set(done.filter(ex => ex.sets.some(A.isWorking)).map(ex => ex.group))],
+  hydrateForWrite: async () => true, historyRows: v => (Array.isArray(v) ? v.slice() : v && typeof v === 'object' ? Object.values(v).filter(e => e && e.date) : []),
   render: () => { state.renders++; },
   saveSessionAsRoutine: () => {}, refreshStats: async () => {}, openStats: async () => {},
   refreshCoachSessions: () => Promise.resolve(true), monthKey: () => '', LS: { get: (k, f) => f, set() {}, del() {} }
 };
 const NAMES = Object.keys(STUBS);
 const make = () => new Function(...NAMES, `
-let summary = null, monthCache = {};
+let summary = null, monthCache = {}, history = {};
 ${LIFTED.map(lift).join('\n')}
 return { draw: s => { summary = s; return renderSummary(); }, summary: () => summary, cache: () => monthCache,
-         setCache: c => { monthCache = c; } };`)(...NAMES.map(k => STUBS[k]));
+         setCache: c => { monthCache = c; }, history: () => history, setHistory: h => { history = h; } };`)(...NAMES.map(k => STUBS[k]));
 
 /* ---------- harness ---------- */
 let pass = 0, fail = 0;
@@ -188,10 +199,14 @@ const inputOf = (sessions, u) => ({
 function draw(prior, today, u) {
   state.u = u || 'lb';
   state.input = inputOf(prior.slice().sort((a, b) => a.startedAt - b.startedAt), state.u);
+  // v72: the snapshot's settings are the account's (asked stamps, what he said
+  // about warm-ups), so the recap's plan reads them.
+  if (state.settings) state.input.settings = state.settings;
   const found = A.detectPRs(today, prior);
   const R = make();
+  R.setHistory(state.history || {});
   const page = R.draw({ record: today, prs: found.prs, firsts: found.firsts,
-                        milestones: A.sessionMilestones(today, prior, state.u), prior });
+                        milestones: A.sessionMilestones(today, prior, state.u), prior, dateK: today._date });
   return { page, R, fin: C.finishRead(state.input, today, { prs: found.prs, firsts: found.firsts, milestones: A.sessionMilestones(today, prior, state.u) }) };
 }
 // Everything on the page but the feel card, which is his own rating in his own words.
@@ -289,8 +304,9 @@ section('D. the order, top to bottom — the win, how it felt, the wins, the til
   const today = rec(0, [['barbell-bench-press', xN(5, 195, 5)], ['incline-dumbbell-bench-press', xN(4, 60, 10)], ['triceps-pushdown-rope', xN(3, 50, 12)],
                         ['cable-crunch', xN(3, 60, 15)]]);
   const { page } = draw(prior, today);
+  // v72: the second block is the check-in card, the feel card one row inside it.
   const top = page.children.map(c => c.classList.contains('summary-hero') ? 'hero'
-    : c.classList.contains('feel-card') ? 'feel'
+    : c.classList.contains('debrief-card') ? (find(c, 'feel-card').length ? 'feel' : 'debrief')
     : c.classList.contains('pr-card') ? 'records'
     : c.classList.contains('stat-row') ? 'tiles'
     : c.classList.contains('summary-like') ? 'compared'
@@ -300,12 +316,15 @@ section('D. the order, top to bottom — the win, how it felt, the wins, the til
     'compared', 'button:Done', 'button:Save as routine', 'button:See statistics'];
   check('§5.1’s order, exactly: ' + top.join(' → '), JSON.stringify(top) === JSON.stringify(want), JSON.stringify(want));
   check('the comparison never leads the page — it is below "What you did"', top.indexOf('compared') > top.indexOf('What you did'));
-  // The Feel switch off: the same page without the check-in, nothing else moved.
+  // The Feel switch off: the same page without the feel row — v72: the check-in
+  // card stays for its other two slots (this day set a record, so one
+  // question is asked), and nothing else moves.
   state.settings = { v: 1, mute: { feel: true }, answers: {}, asked: {} };
   const off = draw(prior, today).page;
   state.settings = null;
-  check('with "After a workout: how it felt" switched off, the check-in is never drawn and nothing else moves',
-        !find(off, 'feel-card').length && off.children.length === page.children.length - 1);
+  check('with "After a workout: how it felt" switched off, the feel row is never drawn and nothing else moves',
+        !find(off, 'feel-card').length && off.children.length === page.children.length &&
+        off.children[1].classList.contains('debrief-card') && find(off.children[1], 'debrief-question').length === 1);
   // The one place a "%" may be: his own strength chips, in his words.
   const feelTexts = find(page, 'feel-card').flatMap(f => texts(f));
   check('and the check-in is where his own "%" lives — "80% or less" … "120%+" — which B leaves to him',
@@ -327,6 +346,132 @@ section('E. v55 — a drop set in "What you did" is one group, "185×8 → 135×
         lines[0] === '185×8   185×8   185×8 → 135×6 → 95×5   185×7 → 135×5', list(lines));
   check('and a D logged the way every one before v55 was — no drops under it — reads exactly as it did: ' + lines[1],
         lines[1] === '50×12   50×12F   30×12D', list(lines));
+}
+
+/* ================= F. THE CHECK-IN (v72) =================
+   COACH-V2-SPEC §4: three slots in one card under the finish line — the
+   warm-up confirmation, how it felt, one question — each one tap, a small
+   "Not now" that takes the card away. Nothing is written on paint; every
+   write is behind a chip; a refused write leaves the record alone. */
+section('F. v72 — the check-in: three slots, one card, nothing written on paint');
+{
+  const buttons = n => walk(n).filter(x => x.tag === 'button');
+  const tap = (n, label) => { const b = buttons(n).find(x => x.textContent === label); if (b && !b.disabled) b.onclick(); return !!b; };
+  const flush = () => new Promise(r => setTimeout(r, 0));
+  const SQ = 'back-squat-low-bar';
+  // Micah's untagged squat day, five of them behind it.
+  const RAMP = [set(45, 10), set(45, 8), set(135, 5), set(135, 5), set(225, 3)];
+  const squatDay = (ago, top) => rec(ago, [[SQ, RAMP.concat(xN(3, top || 315, 5))], ['leg-press', xN(3, 400, 10)]]);
+  const prior = [7, 14, 21, 28, 35].map(a => squatDay(a));
+  state.settings = null; state.history = {};
+  const reset = () => { state.writes = []; state.learned = []; state.asked = []; state.answers = []; state.refuse = false; };
+
+  // 1. The three slots, in order, nothing written.
+  reset();
+  const today = squatDay(0, 335);                     // a record: 335 over 315
+  const { page, R } = draw(prior, today);
+  const card = find(page, 'debrief-card')[0];
+  check('one check-in card, directly under the hero', !!card && page.children[1] === card);
+  const slots = card ? card.children.map(c => c.classList.contains('debrief-confirm') ? 'confirm' : c.classList.contains('feel-card') ? 'feel'
+    : c.classList.contains('debrief-question') ? 'question' : c.classList.contains('debrief-skip') ? 'skip' : c.className) : [];
+  check('its rows: confirm, feel, question, then "Not now" — ' + slots.join(' → '), JSON.stringify(slots) === JSON.stringify(['confirm', 'feel', 'question', 'skip']));
+  check('the confirm row asks about his ramp, in his unit, with its three chips',
+        texts(find(card, 'debrief-confirm')[0]).some(t => t === 'Were 45 to 225 lb (5 sets) your warm-ups on Back Squat (Low Bar)?') &&
+        ['Yes, tag them', 'No, working sets', 'Not now'].every(l => buttons(find(card, 'debrief-confirm')[0]).some(b => b.textContent === l)));
+  check('its eyebrow is one of the two', ['Quick one before you go.', 'One thing I want to get right.'].includes(eyebrows(find(card, 'debrief-confirm')[0])[0]));
+  check('the question row is the record’s, with its three chips', texts(find(card, 'debrief-question')[0]).some(t => /^New best on Back Squat \(Low Bar\)\. Did it feel like there was more in it\?$/.test(t)) &&
+        ['Plenty left', 'Just about', 'That was everything'].every(l => buttons(find(card, 'debrief-question')[0]).some(b => b.textContent === l)));
+  check('never two question rows', find(card, 'debrief-question').length === 1 && find(card, 'feel-ask').length === 2);
+  check('nothing written on paint: no write, no fact, no stamp', !state.writes.length && !state.learned.length && !state.asked.length && !state.answers.length);
+
+  // 2. "Yes, tag them": the whole record rewritten, W on the five, volume down, the fact and the stamp.
+  const volBefore = R.summary().record.volume;
+  tap(find(card, 'debrief-confirm')[0], 'Yes, tag them');
+  await flush(); await flush(); await flush();
+  const w = state.writes.find(([p]) => /^workouts\/\d{4}-\d{2}\/\d{2}\/r\d+$/.test(p));
+  check('one write, to the session node workouts/{mk}/{dd}/{id} — never a container', !!w && state.writes.filter(([p]) => /^workouts\//.test(p)).length === 1, list(state.writes.map(x => x[0])));
+  const written = w && w[1];
+  check('the five ramp sets typed W on it, the three 335s still N', !!written && written.exercises[0].sets.map(s => s.type).join('') === 'WWWWWNNN', written && written.exercises[0].sets.map(s => s.type).join(''));
+  check('its volume dropped the ramp: ' + (written && written.volume) + ' from ' + volBefore, !!written && written.volume < volBefore &&
+        written.volume === 3 * 335 * 5 + 3 * 400 * 10);
+  check('the summary holds the new record and the finish line was read again', R.summary().record === R.summary().record && R.summary().record.exercises[0].sets[0].type === 'W' && !!R.summary().finish);
+  check('knowBy.warm yes on the squat, and the per-lift stamp', JSON.stringify(state.learned) === JSON.stringify([['warm', SQ, 'yes']]) && state.asked.includes('warm:' + SQ));
+  check('the ack: "Tagged. They won’t count as working sets."', texts(find(card, 'debrief-confirm')[0]).includes('Tagged. They won’t count as working sets.') && !buttons(find(card, 'debrief-confirm')[0]).length);
+  check('a repaint keeps the ack and does not ask again', (() => { const p2 = R.draw(R.summary()); const c2 = find(p2, 'debrief-confirm')[0]; return !!c2 && !buttons(c2).length && texts(c2).includes('Tagged. They won’t count as working sets.'); })());
+
+  // 3. "No, working sets": the fact, the stamp, no record write.
+  reset();
+  const g = draw(prior, squatDay(0, 335));
+  tap(find(g.page, 'debrief-confirm')[0], 'No, working sets');
+  await flush();
+  check('"No": knowBy.warm no, the stamp, and the record untouched', JSON.stringify(state.learned) === JSON.stringify([['warm', SQ, 'no']]) &&
+        state.asked.includes('warm:' + SQ) && !state.writes.length && texts(find(g.page, 'debrief-confirm')[0]).includes('Noted. I’ll read them as work on this lift.'));
+  reset();
+  const nn = draw(prior, squatDay(0, 335));
+  tap(find(nn.page, 'debrief-confirm')[0], 'Not now');
+  await flush();
+  check('"Not now" on the row: the stamp alone, the row gone', !state.learned.length && state.asked.includes('warm:' + SQ) && !state.writes.length && !find(nn.page, 'debrief-confirm').length);
+
+  // 4. The record question: rir on the record set, the same whole-record write.
+  reset();
+  const q = draw(prior, squatDay(0, 335));
+  tap(find(q.page, 'debrief-question')[0], 'Just about');
+  await flush(); await flush(); await flush();
+  const w2 = state.writes.find(([p]) => /^workouts\//.test(p));
+  check('"Just about": rir 2 on the first 335, the whole session node written once',
+        !!w2 && w2[1].exercises[0].sets[5].rir === 2 && w2[1].exercises[0].sets.filter(s => s.rir != null).length === 1 && state.writes.length === 1,
+        w2 && JSON.stringify(w2[1].exercises[0].sets.map(s => s.rir)));
+  check('the stamp is per record (q_pr_how:<id>), and the ack is drawn', state.asked.some(k => /^q_pr_how:r\d+$/.test(k)) &&
+        texts(find(q.page, 'debrief-question')[0]).includes('Noted. I’ll read the next target from that.'));
+
+  // 5. A refused write leaves the record, the summary and the facts alone, and the chips stay.
+  reset(); state.refuse = true;
+  const rf = draw(prior, squatDay(0, 335));
+  const before = JSON.stringify(rf.R.summary().record);
+  tap(find(rf.page, 'debrief-confirm')[0], 'Yes, tag them');
+  await flush(); await flush(); await flush();
+  check('refused: the record byte-identical, nothing learned, nothing stamped, the chips still there',
+        JSON.stringify(rf.R.summary().record) === before && !state.learned.length && !state.asked.length &&
+        buttons(find(rf.page, 'debrief-confirm')[0]).length === 3);
+  state.refuse = false;
+
+  // 6. "Not now" on the card: every slot stamped as left, the card gone, nothing else written.
+  reset();
+  const skip = draw(prior, squatDay(0, 335));
+  // the card's own link, not the confirm row's chip of the same name
+  find(skip.page, 'debrief-skip')[0].onclick();
+  check('"Not now" removes the card and writes nothing but the warm-up stamp', !find(skip.page, 'debrief-card').length &&
+        !state.writes.length && !state.learned.length && !state.answers.length && JSON.stringify(state.asked) === JSON.stringify(['warm:' + SQ]));
+  check('and a repaint does not bring it back', !find(skip.R.draw(skip.R.summary()), 'debrief-card').length);
+
+  // 7. A harder rating: MARK_ASK owns the slot, and no question that day.
+  reset();
+  const hard = draw(prior, squatDay(0, 335));
+  const feel = find(hard.page, 'feel-card')[0];
+  tap(feel, '90%'); tap(feel, 'Save');
+  await flush(); await flush(); await flush();
+  const p3 = hard.R.draw(hard.R.summary());
+  check('rated 90%: the feel row asks "Anything I can’t see?" (MARK_ASK) and no question row is drawn',
+        texts(p3).includes(C.MARK_ASK.text) && !find(p3, 'debrief-question').length);
+  // The open lane, on a log that would otherwise ask (a weight rate with no
+  // direction): nothing for the rest of the day once a session today is marked.
+  const asking = { ...state.input, sessions: state.input.sessions.concat([{ ...hard.R.summary().record }]),
+                   weight: { ...state.input.weight, rateWk: -0.5, rateDays: 21 } };
+  const marked = { ...asking, settings: { ...C.normSettings({ v: 2 }), marks: { [hard.R.summary().record.id]: { r: 'sleep', d: hard.R.summary().record._date } } } };
+  check('and pickQuestion for the open lane says nothing for the rest of the day after a mark on this session (it asked before the mark)',
+        !!C.coach(asking).question && C.coach(asking).question.id === 'q_goal_direction' && C.coach(marked).question === null,
+        JSON.stringify(C.coach(asking).question && C.coach(asking).question.id));
+  check('tomorrow it asks again', !!C.coach({ ...marked, now: NOW + DAY }).question);
+
+  // 8. A day with nothing to confirm and no record: the feel row alone, inside the card.
+  reset();
+  const plain = draw([7, 14, 21, 28].map(CHEST), CHEST(0));
+  const pc = find(plain.page, 'debrief-card')[0];
+  check('an ordinary chest day: the card holds the feel row and "Not now" only',
+        !!pc && pc.children.length === 2 && pc.children[0].classList.contains('feel-card') && pc.children[1].classList.contains('debrief-skip'));
+  check('on kilos, the confirm row’s loads are kilos', texts(find(draw(prior, squatDay(0, 335), 'kg').page, 'debrief-confirm')[0]).some(t => /^Were 20\.4 to 102\.1 kg \(5 sets\) your warm-ups/.test(t)),
+        texts(find(draw(prior, squatDay(0, 335), 'kg').page, 'debrief-confirm')[0]).join(' | '));
+  state.u = 'lb';
 }
 
 console.log('\nthe first thing after a workout is the win, and there is no percentage on the page\n');

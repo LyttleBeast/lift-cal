@@ -294,6 +294,33 @@ section('D. v52 — "Should I rest or go lighter?" before the record, and the li
         C.ROUTE_IDS.includes('ask_build_anyway') && !C.ALL_TOPICS.some(t => t.id === 'ask_build_anyway'));
 }
 
+/* ================= E. v72 — settings/coach v2 ================= */
+section('E. v72 — normSettings: a v1 node reads as v2 with no know; a v2 node round-trips; junk know is dropped; the per-lift stamps');
+{
+  const v1 = { v: 1, mute: { fuel: true }, on: { patterns: true }, answers: { q_goal_aim: 'strength', q_experience: 'some' },
+               asked: { q_goal_aim: 1789307130123, vol_neglect: 1789307130124 }, goalLift: { exId: 'barbell-bench-press', lb: 315, reps: 1, at: 5 },
+               marks: { wm3k9x2: { r: 'sleep', d: '2026-09-22' } } };
+  const n1 = C.normSettings(v1);
+  check('a v1 node normalises to v: 2 and is otherwise byte for byte what it was — no know, knowBy or tally key',
+        JSON.stringify(n1) === JSON.stringify({ ...v1, v: 2 }) && !('know' in n1) && !('knowBy' in n1) && !('tally' in n1), JSON.stringify(n1));
+  check('COACH_SETTINGS_VERSION is 2', C.COACH_SETTINGS_VERSION === 2);
+  const v2 = { ...v1, v: 2,
+    asked: { ...v1.asked, 'warm:back-squat-low-bar': 1790000000000, 'q_pr_how:wm3k9x2': 1790000000001 },
+    know: { back: { v: 'elsewhere', c: 1, at: 1790000000000, n: 1 } },
+    knowBy: { warm: { 'back-squat-low-bar': { v: 'yes', c: 2, at: 1790000000000, n: 2 } }, step: { 'lat-pulldown': { v: 10, c: 1, at: 1790000000000, n: 1 } },
+              hold: { 'front-squat': { v: 'hold', c: 1, at: 1790000000000, n: 1 } }, wantNext: { legs: { v: 'push', c: 1, at: 1790000000000, n: 1 } } },
+    tally: { extraOffered: 14, extraTaken: 9 } };
+  check('the spec’s v2 node (COACH-V2-SPEC §3.5) round-trips byte for byte', JSON.stringify(C.normSettings(v2)) === JSON.stringify(v2), JSON.stringify(C.normSettings(v2)));
+  const junk = C.normSettings({ ...v2,
+    know: { back: { v: 'maybe', c: 1, at: 1, n: 1 }, nope: { v: 1, c: 1, at: 1, n: 1 } },
+    knowBy: { warm: { 'back-squat-low-bar': { v: 'yes', c: 7, at: 1, n: 2 }, 'a/b': { v: 'no', c: 1, at: 1, n: 1 } }, step: { x: { v: 'ten', c: 1, at: 1, n: 1 } } },
+    tally: { extraOffered: 'many', ok: 1000 },
+    asked: { ...v1.asked, 'warm:bad/id': 5, 'warm:x': 6, 'q_pr_how:': 7 } });
+  check('junk know, knowBy and tally dropped — and with nothing surviving, no key at all', !('know' in junk) && !('knowBy' in junk) && !('tally' in junk), JSON.stringify(junk));
+  check('asked keeps warm:x, drops warm:bad/id and an empty q_pr_how:', junk.asked['warm:x'] === 6 && !('warm:bad/id' in junk.asked) && !('q_pr_how:' in junk.asked));
+  check('never throws', (() => { try { [null, 1, 'x', [], { know: 1, knowBy: 'x', tally: [] }].forEach(C.normSettings); return true; } catch { return false; } })());
+}
+
 console.log('\nthe sheet adapts to the moment it is opened in\n');
 console.log(results.join('\n'));
 console.log('\n' + pass + ' passed, ' + fail + ' failed\n');

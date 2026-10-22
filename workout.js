@@ -24,10 +24,11 @@ import { initPicker, allExercises, openPicker, openExerciseManager } from './pic
 import { initRoutines, openRoutines, saveSessionAsRoutine } from './routines.js';
 import { coachCard, liveChip, openLiveSheet, noteLiveTick, nudgeLine, dismissNudge } from './coach-ui.js';
 import { initCoachData, coachLogReady, refreshCoachSessions, noteCoachData, coachFinishRead,
-         coachSettings, markSession } from './coach-data.js';
+         coachSettings, markSession, coachInput, learnBy, markAsked, answerQuestion } from './coach-data.js';
 // v53: the check-in's words and gates — pure, and the engine's, so the recap
 // and Coach say his rating the same way and ask the same mark question.
-import { feelHarder, canMark, isMuted, MARK_ASK, FEEL_S_WORDS } from './coach.js';
+// v72: and the recap's plan — coach().debrief(record), the three slots.
+import { coach, feelHarder, canMark, isMuted, MARK_ASK, FEEL_S_WORDS } from './coach.js';
 import { bump } from './usage.js';
 import { wOut, wIn, fmtSetW, fmtSetLoad, fmtVol, volOut, unitW, limW } from './units.js';
 // A group's colour is hex in exercises.js and analytics.js, which the native
@@ -2164,8 +2165,215 @@ async function saveFeel(raw) {
   invalidate();
   refreshCoachSessions().catch(() => {});
   s.finish = coachFinishRead(record, { prs: s.prs, firsts: s.firsts, milestones: s.milestones });
+  // v72: the check-in's plan is read again over the rating — a harder day
+  // hands the question slot to "Anything I can’t see?" and asks nothing else.
+  s.plan = null;
   if (summary === s) render();
   return true;
+}
+
+/* ================= THE RECAP'S WRITE-BACK (v72) =================
+   Two answers on the recap change the record itself: "Yes, tag them" retypes
+   the probable warm-ups W, and "did that record have more in it?" rates the
+   record set. Both go through one helper, the way saveEdit() writes: the WHOLE
+   session node, workouts/{mk}/{dd}/{id} — one session, never a container —
+   with `volume` and `groups` recomputed by the two functions Finish uses.
+   Nothing in memory moves until the write resolves: a refusal leaves the
+   record, the month cache and the index exactly as they were, and the chip
+   row stays so he can try again (the saveFeel pattern). */
+async function rewriteRecord(next) {
+  const s = summary;
+  if (!s || !s.dateK || !next) return false;
+  const { dateK } = s;
+  const mk = dateK.slice(0, 7), dd = dateK.slice(8, 10);
+  if (!(await hydrateForWrite(mk))) return false;
+  const record = { ...next, volume: computeVolume(next.exercises), groups: recordGroups(next.exercises) };
+  try {
+    await write(`workouts/${mk}/${dd}/${record.id}`, record);
+  } catch {
+    toast('Not saved — the question is still here.');
+    return false;
+  }
+  monthCache[mk] = monthCache[mk] || {};
+  monthCache[mk][dd] = monthCache[mk][dd] || {};
+  monthCache[mk][dd][record.id] = record;
+  invalidate();
+  refreshCoachSessions().catch(() => {});
+  s.record = record;
+  // The records are judged again over the retyped sets: a warm-up tagged W is
+  // no longer a candidate for a best, and the finish line reads the new list.
+  let prs = s.prs, firsts = s.firsts, milestones = s.milestones;
+  try {
+    const found = detectPRs(record, s.prior || []);
+    prs = found.prs; firsts = found.firsts;
+    milestones = sessionMilestones(record, s.prior || [], wu());
+  } catch {}
+  s.prs = prs; s.firsts = firsts; s.milestones = milestones;
+  s.finish = coachFinishRead(record, { prs, firsts, milestones });
+  return record;
+}
+
+/* "Yes, tag them": the sets at `idx` of the exercise at `exIdx` (indices into
+   the RAW record, the row the question was asked about) retyped W through
+   analytics.js's retypeSet, so a drop set under one is relinked right; then
+   the whole record, and the "last time" index's row for the day retyped to
+   match. False when nothing was saved. */
+async function retagWarmups(exIdx, idx) {
+  const s = summary;
+  if (!s || !s.record) return false;
+  const ex = (s.record.exercises || [])[exIdx];
+  if (!ex || !Array.isArray(idx) || !idx.length) return false;
+  const sets = idx.reduce((acc, j) => retypeSet(acc, j, 'W'), ex.sets);
+  const exercises = s.record.exercises.map((x, i) => (i === exIdx ? { ...x, sets } : x));
+  const record = await rewriteRecord({ ...s.record, exercises });
+  if (!record) return false;
+  /* The index is derived: a refusal here is logged and tolerated, because the
+     next finish, edit or delete folds or rebuilds it from the log — and the
+     session itself is already right. */
+  const nextHistory = retagHistory(history, ex.exId, s.dateK, idx, ex.sets.length);
+  if (nextHistory !== history) {
+    try { await write('history', nextHistory); history = nextHistory; } catch { /* the next fold corrects it */ }
+  }
+  if (summary === s) render();
+  return true;
+}
+
+/* The "last time" index's row for one lift on one day, its sets at `idx`
+   retyped W — only when that row holds exactly `nSets` sets, the record
+   exercise's count (v68 folds every set, so the indices line up); a row that
+   does not (a duplicated block merged into it, an older fold) is left alone
+   and `h` comes back unchanged, the same object. Pure; exported for
+   tools-check/warmup-retag.mjs. */
+export function retagHistory(h, exId, dateK, idx, nSets) {
+  const rows = historyRows((h || {})[exId]);
+  const at = rows.findIndex(e => e && e.date === dateK);
+  if (at === -1) return h;
+  const row = rows[at];
+  if (!Array.isArray(row.sets) || !Array.isArray(idx) || row.sets.length !== nSets) return h;
+  if (!idx.every(j => Number.isInteger(j) && j >= 0 && j < row.sets.length)) return h;
+  rows[at] = { ...row, sets: row.sets.map((x, j) => (idx.includes(j) ? { ...x, type: 'W' } : x)) };
+  return { ...h, [exId]: rows };
+}
+
+/* "Did it feel like there was more in it?": his rating of the record set,
+   `rir` 4 / 2 / 0, on that one set — the same whole-record write. */
+async function setRirOnRecord(exIdx, setIdx, rir) {
+  const s = summary;
+  if (!s || !s.record || !Number.isInteger(rir)) return false;
+  const ex = (s.record.exercises || [])[exIdx];
+  if (!ex || !ex.sets || !ex.sets[setIdx]) return false;
+  const sets = ex.sets.map((x, j) => (j === setIdx ? { ...x, rir } : x));
+  const exercises = s.record.exercises.map((x, i) => (i === exIdx ? { ...x, sets } : x));
+  const record = await rewriteRecord({ ...s.record, exercises });
+  if (!record) return false;
+  if (summary === s) render();
+  return true;
+}
+
+/* ================= THE CHECK-IN (v72) =================
+   Three slots under the finish line, from coach().debrief(record) — the
+   warm-up confirmation, how it felt (the shipped card), one question — inside
+   one card with a small "Not now" that takes the whole card away. Each slot
+   is one tap. Nothing here writes on paint: every write is behind a chip. */
+function debriefCard(plan) {
+  const s = summary;
+  const { record } = s;
+  const u = wu();
+  const card = el('div', 'card debrief-card');
+  const rows = [];
+
+  // 1. Confirm: the warm-ups the ramp model saw and only he can confirm.
+  if (plan.confirm && !s.confirmDone) {
+    const c = plan.confirm;
+    const row = el('div', 'debrief-row debrief-confirm');
+    row.appendChild(el('div', 'eyebrow', (s.opens || 0) % 2 ? 'One thing I want to get right.' : 'Quick one before you go.'));
+    if (!c.oneTap) row.appendChild(el('div', 'feel-ask', c.text));
+    const chips = el('div', 'coach-chips');
+    const ack = text => { chips.remove(); if (text) row.appendChild(el('div', 'feel-ack', text)); else row.remove(); };
+    const yes = async b => {
+      b.disabled = true;
+      const ok = await retagWarmups(c.exIdx, c.idx);
+      if (!ok) { b.disabled = false; return; }
+      learnBy('warm', c.exId, 'yes').catch(() => {});
+      markAsked('warm:' + c.exId).catch(() => {});
+      s.confirmDone = true;
+      s.confirmAck = (c.options.find(op => op.value === 'yes') || {}).ack || null;
+      ack(s.confirmAck);
+    };
+    if (c.oneTap) {
+      const b = el('button', 'coach-chip', 'Tag ' + c.idx.length + ' warm-up' + (c.idx.length === 1 ? '' : 's'));
+      b.onclick = () => yes(b);
+      chips.appendChild(b);
+    } else {
+      c.options.forEach(op => {
+        const b = el('button', 'coach-chip', op.label);
+        b.onclick = () => {
+          if (op.value === 'yes') { yes(b); return; }
+          if (op.value === 'no') { learnBy('warm', c.exId, 'no').catch(() => {}); }
+          markAsked('warm:' + c.exId).catch(() => {});
+          s.confirmDone = true;
+          s.confirmAck = op.ack || null;
+          ack(op.ack);
+        };
+        chips.appendChild(b);
+      });
+    }
+    row.appendChild(chips);
+    rows.push(row);
+  } else if (s.confirmAck) {
+    const row = el('div', 'debrief-row debrief-confirm');
+    row.appendChild(el('div', 'feel-ack', s.confirmAck));
+    rows.push(row);
+  }
+
+  // 2. Feel: the shipped card, as it is, behind the same switch it always was.
+  if (plan.feel && !s.feelSkipped && !isMuted(coachSettings(), 'feel')) rows.push(feelCard());
+
+  // 3. One question.
+  const q = plan.question;
+  if (q && !s.questionDone) {
+    const row = el('div', 'debrief-row debrief-question');
+    row.appendChild(el('div', 'feel-ask', q.text));
+    const chips = el('div', 'coach-chips');
+    q.options.forEach(op => {
+      const b = el('button', 'coach-chip', op.label);
+      b.onclick = async () => {
+        b.disabled = true;
+        if (q.id === 'q_pr_how' && q.pr) {
+          const ok = await setRirOnRecord(q.pr.exIdx, q.pr.setIdx, op.value);
+          if (!ok) { b.disabled = false; return; }
+        } else if (q.writes === 'answers') {
+          answerQuestion(q.id, op.value).catch(() => {});
+        }
+        // Its stamp: the id, or the per-record one the budget counts.
+        markAsked(q.stamp || q.id).catch(() => {});
+        s.questionDone = true;
+        s.questionAck = q.ack || null;
+        chips.remove();
+        if (q.ack) row.appendChild(el('div', 'feel-ack', q.ack));
+      };
+      chips.appendChild(b);
+    });
+    row.appendChild(chips);
+    rows.push(row);
+  } else if (s.questionAck) {
+    const row = el('div', 'debrief-row debrief-question');
+    row.appendChild(el('div', 'feel-ack', s.questionAck));
+    rows.push(row);
+  }
+
+  if (!rows.length) return null;
+  rows.forEach(r => card.appendChild(r));
+  const notNow = el('button', 'btn btn-ghost debrief-skip', 'Not now');
+  notNow.onclick = () => {
+    // Every slot stamped as put and left: nothing is written for an answer he
+    // did not give, and the warm-up question waits its 28 days on this lift.
+    if (plan.confirm && !s.confirmDone) markAsked('warm:' + plan.confirm.exId).catch(() => {});
+    s.feelSkipped = true; s.confirmDone = true; s.questionDone = true; s.debriefSkipped = true;
+    card.remove();
+  };
+  card.appendChild(notNow);
+  return card;
 }
 
 /* ================= POST-WORKOUT SUMMARY =================
@@ -2195,10 +2403,24 @@ function renderSummary() {
     (record.name || 'Workout') + '  ·  ' + fmtDateFull(todayKey(new Date(record.startedAt)))));
   wrap.appendChild(blk('recap', 'hero', hero));
 
-  /* ---- how did that feel? ----
-     Second, under the win: his own rating, while the session is fresh.
-     Settings → Coach → "After a workout: how it felt" takes it away. */
-  if (!summary.feelSkipped && !isMuted(coachSettings(), 'feel')) wrap.appendChild(blk('recap', 'feel', feelCard()));
+  /* ---- the check-in ----
+     Second, under the win: v72's three slots — the warm-up confirmation when
+     the ramp model saw one, his own rating while the session is fresh
+     (Settings → Coach → "After a workout: how it felt" takes it away), and one
+     question — from coach().debrief(record), worked out once when the recap
+     first draws and never again on a repaint (an answer removes its row, it
+     never re-asks). Nothing is written until he taps a chip. */
+  if (!summary.debriefSkipped) {
+    if (!summary.plan) {
+      const input = coachInput({});
+      summary.opens = (input && input.opens) || 0;
+      let plan = null;
+      try { plan = coach(input).debrief(record, { prs }); } catch { plan = null; }
+      summary.plan = plan || { confirm: null, feel: !isMuted(coachSettings(), 'feel'), question: null };
+    }
+    const card = debriefCard(summary.plan);
+    if (card) wrap.appendChild(blk('recap', 'feel', card));
+  }
 
   /* ---- PRs ---- */
   if (prs.length) {

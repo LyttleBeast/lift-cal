@@ -4039,7 +4039,7 @@ export function feelHarder(feel) {
 // assisted lift is read off them; his ramp loads come from the fact store
 // when there is one (finishSafe has none: the log could not be read).
 const workingSetsOf = (rec, d) => (rec && Array.isArray(rec.exercises) ? rec.exercises : [])
-  .reduce((a, ex) => a + (ex && Array.isArray(ex.sets) ? workSetsOf(ex.sets, { assisted: assistedOf(ex, d ? d.input.lib : null), known: d ? d.knownOf(ex) : [] }) : []).length, 0);
+  .reduce((a, ex) => a + (ex && Array.isArray(ex.sets) ? workSetsOf(ex.sets, { assisted: assistedOf(ex, d ? d.input.lib : null), known: d ? d.knownOf(ex) : [], warm: d ? d.warmOf(ex) : null }) : []).length, 0);
 
 /* What was trained, for "Good work.": his own routine's name when one covers
    exactly these groups (shapeRoutine, the builder's test), otherwise the

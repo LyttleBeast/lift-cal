@@ -635,6 +635,33 @@ reset();
     /removed 5 items/.test(r.message || ''), r.message);
 }
 
+/* ---------- 12. v72: the recap's retag — one whole session node, refused ---------- */
+
+reset();
+{
+  /* "Yes, tag them" rewrites the finished session whole (workout.js
+     rewriteRecord, the saveEdit path): workouts/{mk}/{dd}/{id}. Refused, the
+     write rejects — so the recap keeps the record it had and the chip row —
+     the server's copy stands, the mirror goes back, and the payload is
+     dead-lettered under the path, not lost. */
+  const P = 'workouts/2026-10/22/wretag1';
+  const stored = { id: 'wretag1', startedAt: 1, exercises: [{ exId: 'back-squat-low-bar', sets: [{ w: '45', r: '10', type: 'N' }, { w: '315', r: '5', type: 'N' }] }], volume: 2025 };
+  const tagged = { ...stored, exercises: [{ exId: 'back-squat-low-bar', sets: [{ w: '45', r: '10', type: 'W' }, { w: '315', r: '5', type: 'N' }] }], volume: 1575 };
+  server.set(U + P, stored);
+  setMirror(P, stored);
+  fail = 'refuse';
+  const r = await attempt(() => store.write(P, tagged));
+  check('the retag’s write rejects, so the recap cannot carry on as though it saved', r.threw);
+  check('the server still holds the untagged record', JSON.stringify(server.get(U + P)) === JSON.stringify(stored));
+  check('the mirror goes back to the untagged record', JSON.stringify(mirror(P)) === JSON.stringify(stored), JSON.stringify(mirror(P)));
+  check('nothing queued — a refusal is not a dropped connection', queue().length === 0);
+  check('the tagged record is dead-lettered under its path, retryable', dead().length === 1 && /wretag1$/.test(dead()[0].path) &&
+    JSON.stringify(dead()[0].value) === JSON.stringify(tagged), JSON.stringify(dead().map(x => x.path)));
+  fail = null;
+  check('once the rule allows it, the retry lands the tagged record', await store.retryRefused(dead()[0].key) === 'saved' &&
+    JSON.stringify(server.get(U + P)) === JSON.stringify(tagged) && dead().length === 0);
+}
+
 /* ---------- report ---------- */
 
 console.log('\nrefused writes — a save the database refused says so\n');
