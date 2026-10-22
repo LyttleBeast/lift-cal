@@ -32,7 +32,13 @@ const toDisp = (lb, u) => (u === 'kg' ? lb / LB_PER_KG : lb);
    harm, not tone). */
 export const BANNED = [
   /\bmax(ing)? out\b/i, /\btest your max\b/i, /\b(1\s*rm|one[- ]rep max)\b/i, /\bgo for a (single|max)\b/i,
-  /\bpush through\b/i, /\bno pain no gain\b/i, /\byou should\b/i, /\byou must\b/i, /\bbeat your\b/i
+  /\bpush through\b/i, /\bno pain no gain\b/i, /\byou should\b/i, /\byou must\b/i, /\bbeat your\b/i,
+  // v71: the first person. "Coach" is a label, never the subject of a sentence
+  // — the two third-person rows of coach-voice.mjs's VOICE_BANNED, so a string
+  // the literal extraction cannot see (one built from fragments) is caught here
+  // in the rendered sentence.
+  /\bCoach (is|isn[’']t|can|can[’']t|cannot|will|won[’']t|does|doesn[’']t|wants|reads|keeps|has|sets|leans|needs|goes|learns|stores|would|says|thinks|knows|calls|puts|holds|waits|won|asks|counts|treats|may|suggests|mentions|reports|lists|tracks|takes|builds|couldn[’']t|already|starts|looks|picked|itself|gives|steps|measures|wouldn[’']t|adds|sees|saw|was|were|did|had|should|could|must)\b/i,
+  /\bCoach[’']s\b/i, /\b(for|to|from|by|with|told|tell|ask|asked|asking) Coach\b/i, /\bCoach target/i
 ];
 export function textOffences(texts, u) {
   const out = [];

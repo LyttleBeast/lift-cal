@@ -194,6 +194,33 @@ const offence = s => {
   const hit = BANNED.find(re => re.test(s));
   return hit ? (s.match(hit) || [''])[0] : null;
 };
+/* THE VOICE BAN (v71). Every sentence Coach says is in the first person
+   singular (Micah, 21 Oct 2026: first person, lots of encouragement). "Coach"
+   survives as a LABEL — the eyebrow, the chip prefix, COACH ME, Ask Coach, a
+   Settings row title, the aria prefix — and never as the subject of a verb;
+   and never "we", "let's" or "our", which claim a shared self Coach has not
+   got. The rest of the list is 03-conversation-design.md §5.2's register ban:
+   the gym-bro words, the parental ones, the inflation, and "AI". Applied to
+   every prose literal in the twelve files below (section P), so a third-person
+   sentence cannot come back in a later ship; the exact-match labels are the
+   whole exemption list. coach-hype.mjs and scoring.mjs read this list from
+   here rather than keeping a copy. */
+const VOICE_BANNED = [
+  /\bCoach (is|isn[’']t|can|can[’']t|cannot|will|won[’']t|does|doesn[’']t|wants|reads|keeps|has|sets|leans|needs|goes|learns|stores|would|says|thinks|knows|calls|puts|holds|waits|won|asks|counts|treats|may|suggests|mentions|reports|lists|tracks|takes|builds|couldn[’']t|already|starts|looks|picked|itself|gives|steps|measures|wouldn[’']t|adds|sees|saw|was|were|did|had|should|could|must)\b/i,
+  /\bCoach[’']s\b/i, /\b(for|to|from|by|with|told|tell|ask|asked|asking) Coach\b/i, /\bCoach target/i,
+  /\bwe\b/i, /\blet[’']s\b/i, /\bour\b/i,
+  /\byou[’']re getting (stronger|fitter|leaner)\b/i,
+  /\b(crush|beast mode|grind|no excuses|no days off|push through|warrior)\b/i,
+  /\blisten to your body\b/i, /\b(proud of you|told you)\b/i, /\b(streak|keep it up)\b/i,
+  /\b(perfect|amazing|incredible|insane|unreal)\b/i, /\bAI\b/
+];
+const LABELS = new Set(['Coach', 'Coach · ', 'Coach: ', 'COACH', 'COACH ME', 'Ask Coach', 'Coach me', 'Coach settings',
+                        'Ask Coach something', 'Ask Coach what to do next']);
+const voiceOffence = s => {
+  if (LABELS.has(s)) return null;
+  const hit = VOICE_BANNED.find(re => re.test(s));
+  return hit ? (s.match(hit) || [''])[0] : null;
+};
 
 /* Comments come off before anything is read out of a source. Several comments
    in coach.js quote the banned sentence in order to explain why it is banned,
@@ -1560,6 +1587,39 @@ section('O. v54 — "How’s my weekly volume?" and "Is my training balanced?": 
         twoAnds('Over 8 weeks: 37 squat and lunge and 36 hinge and bridge sets.') && !twoAnds('Over 8 weeks: 37 squat and lunge sets, 36 hinge and bridge sets.'));
   const anded = said.filter(x => twoAnds(x.t));
   check('and not one readout joins its counts with two "and"s (' + said.length + ' strings)', !anded.length, list(anded.map(x => x.where + ': ' + x.t)));
+}
+
+/* ================= P. v71 — THE FIRST PERSON ================= */
+section('P. v71 — every sentence Coach says is in the first person; "Coach" is a label and never a subject');
+{
+  /* Every prose literal in the twelve files that carry Coach's words — the
+     engine, its readers, the builder, the card and sheet, the recap and the
+     Settings rows — read whole, comments off, through the same extraction as
+     everything above. Prose is a quoted run with a space and three letters in
+     it that is not a class name, an id or an import path; the labels are the
+     exact-match set and nothing else is exempt. On the source, so a branch no
+     fixture reaches is under it too; the rendered sweeps above pick up what
+     is assembled out of pieces, because scoring.mjs and coach-hype.mjs read
+     the same list. */
+  const FILES = ['coach.js', 'coach-prog.js', 'coach-live.js', 'coach-overlap.js', 'coach-ready.js', 'coach-fuel.js',
+                 'coach-volume.js', 'coach-build.js', 'coach-ui.js', 'coach-data.js', 'workout.js', 'settings.js'];
+  const isProse = s => /\s/.test(s) && /[a-z]{3}/i.test(s) && !/^(coach-|\.\/|\.coach|swipe-hint|wk-coach|settings\/)/.test(s);
+  const bad = [];
+  let seen = 0;
+  FILES.forEach(f => literals(decomment(src(f))).filter(isProse).forEach(s => {
+    seen++;
+    const w = voiceOffence(s);
+    if (w) bad.push(f + ' — “' + w + '” in: ' + s);
+  }));
+  check('the twelve files were read (' + seen + ' prose literals)', seen >= 600, String(seen));
+  check('and none says "Coach is/can/wants", "Coach’s", "we", "our", "AI" or a word from the register ban — ' + bad.length + ' offences',
+        !bad.length, list(bad));
+  check('the labels are exact matches only: a sentence that merely contains one is not exempt',
+        voiceOffence('Coach is here.') === 'Coach is' && voiceOffence('Coach') === null && voiceOffence('COACH ME') === null);
+  check('and the pools (coach.js BAD_DAY, PR_LINES, BACK_LINES, REST_LINES) are frozen data rows with an id, a gate and a text',
+        [C.BAD_DAY, C.PR_LINES, C.BACK_LINES, C.REST_LINES].every(p => Array.isArray(p) && Object.isFrozen(p) && p.length >= 40 &&
+          p.every(r => typeof r.id === 'string' && typeof r.gate === 'function' && typeof r.text === 'function')),
+        [C.BAD_DAY, C.PR_LINES, C.BACK_LINES, C.REST_LINES].map(p => (p || []).length).join('/'));
 }
 
 /* ---------- report ---------- */
