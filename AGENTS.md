@@ -1065,10 +1065,12 @@ children of the already-granted `settings/coach`, **so no rules change** —
   key `group+group`, ≤ 40 chars). `tally.<k>` — integers 0–999. Keys match
   `/^[a-z][A-Za-z0-9]{0,23}$/`. `coach-ask.js` `KNOW_KEYS` is the table of
   keys and their bounds: `back` ∈ elsewhere|off (TTL 14 d); `warm` ∈ yes|no
-  (180 d); `step` an integer 0.5–100000 — **pounds**, like every stored weight
-  (365 d); `hold` ∈ hold|light|day (42 d); `wantNext` ∈ same|push|ease (14 d).
-  **v72 writes `knowBy.warm` only**; the other keys are declared so the native
-  rules block is written once.
+  (180 d); `step` a number 0.5–100000 on the two-decimal grid — **pounds**,
+  like every stored weight, so a 2.5-lb step is `2.5` and a kilo account's 1 kg
+  is `2.2` (v72 said "integer"; v73 corrected it when it became the first
+  writer) (365 d); `hold` ∈ hold|light|day (42 d); `wantNext` ∈ same|push|ease
+  (14 d). **v72 writes `knowBy.warm` only; v73 adds `knowBy.step` and `tally`**;
+  the other keys are declared so the native rules block is written once.
 - `normKnow()` in `coach-ask.js` is the only reader of the shape, called by
   `normSettings()`: `v` must be one of the key's options or an integer in its
   range, `c` 1–3, `n` 1–9, `at` a finite positive number; junk is dropped,
@@ -1134,6 +1136,35 @@ Published rules: nothing. The block, verbatim (`COACH-V2-SPEC.md` §3.5,
               "$other": { ".validate": false } } } },
 "tally":  { "$k": { ".validate": "$k.matches(/^[a-z][A-Za-z0-9]{0,23}$/) && newData.isNumber() && newData.val() >= 0 && newData.val() <= 999" } }
 ```
+
+**v73 — in the gym: `knowBy.step`, `tally`, and one more stamp.** Still
+`v: 2`, still children of the already-granted `settings/coach`, **so no rules
+change** — `database.rules.json` is byte-identical to rack-v72. Three things
+are written for the first time:
+
+- `knowBy.step.<exId>` — his answer to *On Lat Pulldown, what's one step up?*
+  (`coach-ask.js` `q_equipment_step`, asked in the live sheet about the lift in
+  hand or under *What should I lift today?* about a lift on the plan; a
+  machine, cable or plate-loaded lift, or a dumbbell on a kilo account, with
+  three or more exposures and no step the log has seen twice). The value is
+  **pounds** on the two-decimal grid (the kilo chips' values come from
+  `units.js` `wIn`), written through `coach-data.js` `learnBy('step', exId,
+  lb)`; *Not sure* writes nothing but the stamp. **The log wins:** `coach-prog.js`
+  `stepOf()` reads it only where no jump has been seen twice, so a told step the
+  log later contradicts is inert without a write on paint, and the question's
+  gate reopens whenever the step in use is not the log's own.
+- `tally.extraOffered` / `tally.extraTaken` — how often the live sheet drew a
+  numbered "another set?" answer and how often its *Yes* chip was taken,
+  through `learnTally()`, from the sheet only, never on paint of the quiet
+  line. Read by nothing yet but the verifiers (the builder's set-count rule is a
+  later ship).
+- `asked.q_equipment_step:<exId>` — the question's per-lift stamp, 28 days,
+  kept by `normSettings()` and pruned at 56 days by `patchNow()` exactly like
+  `warm:<exId>`. If the native rules enumerate `asked`, the `$id` rule needs
+  `q_equipment_step:[A-Za-z0-9_-]{1,40}` as one more alternative.
+
+The native block above already takes all three (`v` is a number ≤ 100000 there,
+so a 2.5 passes).
 
 **v52's food reads — when, how many, and for whom.** *Am I fueled?*, *Should I
 rest or go lighter?* and *How did today compare?* read `food/log/{date}`
