@@ -1630,6 +1630,37 @@ section('P. v71 — every sentence Coach says is in the first person; "Coach" is
         [C.BAD_DAY, C.PR_LINES, C.BACK_LINES, C.REST_LINES].map(p => (p || []).length).join('/'));
 }
 
+section('Q. v76 — the questions (coach-ask.js): first person, under the ban, and ONE percentage');
+{
+  /* coach-ask.js carries every question's words, its chips and its acks. The
+     voice ban holds on all of it, and the one percentage Coach ever prints is
+     the drop question's — "{lift} came in {pct}% under last time. On
+     purpose?" — a share of his own two logged loads (coach-prog.js dropOf),
+     never a body or food number, and never the finish line (section M). No
+     other literal in the file has a "%", and that one is in q_drop_why's
+     own text. */
+  const Q = await import(pathToFileURL(join(dir, 'coach-ask.js')).href);
+  const ASK = decomment(src('coach-ask.js'));
+  const isProse = s => /\s/.test(s) && /[a-z]{3}/i.test(s);
+  const lits = literals(ASK).filter(isProse);
+  const bad = lits.map(s => ({ s, w: voiceOffence(s) })).filter(x => x.w);
+  check('coach-ask.js was read (' + lits.length + ' prose literals), and none breaks the voice ban',
+        lits.length >= 40 && !bad.length, list(bad.map(x => '“' + x.w + '” in: ' + x.s)));
+  const pct = lits.filter(s => /%/.test(s));
+  check('exactly one literal carries a "%": the drop question’s', pct.length === 1 && pct[0] === '% under last time. On purpose?', list(pct));
+  const q = Q.askQuestion('q_drop_why');
+  const said = q.text({}, 'lb', { drop: { exId: 'front-squat', name: 'Front Squat', pct: 15, w: '185' } });
+  check('and it reads "Front Squat came in 15% under last time. On purpose?"', said === 'Front Squat came in 15% under last time. On purpose?', said);
+  const opts = Q.dropOptions('lb', { drop: { exId: 'front-squat', name: 'Front Squat', pct: 15, w: '185' } });
+  check('its chips and acks carry no "%", nothing medical, and the hold names the load he agrees to',
+        opts.every(o => !/%/.test(o.label + ' ' + (o.ack || '')) && !/\b(injur|pain|hurt|sick|ill(ness)?)\b/i.test(o.label + ' ' + (o.ack || ''))) &&
+        opts.find(o => o.value === 'hold').ack === 'Noted. I’ll hold Front Squat at 185 lb until you take it higher yourself.',
+        list(opts.map(o => o.label + ' → ' + o.ack)));
+  check('the drop and the gap questions never mention injury, pain or illness',
+        !/\b(injur|pain|hurt|sick|ill(ness)?)\b/i.test([q.text({}, 'lb', { drop: { name: 'X', pct: 20 } }), Q.askQuestion('q_back_what').text]
+          .concat(...['q_drop_why', 'q_back_what'].map(id => Q.askQuestion(id).options.map(o => o.label + ' ' + (o.ack || '')))).join(' ')));
+}
+
 /* ---------- report ---------- */
 console.log('\nCoach describes the numbers, and never the person, on a card nobody asked\n');
 console.log(results.join('\n'));

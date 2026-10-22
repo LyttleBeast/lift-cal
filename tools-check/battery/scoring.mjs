@@ -20,6 +20,10 @@
 // would have given (an injury, a deload he chose). They carry `needsAnswer`
 // so the baseline can report them honestly as "wrong, but unanswerable
 // today" rather than hide them or blame v1 for not asking.
+// v76: T_INJURED and R_INJURED are judged now — the injured lifter answers
+// the drop question ("Building back up — hold it", knowBy.hold, generator.mjs)
+// and a heavier target or a record day on that group contradicts a stored
+// answer. No code carries needsAnswer any more, and run-all.sh fails on them.
 
 const LB_PER_KG = 2.2046226218;
 const TOL = 0.011;
@@ -67,7 +71,7 @@ export const CODES = Object.freeze({
   T_UNIT:      { v: 'wrong', s: 'a kilo account shown a weight that is not a half-kilo step' },
   T_MARK:      { v: 'wrong', s: 'the last session is marked a bad day and the target still counts it' },
   T_TEXT:      { v: 'wrong', s: 'a banned phrase, or lb on a kilo account, in the target’s words' },
-  T_INJURED:   { v: 'wrong', s: 'heavier on a group the lifter said is injured', needsAnswer: true },
+  T_INJURED:   { v: 'wrong', s: 'heavier on a group the lifter is building back on (he answered hold)' },
   T_CONTRADICT:{ v: 'wrong', s: 'a target that reads sets as warm-ups on a lift he said has none (knowBy.warm no) — a row marked ramp, or fewer rows than last time’s sets' },
   T_DEFER:     { v: 'miss',  s: 'no target where the last two sessions were straight sets of the same scheme, no layoff, no single' },
   T_NONUM:     { v: 'miss',  s: '“the next setting up” on a barbell or dumbbell lift with four or more sessions logged' },
@@ -102,7 +106,7 @@ export const CODES = Object.freeze({
   R_MAX:       { v: 'wrong', s: 'a record day under three reps' },
   R_UNREACH:   { v: 'wrong', s: 'a record day whose estimated max is 12%+ over the lifter’s true capacity (a best from before a layoff, read as current)' },
   R_F:         { v: 'wrong', s: 'a record day on a lift whose last session had a set to failure' },
-  R_INJURED:   { v: 'wrong', s: 'a record day on a group the lifter said is injured', needsAnswer: true },
+  R_INJURED:   { v: 'wrong', s: 'a record day on a group the lifter is building back on (he answered hold)' },
   // ---------- plateau or cut (coach-overlap.js readLift) ----------
   P_FALSE:     { v: 'wrong', s: 'a plateau or slide called over a window in which the bar went up two steps or more while his true capacity climbed' },
   P_REPS:      { v: 'miss',  s: 'a plateau called over a window in which reps at the top load went up three or more (under twelve) — a climb read as flat' },

@@ -395,8 +395,11 @@ writeFileSync(join(dir, 'coach-ask.js'), src('coach-ask.js').replace("from './un
      way the targets answer carries the aim. Those two, and no other route. */
   /* And v52 (SHIP-V52-PROMPT §10): "Am I fueled?" carries q_log_timing under
      its answer the same way. Those three, and no other route. */
-  check('no route but ask_targets, ask_goal and (v52) ask_fueled carries a question',
-        C.ROUTE_IDS.filter(r => !['ask_targets', 'ask_goal', 'ask_fueled'].includes(r)).every(r => !('question' in none.ask(r))));
+  /* And v76 (SHIP-V74-PROMPT §2, q_back_what): the first answers back after
+     a gap — ask_shape and ask_lighter — carry the question about where he
+     was. Those five, and no other route. */
+  check('no route but ask_targets, ask_goal, (v52) ask_fueled and (v76) ask_shape and ask_lighter carries a question',
+        C.ROUTE_IDS.filter(r => !['ask_targets', 'ask_goal', 'ask_fueled', 'ask_shape', 'ask_lighter'].includes(r)).every(r => !('question' in none.ask(r))));
   const focusQ = C.coach(input(settings({ q_goal_aim: 'muscle', q_experience: 'some' }))).ask('ask_goal').question;
   check('and the goal answer carries the focus question, once the aim is set and the focus is not',
         !!focusQ && focusQ.id === 'q_focus_group' && focusQ.options.length === 7 &&

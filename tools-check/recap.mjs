@@ -246,12 +246,33 @@ section('B. not one "%" on the page, in either unit — outside his own rating')
     ['a first session', [], CHEST(0)]
   ];
   const bad = [];
+  /* v76: with ONE exception, held to its exact shape: the drop question
+     (coach-ask.js q_drop_why), "{lift} came in {pct}% under last time. On
+     purpose?" — a share of his own two logged loads, asked so the next
+     target can hold. Never a body or food number, never the finish line. */
+  const DROP_ASK = /^[A-Z][A-Za-z0-9 ()'’-]+ came in \d{2} ?% under last time\. On purpose\?$/;
+  const drops = [];
   scenes.forEach(([n, prior, today]) => ['lb', 'kg'].forEach(u => {
     const { page } = draw(prior, today, u);
-    outsideFeel(page).filter(t => /%/.test(t)).forEach(t => bad.push(n + ' [' + u + ']: ' + t));
+    outsideFeel(page).filter(t => /%/.test(t)).forEach(t => (DROP_ASK.test(t) ? drops.push(t) : bad.push(n + ' [' + u + ']: ' + t)));
     if (/Against your last 4 weeks/.test(texts(page).join(' '))) bad.push(n + ': the old card');
   }));
   check('five recaps, both units: no percentage, and the old "Against your last 4 weeks" card is gone', !bad.length, list(bad));
+  // The day-down scene's bench, 135 against his 185: 27%, in both units — a share of his two loads.
+  check('the one exception is the drop question, on the day-down scene, in both units, its share of his own two loads',
+        drops.length === 2 && drops.every(t => t === 'Barbell Bench Press came in 27% under last time. On purpose?'), list(drops));
+  // v76: and its chips write the fact about that one lift, with the hold's own ack.
+  state.learned.length = 0; state.asked.length = 0;
+  const dropPage = draw(scenes[1][1], scenes[1][2], 'lb').page;
+  const row = find(dropPage, 'debrief-question')[0];
+  const hold = row ? walk(row).find(x => x.tag === 'button' && x.textContent === 'Building back up — hold it') : null;
+  if (hold) hold.onclick();
+  await new Promise(r => setTimeout(r, 0));
+  check('"Building back up — hold it" writes knowBy.hold.barbell-bench-press = hold through learnBy, stamps the lift, and says the load it holds at',
+        !!hold && JSON.stringify(state.learned) === JSON.stringify([['hold', 'barbell-bench-press', 'hold']]) &&
+        state.asked.includes('q_drop_why:barbell-bench-press') &&
+        texts(row).includes('Noted. I’ll hold Barbell Bench Press at 135 lb until you take it higher yourself.'),
+        JSON.stringify([state.learned, state.asked, row && texts(row)]));
   const down = draw(scenes[1][1], scenes[1][2]);
   const hero = find(down.page, 'summary-hero')[0];
   check('a smaller day than usual still leads warm, with nothing that stings in the headline or its line',

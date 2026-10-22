@@ -177,6 +177,8 @@ const IMPL = {
   liveSessionOnDevice: () => false,
   coachPro:           () => state.pro,
   rememberGreeting:   id => { state.calls.push(['rememberGreeting', id]); },
+  // v76: a starter bubble tapped, on the device
+  rememberTap:        id => { state.calls.push(['rememberTap', id]); },
   // v49: the card's earned line, the aim, and the lift target.
   rememberHype:       id => { state.calls.push(['rememberHype', id]); },
   setAim:             v => { state.calls.push(['setAim', v]); return Promise.resolve(true); },
@@ -377,6 +379,23 @@ const TOPIC_LIST = C.ALL_TOPICS.concat([{ id: 'ask_shape', label: 'What should I
 const TOPIC_LABELS = TOPIC_LIST.map(t => t.label);
 const TOPIC_ID = Object.fromEntries(TOPIC_LIST.map(t => [t.label, t.id]));
 const topicChipsIn = sh => chipsIn(sh).map(b => b.textContent).filter(l => TOPIC_LABELS.includes(l));
+/* v76: the engine scores the starter bubbles and marks the ones behind
+   "More" (`more`); a question bubble (`q:`) is drawn as a chip but is not a
+   topic. What shows first is the engine's unmarked route bubbles. */
+const firstShown = list => list.filter(t => !t.more && !String(t.id).startsWith('q:'));
+const routeTopics = list => list.filter(t => !String(t.id).startsWith('q:'));
+/* v76: on Pro the opener's question is a starter bubble, labelled by its
+   `short`, and drawn when tapped. Taps it (behind "More" if it is there);
+   true when one was found. */
+const Q = await import(pathToFileURL(join(dir, 'coach-ask.js')).href);
+const SHORTS = new Set(Q.ASK_QUESTIONS.map(q => q.short).filter(Boolean));
+function openQuestionBubble(sh) {
+  let b = chipsIn(sh).find(x => SHORTS.has(x.textContent));
+  if (!b) { const m = chipsIn(sh).find(x => x.textContent === 'More'); if (m) m.onclick(); b = chipsIn(sh).find(x => SHORTS.has(x.textContent)); }
+  if (!b) return false;
+  b.onclick();
+  return true;
+}
 const engine = input => C.coach({ ...input, tier: { pro: state.pro } });
 
 check('the coach-data stub answers everything coach-ui.js imports',
@@ -452,9 +471,9 @@ section('A. the lock in the corner now means something behind it');
   /* v49 (updated deliberately): four topics show and the rest wait under
      "More", so what is drawn is the first four of the engine's list. */
   const proAll = engine(QUESTIONING).topicsFor('you');
-  check('a Pro account on the same log DOES get the topics — the first ' + C.TOPICS_SHOWN + ', and "More" when there are others',
-        proTopics.join(',') === proAll.slice(0, C.TOPICS_SHOWN).map(t => t.label).join(',') && proTopics.length > 0 &&
-        chipsIn(proSheet).some(b => b.textContent === 'More') === (proAll.length > C.TOPICS_SHOWN),
+  check('a Pro account on the same log DOES get the topics — the engine’s first (v76: scored), and "More" when there are others',
+        proTopics.join(',') === firstShown(proAll).map(t => t.label).join(',') && proTopics.length > 0 &&
+        chipsIn(proSheet).some(b => b.textContent === 'More') === proAll.some(t => t.more),
         list(proTopics));
   check('and gets no Pro panel — nobody is sold what they already have',
         !find(proSheet, 'coach-bub').some(b => b.classList.contains('pro')));
@@ -467,7 +486,7 @@ section('A. the lock in the corner now means something behind it');
   try { bare = openBare(UI, undefined); } catch (e) { threw = String((e && e.message) || e); }
   check('openCoachSheet() with no opts at all does not throw', !threw, threw || '');
   check('and the Settings door opens on the general You set',
-        !!bare && topicChipsIn(bare).join(',') === engine(QUESTIONING).topicsFor('you').slice(0, C.TOPICS_SHOWN).map(t => t.label).join(','),
+        !!bare && topicChipsIn(bare).join(',') === firstShown(engine(QUESTIONING).topicsFor('you')).map(t => t.label).join(','),
         bare ? list(topicChipsIn(bare)) : 'no sheet');
 }
 
@@ -477,17 +496,18 @@ section('B. the sheet takes its questions from the card that opened it');
   state.input = BASE;
   state.pro = true;
   const c = engine(BASE);
-  const youSet   = c.topicsFor('you').map(t => t.label);
-  const trainSet = c.topicsFor('train').map(t => t.label);
+  const youSet   = firstShown(c.topicsFor('you')).map(t => t.label);
+  const trainSet = firstShown(c.topicsFor('train')).map(t => t.label);
 
   const youSheet   = open(UI, { go() {} }).sh;
   const trainSheet = open(UI, { tight: true, live: false }).sh;
 
-  // v49: the first four of each, with the rest under "More".
+  // v49: the first four of each, with the rest under "More". v76: the
+  // engine's first, scored from the day.
   check('the You card’s sheet offers the general set',
-        topicChipsIn(youSheet).join(',') === youSet.slice(0, C.TOPICS_SHOWN).join(','), list(topicChipsIn(youSheet)));
+        topicChipsIn(youSheet).join(',') === youSet.join(','), list(topicChipsIn(youSheet)));
   check('the Train card’s sheet offers the training set',
-        topicChipsIn(trainSheet).join(',') === trainSet.slice(0, C.TOPICS_SHOWN).join(','), list(topicChipsIn(trainSheet)));
+        topicChipsIn(trainSheet).join(',') === trainSet.join(','), list(topicChipsIn(trainSheet)));
   /* The two checks that catch a scoping function ignoring its argument. Both of
      the ones above pass on an engine that hands one set to everybody, because
      both sides of those comparisons come from the same call. These do not: this
@@ -1294,7 +1314,13 @@ section('I. v46 from the phone: the question first, "Build it" straight through,
   const trainOpts = { tight: true, live: false, start() {}, save() {} };
   const MAKE = C.TRAIN_TOPICS.find(t => t.id === 'ask_build').label;
   const SHAPE_Q = C.TRAIN_TOPICS.find(t => t.id === 'ask_shape').label;
-  const tap = (sh, label) => { const b = buttonsIn(sh).find(x => x.textContent === label); if (b) b.onclick(); return !!b; };
+  // v76: a bubble the day scored behind "More" is tapped the way he would — More first.
+  const tap = (sh, label) => {
+    let b = buttonsIn(sh).find(x => x.textContent === label);
+    if (!b) { const m = buttonsIn(sh).find(x => x.textContent === 'More'); if (m) { m.onclick(); b = buttonsIn(sh).find(x => x.textContent === label); } }
+    if (b) b.onclick();
+    return !!b;
+  };
   const boxes = sh => find(sh, 'coach-build').filter(b => b.parent);
   const box0 = sh => boxes(sh)[0] || mkEl('div');
   const namesIn = box => find(box, 'day-ex-name').map(n => n.textContent);
@@ -1385,7 +1411,13 @@ section('J. an answer that repeats the opening is not printed twice; "Something 
   const picks = [];
   const trainOpts = { tight: true, live: false, start() {}, save() {},
     pick: (spec, done) => picks.push({ spec, done }) };
-  const tap = (sh, label) => { const b = buttonsIn(sh).find(x => x.textContent === label); if (b) b.onclick(); return !!b; };
+  // v76: a bubble the day scored behind "More" is tapped the way he would — More first.
+  const tap = (sh, label) => {
+    let b = buttonsIn(sh).find(x => x.textContent === label);
+    if (!b) { const m = buttonsIn(sh).find(x => x.textContent === 'More'); if (m) { m.onclick(); b = buttonsIn(sh).find(x => x.textContent === label); } }
+    if (b) b.onclick();
+    return !!b;
+  };
   const boxes = sh => find(sh, 'coach-build').filter(b => b.parent);
   const box0 = sh => boxes(sh)[0] || mkEl('div');
   const namesIn = box => find(box, 'day-ex-name').map(n => n.textContent);
@@ -1556,7 +1588,13 @@ section('L. v48 — the target line, the goal question under its answer, and You
     curl: { name: 'Curl', group: 'arms', equipment: 'dumbbell' }
   };
   const BUILD = { ...BASE, lib: NAMED, libReady: true, hidden: [] };
-  const tap = (sh, label) => { const b = buttonsIn(sh).find(x => x.textContent === label); if (b) b.onclick(); return !!b; };
+  // v76: a bubble the day scored behind "More" is tapped the way he would — More first.
+  const tap = (sh, label) => {
+    let b = buttonsIn(sh).find(x => x.textContent === label);
+    if (!b) { const m = buttonsIn(sh).find(x => x.textContent === 'More'); if (m) { m.onclick(); b = buttonsIn(sh).find(x => x.textContent === label); } }
+    if (b) b.onclick();
+    return !!b;
+  };
   const trainOpts = { tight: true, live: false, start() {}, save() {} };
   const LIFT = C.TRAIN_TOPICS.find(t => t.id === 'ask_targets');
   state.input = BUILD; state.pro = true; state.logKnown = true; state.ready = true; state.calls.length = 0;
@@ -1584,7 +1622,10 @@ section('L. v48 — the target line, the goal question under its answer, and You
 
   // The Train bubble, and the question under its answer.
   sh = open(UI, trainOpts).sh;
-  check('"What should I lift today?" is on the Train sheet, third', chipsIn(sh).map(b => b.textContent)[2] === LIFT.label,
+  // v76: where the day's score puts it — among the first, or behind "More".
+  const liftAt = engine(state.input).topicsFor('train').find(t => t.id === 'ask_targets');
+  check('"What should I lift today?" is on the Train sheet (v76: where the day’s score puts it)',
+        !!liftAt && (chipsIn(sh).some(b => b.textContent === LIFT.label) === !liftAt.more),
         list(chipsIn(sh).map(b => b.textContent)));
   state.calls.length = 0;
   tap(sh, LIFT.label);
@@ -1613,6 +1654,8 @@ section('L. v48 — the target line, the goal question under its answer, and You
   // The opening question keeps its own words.
   state.input = QUESTIONING; state.calls.length = 0;
   sh = open(UI, {}).sh;
+  // v76: on Pro it is a starter bubble first, drawn when tapped.
+  openQuestionBubble(sh);
   const opener = find(sh, 'coach-bub').find(b => b.classList.contains('ask'));
   if (opener) tap(opener, chipsIn(opener)[0].textContent);
   check('the weight question still answers with the shipped line',
@@ -1697,7 +1740,13 @@ section('M. v49 — the card encourages and the sheet opens on the finding; "Mor
     squat: { name: 'Squat', group: 'legs', equipment: 'barbell' }, press: { name: 'Press', group: 'shoulders', equipment: 'barbell' },
     curl: { name: 'Curl', group: 'arms', equipment: 'dumbbell' }
   };
-  const tap = (sh, label) => { const b = buttonsIn(sh).find(x => x.textContent === label); if (b) b.onclick(); return !!b; };
+  // v76: a bubble the day scored behind "More" is tapped the way he would — More first.
+  const tap = (sh, label) => {
+    let b = buttonsIn(sh).find(x => x.textContent === label);
+    if (!b) { const m = buttonsIn(sh).find(x => x.textContent === 'More'); if (m) { m.onclick(); b = buttonsIn(sh).find(x => x.textContent === label); } }
+    if (b) b.onclick();
+    return !!b;
+  };
   const bubT = sh => find(sh, 'coach-bub').filter(b => b.classList.contains('coach')).map(b => (find(b, 'coach-bub-t')[0] || {}).textContent);
   /* A heavy bench today, an hour ago, on top of the full log: a new best (an
      earned line on the card) and a session that has just ended (the sheet's
@@ -1756,9 +1805,11 @@ section('M. v49 — the card encourages and the sheet opens on the finding; "Mor
   const more = chipsIn(ysh).find(b => b.textContent === 'More');
   if (more) more.onclick();
   const after = topicChipsIn(ysh);
-  check('four topics show and "More" holds the rest, revealed in place — nothing moves above it',
-        all.length > C.TOPICS_SHOWN && before.length === C.TOPICS_SHOWN && !!more &&
-        after.join(',') === all.map(t => t.label).join(',') && !chipsIn(ysh).some(b => b.textContent === 'More'),
+  // v76: the engine's first show (three, or four at 60% of the top), and
+  // "More" holds the rest in score order.
+  check('the engine’s first topics show and "More" holds the rest, revealed in place — nothing moves above it',
+        all.some(t => t.more) && before.join(',') === firstShown(all).map(t => t.label).join(',') && !!more &&
+        after.join(',') === routeTopics(all).map(t => t.label).join(',') && !chipsIn(ysh).some(b => b.textContent === 'More'),
         list(before) + ' → ' + list(after));
 
   // How am I tracking toward my goal? — and the focus question under it.
@@ -1865,8 +1916,11 @@ section('M. v49 — the card encourages and the sheet opens on the finding; "Mor
     settings: { v: 1, mute: {}, answers: { q_goal_aim: 'muscle' }, asked: { q_goal_aim: NOW - 20 * DAY } } };
   state.input = CHECK; state.calls.length = 0;
   const qsh = openBare(U2);
+  // v76: offered as the starter bubble "Did your goal change?", drawn when tapped.
+  const offeredQ = chipsIn(qsh).some(b => b.textContent === 'Did your goal change?') && openQuestionBubble(qsh);
   const opener = find(qsh, 'coach-bub').find(b => b.classList.contains('ask'));
-  check('a Pro account building muscle whose weight has fallen three weeks running is asked, once, with his numbers',
+  check('a Pro account building muscle whose weight has fallen three weeks running is offered the question as a bubble, and asked, once, with his numbers',
+        offeredQ &&
         !!opener && /^You set Build muscle, and your weight has come down about [\d.]+ lb over the last 3 weeks\. Did the goal change\?$/.test(textOf(opener).split('I ask at most')[0].trim()),
         opener ? textOf(opener) : 'no question');
   if (opener) tap(opener, 'Yes, update my goal');
@@ -1914,7 +1968,13 @@ section('N. v52 — the caution before a proposal, the mark’s chips, and "Shou
   const inp = x => ({ ...BASE, lib: RL, libReady: true, hidden: [], weighIns: [], ...x });
   const BIG = inp({ sessions: every(5, [3, 4], 82).map(a => S(a, LO)).concat([S(1, LO_BIG)], every(4, [3, 4], 81).map(a => S(a, UP)))
     .sort((a, b) => a.startedAt - b.startedAt) });
-  const tap = (sh, label) => { const b = buttonsIn(sh).find(x => x.textContent === label); if (b) b.onclick(); return !!b; };
+  // v76: a bubble the day scored behind "More" is tapped the way he would — More first.
+  const tap = (sh, label) => {
+    let b = buttonsIn(sh).find(x => x.textContent === label);
+    if (!b) { const m = buttonsIn(sh).find(x => x.textContent === 'More'); if (m) { m.onclick(); b = buttonsIn(sh).find(x => x.textContent === label); } }
+    if (b) b.onclick();
+    return !!b;
+  };
   const bubT = sh => find(sh, 'coach-bub').filter(b => b.classList.contains('coach')).map(b => (find(b, 'coach-bub-t')[0] || {}).textContent);
   const trainOpts = { tight: true, live: false, start(p) { state.calls.push(['start', p]); }, save() {} };
   state.input = BIG; state.pro = true; state.logKnown = true; state.ready = true; state.calls.length = 0;

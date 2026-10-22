@@ -417,9 +417,11 @@ section('G. the lead question only offers topics that have data behind them');
   /* v49: the You sheet's topics are the pre-workout table now — the general
      three, then the goal and the lifts — but the card's lead question is
      still drawn from the general three alone (updated deliberately). */
+  // v76: the bubbles are scored from the day (coach-bubbles.mjs), so the
+  // three general topics lead You as a set, in the hour's order.
   check('a full account is offered one of the three general topics as its lead',
         full.lead && C.TOPICS.some(t => t.id === full.lead.id) &&
-        you(full).slice(0, 3).map(t => t.id).join(',') === C.TOPICS.map(t => t.id).join(','),
+        you(full).filter(t => !t.id.startsWith('q:')).slice(0, 3).map(t => t.id).sort().join(',') === C.TOPICS.map(t => t.id).sort().join(','),
         full.lead && full.lead.id);
   check('and never the one the card is already showing',
         !full.lead || !(full.you.state === 'finding' && full.lead.category === full.you.category),
@@ -458,9 +460,10 @@ section('G2. the topic set belongs to the surface that opened the sheet');
   /* Updated deliberately in v49 (SHIP-V49-PROMPT §6): before a workout the
      You sheet offers the general three, then "How am I tracking toward my
      goal?" and "How are my lifts moving?" — each only when it answers. */
-  check('You gets the general three first, then the goal and the lifts (v49’s pre table)',
-        youSet.join(',') === ['topic_train', 'topic_fuel', 'topic_weight'].concat(
-          ['ask_goal', 'ask_lifts'].filter(id => full.ask(id).id !== id)).join(','),
+  // v76: the set is v49's table; the order is the day's (coach-bubbles.mjs).
+  check('You gets the general three, the goal and the lifts (v49’s pre table; v76: in the day’s order)',
+        youSet.filter(id => !id.startsWith('q:')).slice().sort().join(',') === ['topic_train', 'topic_fuel', 'topic_weight'].concat(
+          ['ask_goal', 'ask_lifts'].filter(id => full.ask(id).id !== id)).sort().join(','),
         list(youSet));
   /* v54, on purpose (SHIP-V54-PROMPT §7): the whole week's two answers —
      "How's my weekly volume?" and "Is my training balanced?" — follow

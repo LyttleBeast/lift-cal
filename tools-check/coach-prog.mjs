@@ -1314,6 +1314,65 @@ if (MAIN) {
     check('    swept over 600 histories with a step down today and 20 reps after it: never `up`, never heavier than the set just done (' + downs + ' read)', downs > 100 && !upAfterDown.length, list(upAfterDown));
   }
 
+  /* ================= v76: the drop he explained, and the gap ================= */
+  section('M. v76 — "came in 15% under": hold, lighter week, just that day; and "training elsewhere"');
+  {
+    const bench = metaOf('barbell-bench-press');
+    const c0 = { now: NOW, u: 'lb', aim: 'muscle', exp: 'some', energy: null, rateWk: null };
+    const exOf = (entries, extra) => ({ ...bench, exposures: P.exposuresFor(logOf(bench, entries), bench.exId), groupDaysSince: null, ...(extra || null) });
+    const T = (entries, extra, c) => P.prescribe(exOf(entries, extra), c || c0);
+    // 185 × 8 three times, then 155 × 8 three days ago: 16% under.
+    const BEFORE = [[15, xN(3, 185, 8)], [11, xN(3, 185, 8)], [7, xN(3, 185, 8)]];
+    const DROP = BEFORE.concat([[3, xN(3, 155, 8)]]);
+    const dropAt = NOW - 3 * DAY, answer = dropAt + 2 * 3600e3;
+    const d0 = P.dropOf(exOf(DROP), c0);
+    check('dropOf: 185 → 155 inside the gap is a drop of 16%, the lower top 155 — the two loads he logged',
+          !!d0 && d0.pct === 16 && d0.w === '155' && d0.prevW === '185' && d0.at === dropAt, JSON.stringify(d0));
+    check('    and not a drop: 14% under, a rise, a 12-day gap between the two (time away has its own question), a heavy single',
+          !P.dropOf(exOf(BEFORE.concat([[3, xN(3, 160, 8)]])), c0) && !P.dropOf(exOf(BEFORE.concat([[3, xN(3, 215, 8)]])), c0) &&
+          !P.dropOf(exOf([[30, xN(3, 185, 8)], [18, xN(3, 185, 8)], [3, xN(3, 155, 8)]]), c0) &&
+          !P.dropOf(exOf(BEFORE.concat([[3, [set(155, 1)]]])), c0));
+    const plain = T(DROP);
+    check('with nothing said, the shipped shape defer stands', !!plain && plain.mode === 'defer' && plain.code === 'shape', JSON.stringify(plain && [plain.mode, plain.code]));
+    // HOLD.
+    const held = T(DROP, { holdAt: answer });
+    check('"Building back up — hold it": 155 × 8 again, "Holding Barbell Bench Press at 155 lb while you build back, as you asked." and how long it stands',
+          !!held && held.mode === 'hold' && held.code === 'held' && held.loadLb === 155 &&
+          held.why[0] === 'Holding Barbell Bench Press at 155 lb while you build back, as you asked.' &&
+          held.why[1] === 'That stands for six weeks from when you told me, or until you go heavier yourself.', JSON.stringify(held && [held.line, held.why]));
+    const TOP = DROP.concat([[1, xN(3, 155, 12)]]);
+    const capped = T(TOP, { holdAt: answer }), free = T(TOP);
+    check('    he reaches the top at 155 (3 × 12): held, never a step up — where without the answer the step is there',
+          !!capped && capped.code === 'held' && capped.loadLb === 155 && !!free && (free.mode === 'add' || free.code === 'confirm'),
+          JSON.stringify([capped && [capped.mode, capped.code, capped.loadLb], free && [free.mode, free.code, free.loadLb]]));
+    const heavier = T(DROP.concat([[1, xN(3, 160, 12)]]), { holdAt: answer });
+    check('    he logs heavier himself (160): the hold is done, the shipped rules read from his new load', !!heavier && heavier.code !== 'held',
+          JSON.stringify(heavier && [heavier.mode, heavier.code, heavier.loadLb]));
+    check('    a replay of the log before the drop never reads the answer (the session it holds at must be the drop)',
+          (() => { const t = T(BEFORE, { holdAt: answer }); return !!t && t.code !== 'held'; })());
+    const live = (w, r) => ({ w: String(w), r: String(r), type: 'N', done: true });
+    const nHeld = P.nextSet(exOf(TOP, { holdAt: answer }), { ...c0, repDrop: 0.25 }, [live(155, 14)]);
+    check('    mid-session, 155 × 14 under the held 155: the same weight — "You said you’re building back on this one, so I’d stay here."',
+          !!nHeld && nHeld.kind === 'same' && nHeld.tw === '155' && nHeld.why.includes('You said you’re building back on this one, so I’d stay here.'), JSON.stringify(nHeld));
+    // LIGHTER WEEK.
+    const lightNow = T(DROP, { lightAt: answer });
+    check('"Lighter week", while the lighter session is still the newest: the defer is the once the recap asked', !!lightNow && lightNow.code === 'shape');
+    const BACK = DROP.concat([[1, xN(3, 185, 8)]]);
+    const lightNext = T(BACK, { lightAt: answer }), noLight = T(BACK);
+    check('    the next session back at 185: the shape defer is gone — `prev` is the session before the lighter week — where without it the jump back defers',
+          !!lightNext && lightNext.mode !== 'defer' && !!noLight && noLight.mode === 'defer' && noLight.code === 'shape',
+          JSON.stringify([lightNext && [lightNext.mode, lightNext.code, lightNext.line], noLight && noLight.code]));
+    check('    and no pair across it teaches a step: the step is not the 30 lb back up', !!lightNext && (!lightNext.step || lightNext.step.value !== 30),
+          JSON.stringify(lightNext && lightNext.step));
+    // ELSEWHERE.
+    const AWAY = [[52, xN(3, 185, 8)], [48, xN(3, 185, 8)], [44, xN(3, 185, 8)], [40, xN(3, 185, 8)]];
+    const off = T(AWAY, { groupDaysSince: 40 }), away = T(AWAY, { groupDaysSince: 40, back: 'elsewhere' });
+    check('"Training elsewhere" at a 40-day gap: re-entry at 90% (165, four 5-lb steps under 185), said so — where time off is the far step, past six of his steps: no number',
+          !!away && away.mode === 'reenter' && away.loadLb === 165 &&
+          away.why.some(w => w.includes('You said you kept training, so a small step back rather than a big one.')) &&
+          !!off && off.mode === 'reenter' && off.loadLb == null, JSON.stringify([away && [away.line, away.why], off && off.line]));
+  }
+
   console.log('\nCoach names a weight only when it is one he can load\n');
   console.log(results.join('\n'));
   console.log('\n' + pass + ' passed, ' + fail + ' failed\n');

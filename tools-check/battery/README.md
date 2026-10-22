@@ -91,6 +91,16 @@ taken out of its sessions and truth rows (`truth.exercises[id].warmNo`). A
 target that still reads a ramp into such a lift (a row marked `ramp`, or
 fewer rows than last time's sets) is `T_CONTRADICT`, a wrong.
 
+**The drop he explained (rack-v76).** An `injured_lighter` lifter's group
+drops hard at the injury; the generator (a third fork at the very end) gives
+him `settings.knowBy.hold.<exId> = 'hold'` for each loaded lift of that group,
+its `at` a few minutes after the drop session ended — he answered the recap's
+"… came in N% under last time. On purpose?" with *Building back up — hold
+it*. The harness hands the fact to the engine only from its `at` on
+(`settingsAt`). A target heavier than his last top while the group is still
+injured (`T_INJURED`) or a record day on it (`R_INJURED`) now contradicts a
+stored answer: both are plain wrongs, no longer `needsAnswer`.
+
 **`scoreRamp` — not yet.** When a later ship proposes a ramp (the recap's
 "Were 45, 135 and 225 your warm-ups?", rack-v72, and whatever draws his ramp
 rows), the thing to score is the proposal itself: every load it names must be
@@ -107,7 +117,7 @@ is `scoring.mjs`, beside `scoreNextSet`.
 | `regress.mjs` | every case passes by the ship that fixes its code |
 | harness **wrong**, cause `engine` | **0** — from rack-v69 on (`--gate engine`) |
 | harness **wrong**, cause `untagged-warmup` | reported in v69; **0** from v70 on (`--gate all`, the default since v70). rack-v70 shipped at 0: where the live next set cannot tell a warm-up from a working set (a set under a target that came down; a deload's first sets) it says nothing, and the cost is `N_NULL` misses (320 of 38,280 at v70), inside the nextSet + live bar; see SHIP-V70-SUMMARY.md |
-| harness **wrong**, `needsAnswer` | 0 once the question exists (v74); reported until then |
+| harness **wrong**, `needsAnswer` | **0** — from rack-v76 on no code carries the flag: `T_INJURED` and `R_INJURED` are judged against the stored answer (below), and `--gate all` fails on them |
 | harness **miss**, target surface | ≤ 10% of target decisions, and `T_DEFER` on `intermediate_double` ≤ 3% — from v70 on |
 | harness **miss**, nextSet + live | ≤ 1% |
 | `P_MISS` on the `plateau` archetype | ≤ 20% of its plateau reads (reported) |

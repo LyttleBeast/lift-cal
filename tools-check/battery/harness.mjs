@@ -11,8 +11,10 @@
 // --repo defaults to the repo this file sits in (tools-check/battery/../..).
 // --gate says which wrongs fail the run: `engine` (rack-v69's gate) exits 1 on
 // any wrong whose cause is `engine`; `all` (run-all.sh's default since rack-v70)
-// exits 1 on any wrong whose codes are not all `needsAnswer`. Both counts are
-// printed either way; this script's own default stays `engine`.
+// exits 1 on any wrong whose codes are not all `needsAnswer` — and since v76,
+// when T_INJURED and R_INJURED lost that flag (scoring.mjs), on any wrong at
+// all. Both counts are printed either way; this script's own default stays
+// `engine`.
 //
 // For each lifter, for each cut-off (a session index), the log before the
 // cut-off is what Coach sees and the session AT the cut-off is the truth
@@ -72,7 +74,15 @@ function settingsAt(L, now) {
   const marks = {};
   const ids = new Set(L.sessions.filter(x => x.startedAt <= now).map(x => x.id));
   Object.keys(s.marks || {}).forEach(id => { if (ids.has(id)) marks[id] = s.marks[id]; });
-  return { ...s, marks };
+  /* v76: an answer he gave on a recap (knowBy.hold, the drop question) is in
+     the settings from its `at` on, never before — a cut-off before the drop
+     has not been asked anything. */
+  const hold = s.knowBy && s.knowBy.hold ? s.knowBy.hold : null;
+  if (!hold) return { ...s, marks };
+  const kept = Object.fromEntries(Object.entries(hold).filter(([, f]) => f && f.at <= now));
+  const knowBy = { ...s.knowBy };
+  if (Object.keys(kept).length) knowBy.hold = kept; else delete knowBy.hold;
+  return { ...s, marks, knowBy };
 }
 
 /* ================================================================
@@ -501,7 +511,8 @@ if (MAIN) {
   console.log('\nreport → ' + opts.out);
   // The gate. `engine`: any wrong a shipped rule caused fails the run; the
   // untagged-warmup wrongs are reported and wait for the ramp model (v70).
-  // `all`: any wrong whose codes are not all needsAnswer fails it.
+  // `all`: any wrong whose codes are not all needsAnswer fails it (v76: no
+  // code carries needsAnswer, so every wrong fails it — needs-answer included).
   const hardWrong = acc.wrongs.filter(r => !r.codes.every(c => CODES[c].needsAnswer));
   const gateWrong = opts.gate === 'engine' ? acc.wrongs.filter(r => r.cause === 'engine') : hardWrong;
   // v74: and under `all`, no dead end in the live sheet — the answer to "I

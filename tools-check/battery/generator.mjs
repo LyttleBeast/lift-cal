@@ -638,6 +638,29 @@ export function makeLifter(seed, archetypeId, opts = {}) {
     if (Object.keys(stepBy).length) { settings.v = 2; settings.knowBy = { ...(settings.knowBy || {}), step: stepBy }; }
   }
 
+  /* ---------- v76: what an injured lifter told Coach about his drop ----------
+     A third fork, after the other two, so every seed above keeps its lifter.
+     An injured_lighter lifter's group drops hard at the injury (the loop
+     above: W × 0.6–0.7, held under the capacity). On the recap of that
+     session Coach asks "… came in N% under last time. On purpose?" and he
+     answers "Building back up — hold it" (coach-ask.js q_drop_why), so
+     settings.knowBy.hold.<exId> is 'hold', its `at` a few minutes after the
+     drop session ended. The harness hands a fact to the engine only once its
+     `at` has passed (settingsAt). Nothing medical reaches Coach: the fact is
+     about the load. */
+  const K3 = R.fork();
+  if (injured) {
+    const holdBy = {};
+    const from = start.getTime() + injured.at * DAY;
+    Object.keys(EX).filter(id => EX[id].group === injured.group && !EX[id].cardio && !EX[id].bodyweight && !EX[id].assisted).forEach(id => {
+      const si = sessions.findIndex(rec => rec.startedAt >= from - DAY && rec.exercises.some(e => e.exId === id) &&
+                                           truthSessions[sessions.indexOf(rec)].phase === 'injured');
+      if (si < 0) return;
+      holdBy[id] = { v: 'hold', c: 1, at: sessions[si].endedAt + K3.int(1, 30) * 60e3, n: 1 };
+    });
+    if (Object.keys(holdBy).length) { settings.v = 2; settings.knowBy = { ...(settings.knowBy || {}), hold: holdBy }; }
+  }
+
   const weight = latest ? {
     latestLb: latest.lb, latestAt: latest.t,
     rateWk: r2(bwRate), rateSeWk: 0.3, rateDays: Math.min(21, weighIns.length), rateSpanDays: 21,

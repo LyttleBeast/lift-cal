@@ -213,12 +213,17 @@ const GENERAL = C.TOPICS.map(t => t.id);
       let want = C.STATE_TOPICS[surface][name].filter(answers);
       if (surface === 'you' && c.ask('ask_patterns').id !== 'ask_patterns') want = want.concat('ask_patterns');
       if (surface === 'train' && !want.length) want = GENERAL;
-      check(name + ' / ' + surface + ': ' + list(got), got.join(',') === want.join(','), 'want ' + list(want));
+      /* v76: the bubbles are scored from the day (coach.js topicsFor,
+         tools-check/coach-bubbles.mjs), so the ORDER is the score's — what is
+         held here is the set: every bubble that answers, and nothing else.
+         A question bubble (`q:`) is the opener's, and is not a route. */
+      const ids = got.filter(id => !id.startsWith('q:'));
+      check(name + ' / ' + surface + ': ' + list(got), ids.slice().sort().join(',') === want.slice().sort().join(','), 'want ' + list(want));
     });
   });
   const pre = C.coach(STATES.pre);
-  check('before a workout Train leads with "What should I train today?", "Make me a workout" second — his decided order',
-        pre.topicsFor('train')[0].id === 'ask_shape' && pre.topicsFor('train')[1].id === 'ask_build', list(pre.topicsFor('train').map(t => t.id)));
+  check('before a workout Train leads with "What should I train today?" (v76: the rest in the day’s order)',
+        pre.topicsFor('train')[0].id === 'ask_shape', list(pre.topicsFor('train').map(t => t.id)));
   const post = C.coach(STATES.post);
   check('after one, both sheets lead with "How did today compare?"',
         post.topicsFor('train')[0].id === 'ask_compare' && post.topicsFor('you')[0].id === 'ask_compare');
@@ -227,11 +232,12 @@ const GENERAL = C.TOPICS.map(t => t.id);
   const shape = done.topicsFor('train').find(t => t.id === 'ask_shape');
   check('later the same day, "What should I train today?" is asked as "What should I train next?" — the same route',
         !!shape && shape.label === 'What should I train next?' && done.topicsFor('train')[0].id === 'ask_compare');
+  const setOf = l => l.map(t => t.id).filter(id => !id.startsWith('q:')).sort().join(',');
   check('and You leads with "How did today compare?", then the pre-workout set', done.topicsFor('you')[0].id === 'ask_compare' &&
-        done.topicsFor('you').slice(1).map(t => t.id).join(',') === pre.topicsFor('you').map(t => t.id).join(','));
+        setOf(done.topicsFor('you').slice(1)) === setOf(pre.topicsFor('you')));
   const live = C.coach(STATES.live);
   check('in a live session the card is the live state, and the sheet keeps its shipped topics',
-        live.card.you.state === 'card_live_session' && live.topicsFor('you').map(t => t.id).join(',') === GENERAL.join(','),
+        live.card.you.state === 'card_live_session' && setOf(live.topicsFor('you')) === GENERAL.slice().sort().join(','),
         live.card.you.state + ' / ' + list(live.topicsFor('you').map(t => t.id)));
   check('"More" holds the rest: four show, and before a workout a list can run past four',
         C.TOPICS_SHOWN === 4 && (pre.topicsFor('train').length > C.TOPICS_SHOWN || pre.topicsFor('you').length > C.TOPICS_SHOWN),

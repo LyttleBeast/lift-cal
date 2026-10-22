@@ -75,9 +75,10 @@ section('A. the catalog: every question changes a registered rule, and coach.js 
   const bad = Q.ASK_QUESTIONS.filter(q => !Array.isArray(q.changes) || !q.changes.length || !q.changes.every(x => ids.has(x))).map(q => q.id);
   check('every row names at least one registered intent in `changes`: ' + Q.ASK_QUESTIONS.map(q => q.id + ' → ' + q.changes.join('/')).join(', '),
         !bad.length, J(bad));
-  check('twelve rows: the shipped seven, the recap’s two, (v73) the step on a stack in the live lane, and (v74) the two that ride with a live answer that has no number', Q.ASK_QUESTIONS.length === 12 &&
+  check('fourteen rows: the shipped seven, the recap’s two, (v73) the step on a stack in the live lane, (v74) the two that ride with a live answer that has no number, and (v76) the drop and the gap', Q.ASK_QUESTIONS.length === 14 &&
         Q.ASK_QUESTIONS.filter(q => q.writes === 'answers').length === 7 &&
-        Q.ASK_QUESTIONS.filter(q => q.moments[0] === 'debrief').map(q => q.id).join(',') === 'q_warm_confirm,q_pr_how' &&
+        Q.ASK_QUESTIONS.filter(q => q.moments[0] === 'debrief').map(q => q.id).join(',') === 'q_warm_confirm,q_pr_how,q_drop_why' &&
+        Q.ASK_QUESTIONS.filter(q => q.moments[0] === 'under:shape').map(q => q.id).join(',') === 'q_back_what' &&
         Q.ASK_QUESTIONS.filter(q => q.moments[0] === 'live').map(q => q.id).join(',') === 'q_equipment_step,q_want_next,q_rough_weight');
   check('coach.js QUESTIONS is the `answers` subset, the same objects, in the same order',
         C.QUESTIONS.length === 7 && C.QUESTIONS.every((q, i) => q === Q.ASK_QUESTIONS.filter(x => x.writes === 'answers')[i]));
@@ -195,7 +196,8 @@ section('C. budgetOf over 10,000 generated days: never past 2 a day or 6 a week'
       if (Number.isFinite(at) && (key(at) === key(now) || (q.cooldownDays > 0 && (now - at) / DAY < q.cooldownDays))) continue;
       // a per-record question is stamped per record (q_pr_how:<recordId>), as
       // the recap stamps it, and once a day at most
-      const stamp = typeof q.stampOf === 'function' ? q.stampOf({ pr: { recId: 'r' + day } }) : q.id;
+      // (v76: and the drop question per lift, a lift a day at most, the same way)
+      const stamp = typeof q.stampOf === 'function' ? q.stampOf({ pr: { recId: 'r' + day }, drop: { exId: 'l' + day } }) : q.id;
       if (stamp !== q.id && Object.keys(asked).some(k => k.startsWith(q.id + ':') && key(asked[k]) === key(now))) continue;
       asked[stamp] = now; asks++;
       const dk = key(now), wkk = wk(now);
@@ -382,6 +384,87 @@ section('G. v73 — q_equipment_step: the gate (stepAskLift), its chips from wIn
         engine(SETTINGS({ asked: { q_goal_aim: NOW - 3600e3, q_experience: NOW - 7200e3 } })).liveQuestion(liveS, { current: 1 }) === null);
   check('and the shipped seven read exactly as before: pickQuestion for `open` on the fixture is unchanged by the new row',
         Q.pickQuestion(fakeD({ 'weight.rateWk': 0.5, 'weight.goalDir': null }), 'open', SETTINGS(), NOW, 0) === Q.askQuestion('q_goal_direction'));
+}
+
+/* ================= H. v76 — THE DROP AND THE GAP ================= */
+section('H. v76 — q_drop_why on a 15% drop without a layoff, never when he has answered; q_back_what once per gap');
+{
+  const BENCH = 'barbell-bench-press';
+  const benchDay = (ago, w, r) => rec(ago, [ex(BENCH, xN(3, w, r || 8))], { name: 'Push' });
+  const prior = [16, 12, 8, 4].map(a => benchDay(a, 185));
+  const today = benchDay(0, 155);
+  const plan = (settings, sessions) => C.coach(inputOf(sessions || prior, settings)).debrief(today, { prs: [] });
+  const p = plan();
+  const q = p.question;
+  check('the recap after 3 × 8 at 155, four sessions at 185 before it: "Barbell Bench Press came in 16% under last time. On purpose?"',
+        !!q && q.id === 'q_drop_why' && q.text === 'Barbell Bench Press came in 16% under last time. On purpose?' &&
+        q.writes === 'knowBy' && q.key === 'hold' && q.by === BENCH && q.stamp === 'q_drop_why:' + BENCH, J(q));
+  check('    its chips: Building back up — hold it · Lighter week · Just that day; the hold names the load he agrees to',
+        !!q && J(q.options.map(o => o.label)) === J(['Building back up — hold it', 'Lighter week', 'Just that day']) &&
+        q.options[0].ack === 'Noted. I’ll hold Barbell Bench Press at 155 lb until you take it higher yourself.' &&
+        q.options[1].ack === 'Noted. I’ll read that as a lighter week, not a new programme.' && q.options[2].ack === 'Noted.', J(q && q.options));
+  check('    in kilos the hold names kilos', (() => { const k = C.coach(inputOf(prior, null, { u: 'kg' })).debrief(today, { prs: [] }).question;
+    return !!k && /^Noted\. I’ll hold Barbell Bench Press at 70\.3 kg until you take it higher yourself\.$/.test(k.options[0].ack); })());
+  const fact = v => SETTINGS({ knowBy: { hold: { [BENCH]: { v, c: 1, at: NOW - 3 * DAY, n: 1 } } } });
+  check('never when he has said anything about it inside the 42 days — hold, lighter week or just that day',
+        ['hold', 'light', 'day'].every(v => { const r = plan(fact(v)).question; return !r || r.id !== 'q_drop_why'; }));
+  check('    and asked again once that answer is past its 42 days',
+        (() => { const r = plan(SETTINGS({ knowBy: { hold: { [BENCH]: { v: 'day', c: 1, at: NOW - 43 * DAY, n: 1 } } } })).question; return !!r && r.id === 'q_drop_why'; })());
+  check('only on a 15% drop: 160 (14% under) asks nothing',
+        (() => { const r = C.coach(inputOf(prior)).debrief(benchDay(0, 160), { prs: [] }).question; return !r || r.id !== 'q_drop_why'; })());
+  check('never across a layoff: the last bench 14 days before the drop asks nothing (the gap has its own question)',
+        (() => { const r = C.coach(inputOf([30, 26, 22, 14].map(a => benchDay(a, 185)))).debrief(today, { prs: [] }).question; return !r || r.id !== 'q_drop_why'; })());
+  check('never after a marked or a harder day — the bad-day line owns the slot',
+        (() => { const m = plan(SETTINGS({ marks: { [today.id]: { r: 'sleep', d: today._date } } })).question;
+                 const h = C.coach(inputOf(prior)).debrief({ ...today, feel: { s: 90, at: NOW } }, { prs: [] }).question; return !m && !h; })());
+  // Under the targets, about a lift on the plan.
+  const withDrop = prior.concat([rec(2, [ex(BENCH, xN(3, 155, 8))], { name: 'Push' })]);
+  const under = C.coach(inputOf(withDrop)).ask('ask_targets');
+  const uq = under.question;
+  check('under "What should I lift today?", the drop on a lift of the plan is asked the same way, by the lift',
+        !uq || (uq.id !== 'q_drop_why') || (uq.by === BENCH && uq.key === 'hold' && /came in 16% under last time\. On purpose\?$/.test(uq.text) && uq.options[0].ack.includes('155 lb')),
+        J(uq));
+  // The facts on the lifts, as coach-prog.js reads them.
+  const lifts = s => (C.overlapInput(inputOf(withDrop, s)) || { lifts: [] }).lifts.find(l => l.exId === BENCH) || {};
+  const at = NOW - 2 * DAY + 3600e3;
+  const H1 = SETTINGS({ knowBy: { hold: { [BENCH]: { v: 'hold', c: 1, at, n: 1 } } } });
+  const L1 = SETTINGS({ knowBy: { hold: { [BENCH]: { v: 'light', c: 1, at, n: 1 } } } });
+  const D1 = SETTINGS({ knowBy: { hold: { [BENCH]: { v: 'day', c: 1, at, n: 1 } } } });
+  check('hold → holdAt on the lift; lighter week → lightAt; just that day → neither; expired → neither',
+        lifts(H1).holdAt === at && lifts(H1).lightAt == null && lifts(L1).lightAt === at && lifts(L1).holdAt == null &&
+        lifts(D1).holdAt == null && lifts(D1).lightAt == null &&
+        lifts(SETTINGS({ knowBy: { hold: { [BENCH]: { v: 'hold', c: 1, at: NOW - 43 * DAY, n: 1 } } } })).holdAt == null);
+  // The lift exactly as coach.js hands it to coach-prog.js, read by targetFor.
+  const P = await st.load('coach-prog.js');
+  const oi = C.overlapInput(inputOf(withDrop, H1));
+  const heldT = P.targetFor(oi.lifts.find(l => l.exId === BENCH), { now: oi.now, u: oi.u, aim: oi.aim, exp: oi.exp, energy: oi.energy, rateWk: oi.rateWk }, null);
+  check('the held target from the lift coach.js builds: "Holding Barbell Bench Press at 155 lb while you build back, as you asked."',
+        !!heldT && heldT.code === 'held' && heldT.loadLb === 155 && heldT.why[0] === 'Holding Barbell Bench Press at 155 lb while you build back, as you asked.',
+        J(heldT && [heldT.mode, heldT.code, heldT.line, heldT.why]));
+  check('and no record day on a held lift', (() => { const a = C.coach(inputOf(withDrop, H1)).ask('ask_record_day'); return !a || !/Barbell Bench Press/.test(a.text || ''); })());
+
+  // THE GAP.
+  const away = [36, 32, 28, 24, 20, 16].map(a => benchDay(a, 185));
+  const back = (s, sessions) => C.coach(inputOf(sessions || away, s)).ask('ask_shape');
+  const bq = back().question;
+  check('sixteen days since a session: under "What should I train today?", "Good to have you back. Training somewhere I can’t see, or time off?"',
+        !!bq && bq.id === 'q_back_what' && bq.text === 'Good to have you back. Training somewhere I can’t see, or time off?' && bq.writes === 'know' && bq.key === 'back' &&
+        J(bq.options.map(o => o.label)) === J(['Training elsewhere', 'Time off']), J(bq));
+  check('    and under "Should I rest or go lighter?" the same', (() => { const r = C.coach(inputOf(away)).ask('ask_lighter').question; return !r || r.id === 'q_back_what'; })());
+  const told = SETTINGS({ know: { back: { v: 'elsewhere', c: 1, at: NOW - DAY, n: 1 } } });
+  check('once per gap: answered since his last session, it is not asked again — either answer',
+        !back(told).question && !back(SETTINGS({ know: { back: { v: 'off', c: 1, at: NOW - DAY, n: 1 } } })).question);
+  check('    an answer from the gap before (older than his last session) does not count for this one',
+        (() => { const r = back(SETTINGS({ know: { back: { v: 'off', c: 1, at: NOW - 30 * DAY, n: 1 } } })).question; return !!r && r.id === 'q_back_what'; })());
+  check('    shown and not answered: twelve days before it is put again (the stamp), inside the same gap',
+        !back(SETTINGS({ asked: { q_back_what: NOW - 3 * DAY } })).question);
+  check('    eleven days away is no gap: nothing asked', (() => { const r = back(null, [21, 17, 13, 11].map(a => benchDay(a, 185))).question; return !r; })());
+  const ov = s => (C.overlapInput(inputOf(away, s)) || { lifts: [] }).lifts.find(l => l.exId === BENCH) || {};
+  check('"Training elsewhere" rides on every lift until the next session; "Time off" on none',
+        ov(told).back === 'elsewhere' && ov(SETTINGS({ know: { back: { v: 'off', c: 1, at: NOW - DAY, n: 1 } } })).back == null &&
+        (() => { const after = away.concat([benchDay(0.1, 185)]); const l = (C.overlapInput(inputOf(after, told)) || { lifts: [] }).lifts.find(x => x.exId === BENCH) || {}; return l.back == null; })());
+  check('the hold’s line and the fact agree: six weeks is KNOW_KEYS.hold’s 42 days; the gap is coach.js’s twelve',
+        Q.KNOW_KEYS.hold.ttlDays === 42 && Q.BACK_GAP_DAYS === 12 && Q.askQuestion('q_back_what').cooldownDays === 12);
 }
 
 done(st.cleanup);
