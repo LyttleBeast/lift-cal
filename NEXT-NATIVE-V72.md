@@ -88,7 +88,10 @@ export function learnTally(delta)    // patch({}, fresh => ({ tally: { k: min(99
 ```
 
 Each resolves `false` when the key is not in `KNOW_KEYS` (or the wrong kind).
-`markAsked` is the recap's door, beside ; the plan carries  for the eyebrow.  is unchanged and is what stamps `warm:<exId>` and
+`coachDebrief(record, extras)` is the recap's door, beside `coachFinishRead()`:
+`coach(coachInput({})).debrief(record, extras)`, the feel row alone on a throw;
+the plan carries `opens` for the eyebrow. `markAsked` is unchanged and is what
+stamps `warm:<exId>` and
 `q_pr_how:<recordId>`. `answerQuestion` is unchanged.
 
 ## 3. The recap — `src/pure/recap-view.js` decides, the screen draws
