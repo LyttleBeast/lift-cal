@@ -447,8 +447,18 @@ function rangeOf(X, now, dir, band) {
    day) is not a jump and is never learned. And on a barbell lift a rise
    bigger than twice its default step — 20 lb on a bench whose plates go in
    fives — is more often a programme change under the 15% line than a step,
-   so it has to be seen three times, not two (the battery's T_JUMP). */
-function stepOf(X, dir, equipment, lowerBody, u) {
+   so it has to be seen three times, not two (the battery's T_JUMP).
+
+   v73: `told` — what he said one step up is on this lift, in stored POUNDS
+   (coach-ask.js knowBy.step, coach.js puts it on the lift as `stepTold`), or
+   null. It stands in for the default only: THE LOG WINS. A jump seen twice is
+   his step whatever he said, so a told step the log has since contradicted is
+   inert without anything being written on paint — the engine simply reads the
+   log, and the fact is replaced the next time the question is answered on
+   that lift. A told step is used only on the display unit's half grid: a
+   2.5-lb answer read on a kilo account is 1.13 kg, a stack setting nobody
+   has, so it is ignored rather than converted. */
+function stepOf(X, dir, equipment, lowerBody, u, told) {
   const seen = new Map();
   const d = defaultStep(equipment, lowerBody, u);
   const big = equipment === 'barbell' && d != null ? 2 * d : null;
@@ -465,6 +475,10 @@ function stepOf(X, dir, equipment, lowerBody, u) {
   if (twice.length) {
     const n = seen.get(twice[0]);
     return { value: twice[0], n, source: 'yours', stage: n >= 4 ? 'yours' : 'learning' };
+  }
+  if (Number.isFinite(told) && told > 0) {
+    const v = r2(wOut(told, u));
+    if (onGrid(v) && v > 0) return { value: v, n: 0, source: 'told', stage: 'learning' };
   }
   return d == null ? null : { value: d, n: 0, source: 'default', stage: 'learning' };
 }
@@ -561,8 +575,11 @@ function liftOf(ex, dials) {
     : [b.compound[0], b.isolation[1]];
   // v72: his word on warm-ups here — 'yes', 'no' or nothing (coach.js lifts()).
   const warm = ex.warm === 'yes' || ex.warm === 'no' ? ex.warm : null;
+  // v73: and what he said one step up is here, stored pounds (coach.js lifts()
+  // from knowBy.step), or null. stepOf() reads it only where the log has no step.
+  const stepTold = Number.isFinite(ex.stepTold) && ex.stepTold > 0 ? ex.stepTold : null;
   return { exId, tag, assisted, dir: assisted ? -1 : 1, lowerBody, equipment: ex.equipment || null,
-           band: band.slice(), group: ex.group || null, warm };
+           band: band.slice(), group: ex.group || null, warm, stepTold };
 }
 
 /* Everything this file knows about one lift before it decides anything. What
@@ -598,7 +615,7 @@ export function baselines(ex, ctx) {
     return {
       exposures: X.length,
       range: rangeOf(X, c.now, lift.dir, lift.band),
-      step: stepOf(X, lift.dir, lift.equipment, lift.lowerBody, u),
+      step: stepOf(X, lift.dir, lift.equipment, lift.lowerBody, u, lift.stepTold),
       status: prog.status, slope: prog.slope, sigma: prog.sigma,
       series: prog.series, lastBestAt: prog.lastBestAt, moveLb: prog.moveLb, best: prog.best,
       freq: { recent: within(28) / 4, normal: within(WINDOW_DAYS) / 12 },
@@ -789,7 +806,7 @@ function decide(ex, c) {
     return defer('heavy', heavyLine,
       ['Your rep range here reads as singles or doubles, and I won’t call a heavier one of those.']);
   }
-  const step = stepOf(X, lift.dir, lift.equipment, lift.lowerBody, u);
+  const step = stepOf(X, lift.dir, lift.equipment, lift.lowerBody, u, lift.stepTold);
   const S = step ? step.value : null;
   const stage = weakest(range.stage, step ? step.stage : 'learning');
   const learning = n => 'I’m learning this lift: ' + plural(n, 'session') + ' so far.';
@@ -798,6 +815,8 @@ function decide(ex, c) {
     if (loadNamed && step) {
       w.push(step.source === 'yours'
         ? 'Your usual jump here is ' + stepText(step) + ' (from ' + plural(step.n, 'increase') + ' in your log).'
+        : step.source === 'told'
+        ? 'You told me one step up here is ' + stepText(step) + '.'
         : stepText(step) + ' is a common starting jump for this kind of lift. I’ll learn yours.');
     }
     if (stage === 'learning') w.push(learning(X.length));
@@ -1305,7 +1324,7 @@ function nextOf(ex, c, today) {
     : (Array.isArray(ex.exposures) ? ex.exposures : []).filter(x => !(m && m.markedAt instanceof Set && m.markedAt.has(x.startedAt)));
   const X = readAll(src, u, false, c.now, lift.warm);
   const known = rampLoads(src.map(allOf), { warm: lift.warm });
-  const step = X.length ? stepOf(X, 1, lift.equipment, lift.lowerBody, u) : null;
+  const step = X.length ? stepOf(X, 1, lift.equipment, lift.lowerBody, u, lift.stepTold) : null;
   const S = step ? step.value : null;
   const range = X.length ? rangeOf(X, c.now, 1, lift.band) : null;
   const logged = P => X.some(e => e.work.some(s => Math.abs(s.L - P) < GRID_TOL));
@@ -1415,7 +1434,7 @@ function nextOf(ex, c, today) {
     // named by what it steps from, never as a size of its own.
     return res('up', store(P), trAt(k), [how,
       'One step over the target’s ' + shown(twT) + ', once in a session' +
-      (step.source === 'yours' ? ': your usual jump on this lift.' : ': a common starting jump for this kind of lift.')]);
+      (step.source === 'yours' ? ': your usual jump on this lift.' : step.source === 'told' ? ': the step you told me.' : ': a common starting jump for this kind of lift.')]);
   }
 
   // DOWN — reps under the range's low end: the same weight, or one step down
