@@ -319,7 +319,7 @@ row('R8', () => {
   const r = rs(inp);
   const k = C.coach(inp).buildCaution({ focus: 'group:arms' });
   const ok = r && r.groups.arms.stage === 'none' && r.groups.arms.win === 2 && !r.groups.arms.ready && !!k &&
-             k.text === 'Arms was trained yesterday; Coach gives them 2 days or more (a common starting point until Coach knows your gaps).';
+             k.text === 'Arms was trained yesterday; I give them 2 days or more (a common starting point until I know your gaps).';
   return grade(ok, !k, r && JSON.stringify(r.groups.arms) + ' · ' + (k && k.text));
 });
 
@@ -329,7 +329,7 @@ row('R9', () => {
   const c = C.coach(inp), r = rs(inp);
   const k = c.buildCaution({ focus: 'group:legs' });
   const anyway = k && c.build(k.anyway.opts), rec = k && k.recovered && c.build(k.recovered.opts);
-  const ok = !!k && k.text === 'Legs had a big day yesterday: 24 sets against a usual 12. Coach would give them another day.' &&
+  const ok = !!k && k.text === 'Legs had a big day yesterday: 24 sets against a usual 12. I’d give them another day.' &&
              k.anyway.label === 'Build legs anyway' && JSON.stringify(k.anyway.opts) === JSON.stringify({ focus: 'group:legs' }) &&
              !!anyway && anyway.focus.id === 'group:legs' && !!k.recovered && k.recovered.label === 'Train something recovered' &&
              !!rec && rec.focus.id === 'shape:' + r.pick.key;
@@ -546,7 +546,7 @@ row('D1', () => {
   const a = C.coach(inp).ask('ask_lighter');
   const ok = a.id === 'readiness' && a.text === 'Nothing in your log is off your normal today.' && !flagged(inp).length &&
              R.readinessHas(C.readyInput(inp), inp.now) >= 3 &&
-             (a.more || []).slice(-1)[0].text === 'Coach can’t see sleep, stress or soreness, and those count most on a day like this.';
+             (a.more || []).slice(-1)[0].text === 'I can’t see sleep, stress or soreness, and those count most on a day like this.';
   return grade(ok, a.id !== 'readiness', a.id + ' · ' + said(a) + ' · flags ' + flagged(inp).join(','));
 });
 
@@ -606,8 +606,8 @@ row('D5', () => {
   const lb = R.readinessAnswer(rows(weighedLog('lb', 196))), kg = R.readinessAnswer(rows(weighedLog('kg', 196)));
   const line = x => x && x.more.find(m => /weigh-in/.test(m.text));
   const ok = lb && kg && line(lb) && line(kg) &&
-             line(lb).text === 'This morning’s weigh-in is 4 lb under your last week. A drop that size is usually water, which Coach can’t see.' &&
-             line(kg).text === 'This morning’s weigh-in is ' + U8.labelW(4, 'kg') + ' under your last week. A drop that size is usually water, which Coach can’t see.' &&
+             line(lb).text === 'This morning’s weigh-in is 4 lb under your last week. A drop that size is usually water, which I can’t see.' &&
+             line(kg).text === 'This morning’s weigh-in is ' + U8.labelW(4, 'kg') + ' under your last week. A drop that size is usually water, which I can’t see.' &&
              !/\blb\b/.test(line(kg).text) && !R.readinessAnswer(rows(weighedLog('lb', 198))).more.some(m => /weigh-in/.test(m.text));
   return grade(ok, !lb, (line(lb) || {}).text + ' / ' + (line(kg) || {}).text);
 });

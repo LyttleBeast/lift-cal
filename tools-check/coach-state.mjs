@@ -253,7 +253,7 @@ section('C. "How did today compare?" and "What’s next time?" answer after a wo
         (post.ask('ask_compare').more || []).some(m => /^Barbell Bench Press: (above|below|about) your usual/.test(m.text)) ||
         /^Barbell Bench Press: /.test(post.ask('ask_compare').text), JSON.stringify(post.ask('ask_compare')));
   check('and says what Coach cannot see, with no reason for the day given',
-        (post.ask('ask_compare').more || []).some(m => m.text === 'Coach can’t see sleep, stress or soreness.') &&
+        (post.ask('ask_compare').more || []).some(m => m.text === 'I can’t see sleep, stress or soreness.') &&
         !/because|due to|tired|sleep(y|ing)? badly/i.test(post.ask('ask_compare').text));
 }
 

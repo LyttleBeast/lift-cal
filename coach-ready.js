@@ -505,14 +505,14 @@ function runReplay(i, now) {
   const lines = [];
   if (flagged >= REPLAY_FLAGGED) {
     lines.push({ text: 'Of the ' + plural(flagged, 'day') + ' your log looked like this, you rested on ' + rested + '.',
-                 reason: 'Each of the last twelve weeks’ mornings, read the way Coach reads today. Nothing about it is stored.' });
+                 reason: 'Each of the last twelve weeks’ mornings, read the way I read today. Nothing about it is stored.' });
   }
   if (through >= REPLAY_THROUGH && held >= HELD_SHARE * through) {
     lines.push({ text: 'You’ve trained through days like this ' + plural(through, 'time') + ' and held your numbers on ' + held + '.',
-                 reason: 'Each of those sessions against your usual as it stood that morning. Coach reports this; it changes nothing.' });
+                 reason: 'Each of those sessions against your usual as it stood that morning. I report this; it changes nothing.' });
   } else if (through >= REPLAY_THROUGH && below >= BELOW_SHARE * through) {
     lines.push({ text: 'The last ' + through + ' times you trained through a day like this, your top sets came in under your usual on ' + below + '.',
-                 reason: 'Each of those sessions against your usual as it stood that morning. Coach reports this; it changes nothing.' });
+                 reason: 'Each of those sessions against your usual as it stood that morning. I report this; it changes nothing.' });
   }
   return { flagged, rested, through, held, below, lines };
 }
@@ -535,17 +535,17 @@ export function groupLine(read, g) {
     if (b.drop) parts.push((parts.length ? 'with ' : '') + 'reps down ' + DROP_WORDS + ' or more on ' + b.d + ' of ' +
                            (them([g]) ? 'their' : 'its') + ' lifts');
     return Label(g) + ' had a big day ' + agoWord(r.since) + ': ' + parts.join(', ') +
-           '. Coach would give ' + pro + ' another day.';
+           '. I’d give ' + pro + ' another day.';
   }
   // A starting point is never "his usual", so it is not said as one.
   return r.stage === 'none'
-    ? Label(g) + ' was trained ' + agoWord(r.since) + '; Coach gives ' + pro + ' ' + plural(r.win, 'day') +
-      ' or more (a common starting point until Coach knows your gaps).'
+    ? Label(g) + ' was trained ' + agoWord(r.since) + '; I give ' + pro + ' ' + plural(r.win, 'day') +
+      ' or more (a common starting point until I know your gaps).'
     : Label(g) + ' was trained ' + agoWord(r.since) + '; you usually give ' + pro + ' ' + plural(r.win, 'day') + ' or more.';
 }
 
 export const REST_REASON = 'Each group against its own recovery time: the quick end of your gaps between training it, and longer after a big day.';
-const UNSEEN = 'Coach can’t see sleep, stress or soreness.';
+const UNSEEN = 'I can’t see sleep, stress or soreness.';
 const T3_LIGHTER = 'A common approach on a lighter day: the same weights, fewer sets.';
 
 /* How recently several groups were trained, said so it is true of every one
@@ -733,7 +733,7 @@ function buildRows(i, now) {
   const wt = weighToday(o.weighIns, now);
   rows.push({ id: 'weighin', has: has.weighin, flag: !!wt && wt.low < WEIGH_SHARE * wt.week,
     text: wt ? 'This morning’s weigh-in is ' + labelW(wt.week - wt.low, u) +
-               ' under your last week. A drop that size is usually water, which Coach can’t see.' : '' });
+               ' under your last week. A drop that size is usually water, which I can’t see.' : '' });
 
   let timeFlag = false, timeText = '';
   if (has.time) {
@@ -756,8 +756,8 @@ export function readinessAnswer(rows) {
   const flagged = mergeRows(all);
   const ids = new Set(flagged.map(x => x.id));
   const several = flagged.length >= SEVERAL || (ids.has('streak') && ids.has('failure'));
-  const unseen = { text: 'Coach can’t see sleep, stress or soreness, and those count most on a day like this.',
-                   reason: 'It reads your log, and nothing about how you feel.' };
+  const unseen = { text: 'I can’t see sleep, stress or soreness, and those count most on a day like this.',
+                   reason: 'I read your log, and nothing about how you feel.' };
   const reason = 'Each one against your own normal, read from your log.';
   if (!flagged.length) return { text: 'Nothing in your log is off your normal today.', reason, more: [unseen] };
   const more = flagged.map(x => ({ text: x.text, reason: '' }));

@@ -1690,7 +1690,7 @@ section('M. v49 — the card encourages and the sheet opens on the finding; "Mor
   const cmp = eng.ask('ask_compare');
   check('tapped, it draws the engine’s answer and then each lift, the targets met and what Coach cannot see',
         cmp.id === 'session_compare' && bubT(tsh).includes(cmp.text) && (cmp.more || []).every(m => bubT(tsh).includes(m.text)) &&
-        bubT(tsh).includes('Coach can’t see sleep, stress or soreness.'), list(bubT(tsh)));
+        bubT(tsh).includes('I can’t see sleep, stress or soreness.'), list(bubT(tsh)));
   const tsh2 = open(U2, { tight: true, live: false, start() {}, save() {} }).sh;
   tap(tsh2, 'What’s next time?');
   const nx = eng.ask('ask_next');
