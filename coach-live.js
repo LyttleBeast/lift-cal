@@ -757,7 +757,9 @@ export function rateAsk(rated, u) {
    that stings (SHIP-V54-PROMPT §5.4, §8). `rir` is the rating just stored, or
    null when the chip was tapped again to clear it; `next` is setRead's next
    set as it reads after the rating. */
-const OPENER = Object.freeze({ 4: 'Strong set.', 2: 'Good.', 0: 'Noted.' });
+// v71: after Too hard, the opener is for the rating, which is what helped —
+// "Noted." read as the opposite of the encouragement Micah asked for.
+const OPENER = Object.freeze({ 4: 'Strong set.', 2: 'Good.', 0: 'Good call rating it.' });
 export function rateAnswer(rir, next, u) {
   const unit = u === 'kg' ? 'kg' : 'lb';
   if (rir == null) return 'Cleared.';

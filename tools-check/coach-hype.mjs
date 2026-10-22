@@ -347,11 +347,11 @@ section('C. "Every Coach target met" replays prescribe() exactly — a comeback 
         tb.mode === 'add' && tb.loadLb === 190 && ts.mode === 'hold' && ts.code === 'back' && ts.loadLb === 225, tb.line + ' / ' + ts.line);
   const cMet = C.coach(inp(met));
   const pool = poolOf(inp(met));
-  check('the session that met both earns "Every Coach target met yesterday."',
-        pool.includes('hype_targets_met') && cardsOf(inp(met)).hype_targets_met.text === 'Every Coach target met yesterday.', list(pool));
+  check('the session that met both earns "Every target met yesterday."',
+        pool.includes('hype_targets_met') && cardsOf(inp(met)).hype_targets_met.text === 'Every target met yesterday.', list(pool));
   check('and "How did today compare?" counts the same replay — 2 of 2', (() => {
     const a = C.coach({ ...inp(met), now: met.startedAt + 2 * 3600e3 }).ask('ask_compare');
-    return (a.more || []).some(m => m.text === '2 of 2 Coach targets met.');
+    return (a.more || []).some(m => m.text === '2 of 2 targets met.');
   })(), JSON.stringify((C.coach({ ...inp(met), now: met.startedAt + 2 * 3600e3 }).ask('ask_compare').more || []).map(m => m.text)));
   check('one set short on the squat, and the line is not earned', !poolOf(inp(shortOne)).includes('hype_targets_met'), list(poolOf(inp(shortOne))));
   check('and a Basic account — which never saw the targets — is never told it met them',

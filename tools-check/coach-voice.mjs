@@ -215,7 +215,7 @@ const VOICE_BANNED = [
   /\b(perfect|amazing|incredible|insane|unreal)\b/i, /\bAI\b/
 ];
 const LABELS = new Set(['Coach', 'Coach · ', 'Coach: ', 'COACH', 'COACH ME', 'Ask Coach', 'Coach me', 'Coach settings',
-                        'Ask Coach something', 'Ask Coach what to do next']);
+                        'Ask Coach something', 'Ask Coach what to do next', 'Coach itself']);
 const voiceOffence = s => {
   if (LABELS.has(s)) return null;
   const hit = VOICE_BANNED.find(re => re.test(s));
@@ -1495,9 +1495,11 @@ section('N. v54 — the next set, its why, "How was it?" and Coach’s answer af
         ['target', 'same', 'up', 'down', 'stop'].every(k => kinds.has(k)) && said.length > 300, [...kinds].join(', '));
   check('not one carries a banned word, a cause, a health or body word, "AI", an exclamation mark, or a pound in kilos',
         !bad.length, list(bad.map(x => '[' + x.u + '] “' + x.w.join('/') + '” in: ' + x.t)));
-  check('and every answer after a tap opens warm — "Strong set.", "Good." or "Noted." — or says it cleared, before any number',
-        said.filter(x => /^(Strong set|Good|Noted|Cleared)\./.test(x.t) || !/^(Strong|Good|Noted|Cleared)/.test(x.t)).length === said.length &&
-        said.filter(x => /Next one|Same again|Stay at|Saved with the set|Cleared/.test(x.t)).every(x => /^(Strong set|Good|Noted|Cleared)\./.test(x.t)));
+  // v71: after Too hard, "Good call rating it." — never "Noted." (SHIP-V71-PROMPT §3).
+  check('and every answer after a tap opens warm — "Strong set.", "Good." or "Good call rating it." — or says it cleared, before any number',
+        said.filter(x => /^(Strong set|Good|Good call rating it|Cleared)\./.test(x.t) || !/^(Strong|Good|Noted|Cleared)/.test(x.t)).length === said.length &&
+        said.filter(x => /Next one|Same again|Stay at|Saved with the set|Cleared/.test(x.t)).every(x => /^(Strong set|Good|Good call rating it|Cleared)\./.test(x.t)) &&
+        !said.some(x => /^Noted\./.test(x.t)));
   // The target's why when his rating moved or held it (coach-prog.js decide()).
   const rated = ['Last time 185 lb × 12 felt too hard, so it’s the same again.', 'Last time you rated 185 lb for 10, 10, 9 way too easy.'];
   const ratedSrc = literals(decomment(PSRC)).filter(t => /felt too hard|way too easy|you rated/.test(t));

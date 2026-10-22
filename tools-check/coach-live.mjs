@@ -799,15 +799,16 @@ section('H. v54 — the next set (spec §3.10 with his rating), each rule by nam
     [4, nx([[190, 8, { rir: 4 }]]), 'Strong set. Next one: 195 lb × 8.'],
     [4, nx([[190, 10], [195, 8, { rir: 4 }]]), 'Good. Stay at 195 lb for the next one.'],
     [2, nx([[190, 8, { rir: 2 }]]), 'Good. Same again: 190 lb × 8.'],
-    [0, nx([[190, 8, { rir: 0 }]]), 'Noted. Stay at 190 lb, or call that the last set of this one.'],
+    // v71: after Too hard the opener is for the rating — never "Noted."
+    [0, nx([[190, 8, { rir: 0 }]]), 'Good call rating it. Stay at 190 lb, or call that the last set of this one.'],
     [2, nx([[190, 7, { rir: 2 }]]), 'Good. Next one: 185 lb × 8.'],
     [4, null, 'Strong set. Saved with the set.'],
-    [0, null, 'Noted. Saved with the set.'],
+    [0, null, 'Good call rating it. Saved with the set.'],
     [null, nx([[190, 8]]), 'Cleared.']
   ];
   const wrongWords = words.filter(([v, n2, w]) => L.rateAnswer(v, n2, 'lb') !== w).map(([v, n2, w]) => v + ': ' + L.rateAnswer(v, n2, 'lb') + ' (want ' + w + ')');
   check('after a tap: "Strong set. Next one: 195 lb × 8." · "Good. Stay at 195 lb for the next one." · "Good. Same again: 190 lb × 8." · ' +
-        '"Noted. Stay at 190 lb, or call that the last set of this one." · and with no next set, the rating saved',
+        '"Good call rating it. Stay at 190 lb, or call that the last set of this one." · and with no next set, the rating saved',
         !wrongWords.length, list(wrongWords));
   check('and in kilos, through units.js', L.rateAnswer(4, nextOf(FK, sess(FK, B, [[87.5, 8, { rir: 4 }]])).next, 'kg') === 'Strong set. Next one: 90 kg × 8.');
 

@@ -419,8 +419,8 @@ section('E. the chips: in the live sheet only, over a ticked working set, on the
         (find(find(sh, 'coach-rate-after')[0], 'coach-bub-t')[0] || {}).textContent === 'Cleared.' &&
         !buttonsIn(find(sh, 'coach-rate-after')[0]).length);
   chipsOf(sh)[2].onclick();
-  check('"Too hard": "Noted. Stay at 190 lb, or call that the last set of this one."',
-        (find(find(sh, 'coach-rate-after')[0], 'coach-bub-t')[0] || {}).textContent === 'Noted. Stay at 190 lb, or call that the last set of this one.');
+  check('"Too hard": "Good call rating it. Stay at 190 lb, or call that the last set of this one."',
+        (find(find(sh, 'coach-rate-after')[0], 'coach-bub-t')[0] || {}).textContent === 'Good call rating it. Stay at 190 lb, or call that the last set of this one.');
 
   // Where the chips never are.
   ({ sh } = openOn(live([{ w: '', r: '', type: 'N', done: false }, { w: '', r: '', type: 'N', done: false }])));

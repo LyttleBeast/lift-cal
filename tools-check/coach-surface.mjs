@@ -1557,8 +1557,8 @@ section('L. v48 — the target line, the goal question under its answer, and You
   // v49: the aim is saved through setAim(), which clears the goal-change answers.
   check('tapping one saves it and answers with the question’s own acknowledgement, not the weight question’s',
         state.calls.some(x => x[0] === 'setAim' && x[1] === 'powerlifting') &&
-        find(sh, 'coach-bub-t').some(n => n.textContent === 'Noted. Coach sets your targets with that in mind.') &&
-        !find(sh, 'coach-bub-t').some(n => n.textContent === 'Noted. That changes how Coach reads your weight.'));
+        find(sh, 'coach-bub-t').some(n => n.textContent === 'Noted. I’ll set your targets with that in mind.') &&
+        !find(sh, 'coach-bub-t').some(n => n.textContent === 'Noted. That changes how I read your weight.'));
   check('the goal question is never the sheet’s opening question', engine(BUILD).question === null ||
         !['q_goal_aim', 'q_experience'].includes(engine(BUILD).question.id));
 
@@ -1568,7 +1568,7 @@ section('L. v48 — the target line, the goal question under its answer, and You
   const opener = find(sh, 'coach-bub').find(b => b.classList.contains('ask'));
   if (opener) tap(opener, chipsIn(opener)[0].textContent);
   check('the weight question still answers with the shipped line',
-        !!opener && find(sh, 'coach-bub-t').some(n => n.textContent === 'Noted. That changes how Coach reads your weight.'));
+        !!opener && find(sh, 'coach-bub-t').some(n => n.textContent === 'Noted. That changes how I read your weight.'));
 
   // Switched off: no bubble.
   state.input = { ...BUILD, settings: { ...BUILD.settings, mute: { targets: true } } };
@@ -1943,8 +1943,8 @@ section('N. v52 — the caution before a proposal, the mark’s chips, and "Shou
   sh = open(U3, trainOpts).sh;
   tap(sh, 'How did today compare?');
   const opts = C.MARK_ASK.options.map(o => o.label);
-  check('below his usual: "Anything Coach can’t see?" with Slept badly, Stressed, Sore, Didn’t feel well and Nothing',
-        bubT(sh).includes('Anything Coach can’t see?') && opts.every(l => chipsIn(sh).some(b => b.textContent === l)), list(bubT(sh)));
+  check('below his usual: "Anything I can’t see?" with Slept badly, Stressed, Sore, Didn’t feel well and Nothing',
+        bubT(sh).includes('Anything I can’t see?') && opts.every(l => chipsIn(sh).some(b => b.textContent === l)), list(bubT(sh)));
   tap(sh, 'Slept badly');
   const w1 = state.calls.filter(c => c[0] === 'markSession');
   check('"Slept badly" writes one mark on that session — its id and its own date — and says so',
@@ -1954,7 +1954,7 @@ section('N. v52 — the caution before a proposal, the mark’s chips, and "Shou
   sh = open(U3, trainOpts).sh;
   tap(sh, 'How did today compare?'); tap(sh, 'Didn’t feel well');
   check('"Didn’t feel well": the mark, and the one line about rest and health', state.calls.some(c => c[0] === 'markSession' && c[2] === 'unwell') &&
-        bubT(sh).includes('Noted. That session won’t count against your numbers. Rest is always an option. Coach doesn’t do health, so it’ll leave it there.'));
+        bubT(sh).includes('Noted. That session won’t count against your numbers. Rest is always an option. I don’t do health, so I’ll leave it there.'));
   state.calls.length = 0;
   sh = open(U3, trainOpts).sh;
   tap(sh, 'How did today compare?'); tap(sh, 'Nothing');
@@ -1964,7 +1964,7 @@ section('N. v52 — the caution before a proposal, the mark’s chips, and "Shou
   sh = open(U3, trainOpts).sh;
   tap(sh, 'How did today compare?');
   check('marked: "You marked this session: felt unwell." — Coach’s words, never the chip’s — and no question',
-        bubT(sh).includes('You marked this session: felt unwell. It doesn’t count against your numbers.') && !bubT(sh).includes('Anything Coach can’t see?'),
+        bubT(sh).includes('You marked this session: felt unwell. It doesn’t count against your numbers.') && !bubT(sh).includes('Anything I can’t see?'),
         list(bubT(sh)));
   tap(sh, 'Clear the mark');
   const w2 = state.calls.filter(c => c[0] === 'markSession');
@@ -2056,7 +2056,7 @@ section('N. v52 — the caution before a proposal, the mark’s chips, and "Shou
   tap(sh, 'As I go');
   check('"As I go" is saved as the answer, and the question says what it changes',
         state.calls.some(c => c[0] === 'answerQuestion' && c[1] === 'q_log_timing' && c[2] === 'live') &&
-        bubT(sh).includes('Noted. Coach reads your food by the hour when you log as you go, and by the day when you log later.'),
+        bubT(sh).includes('Noted. I read your food by the hour when you log as you go, and by the day when you log later.'),
         JSON.stringify(state.calls.filter(c => c[0] !== 'markAsked')));
   state.fuelPending = false; state.fuelArrives = null;
   check('the coach-data stub still answers everything coach-ui.js imports', !state.unknown.length, list(state.unknown));

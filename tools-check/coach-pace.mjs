@@ -275,7 +275,7 @@ section('C. Powerlifting’s big three and their total; the focus group’s sets
         .some(x => /Your focus/.test(x)));
   const noAim = goalLines(input({ sessions: sortS(benchLog(185, 2.5)) }));
   check('with no aim, where to set one — once, and nothing else',
-        noAim.length === 1 && noAim[0] === 'Set a goal in Settings → Coach → Your goal and Coach will track it.', list(noAim));
+        noAim.length === 1 && noAim[0] === 'Set a goal in Settings → Coach → Your goal and I’ll track it.', list(noAim));
 }
 
 /* ================= D. THE LIFT TARGET CANNOT BE JUNK ================= */
@@ -350,8 +350,8 @@ section('E. the goal-change questions — G1 to G8');
   check('and neither is ever a `where` question — they are the sheet’s opener, through the shipped machinery', qs.every(x => !x.where));
   // An answer he gave shows up in the goal answer — never as a verdict.
   const kept = C.coach(q('muscle', 40, -0.6, { answers: { q_goal_check_weight: 'keep' }, asked: { q_goal_check_weight: NOW - 5 * DAY } })).ask('ask_goal');
-  check('what he answered is what the goal answer says back: "and you told Coach that’s on purpose."',
-        /you told Coach that’s on purpose\./.test(kept.text), kept.text);
+  check('what he answered is what the goal answer says back: "and you told me that’s on purpose."',
+        /you told me that’s on purpose\./.test(kept.text), kept.text);
 }
 
 /* ================= F. CHANGING THE AIM CLEARS BOTH ANSWERS ================= */

@@ -74,6 +74,37 @@ export function todayKey(d = new Date()) {
 const NOWT = await stageTree(null);
 const V51 = await stageTree('99b49ea');
 const { C, P, O, R } = NOWT;
+/* v71: Coach speaks in the first person (SHIP-V71-PROMPT §3). Every answer
+   rack-v51 wrote in the third person is read through this one map before a
+   byte-for-byte comparison against it, so the promise stays "the same
+   answer", up to exactly these documented sentence pairs — a number, a mode
+   or a target that moved still fails. The pairs are the ship's own rewrite
+   table for the words these rows reach; anything not covered stays a
+   difference. */
+const VOICE = [
+  [/Coach is learning this lift \((\d+ sessions?) so far\)\./g, 'I’m learning this lift: $1 so far.'],
+  [/for Coach to call/g, 'for me to call'], [/and Coach won’t call/g, 'and I won’t call'],
+  [/Coach sets targets from there/g, 'I’ll set targets from there'], [/Coach will learn yours/g, 'I’ll learn yours'],
+  [/so Coach won’t work/g, 'so I won’t work'], [/Coach doesn’t have a lighter/g, 'I don’t have a lighter'],
+  [/Coach needs a few more sessions of this lift to know your rep range\./g, 'A few more sessions of this lift and I’ll know your rep range.'],
+  [/Coach wants to see it twice/g, 'I want to see it twice'],
+  [/Coach doesn’t know (.*?) yet, so it won’t guess/g, 'I don’t know $1 yet, so I won’t guess'],
+  [/A workout is running\. Coach builds the next one/g, 'A workout is running. I’ll build the next one'],
+  [/; Coach gives (them|it) /g, '; I give $1 '], [/until Coach knows your gaps/g, 'until I know your gaps'],
+  [/Coach would give (them|it) another day/g, 'I’d give $1 another day'],
+  [/Coach can’t see sleep, stress or soreness/g, 'I can’t see sleep, stress or soreness'],
+  [/which Coach can’t see/g, 'which I can’t see'], [/read the way Coach reads today/g, 'read the way I read today'],
+  [/Coach reports this; it changes nothing/g, 'I report this; it changes nothing'],
+  [/It reads your log, and nothing about how you feel\./g, 'I read your log, and nothing about how you feel.'],
+  // coach.js: the goal questions' acknowledgements ride on the targets answer.
+  [/Noted\. Coach sets your targets with that in mind\./g, 'Noted. I’ll set your targets with that in mind.'],
+  [/That sets how big a jump Coach will suggest\./g, 'That sets how big a jump I’ll suggest.'],
+  [/That changes how Coach reads your weight\./g, 'That changes how I read your weight.'],
+  [/Noted\. Coach reads that group’s sets and lifts/g, 'Noted. I’ll read that group’s sets and lifts'],
+  [/Noted\. Coach won’t ask about that again/g, 'Noted. I won’t ask about that again']
+];
+const voiced = t => (t == null ? t : JSON.parse(JSON.stringify(t), (k, v) =>
+  (typeof v === 'string' ? VOICE.reduce((s, [a, b]) => s.replace(a, b), v) : v)));
 const { EXERCISES } = await import(JSON.parse(real('exercises.js')));
 const U8 = await import(JSON.parse(real('units.js')));
 
@@ -292,14 +323,18 @@ row('R5', () => {
 row('R6', () => {
   const inp = withSettings(R1(), { mute: { rest: true } });
   const c = C.coach(inp), c51 = V51.C.coach(inp);
-  const same = id => JSON.stringify(c.ask(id)) === JSON.stringify(c51.ask(id));
-  const sameBuild = JSON.stringify(c.build({})) === JSON.stringify(c51.build({})) &&
-                    JSON.stringify(c.buildMenu()) === JSON.stringify(c51.buildMenu());
+  const same = id => JSON.stringify(c.ask(id)) === JSON.stringify(voiced(c51.ask(id)));
+  const sameBuild = JSON.stringify(c.build({})) === JSON.stringify(voiced(c51.build({}))) &&
+                    JSON.stringify(c.buildMenu()) === JSON.stringify(voiced(c51.buildMenu()));
   const quiet = ['ask_shape', 'ask_lighter'].every(id => !['rest_day', 'group_ready'].includes(c.ask(id).id)) &&
                 !c.buildCaution({ focus: 'group:legs' });
   const ok = quiet && same('ask_shape') && same('ask_targets') && same('ask_build_now') && sameBuild;
+  // The first string that differs, so a failure names the sentence and not the row.
+  const firstDiff = (a, b) => { const A = JSON.stringify(a, null, 1).split('\n'), B = JSON.stringify(b, null, 1).split('\n');
+    const i = A.findIndex((l, k) => l !== B[k]); return i < 0 ? '' : ' · first difference: ' + (A[i] || '∅') + ' vs v51 ' + (B[i] || '∅'); };
   return grade(ok, false, 'quiet ' + quiet + ' shape ' + same('ask_shape') + ' targets ' + same('ask_targets') + ' build ' + sameBuild +
-               ' · ' + c.ask('ask_targets').text + ' / ' + c51.ask('ask_targets').text);
+               ' · ' + c.ask('ask_targets').text + ' / ' + c51.ask('ask_targets').text +
+               (same('ask_targets') ? '' : firstDiff(c.ask('ask_targets'), voiced(c51.ask('ask_targets')))));
 });
 
 /* R7: five sessions in the window — no rest read, the shipped answers. */
@@ -307,7 +342,7 @@ row('R7', () => {
   const inp = input({ sessions: sortS([1, 4, 8, 11, 15].map((a, k) => sess(a, k % 2 ? LOWER : UPPER))) });
   const r = rs(inp);
   const c = C.coach(inp), c51 = V51.C.coach(inp);
-  const ok = r === null && JSON.stringify(c.ask('ask_shape')) === JSON.stringify(c51.ask('ask_shape'));
+  const ok = r === null && JSON.stringify(c.ask('ask_shape')) === JSON.stringify(voiced(c51.ask('ask_shape')));
   return grade(ok, false, JSON.stringify(r) + ' · ' + c.ask('ask_shape').text);
 });
 
@@ -473,7 +508,7 @@ row('R17', () => {
 row('R18', () => {
   const inp = R3();
   const c = C.coach(inp), c51 = V51.C.coach(inp);
-  const t = c.ask('ask_targets'), t51 = c51.ask('ask_targets');
+  const t = c.ask('ask_targets'), t51 = voiced(c51.ask('ask_targets'));
   const lines = (t.more || []).map(m => m.text), lines51 = (t51.more || []).map(m => m.text);
   const ok = t.id === 'lift_targets' && lines[0] === 'Today looks like a rest day. These targets keep until your next session.' &&
              JSON.stringify(lines.filter(x => /— Target:/.test(x))) === JSON.stringify(lines51.filter(x => /— Target:/.test(x))) &&
@@ -670,7 +705,7 @@ row('X1', () => {
   const more = (a.more || []).map(m => m.text);
   const ok = a.id === 'session_compare' && /^Below your usual/.test(a.text) && more.includes('Nothing in your log was off your normal.') &&
              !more.includes('These are differences, not causes.') && !!a.mark && a.mark.sessionId === 'today' &&
-             a.mark.text === 'Anything Coach can’t see?' && a.mark.options.map(o => o.label).join('|') === 'Slept badly|Stressed|Sore|Didn’t feel well|Nothing';
+             a.mark.text === 'Anything I can’t see?' && a.mark.options.map(o => o.label).join('|') === 'Slept badly|Stressed|Sore|Didn’t feel well|Nothing';
   return grade(ok, a.id !== 'session_compare', a.text + ' / ' + more.join(' / ') + ' · mark ' + !!a.mark);
 });
 row('X2', () => {
@@ -799,9 +834,9 @@ row('M7', () => {
   [R1(), R3(), R11(), mLog([[185, 8], [190, [6, 5, 5]]]), mLog([[185, [6, 6, 6]], [185, [6, 6, 5]]], { head: [170, 175, 180] })].forEach((inp0, n) => {
     // Readiness off too: its line is not a target, and it has its own switch.
     const inp = withSettings(inp0, { mute: { rest: true, readiness: true } });
-    const a = C.coach(inp).build({}), b = V51.C.coach(inp).build({});
+    const a = C.coach(inp).build({}), b = voiced(V51.C.coach(inp).build({}));
     if (JSON.stringify(a) !== JSON.stringify(b)) bad.push(n + ' build');
-    if (JSON.stringify(C.coach(inp).ask('ask_targets')) !== JSON.stringify(V51.C.coach(inp).ask('ask_targets'))) bad.push(n + ' targets');
+    if (JSON.stringify(C.coach(inp).ask('ask_targets')) !== JSON.stringify(voiced(V51.C.coach(inp).ask('ask_targets')))) bad.push(n + ' targets');
   });
   return grade(!bad.length, false, bad.join(', ') || 'identical');
 });
@@ -810,7 +845,7 @@ row('M8', () => {
   const acks = Object.fromEntries(opts.map(o => [o.label, o.ack]));
   const ok = acks['Slept badly'] === 'Noted. That session won’t count against your numbers.' &&
              acks['Stressed'] === acks['Slept badly'] && acks['Sore'] === acks['Slept badly'] &&
-             acks['Didn’t feel well'] === 'Noted. That session won’t count against your numbers. Rest is always an option. Coach doesn’t do health, so it’ll leave it there.' &&
+             acks['Didn’t feel well'] === 'Noted. That session won’t count against your numbers. Rest is always an option. I don’t do health, so I’ll leave it there.' &&
              acks['Nothing'] === 'Noted.' && opts.find(o => o.label === 'Nothing').value === null &&
              C.MARK_ASK.clear.label === 'Clear the mark' && C.MARK_ASK.clear.ack === 'Cleared.';
   return grade(ok, false, JSON.stringify(acks));

@@ -472,7 +472,7 @@ section('K. v52, Phase B — "Am I fueled?": four selectors, and q_log_timing wi
         !!q && q.where === 'fuel' && q.text === 'Do you usually log food as you go, or later in the day?' &&
         JSON.stringify(q.options.map(o => [o.value, o.label])) === JSON.stringify([['live', 'As I go'], ['later', 'Later']]) &&
         JSON.stringify(q.changes) === '["fuel_fueled"]' && q.fact === 'coach.logTiming' &&
-        q.ack === 'Noted. Coach reads your food by the hour when you log as you go, and by the day when you log later.');
+        q.ack === 'Noted. I read your food by the hour when you log as you go, and by the day when you log later.');
   const f = FACTS.find(x => x.id === 'coach.logTiming');
   check('coach.logTiming reads the answer straight off settings/coach, and nothing else — so the registry can drive it',
         !!f && JSON.stringify(f.usesAnswers) === '["q_log_timing"]' &&

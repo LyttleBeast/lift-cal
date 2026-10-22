@@ -348,7 +348,7 @@ const BUTTONS = [
      Never measured in Chrome at v46, so B names them and leaves them to A. */
   ['Recap · feel', 'Energy 1–10', ['workout.js', /el\('div', 'feel-grid'\)/], `button.coach-chip < div.feel-grid < div.card.feel-card < div.screen-pad.summary-page < ${V}`, null],
   ['Recap · feel', 'Strength steps', ['workout.js', /'coach-chips feel-steps'/], `button.coach-chip < div.coach-chips.feel-steps < div.card.feel-card < div.screen-pad.summary-page < ${V}`, null],
-  ['Recap · feel', 'Anything Coach can’t see?', ['workout.js', /el\('div', 'feel-mark'\)/], `button.coach-chip < div.coach-chips < div.feel-mark < div.card.feel-card < div.screen-pad.summary-page < ${V}`, null],
+  ['Recap · feel', 'Anything I can’t see?', ['workout.js', /el\('div', 'feel-mark'\)/], `button.coach-chip < div.coach-chips < div.feel-mark < div.card.feel-card < div.screen-pad.summary-page < ${V}`, null],
   ['Recap · feel', 'Save', ['workout.js', /el\('button', 'btn btn-primary', 'Save'\)/], `button.btn.btn-primary < div.feel-acts < div.card.feel-card < div.screen-pad.summary-page < ${V}`, null],
   ['Recap · feel', 'Skip', ['workout.js', /el\('button', 'btn btn-ghost', 'Skip'\)/], `button.btn.btn-ghost < div.feel-acts < div.card.feel-card < div.screen-pad.summary-page < ${V}`, null],
   /* v54, on purpose: the live sheet's "How was it?" — the three effort chips

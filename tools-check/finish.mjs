@@ -176,8 +176,8 @@ row('N2', () => {
   const inp1 = input({ sessions: sortS(holdsLog().filter(s => !s.exercises.some(e => e.exId === SQUAT)).concat([one])) });
   const f1 = keep('N2 1 of 1', recap(inp1, one));
   const replay = C.coach({ ...inp, now: NOW }).ask('ask_compare');
-  const two = (replay.more || []).some(m => m.text === '2 of 2 Coach targets met.');
-  const ok = two && f.headline === 'Great workout.' && f.line === 'Every Coach target met: 2 of 2.' && f.evidence[0] === 'targets' &&
+  const two = (replay.more || []).some(m => m.text === '2 of 2 targets met.');
+  const ok = two && f.headline === 'Great workout.' && f.line === 'Every target met: 2 of 2.' && f.evidence[0] === 'targets' &&
              !f1.evidence.includes('targets');
   return grade(ok, !two, said(f) + ' · 1 of 1: ' + said(f1) + ' · compare: ' + (replay.more || []).map(m => m.text).join(' / '));
 });
@@ -238,7 +238,7 @@ row('N8', () => {
   const met = justNow([[SQUAT, xN(3, 225, 10)], [ROW, xN(3, 155, 8)]]);
   const inp = input({ sessions: sortS(holdsLog().concat([met])), tier: { pro: false } });
   const f = keep('N8', recap(inp, met));
-  const ok = !f.evidence.includes('targets') && !f.evidence.includes('compare') && f.line !== 'Every Coach target met: 2 of 2.' &&
+  const ok = !f.evidence.includes('targets') && !f.evidence.includes('compare') && f.line !== 'Every target met: 2 of 2.' &&
              (f.headline === 'Good work.' || f.evidence.length > 0);
   return grade(ok, false, said(f));
 });

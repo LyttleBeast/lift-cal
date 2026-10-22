@@ -366,7 +366,7 @@ export function todayKey(d = new Date()) {
         logs.map(i => (C.coach(i).question || {}).id).join(','));
   const q0 = none.ask('ask_targets').question;
   check('the targets answer carries the aim question first, with its six answers and its own acknowledgement',
-        !!q0 && q0.id === 'q_goal_aim' && q0.options.length === 6 && q0.ack === 'Noted. Coach sets your targets with that in mind.');
+        !!q0 && q0.id === 'q_goal_aim' && q0.options.length === 6 && q0.ack === 'Noted. I’ll set your targets with that in mind.');
   const q1 = C.coach(input(settings({ q_goal_aim: 'muscle' }, { q_goal_aim: NOW - DAY }))).ask('ask_targets').question;
   check('once the aim is answered, the experience question is next', !!q1 && q1.id === 'q_experience', q1 && q1.id);
   check('and with both answered, nothing is asked',

@@ -125,13 +125,13 @@ const NOTED = 'Noted. That session won’t count against your numbers.';
    what each answer says back. Not one of QUESTIONS: nothing it stores is an
    answer, and "Nothing" stores nothing at all. */
 export const MARK_ASK = Object.freeze({
-  text: 'Anything Coach can’t see?',
+  text: 'Anything I can’t see?',
   options: Object.freeze([
     Object.freeze({ value: 'sleep',  label: 'Slept badly',       ack: NOTED }),
     Object.freeze({ value: 'stress', label: 'Stressed',          ack: NOTED }),
     Object.freeze({ value: 'sore',   label: 'Sore',              ack: NOTED }),
     Object.freeze({ value: 'unwell', label: 'Didn’t feel well',
-                    ack: NOTED + ' Rest is always an option. Coach doesn’t do health, so it’ll leave it there.' }),
+                    ack: NOTED + ' Rest is always an option. I don’t do health, so I’ll leave it there.' }),
     Object.freeze({ value: null,     label: 'Nothing',           ack: 'Noted.' })
   ]),
   clear: Object.freeze({ label: 'Clear the mark', ack: 'Cleared.' })
@@ -284,7 +284,7 @@ function groupList(gs) {
    core, and switching it off would leave a card that cannot say anything at
    all — including that it cannot read the log. */
 export const CATEGORIES = Object.freeze([
-  { id: 'core',        label: 'Coach itself',        mutable: false, note: 'The card and what it can and cannot see.' },
+  { id: 'core',        label: 'Coach itself',        mutable: false, note: 'The card, and what I can and cannot see.' },
   { id: 'safety',      label: 'Caution',             mutable: false, note: 'Anything that counsels rest or care.' },
   { id: 'volume',      label: 'Balance and volume',  mutable: true,  note: 'Sets for a group against your own normal.' },
   { id: 'recency',     label: 'Overdue and layoffs', mutable: true,  note: 'How long since a group, and since a session.' },
@@ -292,7 +292,7 @@ export const CATEGORIES = Object.freeze([
      when Coach suggests a lighter week or a rest. Every later category moves
      down one and keeps its order relative to the others, so no finding's rank
      moves — its one finding is sheet-only and never competes for a card. */
-  { id: 'rest',        label: 'Rest and lighter weeks', mutable: true, note: 'When Coach suggests a lighter week or a rest.' },
+  { id: 'rest',        label: 'Rest and lighter weeks', mutable: true, note: 'When I suggest a lighter week or a rest.' },
   /* v52's, directly after rest because it is the question asked before a
      workout. Every later category moves down one and keeps its order, so no
      finding's rank moves — nothing in it competes for a card. */
@@ -324,7 +324,7 @@ export const CATEGORIES = Object.freeze([
   { id: 'fuel',        label: 'Food',                mutable: true,  note: 'Calories and macros against your own targets.' },
   { id: 'weight',      label: 'Weight',              mutable: true,  note: 'Rate of change, and days since a weigh-in.' },
   { id: 'steps',       label: 'Steps',               mutable: true,  note: 'Today against your own trailing average.' },
-  { id: 'questions',   label: 'Questions',           mutable: true,  note: 'Whether Coach may ask you anything at all.' },
+  { id: 'questions',   label: 'Questions',           mutable: true,  note: 'Whether I may ask you anything at all.' },
   /* Ship three's, and the one category that is OFF until it is switched on
      (`optIn`): a comparison between two groups of somebody's own days is a
      thing they ask for, not a thing Coach volunteers. Last, so it moves no
@@ -966,7 +966,7 @@ export const FACTS = Object.freeze([
       return best;
     },
     because: () => 'counted from working sets alone, over the four weeks before this one — ' +
-                   'your own normal rather than a bar Coach picked',
+                   'your own normal rather than a bar I picked',
     age: () => 0
   },
   {
@@ -1234,7 +1234,7 @@ export const FACTS = Object.freeze([
        paint. It reports; it adjusts nothing. */
     id: 'session.replay', unit: null, requires: [],
     compute: d => replay(d.ready(), d.now),
-    because: () => 'each of the last twelve weeks’ mornings, read the way Coach reads today'
+    because: () => 'each of the last twelve weeks’ mornings, read the way I read today'
   },
 
   /* ---------- stage four, the food half (v52, Phase B): coach-fuel.js ---------- */
@@ -1243,7 +1243,7 @@ export const FACTS = Object.freeze([
     id: 'coach.logTiming', unit: null, requires: [],
     compute: d => { const a = ((d.input.settings && d.input.settings.answers) || {}).q_log_timing;
                     return a === 'live' || a === 'later' ? a : null; },
-    because: v => (v === 'live' ? 'you told Coach you log food as you go' : 'you told Coach you log food later in the day'),
+    because: v => (v === 'live' ? 'you told me you log food as you go' : 'you told me you log food later in the day'),
     usesAnswers: ['q_log_timing']
   },
   {
@@ -1416,7 +1416,7 @@ export const FACTS = Object.freeze([
     because: (v, d) => {
       const w = d.input.weight || {};
       const own = w.goalDir === -1 || w.goalDir === 0 || w.goalDir === 1;
-      return own ? 'the direction your own goal points' : 'the direction you told Coach you were going';
+      return own ? 'the direction your own goal points' : 'the direction you told me you were going';
     },
     usesAnswers: ['q_goal_direction']
   },
@@ -1713,7 +1713,7 @@ export const FACTS = Object.freeze([
       if (!Array.isArray(list)) return [];
       return list.filter(x => typeof x === 'string' && x).slice(0, 3);
     },
-    because: () => 'the lines Coach opened with last time'
+    because: () => 'the lines I opened with last time'
   },
   {
     /* v49: the card's last few earned lines, newest first — device storage,
@@ -1750,7 +1750,7 @@ export const FACTS = Object.freeze([
       });
       return live.length ? live[0].id : null;
     },
-    because: () => 'Coach already has a question waiting'
+    because: () => 'I already have a question waiting'
   },
   /* THE GOAL, as the answers to Coach's own two questions and nothing else —
      no `goal` key, because a second record of the same fact is the one that
@@ -1764,7 +1764,7 @@ export const FACTS = Object.freeze([
       const a = ((d.input.settings && d.input.settings.answers) || {}).q_goal_aim;
       return AIMS.includes(a) ? a : null;
     },
-    because: () => 'what you told Coach you are training for',
+    because: () => 'what you told me you are training for',
     usesAnswers: ['q_goal_aim']
   },
   {
@@ -1773,7 +1773,7 @@ export const FACTS = Object.freeze([
       const a = ((d.input.settings && d.input.settings.answers) || {}).q_experience;
       return EXPERIENCE.includes(a) ? a : null;
     },
-    because: () => 'how long you told Coach you have been lifting',
+    because: () => 'how long you told me you have been lifting',
     usesAnswers: ['q_experience']
   },
 
@@ -1785,7 +1785,7 @@ export const FACTS = Object.freeze([
       const a = ((d.input.settings && d.input.settings.answers) || {}).q_focus_group;
       return FOCUS_VALUES.includes(a) ? a : null;
     },
-    because: () => 'the group you told Coach you most want to bring up',
+    because: () => 'the group you told me you most want to bring up',
     usesAnswers: ['q_focus_group']
   },
   {
@@ -1796,7 +1796,7 @@ export const FACTS = Object.freeze([
       const a = ((d.input.settings && d.input.settings.answers) || {}).q_goal_check_weight;
       return CHECK_VALUES.includes(a) ? a : null;
     },
-    because: () => 'what you told Coach about your weight moving against your goal',
+    because: () => 'what you told me about your weight moving against your goal',
     usesAnswers: ['q_goal_check_weight']
   },
   {
@@ -1805,7 +1805,7 @@ export const FACTS = Object.freeze([
       const a = ((d.input.settings && d.input.settings.answers) || {}).q_goal_check_targets;
       return CHECK_VALUES.includes(a) ? a : null;
     },
-    because: () => 'what you told Coach about your food targets pointing against your goal',
+    because: () => 'what you told me about your food targets pointing against your goal',
     usesAnswers: ['q_goal_check_targets']
   },
   {
@@ -1850,7 +1850,7 @@ export const FACTS = Object.freeze([
     // Coach's targets for that session, replayed as they stood before it.
     id: 'session.latestTargets', unit: null, requires: ['session.latest'],
     compute: d => { const r = targetsReplay(d.overlap(), d.f('session.latest')); return r && r.n ? r : null; },
-    because: v => plural(v.n, 'lift') + ' with a Coach target that named a weight'
+    because: v => plural(v.n, 'lift') + ' with a target of mine that named a weight'
   },
   {
     id: 'lift.next', unit: null, requires: ['session.latest'],
@@ -1915,7 +1915,7 @@ export const FACTS = Object.freeze([
       const r = replayOf(d, s);
       return r ? { ...r, daysAgo: s.daysAgo, date: s.date } : null;
     },
-    because: v => plural(v.n, 'lift') + ' with a Coach target that named a weight',
+    because: v => plural(v.n, 'lift') + ' with a target of mine that named a weight',
     age: v => v.daysAgo
   },
   {
@@ -2089,7 +2089,7 @@ export const QUESTIONS = Object.freeze([
     // unlocks or the list stops being true.
     changes: Object.freeze(['weight_rate_vs_goal', 'stalled_lift']),
     fact: 'weight.goalDir',
-    ack: 'Noted. That changes how Coach reads your weight.',
+    ack: 'Noted. That changes how I read your weight.',
     // Only worth asking when the answer would really unlock something: there is
     // a rate to read and no direction to read it against.
     when: d => d.f('weight.rateWk') != null && d.f('weight.goalDir') == null
@@ -2109,7 +2109,7 @@ export const QUESTIONS = Object.freeze([
     fact: 'coach.aim',
     always: true,
     where: 'targets',
-    ack: 'Noted. Coach sets your targets with that in mind.',
+    ack: 'Noted. I’ll set your targets with that in mind.',
     when: d => d.f('coach.aim') == null
   },
   {
@@ -2126,7 +2126,7 @@ export const QUESTIONS = Object.freeze([
     fact: 'coach.experience',
     always: true,
     where: 'targets',
-    ack: 'Noted. That sets how big a jump Coach will suggest.',
+    ack: 'Noted. That sets how big a jump I’ll suggest.',
     when: d => d.f('coach.aim') != null && d.f('coach.experience') == null
   },
   /* v49. The focus group: asked under "How am I tracking toward my goal?"
@@ -2150,7 +2150,7 @@ export const QUESTIONS = Object.freeze([
     fact: 'coach.focus',
     always: true,
     where: 'goal',
-    ack: 'Noted. Coach reads that group’s sets and lifts when you ask how you’re tracking.',
+    ack: 'Noted. I’ll read that group’s sets and lifts when you ask how you’re tracking.',
     when: d => d.f('coach.aim') != null && d.f('coach.focus') == null
   },
   /* v49. "DID YOUR GOAL CHANGE?" — two questions, asked as the sheet's opener
@@ -2181,7 +2181,7 @@ export const QUESTIONS = Object.freeze([
     changes: Object.freeze(['goal_pace']),
     fact: 'coach.goalCheckWeight',
     settings: false,
-    ack: 'Noted. Coach won’t ask about that again for a while.',
+    ack: 'Noted. I won’t ask about that again for a while.',
     stale: (answer, askedAt, d) => checkStale(answer, askedAt, d),
     when: d => goalCheckOpen(d) && (d.f('coach.goalChecks') || {}).weight === true
   },
@@ -2196,7 +2196,7 @@ export const QUESTIONS = Object.freeze([
     changes: Object.freeze(['goal_pace']),
     fact: 'coach.goalCheckTargets',
     settings: false,
-    ack: 'Noted. Coach won’t ask about that again for a while.',
+    ack: 'Noted. I won’t ask about that again for a while.',
     stale: (answer, askedAt, d) => checkStale(answer, askedAt, d),
     when: d => goalCheckOpen(d) && (d.f('coach.goalChecks') || {}).targets === true
   },
@@ -2215,7 +2215,7 @@ export const QUESTIONS = Object.freeze([
     changes: Object.freeze(['fuel_fueled']),
     fact: 'coach.logTiming',
     where: 'fuel',
-    ack: 'Noted. Coach reads your food by the hour when you log as you go, and by the day when you log later.',
+    ack: 'Noted. I read your food by the hour when you log as you go, and by the day when you log later.',
     when: d => { const r = d.f('fuel.read'); return !!r && !!r.a && r.a.detected === 'batch' && d.f('coach.logTiming') == null; }
   }
 ]);
@@ -2859,19 +2859,19 @@ export const RESPONSES = Object.freeze({
 
   resp_log_unreadable: {
     text: () => 'Can’t read your training log right now.',
-    reason: () => 'Coach says nothing rather than guess from a read it could not finish. Every other tab draws from its own data.'
+    reason: () => 'I say nothing rather than guess from a read I could not finish. Every other tab draws from its own data.'
   },
   resp_first_run: {
     text: () => 'Nothing in your training log yet.',
-    reason: () => 'Coach reads your own sessions, food and weigh-ins. Finish one session and it has something to compare.'
+    reason: () => 'I read your own sessions, food and weigh-ins. Finish one session and I have something to compare.'
   },
   resp_live_session: {
     text: () => 'You’re mid-session.',
-    reason: () => 'A workout in progress isn’t in the log yet, so Coach waits until you save it.'
+    reason: () => 'A workout in progress isn’t in the log yet, so I wait until you save it.'
   },
   resp_state_thin: {
     text: d => plural(d.f('session.count'), 'session') + ' logged so far.',
-    reason: () => 'Most of what Coach looks at wants three or four sessions inside the last twelve weeks before it will say anything.'
+    reason: () => 'Most of what I look at wants three or four sessions inside the last twelve weeks before I say anything.'
   },
   resp_state_clear: {
     text: () => 'Nothing stands out today.',
@@ -2880,8 +2880,8 @@ export const RESPONSES = Object.freeze({
   resp_state_locked: {
     text: d => {
       const n = d.lockedCount || 0;
-      return n === 1 ? 'Coach has one more thing to say about your log.'
-                     : 'Coach has ' + n + ' more things to say about your log.';
+      return n === 1 ? 'I have one more thing to say about your log.'
+                     : 'I have ' + n + ' more things to say about your log.';
     },
     reason: () => 'Comparisons against your own history are part of Pro. The readouts stay here either way.'
   },
@@ -2901,7 +2901,7 @@ export const RESPONSES = Object.freeze({
     reason: d => {
       const g = d.f('session.lastGroups');
       return (g && g.length ? 'Your last session was ' + groupList(g) + '. ' : '') +
-             'Nothing here is behind — Coach starts its windows again from whatever you log next.';
+             'Nothing here is behind — I start my windows again from whatever you log next.';
     }
   },
   resp_train_today: {
@@ -2990,12 +2990,12 @@ export const RESPONSES = Object.freeze({
     // Naming the denominator out loud, because the denominator IS the finding:
     // Rack has no opinion about how many sessions a week is right and is not
     // going to grow one. The bar is whatever this account has been doing.
-    reason: () => 'Your own trailing average, not a number Coach picked. The four weeks before this one, nothing else.'
+    reason: () => 'Your own trailing average, not a number I picked. The four weeks before this one, nothing else.'
   },
 
   resp_no_targets: {
     text: () => 'No daily targets set on this account.',
-    reason: () => 'Coach won’t measure your food against a number nobody chose. Set them under Settings → Daily targets and it will start.'
+    reason: () => 'I won’t measure your food against a number nobody chose. Set them under Settings → Daily targets and I’ll start.'
   },
   resp_cal_left: {
     text: d => {
@@ -3037,7 +3037,7 @@ export const RESPONSES = Object.freeze({
       const size = labelRate(Math.abs(r), u) + ' a week';
       if (Math.abs(r) > RATE_BAND_LB) {
         return way + size + (goal != null ? ', against the ' + labelRate(Math.abs(goal), u) + ' you set.'
-                                          : '. Coach reports the number and leaves the reading to you.');
+                                          : '. I report the number and leave the reading to you.');
       }
       const agrees = dir === 0 ? Math.abs(r) <= 0.5 : dir < 0 ? r <= 0 : r >= 0;
       if (r === 0) return 'Holding — no change a week.';
@@ -3047,7 +3047,7 @@ export const RESPONSES = Object.freeze({
       const r = d.f('weight.rateWk');
       const base = FACT_BY_ID['weight.rateWk'].because(r, d);
       return Math.abs(r) > RATE_BAND_LB
-        ? base.charAt(0).toUpperCase() + base.slice(1) + '. Coach won’t call a rate that size on track, whichever way it points.'
+        ? base.charAt(0).toUpperCase() + base.slice(1) + '. I won’t call a rate that size on track, whichever way it points.'
         : base.charAt(0).toUpperCase() + base.slice(1) + '.';
     }
   },
@@ -3227,7 +3227,7 @@ export const RESPONSES = Object.freeze({
       const v = d.f('session.compare'), t = d.f('session.latestTargets');
       const out = (v.summary ? v.rows : []).map(r => ({ text: r.text, reason: '' }));
       if (t && d.f('meta.tierPro') === true && !isMuted(d.input.settings, 'targets')) {
-        out.push({ text: t.met + ' of ' + t.n + ' Coach targets met.', reason: 'Each target as Coach would have set it before the session.' });
+        out.push({ text: t.met + ' of ' + t.n + ' targets met.', reason: 'Each target as I would have set it before the session.' });
       }
       // v53: his own rating, after the shipped rows — quoted as he gave it.
       const feel = normFeel(((d.f('session.latest') || {}).session || {}).feel);
@@ -3236,13 +3236,13 @@ export const RESPONSES = Object.freeze({
       if (diffs && diffs.rows.length) {
         out.push({ text: 'What was different in your log:', reason: 'Each against your own sessions in the twelve weeks before it, whichever way it went.' });
         diffs.rows.forEach(r => out.push({ text: r.text, reason: '' }));
-        out.push({ text: 'These are differences, not causes.', reason: 'Coach lists what was different, either way, and never says why.' });
+        out.push({ text: 'These are differences, not causes.', reason: 'I list what was different, either way, and never say why.' });
         const t2 = compareLink(d, diffs.rows);
         if (t2) out.push({ text: t2, reason: 'One of Patterns’ own comparisons, from your log, with both counts.' });
       } else if (diffs && diffs.measured) {
         out.push({ text: 'Nothing in your log was off your normal.', reason: 'Each against your own sessions in the twelve weeks before it.' });
       }
-      out.push({ text: 'Coach can’t see sleep, stress or soreness.', reason: 'It reads your log, and nothing about the day you had.' });
+      out.push({ text: 'I can’t see sleep, stress or soreness.', reason: 'I read your log, and nothing about the day you had.' });
       const m = d.markOf(d.f('session.latest'));
       if (m) out.push({ text: 'You marked this session: ' + MARK_WORDS[m.r] + '. It doesn’t count against your numbers.',
                         reason: 'Clear the mark and it counts again.' });
@@ -3318,11 +3318,11 @@ export const RESPONSES = Object.freeze({
       const q = QUESTION_BY_ID[d.askQuestionId || ''];
       return q ? q.text : '';
     },
-    reason: () => 'Coach asks at most one thing, and only something that changes what it can tell you.'
+    reason: () => 'I ask at most one thing, and only something that changes what I can tell you.'
   },
   resp_not_injuries: {
-    text: () => 'Coach doesn’t do injuries or pain.',
-    reason: () => 'It reads your log and nothing else. If something hurts, that’s a conversation for a person, not an app.'
+    text: () => 'I don’t do injuries or pain.',
+    reason: () => 'I read your log and nothing else. If something hurts, that’s a conversation for a person, not an app.'
   }
 });
 
@@ -3343,8 +3343,8 @@ const GOAL_CHOICES = 30;
 function goalLines(d, u) {
   const aim = d.f('coach.aim');
   if (!aim) {
-    return [{ text: 'Set a goal in Settings → Coach → Your goal and Coach will track it.',
-              reason: 'It reads what you’re training for, a lift target if you set one, and the goal weight in your daily targets.' }];
+    return [{ text: 'Set a goal in Settings → Coach → Your goal and I’ll track it.',
+              reason: 'I read what you’re training for, a lift target if you set one, and the goal weight in your daily targets.' }];
   }
   const out = [];
   // The aim, and — only where he has answered one — what he said about a
@@ -3356,11 +3356,11 @@ function goalLines(d, u) {
   if (checks.weight && (cw === 'temp' || cw === 'keep') && checks.weeks) {
     const moved = checks.weeks[checks.weeks.length - 1].to - checks.weeks[0].from;
     aside += ' Your weight has ' + (moved < 0 ? 'come down' : 'gone up') + ' about ' + labelW(Math.abs(moved), u) +
-             ' over the last ' + plural(checks.weeks.length, 'week') + ', and you told Coach that’s ' + said(cw) + '.';
+             ' over the last ' + plural(checks.weeks.length, 'week') + ', and you told me that’s ' + said(cw) + '.';
   }
   if (checks.targets && (ct === 'temp' || ct === 'keep')) {
     aside += ' Your food targets are set to ' + (d.f('weight.goalRateWk') < 0 ? 'lose' : 'gain') +
-             ', and you told Coach that’s ' + said(ct) + '.';
+             ', and you told me that’s ' + said(ct) + '.';
   }
   out.push({ text: 'You set ' + aimLabel(aim) + '.' + aside, reason: 'Change it any time in Settings → Coach → Your goal.' });
 
@@ -3371,7 +3371,7 @@ function goalLines(d, u) {
     const name = (r && r.name) || ((d.lib[g.exId] || {}).name) || g.exId;
     const what = 'Your target, ' + labelW(g.lb, u) + (g.reps > 1 ? ' for ' + g.reps : '') + ' on ' + name;
     const why = 'The middle of your last two sessions of it, against the target’s estimated max; reps past twelve count as twelve, ' +
-                'the way every estimated max Coach reads does.';
+                'the way every estimated max I read does.';
     if (!r || !r.logged || !r.pace) {
       out.push({ text: what + ': no sessions of it lately, so there’s nothing to measure yet.', reason: why });
     } else if (r.pace.reached) {
@@ -3384,7 +3384,7 @@ function goalLines(d, u) {
         out.push({ text: head + ' ' + cap(weeksRange(lo, hi)) + ' at your last 12 weeks’ rate.',
                    reason: why + ' The range runs from the fitted pace of your sessions to its slow end.' });
       } else if (r.pace.perWk == null) {
-        out.push({ text: head + ' Coach needs six sessions of it in twelve weeks to put a pace on it.', reason: why });
+        out.push({ text: head + ' Six sessions of it in twelve weeks would let me put a pace on it.', reason: why });
       } else {
         const read = r.read && r.read.call !== 'none' ? ' ' + r.read.text : '';
         out.push({ text: head + ' Not moving toward it right now.' + read, reason: why });
@@ -3404,7 +3404,7 @@ function goalLines(d, u) {
       const r = Math.abs(rate);
       if (r > RATE_BAND_LB) {
         out.push({ text: 'Your weight is moving ' + labelRate(r, u) + ' a week toward your ' + goalW + ' goal weight.',
-                   reason: why.charAt(0).toUpperCase() + why.slice(1) + '. Coach reports a rate that size and leaves the reading to you.' });
+                   reason: why.charAt(0).toUpperCase() + why.slice(1) + '. I report a rate that size and leave the reading to you.' });
       } else {
         const se = d.f('weight.rateSeWk');
         const spread = se != null ? se : r * 0.25;
@@ -3771,7 +3771,7 @@ export const HYPE = Object.freeze([
     id: 'hype_targets_met', category: 'targets', aims: null, facts: ['session.targetsMet'],
     gate: d => { const v = d.f('session.targetsMet'); return d.f('meta.tierPro') === true && v.n >= 2 && v.met === v.n; },
     text: d => { const v = d.f('session.targetsMet');
-                 return 'Every Coach target met ' + (v.daysAgo === 0 ? 'today' : v.daysAgo === 1 ? 'yesterday' : 'on ' + weekday(v.date)) + '.'; },
+                 return 'Every target met ' + (v.daysAgo === 0 ? 'today' : v.daysAgo === 1 ? 'yesterday' : 'on ' + weekday(v.date)) + '.'; },
     key: d => 'targets:' + d.f('session.targetsMet').date,
     why: d => plural(d.f('session.targetsMet').n, 'lift') + ', each at its target weight and reps'
   },
@@ -3924,12 +3924,12 @@ function pickHype(pool, recent, opens, now, keep) {
    of the day's memory. */
 export const WARM = Object.freeze([
   { id: 'w_good_day',  text: () => 'A good day to get something done.' },
-  { id: 'w_here',      text: () => 'Coach is here whenever you want it.' },
-  { id: 'w_day_ready', text: d => weekday(dayKey(d.now)) + '. Coach is ready when you are.' },
+  { id: 'w_here',      text: () => 'I’m here whenever you want me.' },
+  { id: 'w_day_ready', text: d => weekday(dayKey(d.now)) + '. I’m ready when you are.' },
   { id: 'w_one_set',   text: () => 'One set at a time.' },
   { id: 'w_add_up',    text: () => 'Small steps add up.' },
   { id: 'w_day_page',  text: d => 'A new ' + weekday(dayKey(d.now)) + ', a fresh page.' },
-  { id: 'w_one_tap',   text: () => 'Coach is one tap away.' },
+  { id: 'w_one_tap',   text: () => 'I’m one tap away.' },
   { id: 'w_day_happy', text: d => 'Happy ' + weekday(dayKey(d.now)) + '.' }
 ]);
 function pickWarm(d, opens, greetText, not) {
@@ -4076,7 +4076,7 @@ function finishOf(d, rec, extras) {
   if (readable && pro && !isMuted(d.input.settings, 'targets')) {
     const t = replayOf(d, sh);
     if (t && t.n >= 2 && t.met === t.n) {
-      ev.push({ id: 'targets', line: 'Every Coach target met: ' + t.met + ' of ' + t.n + '.', short: 'Every Coach target met.',
+      ev.push({ id: 'targets', line: 'Every target met: ' + t.met + ' of ' + t.n + '.', short: 'Every target met.',
                 why: plural(t.n, 'lift') + ', each at its target weight and reps.' });
     }
   }
@@ -5239,8 +5239,8 @@ function ask(d, u, id) {
   const route = ROUTES[id];
   if (!route) {
     return {
-      id, text: 'Coach can’t answer that one.',
-      reason: 'It only reads your training, food, weight and steps — and only what it can back with a number.',
+      id, text: 'I can’t answer that one.',
+      reason: 'I read your training, food, weight and steps, and nothing else — and say what I can back with a number.',
       followups: followupsFor(d, u, 'topic_train')
     };
   }

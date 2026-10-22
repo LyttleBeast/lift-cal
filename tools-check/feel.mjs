@@ -354,7 +354,7 @@ section('D. a harder rating brings up "Anything Coach can’t see?" — exactly 
   const u = await asked(2, null);
   tap(u.card, 'Didn’t feel well');
   check('"Didn’t feel well" keeps its own acknowledgement, the one that leaves health alone',
-        find(u.card, 'feel-ack')[0].textContent === C.MARK_ASK.options[3].ack && /Coach doesn’t do health/.test(C.MARK_ASK.options[3].ack));
+        find(u.card, 'feel-ack')[0].textContent === C.MARK_ASK.options[3].ack && /I don’t do health/.test(C.MARK_ASK.options[3].ack));
   const q = await asked(2, '80% or less', { v: 1, mute: { questions: true }, answers: {}, asked: {} });
   check('Questions switched off: no chips, as v52’s markView() honours it', !find(q.card, 'feel-ask').length && !find(q.card, 'feel-mark').length);
   const m = await asked(2, '80% or less', { v: 1, mute: {}, answers: {}, asked: {}, marks: { w1: { r: 'sore', d: key(NOW - 50 * 60e3) } } });
