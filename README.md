@@ -762,7 +762,7 @@ score, and it stays silent with fewer than three things to read.
 
 **How did today compare?** lists what was *different* about the session, in
 both directions, and says "These are differences, not causes." When a session
-came in below your usual it asks *Anything Coach can’t see?*. Your answer is a
+came in below your usual it asks *Anything I can’t see?*. Your answer is a
 **mark** on that one session, kept six months. A marked session still counts
 for when and how much you trained, but never against your numbers: the next
 target is the one from before it. *Clear the mark* takes it back. Settings →

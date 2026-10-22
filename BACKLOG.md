@@ -1008,7 +1008,7 @@ goal step in onboarding, one target for Basic). Written up in `COACH-REPORT.md`
 - **Goal pace sits in the "Stalls and records" category** — no category fitted
   better without adding one — so switching that off also silences *How am I
   tracking toward my goal?*.
-- **"Every Coach target met" is Pro only** (a Basic account never saw the
+- **"Every target met" (v71; "Every Coach target met" before) is Pro only** (a Basic account never saw the
   targets), the one exception to "Pro and Basic both get earned lines".
 - **The volume rung reads "weeks 4–12" as weeks 5 to 12** (the four weeks
   before them are the "last 4 weeks" it compares).

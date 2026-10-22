@@ -672,8 +672,10 @@ section('I. a recorded set with no load reads BW — on a screen, never in a box
   // it?", "Next one: 190 lb × 8." — which never fill an input.
   // v68, one more in workout.js, a sentence: the "Last ·" line's warm-ups,
   // "warm-ups 45 to 225" (warmupsText), which never fills an input.
+  // v71, one more in coach.js, a sentence: the PR pool's "225 for 5. That’s a
+  // first." (PR_LINES pr_first), the finish line's record said another way.
   const DISPLAY = { 'workout.js': 5, 'stats.js': 2, 'you.js': 1, 'analytics.js': 1, 'coach-build.js': 1,
-                    'coach-live.js': 2, 'coach-prog.js': 2, 'coach.js': 1 };
+                    'coach-live.js': 2, 'coach-prog.js': 2, 'coach.js': 2 };
   const BOXES   = { 'workout.js': 2, 'routines.js': 3 };
   const wrong = [];
   APPJS.forEach(f => {

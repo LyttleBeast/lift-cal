@@ -714,7 +714,9 @@ section('I. v71 — the four first-person pools: every line under the bans in bo
         H.every(f => f.headline === 'Good work.' && badTexts.has(f.line) && f.short === 'Showing up on a harder day counts.'), H[0].line);
   const older = steady.filter(s => s.startedAt < NOW - 20 * DAY);
   const B = lines(comeback, older, 'lb');
-  const gapDays = Math.round((NOW - 2 * 3600e3 - Math.max(...older.map(s => s.startedAt))) / DAY);
+  // Calendar days in the local zone, as the engine counts them (noon to noon).
+  const noonOf = ms => { const d = new Date(ms); d.setHours(12, 0, 0, 0); return d.getTime(); };
+  const gapDays = Math.round((noonOf(NOW - 2 * 3600e3) - noonOf(Math.max(...older.map(s => s.startedAt)))) / DAY);
   const backTexts = textsOf(C.BACK_LINES, [{ n: gapDays, trained: true, priorGap: false }], 'lb');
   check('the first session back after ' + gapDays + ' days: "Great workout." and a missed-time pool line, the shipped sentence as the short',
         B.every(f => f.headline === 'Great workout.' && f.evidence[0] === 'back' && backTexts.has(f.line) && f.short === 'First session in ' + gapDays + ' days.'), B[0].line);

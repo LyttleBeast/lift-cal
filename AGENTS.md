@@ -994,7 +994,8 @@ twelve characters.
     `/^[A-Za-z0-9_-]{1,40}$/`.
   - `r` is `sleep`, `stress`, `sore` or `unwell`.
   - `d` is the session's own `YYYY-MM-DD`.
-  - One is written only by the answer to *Anything Coach can’t see?* under a
+  - One is written only by the answer to *Anything I can’t see?* (v71; *Anything
+    Coach can’t see?* until then) under a
     below-usual *How did today compare?*, through `coach-data.js`
     `markSession()`. *Nothing* writes nothing, and *Clear the mark* writes the
     key to `null`.

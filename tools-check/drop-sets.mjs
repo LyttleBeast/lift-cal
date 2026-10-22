@@ -232,6 +232,16 @@ function check(label, ok, detail) {
 }
 function section(t) { results.push('\n' + t); }
 const J = v => JSON.stringify(v);
+/* v71: Coach speaks in the first person, so rack-v54's sentences are read
+   through the ship's rewrite map before a byte-for-byte comparison — the
+   promise stays "the same read", up to exactly these documented pairs; a
+   number, a kind or a set that moved still fails. */
+const VOICE = [
+  [/Coach leans to stopping when the log points both ways/g, 'I lean to stopping when the log points both ways'],
+  [/Coach can’t see how you slept or how you feel/g, 'I can’t see how you slept or how you feel']
+];
+const voiced = t => (t == null ? t : JSON.parse(JSON.stringify(t), (k, v) =>
+  (typeof v === 'string' ? VOICE.reduce((s, [a, b]) => s.replace(a, b), v) : v)));
 const find = (n, cls) => walk(n).filter(x => x.classList.contains(cls));
 const buttonsIn = n => walk(n).filter(x => x.tag === 'button');
 
@@ -530,7 +540,7 @@ section('F2. the one read that was wrong: a drop set’s falling reps read as fa
   check('after: nothing — a drop set is not a sign he is done', now === null, J(now));
   const tiredDay = [exOf(BENCH, [S_(185, 8), S_(185, 6)]), exOf(FLY, [S_(40, 12), S_(40, 9)])];
   check('reps that really fell on straight sets: the same answer before and after, "You’re probably good for today — …"',
-        J(OLD.L.liveRead(liveIn(tiredDay))) === J(NEW.L.liveRead(liveIn(tiredDay))) && NEW.L.liveRead(liveIn(tiredDay)).kind === 'done');
+        J(voiced(OLD.L.liveRead(liveIn(tiredDay)))) === J(NEW.L.liveRead(liveIn(tiredDay))) && NEW.L.liveRead(liveIn(tiredDay)).kind === 'done');
   const mixDay = [exOf(BENCH, [S_(185, 8), D_(185, 8), P_(135, 6), S_(185, 6)]), exOf(FLY, [S_(40, 12), S_(40, 9)])];
   check('and a straight set after a drop set that fell a quarter is still read — the drop set is left out, not the day',
         !!NEW.L.liveRead(liveIn(mixDay)) && NEW.L.liveRead(liveIn(mixDay)).kind === 'done' && /Barbell Bench Press, reps from 8 to 6/.test(NEW.L.liveRead(liveIn(mixDay)).text));
@@ -598,7 +608,7 @@ section('F2. the one read that was wrong: a drop set’s falling reps read as fa
   check('after: "' + (ra && ra.text) + '"', !!ra && /^Good day for 6 at 225 lb on Barbell Bench Press/.test(ra.text));
   const realTail = rec([S2(225, 3)]);
   check('a straight set that fell a quarter: nothing, before and after', day(OLD, realTail) === null && day(NEW, realTail) === null);
-  check('no drop set, no tail: the same record day before and after', J(day(OLD, rec([]))) === J(day(NEW, rec([]))) && !!day(NEW, rec([])));
+  check('no drop set, no tail: the same record day before and after', J(voiced(day(OLD, rec([])))) === J(day(NEW, rec([]))) && !!day(NEW, rec([])));
 
   // A sweep: logs with no drop set in them read the same in both, every read above.
   let seed = 7;
@@ -632,7 +642,7 @@ section('F2. the one read that was wrong: a drop set’s falling reps read as fa
     // model's own read says which (coach-ramp.js, never restated here).
     const ramped = sessions.some(s => s.exercises.some(e => NEW.R.rampOf(e.sets, {}).probable > 0));
     if (ramped) { ramps++; continue; }
-    const a = J([OLD.V.volumeRead(OLD.C.volumeInput(i)), OLD.C.overlapInput(i).shaped.map(x => x.ldrop), gapped ? null : day(OLD, i)]);
+    const a = J(voiced([OLD.V.volumeRead(OLD.C.volumeInput(i)), OLD.C.overlapInput(i).shaped.map(x => x.ldrop), gapped ? null : day(OLD, i)]));
     const b = J([NEW.V.volumeRead(NEW.C.volumeInput(i)), NEW.C.overlapInput(i).shaped.map(x => x.ldrop), gapped ? null : day(NEW, i)]);
     if (a === b) same++; else diff.push(n);
   }
