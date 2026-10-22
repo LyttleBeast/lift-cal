@@ -80,6 +80,8 @@ export function todayKey(d = new Date()) {
   // relative import resolves); an older revision without the import is unmoved.
   writeFileSync(join(dir, 'package.json'), '{ "type": "module" }');
   writeFileSync(join(dir, 'coach-ramp.js'), src('coach-ramp.js').replace("from './analytics.js'", "from './analytics.mjs'"));
+  // v72: coach-ask.js, the questions and the facts — imports units.js and coach-ramp.js (the staged copy beside it).
+  writeFileSync(join(dir, 'coach-ask.js'), src('coach-ask.js').replace("from './units.js'", 'from ' + real('units.js')));
   if (!rev) rampUrl = pathToFileURL(join(dir, 'coach-ramp.js')).href;
   writeFileSync(join(dir, 'coach-prog.mjs'), prog
     .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href))

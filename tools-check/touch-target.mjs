@@ -577,13 +577,15 @@ section('F. Your goal (v55): every answer’s label fits its chip on one line, a
      that Settings may draw (all but `settings: false`), with coach-ui.js's
      SHORT_LABELS over them, and the box each is drawn in decided by
      coach-ui.js's own goalLayout() — read and run, never restated. */
-  const CS = read('coach.js'), UIS = CODE['coach-ui.js'];
-  const qs = CS.slice(CS.indexOf('export const QUESTIONS = Object.freeze(['));
+  // v72: the catalog lives in coach-ask.js (ASK_QUESTIONS); coach.js's
+  // QUESTIONS is its `writes: 'answers'` subset, and Settings draws only that.
+  const CS = read('coach-ask.js'), UIS = CODE['coach-ui.js'];
+  const qs = CS.slice(CS.indexOf('export const ASK_QUESTIONS = Object.freeze(['));
   const qBlock = qs.slice(0, qs.indexOf('\n]);'));
   const at = [...qBlock.matchAll(/^    id: '(q_\w+)',$/gm)];
   const QS = at.map((m, i) => {
     const body = qBlock.slice(m.index, i + 1 < at.length ? at[i + 1].index : qBlock.length);
-    return { id: m[1], settings: !/^\s+settings: false,$/m.test(body),
+    return { id: m[1], settings: !/^\s+settings: false,$/m.test(body) && /writes: 'answers'/.test(body),
              options: [...body.matchAll(/\{\s*value:\s*'([^']+)',\s*label:\s*'([^']+)'\s*\}/g)].map(o => ({ value: o[1], label: o[2] })) };
   }).filter(q => q.settings);
   const shortSrc = (/const SHORT_LABELS = Object\.freeze\(\{([\s\S]*?)\n\}\);/.exec(UIS) || [])[1] || '';

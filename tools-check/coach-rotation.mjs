@@ -101,6 +101,8 @@ writeFileSync(join(dir, 'analytics.mjs'), src('analytics.js')
 // so that one relative import resolves without a repoint in every chain.
 writeFileSync(join(dir, 'package.json'), '{ "type": "module" }');
 writeFileSync(join(dir, 'coach-ramp.js'), src('coach-ramp.js').replace("from './analytics.js'", "from './analytics.mjs'"));
+// v72: coach-ask.js, the questions and the facts — imports units.js and coach-ramp.js (the staged copy beside it).
+writeFileSync(join(dir, 'coach-ask.js'), src('coach-ask.js').replace("from './units.js'", 'from ' + real('units.js')));
 /* coach-goal.js and coach-prog.js — v48's targets — are staged the same way:
    coach-build.js imports coach-prog.js, which takes the same session math
    through the stub, and coach-goal.js imports nothing at all. */
@@ -750,6 +752,8 @@ section('H. driven across real app opens — the counter moves once, and only on
     .replace("from './tdee.js'", 'from ' + here('tdee-stub.mjs'))
     .replace("from './insights.js'", 'from ' + here('insights-stub.mjs'))
     .replace("from './access.js'", 'from ' + here('access-stub.mjs'))
+    // v72: coach-ask.js, staged beside coach-ramp.js above.
+    .replace("from './coach-ask.js'", 'from ' + here('coach-ask.js'))
     .replace("from './coach.js'", 'from ' + here('coach.mjs'));
   writeFileSync(join(dir, 'picker-stub.mjs'), 'export function allExercises() { return []; }\n' +
     'export function hiddenIds() { return []; }\nexport function libraryReady() { return false; }\n');

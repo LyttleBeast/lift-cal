@@ -230,6 +230,8 @@ export function todayKey(d = new Date()) {
   // module package so that one relative import resolves without a repoint.
   writeFileSync(join(dir, 'package.json'), '{ "type": "module" }');
   writeFileSync(join(dir, 'coach-ramp.js'), src('coach-ramp.js').replace("from './analytics.js'", "from './analytics.mjs'"));
+// v72: coach-ask.js, the questions and the facts — imports units.js and coach-ramp.js (the staged copy beside it).
+writeFileSync(join(dir, 'coach-ask.js'), src('coach-ask.js').replace("from './units.js'", 'from ' + real('units.js')));
   writeFileSync(join(dir, 'coach-prog.mjs'), src('coach-prog.js')
     .replace("from './exercises.js'", 'from ' + real('exercises.js'))
     .replace("from './units.js'", 'from ' + real('units.js'))

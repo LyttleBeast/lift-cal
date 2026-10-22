@@ -226,6 +226,8 @@ async function rig({ data = {}, slow = [], fail = [], pro = false } = {}) {
   // session math, and coach-goal.js imports nothing.
   // v70: coach-ramp.js, the ramp model — imports analytics.js and nothing else.
   const RAMP   = put('coach-ramp.mjs', swap(src('coach-ramp.js'), [['./analytics.js', ANALY]]));
+  // v72: coach-ask.js, the questions and the facts — imports units.js and coach-ramp.js.
+  const ASK    = put('coach-ask.mjs', swap(src('coach-ask.js'), [['./units.js', real('units.js')], ['./coach-ramp.js', RAMP]]));
   const PROG   = put('coach-prog.mjs', swap(src('coach-prog.js'), [
     ['./analytics.js', ANALY], ['./units.js', real('units.js')], ['./exercises.js', real('exercises.js')],
     ['./coach-tags.js', real('coach-tags.js')], ['./coach-goal.js', real('coach-goal.js')], ['./coach-ramp.js', RAMP]]));
@@ -255,11 +257,11 @@ async function rig({ data = {}, slow = [], fail = [], pro = false } = {}) {
     ['./exercises.js', real('exercises.js')], ['./analytics.js', ANALY],
     ['./units.js', real('units.js')], ['./coach-build.js', BUILD], ['./coach-live.js', LIVE],
     ['./coach-goal.js', real('coach-goal.js')], ['./coach-prog.js', PROG], ['./coach-overlap.js', OVER],
-    ['./coach-ready.js', READY], ['./coach-fuel.js', FUEL], ['./coach-volume.js', VOL], ['./coach-ramp.js', RAMP]]));
+    ['./coach-ready.js', READY], ['./coach-fuel.js', FUEL], ['./coach-volume.js', VOL], ['./coach-ramp.js', RAMP], ['./coach-ask.js', ASK]]));
   const DATA_  = put('coach-data.mjs', swap(src('coach-data.js'), [
     ['./store.js', STORE], ['./exercises.js', real('exercises.js')],
     ['./picker.js', PICK], ['./tdee.js', TDEE], ['./insights.js', INSI],
-    ['./access.js', ACCESS], ['./coach.js', COACH]]));
+    ['./access.js', ACCESS], ['./coach.js', COACH], ['./coach-ask.js', ASK]]));
 
   const S = await import(JSON.parse(STORE));
   const D = await import(JSON.parse(DATA_));

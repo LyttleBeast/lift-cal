@@ -315,9 +315,13 @@ export function exposuresFor(sessions, exId) {
    `work`, which is what T, the top sets, the range, the step and every quote
    are read from. */
 const allOf = e => (Array.isArray(e.allSets) && e.allSets.length ? e.allSets : e.sets || []);
-function readExposure(e, u, assisted, now, known) {
+// v72: `warm` is his answer about warm-ups on this lift (coach-ask.js
+// knowBy.warm, handed in on the lift as `ex.warm`): 'no' switches the ramp
+// model's detection off, so every set he typed N is the working set he says it
+// is; 'yes' and nothing said read as v70 did.
+function readExposure(e, u, assisted, now, known, warm) {
   const all = allOf(e).map(copySet);
-  const working = new Set(workSetsOf(all, { assisted, known }));
+  const working = new Set(workSetsOf(all, { assisted, known, warm }));
   const work = [];
   all.forEach((s, i) => {
     if (!working.has(s)) return;
@@ -338,10 +342,10 @@ function readExposure(e, u, assisted, now, known) {
    rampLoads: the loads he only ever warms up with, over the newest exposures)
    handed to each read, so a 10-lb set before his 15-lb raises is the warm-up
    it is in every session and not only in the ones where the tiers catch it. */
-function readAll(exposures, u, assisted, now) {
+function readAll(exposures, u, assisted, now, warm) {
   const list = Array.isArray(exposures) ? exposures : [];
-  const known = rampLoads(list.map(allOf), { assisted });
-  return list.map(e => readExposure(e, u, assisted, now, known)).filter(Boolean);
+  const known = rampLoads(list.map(allOf), { assisted, warm });
+  return list.map(e => readExposure(e, u, assisted, now, known, warm)).filter(Boolean);
 }
 
 /* v69: the heavy gate, as one test — a read exposure whose top sets hold a
@@ -555,8 +559,10 @@ function liftOf(ex, dials) {
   const band = tag && tag.load === 'isolation' ? b.isolation
     : tag && tag.load === 'compound' ? b.compound
     : [b.compound[0], b.isolation[1]];
+  // v72: his word on warm-ups here — 'yes', 'no' or nothing (coach.js lifts()).
+  const warm = ex.warm === 'yes' || ex.warm === 'no' ? ex.warm : null;
   return { exId, tag, assisted, dir: assisted ? -1 : 1, lowerBody, equipment: ex.equipment || null,
-           band: band.slice(), group: ex.group || null };
+           band: band.slice(), group: ex.group || null, warm };
 }
 
 /* Everything this file knows about one lift before it decides anything. What
@@ -585,7 +591,7 @@ export function baselines(ex, ctx) {
     if (!ex || !Number.isFinite(c.now)) return null;
     const base = dialsFor({ aim: c.aim, exp: c.exp, energy: c.energy });
     const lift = liftOf(ex, base);
-    const X = readAll(ex.exposures, u, lift.assisted, c.now);
+    const X = readAll(ex.exposures, u, lift.assisted, c.now, lift.warm);
     if (!X.length) return null;
     const prog = progressOf(X, c.now);
     const within = n => X.filter(e => e.daysAgo >= 0 && e.daysAgo < n).length;
@@ -644,7 +650,7 @@ function decide(ex, c) {
 
   const base = dialsFor({ aim: c.aim, exp: c.exp, energy: c.energy });
   const lift = liftOf(ex, base);
-  const X = readAll(ex.exposures, u, lift.assisted, now);
+  const X = readAll(ex.exposures, u, lift.assisted, now, lift.warm);
   const unit = unitW(u);
 
   /* ---------- the words' building blocks ----------
@@ -1297,8 +1303,8 @@ function nextOf(ex, c, today) {
   const m = ex.mark;
   const src = m && m.latest && Array.isArray(m.latest.exposures) ? m.latest.exposures
     : (Array.isArray(ex.exposures) ? ex.exposures : []).filter(x => !(m && m.markedAt instanceof Set && m.markedAt.has(x.startedAt)));
-  const X = readAll(src, u, false, c.now);
-  const known = rampLoads(src.map(allOf), {});
+  const X = readAll(src, u, false, c.now, lift.warm);
+  const known = rampLoads(src.map(allOf), { warm: lift.warm });
   const step = X.length ? stepOf(X, 1, lift.equipment, lift.lowerBody, u) : null;
   const S = step ? step.value : null;
   const range = X.length ? rangeOf(X, c.now, 1, lift.band) : null;
@@ -1311,12 +1317,12 @@ function nextOf(ex, c, today) {
   // warm-up and not "the first working set". A ticked row typed W, and a
   // probable warm-up, are both out of `done`.
   const ticked = today.filter(s => s && s.done !== false && parseInt(s.r, 10) >= 1);
-  const habit = rampProfile(src, {}).stage === 'yours';
+  const habit = rampProfile(src, { warm: lift.warm }).stage === 'yours';
   // His last top load on the lift, stored pounds: what a target that came
   // down (a re-entry, a reduction) is still a step down from.
   const lastAll = X.length ? allOf(src[src.length - 1]) : [];
   const anchor = Math.max(0, ...lastAll.filter(s => s && s.type !== 'W' && s.type !== 'D' && parseInt(s.r, 10) >= 1).map(s => parseFloat(s.w) || 0));
-  const ramp = rampOf(ticked, { T: t.loadLb, known, R: trAt(0), habit, anchor });
+  const ramp = rampOf(ticked, { T: t.loadLb, known, R: trAt(0), habit, anchor, warm: lift.warm });
   const split = ticked.filter((s, i) => ramp.workIdx.has(i));
   // v70: UNSURE — Coach says nothing rather than guess. The tiers read a set's
   // shape, and before anything has reached the target the same shape is both

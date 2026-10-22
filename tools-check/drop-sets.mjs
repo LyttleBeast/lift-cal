@@ -102,7 +102,7 @@ export function todayKey(d = new Date()) {
 `;
 // v70: coach-ramp.js is in the list; rack-v55's tree has no such file, so a
 // file the older revision lacks is simply not staged (nothing there imports it).
-const FILES = ['analytics.js', 'coach-goal.js', 'coach-ramp.js', 'coach-prog.js', 'coach-overlap.js', 'coach-build.js', 'coach-live.js',
+const FILES = ['analytics.js', 'coach-goal.js', 'coach-ramp.js', 'coach-ask.js', 'coach-prog.js', 'coach-overlap.js', 'coach-build.js', 'coach-live.js',
                'coach-ready.js', 'coach-fuel.js', 'coach-volume.js', 'coach.js'];
 async function stage(tag, read) {
   const dir = mkdtempSync(join(tmpdir(), 'rack-drops-' + tag + '-'));

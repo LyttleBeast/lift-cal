@@ -186,7 +186,10 @@ const liveWorking = s => !!(s && s.done && loggedWorking(s));
 // window's sessions). An assisted lift is decided the way coach-prog.js
 // liftOf() decides it — the id, or "assist" in the name.
 const assistedOf = (i, ex) => ex.exId === 'assisted-pull-up' || /assist/i.test(nameOf(i, ex));
-const workingOf = (i, ex, sets, known) => workSetsOf(sets.filter(s => s && reps(s) > 0), { assisted: assistedOf(i, ex), known: known.get(ex.exId) || [] });
+// v72: and his word on warm-ups on the lift (`i.warm`, exId → 'yes' | 'no',
+// coach.js from knowBy.warm): 'no' switches detection off for it.
+const warmOf = (i, ex) => (i.warm && typeof i.warm === 'object' ? i.warm[ex.exId] || null : null);
+const workingOf = (i, ex, sets, known) => workSetsOf(sets.filter(s => s && reps(s) > 0), { assisted: assistedOf(i, ex), known: known.get(ex.exId) || [], warm: warmOf(i, ex) });
 // His ramp loads per lift, from the window's sessions, oldest first.
 function knownOf(i) {
   const lists = new Map();
@@ -198,7 +201,7 @@ function knownOf(i) {
       lists.get(ex.exId).lists.push(ex.sets || []);
     }));
   const out = new Map();
-  lists.forEach(({ ex, lists: L }, id) => out.set(id, rampLoads(L, { assisted: assistedOf(i, ex) })));
+  lists.forEach(({ ex, lists: L }, id) => out.set(id, rampLoads(L, { assisted: assistedOf(i, ex), warm: warmOf(i, ex) })));
   return out;
 }
 

@@ -58,7 +58,7 @@ export function todayKey(d = new Date()) {
   return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
 }
 `);
-const FILES = ['analytics.js', 'coach-goal.js', 'coach-ramp.js', 'coach-prog.js', 'coach-overlap.js', 'coach-build.js', 'coach-live.js',
+const FILES = ['analytics.js', 'coach-goal.js', 'coach-ramp.js', 'coach-ask.js', 'coach-prog.js', 'coach-overlap.js', 'coach-build.js', 'coach-live.js',
                'coach-ready.js', 'coach-fuel.js', 'coach-volume.js', 'coach.js'];
 FILES.forEach(f => writeFileSync(join(dir, f.replace(/\.js$/, '.mjs')), src(f)
   .replace("from './store.js'", "from './store-stub.mjs'")

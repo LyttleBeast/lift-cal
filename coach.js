@@ -62,6 +62,11 @@ import { fueledRead, fuelAnswer, fedUnloggedAnswer, fedNoneAnswer, fuelRow, sess
 import { volumeRead, volumeAnswer, balanceRead, balanceAnswer } from './coach-volume.js';
 // v70: the ramp model — a session's working sets, the warm-up out whether he typed the W or not.
 import { workSetsOf, rampLoads } from './coach-ramp.js';
+// v72: the questions and what he answered — the catalog (coach.js's QUESTIONS
+// is its `answers` subset), the stored facts' normaliser and reader, the
+// picker and the recap's plan. It imports units.js and coach-ramp.js, never
+// this file.
+import { ASK_QUESTIONS, normKnow, pickQuestion, debriefPlan, warmAnswer, aimLabel, ID_RE } from './coach-ask.js';
 
 const DAY = 864e5;
 
@@ -369,6 +374,11 @@ function derive(input) {
      session it was in. */
   const groupOf = ex => (lib[ex.exId] && lib[ex.exId].group) || ex.group || null;
   const equipOf = ex => (lib[ex.exId] && lib[ex.exId].equipment) || ex.equipment || null;
+  /* v72: what he said about warm-ups on a lift (coach-ask.js, knowBy.warm):
+     'no' switches the ramp model's detection off for it everywhere a working
+     set is counted here, and on every lift handed to the targets and the live
+     read; 'yes' and nothing said read as before. */
+  const warmOf = ex => warmAnswer(input.settings, String((ex && ex.exId) || ''), now);
 
   /* v70: his ramp loads per lift (coach-ramp.js rampLoads) over the whole log,
      oldest first — the loads he only ever warms up with — so every working-set
@@ -383,7 +393,7 @@ function derive(input) {
       });
     });
     const out = new Map();
-    lists.forEach(({ ex, lists: L }, id) => out.set(id, rampLoads(L, { assisted: assistedOf(ex, lib) })));
+    lists.forEach(({ ex, lists: L }, id) => out.set(id, rampLoads(L, { assisted: assistedOf(ex, lib), warm: warmOf(ex) })));
     return out;
   });
   const knownOf = ex => ramps().get(ex.exId) || [];
@@ -409,7 +419,7 @@ function derive(input) {
       // typed the W on is not two leg sets. (A set with no reps was a working
       // set to the old count and is not one to this; the signature, the hard
       // sets and the rep drop all follow.)
-      const work = workSetsOf(ex.sets || [], { assisted: assistedOf(ex, lib), known: knownOf(ex) });
+      const work = workSetsOf(ex.sets || [], { assisted: assistedOf(ex, lib), known: knownOf(ex), warm: warmOf(ex) });
       const n = work.length;
       if (!n) return;
       sets[g] = (sets[g] || 0) + n;
@@ -660,7 +670,11 @@ function derive(input) {
         if (was && was.lastAt >= s.startedAt) return;
         by.set(ex.exId, {
           exId: ex.exId, name: String((lib[ex.exId] && lib[ex.exId].name) || ex.name || ex.exId),
-          group: groupOf(ex), equipment: equipOf(ex), lastAt: s.startedAt
+          group: groupOf(ex), equipment: equipOf(ex), lastAt: s.startedAt,
+          // v72: his word on warm-ups here, for coach-prog.js liftOf() — only
+          // when he gave one, so a lift he has not been asked about is the
+          // same four keys it always was.
+          ...(warmOf(ex) ? { warm: warmOf(ex) } : null)
         });
       });
     });
@@ -703,7 +717,7 @@ function derive(input) {
     all, inWindow, shapes, groupDays, groupGap,
     setsThisWeek, setsTrailing, sessionsIn, sessionGap, index,
     pDays, pSessions, trainedDays, pLift, lifts,
-    groupOf, equipOf, knownOf,
+    groupOf, equipOf, knownOf, warmOf,
     marks, markOf, idOf, perf, stalestOf, overdue
   };
 }
@@ -748,7 +762,7 @@ const prevDay = k => dayKey(new Date(k + 'T12:00:00').getTime() - DAY);
 // as one by the ramp model.
 function workingSets(d, s) {
   return mergeSessionExercises((s.session && s.session.exercises) || []).reduce((a, ex) =>
-    (!ex || d.equipOf(ex) === 'cardio') ? a : a + workSetsOf(ex.sets || [], { assisted: assistedOf(ex, d.input.lib), known: d.knownOf(ex) }).length, 0);
+    (!ex || d.equipOf(ex) === 'cardio') ? a : a + workSetsOf(ex.sets || [], { assisted: assistedOf(ex, d.input.lib), known: d.knownOf(ex), warm: d.warmOf(ex) }).length, 0);
 }
 
 function symDiff(a, b) {
@@ -1738,17 +1752,28 @@ export const FACTS = Object.freeze([
   {
     /* A question already put and not yet answered. It expires: see
        ASK_COOLDOWN_DAYS. Null is the common case and it is what lets a new
-       question be asked at all. */
+       question be asked at all.
+       v72: PER LANE. The value is { lane: id } over the lanes that hold one
+       — 'open', 'debrief', 'live', 'under:<where>', a row's first-choice
+       moment — or null when none does, so an unanswered q_log_timing under
+       "Am I fueled?" no longer blocks a recap question for a week. Only a
+       question that stores an answer can be open: a record or a fact question
+       stamps `asked` when it is answered, so "put and not answered" is not a
+       state it has. */
     id: 'coach.openQuestion', unit: null, requires: [],
     compute: d => {
       const s = d.input.settings || {};
       const asked = s.asked || {}, answers = s.answers || {};
-      const live = QUESTIONS.filter(q => {
+      const out = {};
+      ASK_QUESTIONS.forEach(q => {
+        if (q.writes !== 'answers') return;
         const at = asked[q.id];
-        if (!Number.isFinite(at) || answers[q.id] != null) return false;
-        return daysBetween(at, d.now) < ASK_COOLDOWN_DAYS;
+        if (!Number.isFinite(at) || answers[q.id] != null) return;
+        if (daysBetween(at, d.now) >= ASK_COOLDOWN_DAYS) return;
+        const lane = q.moments[0];
+        if (!out[lane]) out[lane] = q.id;
       });
-      return live.length ? live[0].id : null;
+      return Object.keys(out).length ? out : null;
     },
     because: () => 'I already have a question waiting'
   },
@@ -2045,180 +2070,15 @@ export const PATTERN_FACTS = Object.freeze([
    Your goal. `ack` is what the sheet says once an answer is in — each question
    its own, because "that changes how Coach reads your weight" is false of an
    aim. */
-/* The goal-change questions' three answers, and the focus group's values. */
-const CHECK_OPTIONS = [
-  Object.freeze({ value: 'update', label: 'Yes, update my goal' }),
-  Object.freeze({ value: 'temp',   label: 'No, it’s temporary' }),
-  Object.freeze({ value: 'keep',   label: 'It’s on purpose' })
-];
-const CHECK_VALUES = Object.freeze(CHECK_OPTIONS.map(o => o.value));
+/* v72: THE CATALOG LIVES IN coach-ask.js (ASK_QUESTIONS), where the two the
+   recap asks sit beside these; this file's QUESTIONS is the subset that stores
+   an answer under settings/coach.answers — the seven that shipped before v72,
+   unchanged in meaning — so Settings, normSettings() and the registry's
+   verifier keep reading one list. The goal-change answers' values and the
+   focus group's are read off the rows, never restated. */
+export const QUESTIONS = Object.freeze(ASK_QUESTIONS.filter(q => q.writes === 'answers'));
+const CHECK_VALUES = Object.freeze(QUESTIONS.find(q => q.id === 'q_goal_check_weight').options.map(o => o.value));
 const FOCUS_VALUES = Object.freeze(GROUP_ORDER.concat(['none']));
-// Temporary (and "update", which reads like it afterwards) goes quiet for four
-// weeks from the moment it was asked; "on purpose" stays quiet until setAim()
-// clears it.
-const CHECK_QUIET_DAYS = 28;
-// Behaviour needs time to follow a new goal.
-const CHECK_AIM_DAYS = 14;
-function checkStale(answer, askedAt, d) {
-  if (answer === 'keep') return false;
-  return !Number.isFinite(askedAt) || daysBetween(askedAt, d.now) >= CHECK_QUIET_DAYS;
-}
-function goalCheckOpen(d) {
-  if (d.f('meta.tierPro') !== true || d.f('coach.aim') == null) return false;
-  const at = ((d.input.settings && d.input.settings.asked) || {}).q_goal_aim;
-  return !Number.isFinite(at) || daysBetween(at, d.now) >= CHECK_AIM_DAYS;
-}
-// An aim as the question offers it: "Build muscle", "Lose fat, keep strength".
-function aimLabel(aim) {
-  const q = QUESTIONS.find(x => x.id === 'q_goal_aim');
-  const o = q && q.options.find(x => x.value === aim);
-  return o ? o.label : 'a goal';
-}
-
-export const QUESTIONS = Object.freeze([
-  {
-    id: 'q_goal_direction',
-    text: 'Which way are you trying to go right now?',
-    options: Object.freeze([
-      { value: 'down', label: 'Down' },
-      { value: 'hold', label: 'Holding' },
-      { value: 'up',   label: 'Up' }
-    ]),
-    // Two rules now, not one: the stall readout reads differently through a
-    // deficit, and a question that unlocks something has to say everything it
-    // unlocks or the list stops being true.
-    changes: Object.freeze(['weight_rate_vs_goal', 'stalled_lift']),
-    fact: 'weight.goalDir',
-    ack: 'Noted. That changes how I read your weight.',
-    // Only worth asking when the answer would really unlock something: there is
-    // a rate to read and no direction to read it against.
-    when: d => d.f('weight.rateWk') != null && d.f('weight.goalDir') == null
-  },
-  {
-    id: 'q_goal_aim',
-    text: 'What are you training for right now?',
-    options: Object.freeze([
-      { value: 'strength',     label: 'Get stronger' },
-      { value: 'powerlifting', label: 'Powerlifting' },
-      { value: 'muscle',       label: 'Build muscle' },
-      { value: 'cut',          label: 'Lose fat, keep strength' },
-      { value: 'recomp',       label: 'Recomp' },
-      { value: 'maintain',     label: 'Stay consistent' }
-    ]),
-    changes: Object.freeze(['lift_targets']),
-    fact: 'coach.aim',
-    always: true,
-    where: 'targets',
-    ack: 'Noted. I’ll set your targets with that in mind.',
-    when: d => d.f('coach.aim') == null
-  },
-  {
-    id: 'q_experience',
-    text: 'How long have you been lifting consistently?',
-    // Spelled out: every figure in this file's copy is computed from the log,
-    // and tools-check/coach-units.mjs refuses a typed one.
-    options: Object.freeze([
-      { value: 'new',   label: 'Under six months' },
-      { value: 'some',  label: 'Six months to two years' },
-      { value: 'years', label: 'Two years or more' }
-    ]),
-    changes: Object.freeze(['lift_targets']),
-    fact: 'coach.experience',
-    always: true,
-    where: 'targets',
-    ack: 'Noted. That sets how big a jump I’ll suggest.',
-    when: d => d.f('coach.aim') != null && d.f('coach.experience') == null
-  },
-  /* v49. The focus group: asked under "How am I tracking toward my goal?"
-     (where: 'goal'), never as the opener, and shown in Settings → Your goal
-     like the aim. It changes what goal pace reads, and (v54, stage five) the
-     weekly volume answer — its range up 30%, its line first — and the
-     builder, where its exercises come first. */
-  {
-    id: 'q_focus_group',
-    text: 'Is there one muscle group you most want to bring up?',
-    options: Object.freeze([
-      { value: 'chest',     label: 'Chest' },
-      { value: 'back',      label: 'Back' },
-      { value: 'legs',      label: 'Legs' },
-      { value: 'shoulders', label: 'Shoulders' },
-      { value: 'arms',      label: 'Arms' },
-      { value: 'core',      label: 'Core' },
-      { value: 'none',      label: 'No focus' }
-    ]),
-    changes: Object.freeze(['goal_pace', 'week_volume', 'build_workout']),
-    fact: 'coach.focus',
-    always: true,
-    where: 'goal',
-    ack: 'Noted. I’ll read that group’s sets and lifts when you ask how you’re tracking.',
-    when: d => d.f('coach.aim') != null && d.f('coach.focus') == null
-  },
-  /* v49. "DID YOUR GOAL CHANGE?" — two questions, asked as the sheet's opener
-     through the shipped machinery, each a question and never a verdict. Pro
-     only: "Yes" opens Your goal, which is Pro only, and the opener is drawn
-     before the Pro gate for Basic, so the tier is checked in `when`. Both need
-     three weeks of weigh-ins (coach-goal.js's goalChecks()) and fourteen days
-     since the aim was set: behaviour needs time to follow a new goal.
-
-       update  opens Your goal, and then reads like temp
-       temp    quiet for 28 days from its asked stamp (`stale`)
-       keep    quiet until the aim changes — setAim() clears both answers
-
-     `text` is a function here, resolved with his numbers through units.js;
-     `settings: false` keeps them out of Settings' answer rows, which would
-     otherwise draw them as a three-way switch. */
-  {
-    id: 'q_goal_check_weight',
-    text: (d, u) => {
-      const w = (d.f('coach.goalChecks') || {}).weeks || [];
-      const moved = w.length ? w[w.length - 1].to - w[0].from : 0;
-      const aim = aimLabel(d.f('coach.aim'));
-      const way = moved < 0 ? 'come down' : 'gone up';
-      return 'You set ' + aim + ', and your weight has ' + way + ' about ' + labelW(Math.abs(moved), u) +
-             ' over the last ' + plural(w.length, 'week') + '. Did the goal change?';
-    },
-    options: Object.freeze(CHECK_OPTIONS),
-    changes: Object.freeze(['goal_pace']),
-    fact: 'coach.goalCheckWeight',
-    settings: false,
-    ack: 'Noted. I won’t ask about that again for a while.',
-    stale: (answer, askedAt, d) => checkStale(answer, askedAt, d),
-    when: d => goalCheckOpen(d) && (d.f('coach.goalChecks') || {}).weight === true
-  },
-  {
-    id: 'q_goal_check_targets',
-    text: (d, u) => {
-      const g = d.f('weight.goalRateWk');
-      return 'You set ' + aimLabel(d.f('coach.aim')) + ', and your food targets are set to ' +
-             (g < 0 ? 'lose' : 'gain') + ' about ' + labelRate(Math.abs(g), u) + ' a week. Did the goal change?';
-    },
-    options: Object.freeze(CHECK_OPTIONS),
-    changes: Object.freeze(['goal_pace']),
-    fact: 'coach.goalCheckTargets',
-    settings: false,
-    ack: 'Noted. I won’t ask about that again for a while.',
-    stale: (answer, askedAt, d) => checkStale(answer, askedAt, d),
-    when: d => goalCheckOpen(d) && (d.f('coach.goalChecks') || {}).targets === true
-  },
-  /* v52. How he logs food — asked under "Am I fueled?" (where: 'fuel'), once,
-     when his entries look batch-logged and he has not said. It is a
-     preference, not a daily state, so it is kept; and it is its own fact, so
-     the registry can drive it. As I go: the hour's reads come on; Later: the
-     day's totals alone. */
-  {
-    id: 'q_log_timing',
-    text: 'Do you usually log food as you go, or later in the day?',
-    options: Object.freeze([
-      { value: 'live',  label: 'As I go' },
-      { value: 'later', label: 'Later' }
-    ]),
-    changes: Object.freeze(['fuel_fueled']),
-    fact: 'coach.logTiming',
-    where: 'fuel',
-    ack: 'Noted. I read your food by the hour when you log as you go, and by the day when you log later.',
-    when: d => { const r = d.f('fuel.read'); return !!r && !!r.a && r.a.detected === 'batch' && d.f('coach.logTiming') == null; }
-  }
-]);
 
 const QUESTION_BY_ID = Object.freeze(Object.fromEntries(QUESTIONS.map(q => [q.id, q])));
 
@@ -4396,6 +4256,36 @@ export function finishRead(input, record, extras) {
   }
 }
 
+/* v72: `debriefRead(input, record, extras)` — the recap's three slots
+   (coach-ask.js debriefPlan): the warm-up confirmation, the feel card, one
+   question. The record is put among the sessions exactly as finishRead()
+   does, so "the second session of its day" and the working-set count read
+   the same log the finish line read. Nothing drawn on an unreadable log or an
+   edit (`_edit`): the feel card alone, as before v72. Never throws. */
+function debriefRead(input, record, extras) {
+  const i = input || {};
+  const s = i.settings || {};
+  const feelOnly = { confirm: null, feel: !(s.mute && s.mute.feel === true), question: null };
+  const rec = record && typeof record === 'object' && !record._edit ? record : null;
+  if (!rec || i.log !== 'readable') return feelOnly;
+  try {
+    const ss = Array.isArray(i.sessions) ? i.sessions : [];
+    const same = x => x === rec || (!!x && rec.id != null && x.id === rec.id);
+    const sessions = ss.some(same) ? ss.map(x => (same(x) ? rec : x)) : ss.concat([rec]);
+    const d = factStore({ ...i, sessions });
+    const sh = d.all().find(x => x.session === rec);
+    const x = extras && typeof extras === 'object' ? extras : {};
+    return debriefPlan(d, rec, s, d.now, d.input.opens, {
+      prs: Array.isArray(x.prs) ? x.prs : [],
+      harder: feelHarder(rec.feel),
+      marked: !!(sh && d.markOf(sh)),
+      u: uOf(d)
+    });
+  } catch {
+    return feelOnly;
+  }
+}
+
 /* ================================================================
    8.  THE SHEET'S TOPICS
    ================================================================
@@ -4804,8 +4694,20 @@ function volumeOf(d) {
     focus: focus && focus !== 'none' ? focus : null,
     aimSetAt: Number.isFinite((s.asked || {}).q_goal_aim) ? s.asked.q_goal_aim : null,
     asked: s.asked || {},
-    repDrop: REP_DROP
+    repDrop: REP_DROP,
+    // v72: his word on warm-ups per lift, for the hard-set split.
+    warm: warmMap(d)
   };
+}
+
+/* v72: exId → 'yes' | 'no' over the lifts he has answered about (coach-ask.js
+   knowBy.warm, unexpired), for the readers that take a map rather than the
+   lift — coach-live.js and coach-volume.js. Empty when he has said nothing. */
+function warmMap(d) {
+  const by = (d.input.settings && d.input.settings.knowBy && d.input.settings.knowBy.warm) || {};
+  const out = {};
+  Object.keys(by).forEach(id => { const v = d.warmOf({ exId: id }); if (v) out[id] = v; });
+  return out;
 }
 
 /* Everything coach-ready.js is allowed to know, and every piece of it is this
@@ -5036,6 +4938,8 @@ function liveInput(d, session, current) {
     shapes: d.f('session.shapes') || [],
     lib: d.lib,
     hidden: Array.isArray(d.input.hidden) ? d.input.hidden : [],
+    // v72: his word on warm-ups per lift, for the live split.
+    warm: warmMap(d),
     /* v54: the live session's own day, so the read counts the sessions he
        finished earlier that day from the window above — today is a day, not
        a session (SHIP-V54-PROMPT decision 10). coach-live.js constructs no
@@ -5230,60 +5134,47 @@ function leadQuestion(d, finding) {
 /* Coach's own question, if it may ask one at all. Three gates, and all three
    have to pass: the category is not muted, there is no unanswered question
    already waiting, and the answer would change what a registered rule does. */
+/* v72: the three gates stand, and the question itself is coach-ask.js's
+   pickQuestion() for the lane 'open' — scored and budgeted with every other
+   question, on the same catalog. "Nothing already waiting" is per lane now
+   (coach.openQuestion), so a question put under an answer and left does not
+   silence the opener for a week. */
 function pendingQuestion(d) {
   const muted = (d.input.settings && d.input.settings.mute) || {};
   if (muted.questions === true) return null;
-  if (d.f('coach.openQuestion')) return null;
-  const answers = (d.input.settings && d.input.settings.answers) || {};
-  const asked = (d.input.settings && d.input.settings.asked) || {};
-  for (const q of QUESTIONS) {
-    // Asked somewhere else — under the answer it refines — and never here.
-    if (q.where) continue;
-    // Answered, unless the answer has gone stale (v49: the goal-change
-    // questions' "temporary" lasts four weeks from when it was asked).
-    if (answers[q.id] != null && !isStale(q, answers[q.id], asked[q.id], d)) continue;
-    let ok = false;
-    try { ok = !!q.when(d); } catch { ok = false; }
-    if (ok) return q;
-  }
-  return null;
+  if (laneOpen(d, 'open')) return null;
+  return pickQuestion(d, 'open', d.input.settings || {}, d.now, d.input.opens);
+}
+// Whether the lane holds a question put and not yet answered.
+function laneOpen(d, lane) {
+  const o = d.f('coach.openQuestion');
+  return !!(o && o[lane]);
 }
 
 /* The question asked UNDER an answer rather than as the sheet's opener: the
    first unanswered one whose `where` is that answer's, under the same three
    gates as the opener — questions not switched off, nothing already waiting
-   (the shipped week's cooldown, which is what makes them one at a time), and
-   an answer that would change something. Never a gate on the answer itself:
-   the targets are there either way. */
+   in that lane (the shipped week's cooldown, which is what makes them one at
+   a time), and an answer that would change something. Never a gate on the
+   answer itself: the targets are there either way. */
 function questionUnder(d, where) {
   if (isMuted(d.input.settings, 'questions')) return null;
-  if (d.f('coach.openQuestion')) return null;
-  const answers = (d.input.settings && d.input.settings.answers) || {};
-  for (const q of QUESTIONS) {
-    if (q.where !== where || answers[q.id] != null) continue;
-    let ok = false;
-    try { ok = !!q.when(d); } catch { ok = false; }
-    if (ok) return q;
-  }
-  return null;
+  if (laneOpen(d, 'under:' + where)) return null;
+  return pickQuestion(d, 'under:' + where, d.input.settings || {}, d.now, d.input.opens);
 }
 
 // What the sheet is handed of a question: its words, its chips, and what it
 // says once answered.
 /* v49: a question's text may be a function of the log, so it can carry his
    numbers through units.js ("your weight has come down about 4 lb"); it is
-   resolved here, the one place a question is handed to the sheet. */
-const questionView = (q, d, u) => {
+   resolved here, the one place a question is handed to the sheet. v72: and
+   the moment's context, for the two recap rows (none here). */
+const questionView = (q, d, u, ctx) => {
   if (!q) return null;
   let text = q.text;
-  if (typeof text === 'function') { try { text = String(text(d, u) || ''); } catch { text = ''; } }
+  if (typeof text === 'function') { try { text = String(text(d, u, ctx) || ''); } catch { text = ''; } }
   return text ? { id: q.id, text, options: q.options, ack: q.ack || null } : null;
 };
-// An answered question whose answer has gone stale counts as unanswered.
-function isStale(q, answer, askedAt, d) {
-  if (typeof q.stale !== 'function') return false;
-  try { return !!q.stale(answer, askedAt, d); } catch { return false; }
-}
 
 /* ---------- the public face ----------
 
@@ -5413,6 +5304,13 @@ export function coach(input) {
        component and the card is the only thing that knows which one it is. */
     topicsFor: surface => topicsFor(d, surface === 'train' ? 'train' : 'you'),
     question: questionView(question, d, u),
+    /* v72: THE RECAP'S PLAN — coach-ask.js debriefPlan() on this snapshot
+       with the record just saved among its sessions, the way finishRead()
+       reads it (the re-read has not landed yet). On the recap's own gates: a
+       readable log, never an edit of a past session. Anything that goes wrong
+       is the feel card alone, the recap being the screen that must never
+       break. `extras` is { prs } as workout.js worked them out. */
+    debrief: (record, extras) => debriefRead(input, record, extras),
     // The opening bubble: the same finding the You card is showing, so the
     // sheet does not contradict the card that opened it.
     /* v53: after a workout the sheet opens on the finish line instead, and
@@ -5616,7 +5514,10 @@ function markView(d) {
    Exported so coach-data.js and the Settings section agree on the shape without
    either of them holding a second copy of it. A small object, written whole,
    never PUT from stale module state. */
-export const COACH_SETTINGS_VERSION = 1;
+/* v72: 2 — the node gains `know`, `knowBy` and `tally` (coach-ask.js), the
+   facts Coach learned by asking, and `asked` gains the per-lift `warm:<exId>`
+   stamps. A v1 node reads as v2 with none of them; nothing migrates. */
+export const COACH_SETTINGS_VERSION = 2;
 
 /* v54: THE ONCE-IN-A-WHILE LINES — sentences said at most once in a stretch,
    stamped in `asked` the way a question is when it is put (coach-data.js
@@ -5649,9 +5550,21 @@ export function normSettings(v) {
   });
   const asked = {};
   const rawAsk = o.asked && typeof o.asked === 'object' ? o.asked : {};
-  QUESTIONS.forEach(q => { if (Number.isFinite(rawAsk[q.id])) asked[q.id] = rawAsk[q.id]; });
+  // v72: every row of the catalog stamps `asked` — the two recap questions
+  // beside the seven that store an answer.
+  ASK_QUESTIONS.forEach(q => { if (Number.isFinite(rawAsk[q.id])) asked[q.id] = rawAsk[q.id]; });
   // v54: and the stamps of the lines said once in a while, not questions.
   ONCE_LINES.forEach(id => { if (Number.isFinite(rawAsk[id])) asked[id] = rawAsk[id]; });
+  /* v72: and the warm-up confirmation's per-lift stamps, `warm:<exId>`, kept
+     when the id part is an id's shape. Pruned at 56 days on every write
+     (coach-data.js, where the clock is); the engine reads them by its own
+     clock argument, so an unwritten node still reads right. */
+  Object.keys(rawAsk).forEach(k => {
+    if (k.startsWith('warm:') && ID_RE.test(k.slice(5)) && Number.isFinite(rawAsk[k])) asked[k] = rawAsk[k];
+    // and the record question's per-record stamps, `q_pr_how:<recordId>`,
+    // the same way — so the budget counts every record it was asked on
+    if (k.startsWith('q_pr_how:') && ID_RE.test(k.slice(9)) && Number.isFinite(rawAsk[k])) asked[k] = rawAsk[k];
+  });
   /* No `lastGreet`. It used to live here and it was the wrong node for it: the
      write fires as the app opens and the app is routinely closed a second or
      two later, so the one usage pattern that needed the value remembered was
@@ -5668,11 +5581,18 @@ export function normSettings(v) {
   const marks = {};
   const rawMk = o.marks && typeof o.marks === 'object' && !Array.isArray(o.marks) ? o.marks : {};
   Object.keys(rawMk).forEach(id => { const m = rawMk[id]; if (markValid(id, m)) marks[id] = { r: m.r, d: m.d }; });
+  /* v72: what he told Coach — coach-ask.js normKnow() is the only reader of
+     the shape, junk dropped and never thrown — each key added only when
+     something survives, so a node with none keeps the shipped shape. */
+  const { know, knowBy, tally } = normKnow(o);
   return {
     v: COACH_SETTINGS_VERSION,
     mute, on, answers, asked,
     ...(goalLift ? { goalLift } : null),
-    ...(Object.keys(marks).length ? { marks } : null)
+    ...(Object.keys(marks).length ? { marks } : null),
+    ...(Object.keys(know).length ? { know } : null),
+    ...(Object.keys(knowBy).length ? { knowBy } : null),
+    ...(Object.keys(tally).length ? { tally } : null)
   };
 }
 

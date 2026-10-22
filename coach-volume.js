@@ -167,9 +167,11 @@ const noPat = () => Object.fromEntries(PAT_KEYS.map(k => [k, 0]));
 /* THE HARD SETS OF ONE EXERCISE IN ONE SESSION, the warm-up out whether he
    typed the W or not — coach-ramp.js's split (v70). Exported for the battery.
    An assisted lift's load is the help, so nothing about it is a ramp. */
-export function hardSets(sets, assisted, known) {
+// v72: `warm` is his word on warm-ups on the lift (coach.js, knowBy.warm):
+// 'no' switches detection off for it.
+export function hardSets(sets, assisted, known, warm) {
   const work = (Array.isArray(sets) ? sets : []).filter(s => s && parseInt(s.r, 10) >= 1);
-  return workSetsOf(work, { assisted: !!assisted, known: known || [] });
+  return workSetsOf(work, { assisted: !!assisted, known: known || [], warm: warm || null });
 }
 
 // A rep drop in one exercise's working sets: a later set at the same or a
@@ -178,8 +180,8 @@ export function hardSets(sets, assisted, known) {
 // v55: a drop set's sets ('D') are not read for it, as in both of those.
 // v70: read over the same split the hard sets are, so a 45 × 10 before the
 // top is never "the first set" a drop is measured from.
-function dropped(sets, repDrop, assisted, known) {
-  const w = hardSets(sets, assisted, known).filter(s => s.type !== 'D');
+function dropped(sets, repDrop, assisted, known, warm) {
+  const w = hardSets(sets, assisted, known, warm).filter(s => s.type !== 'D');
   if (w.length < 2 || !(repDrop > 0)) return false;
   const load = s => parseFloat(s.w) || 0, reps = s => parseInt(s.r, 10);
   return w.slice(1).some(s => load(s) <= load(w[0]) && reps(s) <= reps(w[0]) * (1 - repDrop));
@@ -194,7 +196,7 @@ const assistedOf = (ex, row) => ex.exId === 'assisted-pull-up' || /assist/i.test
 /* v70: his ramp loads per lift (coach-ramp.js rampLoads), over the sessions
    the week read is handed, oldest first — so a 10-lb raise before his 15-lb
    ones is a warm-up in every session, not only where the tiers catch it. */
-function knownOf(sessions, lib) {
+function knownOf(sessions, lib, warm) {
   const lists = new Map();
   sessions.slice().sort((a, b) => (b.daysAgo - a.daysAgo) || ((a.startedAt || 0) - (b.startedAt || 0))).forEach(s => {
     mergeSessionExercises((s.session || s).exercises).forEach(ex => {
@@ -204,11 +206,11 @@ function knownOf(sessions, lib) {
     });
   });
   const out = new Map();
-  lists.forEach(({ ex, lists: L }, id) => out.set(id, rampLoads(L, { assisted: assistedOf(ex, lib[id] || null) })));
+  lists.forEach(({ ex, lists: L }, id) => out.set(id, rampLoads(L, { assisted: assistedOf(ex, lib[id] || null), warm: (warm && warm[id]) || null })));
   return out;
 }
 
-function countSession(rec, lib, repDrop, known) {
+function countSession(rec, lib, repDrop, known, warm) {
   const out = { groups: {}, prim: {}, f: {}, drops: {}, custom: {}, pat: {}, customSets: 0 };
   mergeSessionExercises(rec && rec.exercises).forEach(ex => {
     if (!ex || !ex.exId) return;
@@ -218,14 +220,15 @@ function countSession(rec, lib, repDrop, known) {
     if (((row && row.equipment) || ex.equipment) === 'cardio') return;
     const assisted = assistedOf(ex, row);
     const his = (known && known.get(ex.exId)) || [];
-    const hard = hardSets(ex.sets, assisted, his);
+    const w72 = (warm && warm[ex.exId]) || null;
+    const hard = hardSets(ex.sets, assisted, his, w72);
     if (!hard.length) return;
     const n = hard.length;
     const built = EXERCISE_BY_ID[ex.exId];
     add(out.groups, g, n);
     add(out.prim, g, n);
     add(out.f, g, hard.filter(s => s.type === 'F').length);
-    if (dropped(ex.sets, repDrop, assisted, his)) add(out.drops, g, 1);
+    if (dropped(ex.sets, repDrop, assisted, his, w72)) add(out.drops, g, 1);
     // v56: a custom exercise he has set a movement on is read by it — in the
     // split, and not among the customs Coach cannot place, nor in their share
     // of the group. Still its primary group only: nobody asked him about a
@@ -262,11 +265,11 @@ function weeksOf(i) {
     .filter(s => s && Number.isFinite(s.daysAgo) && s.daysAgo >= 0 && (s.session || s.exercises));
   const weeks = [];
   const at = k => weeks[k] || (weeks[k] = { n: 0, groups: {}, prim: {}, f: {}, drops: {}, custom: {}, pat: {}, customSets: 0 });
-  const known = knownOf(sessions, lib);
+  const known = knownOf(sessions, lib, i.warm);
   sessions.forEach(s => {
     const w = at(Math.floor(s.daysAgo / 7));
     w.n++;
-    const c = countSession(s.session || s, lib, i.repDrop, known);
+    const c = countSession(s.session || s, lib, i.repDrop, known, i.warm);
     ['groups', 'prim', 'f', 'drops', 'custom'].forEach(k => Object.keys(c[k]).forEach(g => add(w[k], g, c[k][g])));
     Object.keys(c.pat).forEach(g => { const P = w.pat[g] || (w.pat[g] = noPat()); PAT_KEYS.forEach(k => { P[k] += c.pat[g][k]; }); });
     w.customSets += c.customSets;

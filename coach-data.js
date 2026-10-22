@@ -41,6 +41,9 @@ import { maintenance, effectiveMaint, trendRate, sortedEntries } from './tdee.js
 import { goalDirection } from './insights.js';
 import { capabilities } from './access.js';
 import { normSettings, isMuted, patternFoodDays, fuelDays, CATEGORIES, finishRead } from './coach.js';
+// v72: the facts' ladder (one more answer → { v, c, at, n }) and the recap's
+// per-lift stamp, from the pure module that owns the shape.
+import { nextFact, KNOW_KEYS } from './coach-ask.js';
 
 /* ================= STATE =================
    Everything here is set once by initCoachData() and read synchronously
@@ -501,16 +504,20 @@ function hasPro() {
 // with the other one's write and lose a toggle. A queue of one is enough: these
 // are user-initiated and there are never more than a handful.
 let chain = Promise.resolve();
-function patch(change) {
-  const next = chain.then(() => patchNow(change), () => patchNow(change));
+// v72: `more(fresh)` is a change worked out from the node as it is read inside
+// the patch — the facts' ladder and the tallies need what is stored now, not
+// what this module remembers.
+function patch(change, more) {
+  const next = chain.then(() => patchNow(change, more), () => patchNow(change, more));
   chain = next.catch(() => {});
   return next;
 }
 
-async function patchNow(change) {
+async function patchNow(change0, more) {
   let fresh;
   try { fresh = normSettings(await readExact('settings/coach')); settingsRead = true; }
   catch { return false; }
+  const change = typeof more === 'function' ? { ...change0, ...more(fresh) } : change0;
 
   const next = normSettings({
     ...fresh,
@@ -522,8 +529,22 @@ async function patchNow(change) {
     // v52: merged like answers — a key set to null is dropped by
     // normSettings() — and every mark past six months pruned on every write,
     // here, where the clock is.
-    marks:   { ...(fresh.marks || {}), ...(change.marks || {}), ...staleMarks(fresh.marks) }
+    marks:   { ...(fresh.marks || {}), ...(change.marks || {}), ...staleMarks(fresh.marks) },
+    /* v72: the facts he answered (coach-ask.js) — `know` one level, each
+       `knowBy.<key>` one level, `tally` one level — merged the way marks are,
+       so one answer never erases another lift's. A change may hand a
+       finished fact (learn, learnBy) or, for tally, a delta already summed
+       against `fresh` by learnTally(). */
+    know:    { ...(fresh.know || {}), ...(change.know || {}) },
+    knowBy:  mergeBy(fresh.knowBy, change.knowBy),
+    tally:   { ...(fresh.tally || {}), ...(change.tally || {}) }
   });
+  /* v72: and the per-item stamps — the warm-up confirmation's `asked.warm:<exId>`
+     and the record question's `asked.q_pr_how:<recordId>` — pruned at 56 days
+     on every write: twice the 28 days a lift stays asked, and well past the
+     week the budget counts, so a stamp outlives its meaning by one cooldown
+     and never piles up. The engine reads them by its own clock. */
+  Object.keys(next.asked).forEach(k => { if ((k.startsWith('warm:') || k.startsWith('q_pr_how:')) && staleStamp(next.asked[k])) delete next.asked[k]; });
 
   try {
     await write('settings/coach', next);
@@ -539,6 +560,20 @@ async function patchNow(change) {
    The engine ignores the same marks by its own clock argument, so a node
    nobody has written to since still reads right. */
 const MARK_KEEP_DAYS = 182;
+// v72: how long a `warm:<exId>` stamp is kept, in whole days noon to noon.
+const WARM_STAMP_KEEP_DAYS = 56;
+function staleStamp(at) {
+  const today = new Date(); today.setHours(12, 0, 0, 0);
+  const d = new Date(Number(at)); d.setHours(12, 0, 0, 0);
+  return !Number.isFinite(at) || Math.round((today.getTime() - d.getTime()) / 864e5) > WARM_STAMP_KEEP_DAYS;
+}
+// Each knowBy key merged one level: a change to one lift leaves the others.
+function mergeBy(fresh, change) {
+  const out = {};
+  const keys = new Set(Object.keys(fresh || {}).concat(Object.keys(change || {})));
+  keys.forEach(k => { out[k] = { ...((fresh || {})[k] || {}), ...((change || {})[k] || {}) }; });
+  return out;
+}
 function staleMarks(marks) {
   const out = {};
   const today = new Date(); today.setHours(12, 0, 0, 0);
@@ -706,6 +741,30 @@ export function setGoalLift(v) {
 
 export function markAsked(id) {
   return patch({ asked: { [id]: Date.now() } });
+}
+
+/* v72: WHAT HE TOLD COACH (coach-ask.js). Each writer reads the node fresh
+   inside the serialised patch, climbs the fact's ladder from what is there
+   (nextFact: the same answer again is one rung more sure, a different one
+   starts over) and writes it back one level deep, beside everything else.
+   The value is written as given; normSettings() drops one off the key's
+   options or range on the way through, so a bad value is never stored and
+   a bad key never adds a row. Children of the already-granted settings/coach:
+   no rules change. */
+export function learn(key, v) {
+  if (!KNOW_KEYS[key] || KNOW_KEYS[key].by) return Promise.resolve(false);
+  return patch({}, fresh => ({ know: { [key]: nextFact((fresh.know || {})[key], v, Date.now()) } }));
+}
+export function learnBy(key, id, v) {
+  const spec = KNOW_KEYS[key];
+  if (!spec || !spec.by || typeof id !== 'string' || !id) return Promise.resolve(false);
+  return patch({}, fresh => ({ knowBy: { [key]: { [id]: nextFact(((fresh.knowBy || {})[key] || {})[id], v, Date.now()) } } }));
+}
+// A count moved by a delta — read-merge, capped at 999 like the shape says.
+export function learnTally(delta) {
+  const d = delta && typeof delta === 'object' ? delta : {};
+  return patch({}, fresh => ({ tally: Object.fromEntries(Object.keys(d).map(k =>
+    [k, Math.max(0, Math.min(999, ((fresh.tally || {})[k] || 0) + (Number(d[k]) || 0)))])) }));
 }
 
 /* v52: A BAD-DAY MARK (Micah's decision #9), on one session, by its own

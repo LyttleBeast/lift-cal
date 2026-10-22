@@ -96,7 +96,7 @@ writeFileSync(join(dir, 'analytics.mjs'), src('analytics.js')
   .replace("from './ui.js'", 'from ' + real('ui.js'))
   .replace("from './units.js'", 'from ' + real('units.js')));
 // v70: coach-ramp.js, the ramp model, staged with the rest.
-const COACH_DEPS = ['coach-ramp', 'coach-prog', 'coach-overlap', 'coach-fuel', 'coach-ready', 'coach-build', 'coach-live', 'coach-volume'];
+const COACH_DEPS = ['coach-ramp', 'coach-ask', 'coach-prog', 'coach-overlap', 'coach-fuel', 'coach-ready', 'coach-build', 'coach-live', 'coach-volume'];
 COACH_DEPS.concat(['coach']).forEach(name => writeFileSync(join(dir, name + '.mjs'), src(name + '.js')
   .replace(/from '\.\/([\w-]+)\.js'/g, (w, n) => 'from ' + (n === 'analytics' || COACH_DEPS.includes(n) || n === 'coach'
     ? at(n + '.mjs') : real(n + '.js')))));

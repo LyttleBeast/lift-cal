@@ -60,6 +60,8 @@ writeFileSync(join(dir, 'analytics.mjs'), src('analytics.js')
 // Section O holds the file itself to this file's rules.
 writeFileSync(join(dir, 'package.json'), '{ "type": "module" }');
 writeFileSync(join(dir, 'coach-ramp.js'), src('coach-ramp.js').replace("from './analytics.js'", "from './analytics.mjs'"));
+// v72: coach-ask.js, the questions and the facts — imports units.js and coach-ramp.js (the staged copy beside it).
+writeFileSync(join(dir, 'coach-ask.js'), src('coach-ask.js').replace("from './units.js'", 'from ' + real('units.js')));
 /* coach-goal.js and coach-prog.js — v48's targets — are staged the same way:
    coach-build.js imports coach-prog.js, which takes the same session math
    through the stub, and coach-goal.js imports nothing at all. */
@@ -174,12 +176,14 @@ section('A. three imports, and the analytics one is a closed list');
   // through the builder and the overlap (the next set: coach-overlap.js
   // nextSetFor()). v70, deliberately added: coach-ramp.js is the eleventh —
   // the ramp model, which says which of a session's sets were the warm-up;
-  // section O holds it to the same rules.
+  // section O holds it to the same rules. v72, deliberately added:
+  // coach-ask.js is the twelfth — the questions and the facts he answered;
+  // section P holds it to the same rules.
   const ALLOWED = ['./exercises.js', './analytics.js', './units.js', './coach-build.js', './coach-live.js',
                    './coach-goal.js', './coach-overlap.js', './coach-ready.js', './coach-fuel.js', './coach-volume.js',
-                   './coach-ramp.js'];
+                   './coach-ramp.js', './coach-ask.js'];
   const extra = imports.map(i => i.from).filter(f => !ALLOWED.includes(f));
-  check('coach.js imports nothing outside exercises.js, analytics.js, units.js, coach-build.js, coach-live.js, coach-goal.js, coach-overlap.js, coach-ready.js, coach-fuel.js, coach-volume.js and coach-ramp.js',
+  check('coach.js imports nothing outside exercises.js, analytics.js, units.js, coach-build.js, coach-live.js, coach-goal.js, coach-overlap.js, coach-ready.js, coach-fuel.js, coach-volume.js, coach-ramp.js and coach-ask.js',
         !extra.length, list(extra));
   check('and imports none of them twice',
         new Set(imports.map(i => i.from)).size === imports.length);
@@ -943,6 +947,53 @@ section('O. coach-ramp.js — the ramp model is copied byte for byte as well');
           .every(f => /import \{[^}]*\bworkSetsOf\b[^}]*\} from '\.\/coach-ramp\.js'/.test(src(f))));
   check('and it never writes to a set it is handed — no assignment through `.type`, `.w` or `.r`',
         !/\.(type|w|r)\s*=[^=]/.test(MCODE));
+}
+
+/* ================= P. coach-ask.js (v72) =================
+   The questions and the facts he answered. It is the one module coach.js
+   imports that holds the clock-free date math a second time (dayKey, noon,
+   daysBetween — coach.js's five lines, copied because the fence forbids the
+   import the other way), so the two copies are held equal here, and the file
+   is held to every rule above: units.js and coach-ramp.js and nothing else,
+   `now` always an argument, no module state. */
+section('P. coach-ask.js — the questions and the facts are copied byte for byte as well');
+{
+  const QRAW = src('coach-ask.js');
+  const QCODE = QRAW.replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n').map(l => l.replace(/(^|[^:'"\\])\/\/.*$/, '$1')).join('\n');
+  const imports = [...QRAW.matchAll(/^import\s+(?:([^;]*?)\s+from\s+)?['"]([^'"]+)['"];?$/gm)]
+    .map(m => ({ names: (m[1] || '').trim(), from: m[2] }));
+  check('it imports units.js and coach-ramp.js, and nothing else',
+        imports.length === 2 && imports.every(i => ['./units.js', './coach-ramp.js'].includes(i.from)), list(imports.map(i => i.from)));
+  check('never coach.js — coach.js imports IT', !/'\.\/coach\.js'/.test(QRAW));
+  check('and never names store.js, reads or writes',
+        !/store\.js/.test(QCODE) && !/\bread\s*\(|\breadExact\s*\(|\bwrite\s*\(/.test(QCODE));
+  check('no Date.now(), no argless new Date() — `now` is always an argument',
+        !/Date\.now\s*\(/.test(QCODE) && ![...QCODE.matchAll(/new\s+Date\s*\(\s*\)/g)].length && !/performance\s*\.\s*now/.test(QCODE));
+  check('no Math.random()', !/Math\s*\.\s*random/.test(QCODE));
+  ['document', 'window', 'navigator', 'localStorage', 'sessionStorage', 'fetch', 'XMLHttpRequest']
+    .forEach(g => check('no ' + g, !new RegExp('\\b' + g + '\\b').test(QCODE),
+                        (QCODE.match(new RegExp('.*\\b' + g + '\\b.*')) || [''])[0].trim()));
+  check('no console, no timers', !/\bconsole\s*\./.test(QCODE) && !/\bset(Timeout|Interval)\s*\(/.test(QCODE));
+  const topLevel = QCODE.split('\n').filter(l => /^(export\s+)?(let|var)\s/.test(l));
+  check('no top-level let or var — nothing remembered between reads', !topLevel.length, list(topLevel.map(l => l.trim())));
+  check('no default export', !/export\s+default/.test(QCODE));
+  // The copied date math, line for line against coach.js's.
+  const fn = (text, name) => {
+    const one = new RegExp('^function ' + name + '\\([^\\n]*\\}$', 'm').exec(text);
+    const m = one || new RegExp('^function ' + name + '\\([\\s\\S]*?\\n\\}', 'm').exec(text);
+    return m ? m[0] : null;
+  };
+  ['dayKey', 'noon', 'daysBetween'].forEach(name =>
+    check(name + '() is coach.js’s, byte for byte', fn(QRAW, name) != null && fn(QRAW, name) === fn(RAW, name),
+          (fn(QRAW, name) || 'missing').slice(0, 80)));
+  check('rotate() is coach.js’s, byte for byte', fn(QRAW, 'rotate') != null && fn(QRAW, 'rotate') === fn(RAW, 'rotate'));
+  check('what it exports: the catalog, the facts’ reader and normaliser, the picker, the plan and the ramp row',
+        ['KNOW_KEYS', 'ASK_QUESTIONS'].every(n => new RegExp('export const ' + n + '\\b').test(QRAW)) &&
+        ['normKnow', 'knowOf', 'nextFact', 'warmStyle', 'budgetOf', 'pickQuestion', 'debriefPlan', 'warmRamp']
+          .every(n => new RegExp('export function ' + n + '\\(').test(QRAW)));
+  check('and coach.js reads its QUESTIONS off the catalog rather than holding a second list',
+        /export const QUESTIONS = Object\.freeze\(ASK_QUESTIONS\.filter\(q => q\.writes === 'answers'\)\)/.test(RAW));
 }
 
 /* ---------- report ---------- */

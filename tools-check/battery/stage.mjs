@@ -41,7 +41,7 @@ export function todayKey(d = new Date()) {
   // Every pure Coach module, each relative import repointed: a sibling Coach
   // module to its staged copy, analytics.js to the staged one, and the leaf
   // modules (units, exercises, tags, goal, blocks) to the real files.
-  const COACH = ['coach-ramp.js', 'coach-prog.js', 'coach-build.js', 'coach-live.js', 'coach-overlap.js', 'coach-fuel.js',
+  const COACH = ['coach-ramp.js', 'coach-ask.js', 'coach-prog.js', 'coach-build.js', 'coach-live.js', 'coach-overlap.js', 'coach-fuel.js',
                  'coach-ready.js', 'coach-volume.js', 'coach.js'];
   const LEAF = ['units.js', 'exercises.js', 'coach-tags.js', 'coach-goal.js', 'blocks.js'];
   const repoint = text => text.replace(/from\s+'\.\/([\w-]+\.js)'/g, (m, f) => {
