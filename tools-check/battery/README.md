@@ -61,6 +61,17 @@ saying nothing on a working set it cannot tell from one costs a miss, never a
 wrong. Each next-set row in the report carries the day's `target` (pounds),
 its `mode` and `today` (the ticks so far), for reading a report by hand.
 
+### What he said (rack-v72)
+
+Since v72 a lifter can carry `settings.knowBy.warm` — what he told Coach about
+warm-ups on a lift. The generator draws it from a fork at the very end of a
+lifter (so every seed keeps its lifter): a `tags_everything` lifter has said
+`yes` on one or two lifts; a bodybuilder-based lifter has said `no` on one
+loaded lift, and the truth is made true of it — that lift's warm-up sets are
+taken out of its sessions and truth rows (`truth.exercises[id].warmNo`). A
+target that still reads a ramp into such a lift (a row marked `ramp`, or
+fewer rows than last time's sets) is `T_CONTRADICT`, a wrong.
+
 **`scoreRamp` — not yet.** When a later ship proposes a ramp (the recap's
 "Were 45, 135 and 225 your warm-ups?", rack-v72, and whatever draws his ramp
 rows), the thing to score is the proposal itself: every load it names must be

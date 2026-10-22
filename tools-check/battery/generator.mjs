@@ -573,6 +573,50 @@ export function makeLifter(seed, archetypeId, opts = {}) {
     progression[exId] = { ratePctWk: sxx > 0 && my > 0 ? r2(sxy / sxx / my * 100) : 0, points: pts.length };
   });
 
+  /* ---------- v72: what he told Coach about warm-ups ----------
+     A fork at the very end, so every draw above keeps its order and every
+     existing seed its lifter (README: the one rule of the generator). A
+     tags_everything lifter has said "yes" on one or two of his lifts — true
+     of him, and the engine reads a yes as it reads nothing said. A
+     bodybuilder-based lifter has said "no" on one loaded lift, and the truth
+     is made true of it: that lift's warm-up sets are taken out of every
+     session and every truth row (he logs only working sets there), so a
+     Coach that still read a ramp into it would be contradicting him —
+     scoring.mjs T_CONTRADICT. `at` is the run's own now, so the answer never
+     expires inside the log. */
+  const K = R.fork();
+  const loaded = Object.keys(EX).filter(id => !EX[id].cardio && !EX[id].bodyweight && !EX[id].assisted);
+  const warmBy = {};
+  if (archetypeId === 'tags_everything' && loaded.length) {
+    const n = K.int(1, Math.min(2, loaded.length));
+    const pool = loaded.slice();
+    for (let i = 0; i < n; i++) warmBy[pool.splice(Math.floor(K.f() * pool.length), 1)[0]] = { v: 'yes', c: K.int(1, 3), at: END, n: K.int(1, 3) };
+  }
+  if (A.base === 'bodybuilder' && loaded.length) {
+    const noId = loaded[Math.floor(K.f() * loaded.length)];
+    sessions.forEach((rec, si) => {
+      const tS = truthSessions[si];
+      rec.exercises.forEach(e => {
+        if (e.exId !== noId || e.block) return;
+        const t = tS.exercises.find(x => x.exId === noId);
+        if (!t || !t.rampIdx.length) return;
+        const drop = new Set(t.rampIdx);
+        const map = []; let k = 0;
+        e.sets.forEach((s, i) => { map[i] = drop.has(i) ? -1 : k++; });
+        e.sets = e.sets.filter((s, i) => !drop.has(i));
+        t.workIdx = t.workIdx.map(i => (i < 0 ? i : map[i]));
+        t.rampIdx = []; t.ramp = [];
+      });
+      // the record's volume counted the untagged ramp sets; it is the log's number, so it moves with them
+      const working = rec.exercises.flatMap(e => e.sets.filter(s => s.type !== 'W'));
+      rec.volume = Math.round(working.reduce((a, s) => a + (parseFloat(s.w) || 0) * (parseInt(s.r, 10) || 0), 0));
+    });
+    truthEx[noId].rampStyle = 'none';
+    truthEx[noId].warmNo = true;
+    warmBy[noId] = { v: 'no', c: K.int(1, 3), at: END, n: K.int(1, 3) };
+  }
+  if (Object.keys(warmBy).length) { settings.v = 2; settings.knowBy = { warm: warmBy }; }
+
   const weight = latest ? {
     latestLb: latest.lb, latestAt: latest.t,
     rateWk: r2(bwRate), rateSeWk: 0.3, rateDays: Math.min(21, weighIns.length), rateSpanDays: 21,

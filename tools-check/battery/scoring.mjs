@@ -65,6 +65,7 @@ export const CODES = Object.freeze({
   T_MARK:      { v: 'wrong', s: 'the last session is marked a bad day and the target still counts it' },
   T_TEXT:      { v: 'wrong', s: 'a banned phrase, or lb on a kilo account, in the target’s words' },
   T_INJURED:   { v: 'wrong', s: 'heavier on a group the lifter said is injured', needsAnswer: true },
+  T_CONTRADICT:{ v: 'wrong', s: 'a target that reads sets as warm-ups on a lift he said has none (knowBy.warm no) — a row marked ramp, or fewer rows than last time’s sets' },
   T_DEFER:     { v: 'miss',  s: 'no target where the last two sessions were straight sets of the same scheme, no layoff, no single' },
   T_NONUM:     { v: 'miss',  s: '“the next setting up” on a barbell or dumbbell lift with four or more sessions logged' },
   T_HOLD:      { v: 'miss',  s: 'held at the same weight though the top of the range was reached twice running (and the aim is not a cut or maintain)' },
@@ -154,6 +155,11 @@ export function scoreTarget(t, tr) {
       if (s.w !== '' && s.w != null && (!row || row.tw === '')) codes.push('T_GHOST');
       j++;
     });
+  }
+  // v72: on a lift he said he logs no warm-ups on, every set he typed is a
+  // working set — a target that marks a row as his ramp, or drops one, contradicts him
+  if (tr.warmNo && sets.length && (sets.some(s => s && s.ramp) || (tr.lastAll && !t.marked && !['reduce', 'reenter'].includes(t.mode) && sets.length < tr.lastAll.length))) {
+    codes.push('T_CONTRADICT'); notes.push(sets.filter(s => s && s.ramp).length + ' ramp rows, ' + sets.length + ' of ' + (tr.lastAll ? tr.lastAll.length : '?'));
   }
   if (load != null && !tr.bodyweight) {
     const L = toDisp(load, u);

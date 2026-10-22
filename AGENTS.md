@@ -821,7 +821,10 @@ v55, never on a drop: a drop set is rated on the set he changed to a drop set.
   rules take it: `workouts` carries a section-level `.write`.
 - **Written and cleared:** `workout.js` `rateSet()` sets it, and deletes the
   key (never null) for the chosen chip tapped again. Unticking a set deletes
-  it (`tickSet`), since a rating is of a set that was done.
+  it (`tickSet`), since a rating is of a set that was done. **v72:** the
+  recap's "did that record have more in it?" writes it on the record set
+  after Finish (`setRirOnRecord`, 4 / 2 / 0) — the whole session node written
+  again, as `saveEdit()` writes it; see `settings/coach` v72.
 - **The trap, again:** `saveEdit()` rebuilds the record, so `editWorkout`
   carries each `rir` onto the edit's sets and `collectFrom` carries it back.
   **Every place that builds a set from another set builds it fresh**, with no
@@ -1034,6 +1037,103 @@ movement can be set, said at most once in 28 days and only when a group's
 customs are hiding a split. Also a child of `settings/coach`, so no rules
 change. Native's PROPOSED rules need it beside `vol_neglect` if they enumerate
 `asked` (`NEXT-NATIVE-V56.md` §7).
+
+**v72 — `v: 2`: what he told Coach.** Coach asks questions now (`coach-ask.js`,
+`COACH-V2-SPEC.md` §3), and keeps the answers the log cannot supply as
+**facts**, each `{ v, c, at, n }` — the value, how sure (1 answered once, 2
+twice the same, 3 three times), the epoch ms of the last answer, and the run of
+consistent answers (1–9, back to 1 when the answer changes). Three keys, all
+children of the already-granted `settings/coach`, **so no rules change** —
+`database.rules.json` is byte-identical to rack-v71:
+
+```json
+{ "v": 2,
+  "mute": {}, "on": {}, "answers": {}, "asked": { "q_goal_aim": 1790000000000, "warm:back-squat-low-bar": 1790000000000, "q_pr_how:wm3k9x2": 1790000000001 },
+  "goalLift": {}, "marks": {},
+  "know":   { "back": { "v": "elsewhere", "c": 1, "at": 1790000000000, "n": 1 } },
+  "knowBy": {
+    "warm":     { "back-squat-low-bar": { "v": "yes",  "c": 2, "at": 1790000000000, "n": 2 } },
+    "step":     { "lat-pulldown":       { "v": 10,     "c": 1, "at": 1790000000000, "n": 1 } },
+    "hold":     { "front-squat":        { "v": "hold", "c": 1, "at": 1790000000000, "n": 1 } },
+    "wantNext": { "legs":               { "v": "push", "c": 1, "at": 1790000000000, "n": 1 } }
+  },
+  "tally": { "extraOffered": 14, "extraTaken": 9 } }
+```
+
+- `know.<key>` — scalar facts. `knowBy.<key>.<id>` — per-lift facts (the id is
+  the `exId`, `/^[A-Za-z0-9_-]{1,40}$/`) or per-shape (`wantNext`, a shape
+  key `group+group`, ≤ 40 chars). `tally.<k>` — integers 0–999. Keys match
+  `/^[a-z][A-Za-z0-9]{0,23}$/`. `coach-ask.js` `KNOW_KEYS` is the table of
+  keys and their bounds: `back` ∈ elsewhere|off (TTL 14 d); `warm` ∈ yes|no
+  (180 d); `step` an integer 0.5–100000 — **pounds**, like every stored weight
+  (365 d); `hold` ∈ hold|light|day (42 d); `wantNext` ∈ same|push|ease (14 d).
+  **v72 writes `knowBy.warm` only**; the other keys are declared so the native
+  rules block is written once.
+- `normKnow()` in `coach-ask.js` is the only reader of the shape, called by
+  `normSettings()`: `v` must be one of the key's options or an integer in its
+  range, `c` 1–3, `n` 1–9, `at` a finite positive number; junk is dropped,
+  never thrown; at most 60 ids per `knowBy` key (the oldest `at` go); each key
+  is added to the normalised node only when something survives, so a node
+  with none keeps the shipped shape. **A v1 node reads as v2 with no `know`;
+  nothing migrates.** Expiry is a TTL in the pure module, never stored: an
+  expired fact keeps `v` as a prior and reads as `c: 1`; `warmAnswer()` reads
+  an expired `warm` as nothing said.
+- **Written** by `coach-data.js` `learn(key, v)`, `learnBy(key, id, v)` and
+  `learnTally(delta)` — read-merge inside the serialised patch, the ladder
+  climbed from what is stored (`nextFact`), one level deep (`know`, each
+  `knowBy.<key>`, `tally`), beside `marks`. The value is written as given and
+  `normSettings()` drops a bad one on the way through.
+- `asked` gains two kinds of **per-item stamp**: `warm:<exId>` (the warm-up
+  confirmation, asked once in 28 days per lift) and `q_pr_how:<recordId>` (the
+  record question, one stamp per record it was asked on — so the budget counts
+  every one). `normSettings()` keeps them when the id part is an id's shape;
+  `patchNow()` prunes both past 56 days on every write. The two new question
+  ids `q_warm_confirm` and `q_pr_how` are kept beside the shipped seven.
+- **The budget** is counted from the `asked` stamps alone: two stored-answer
+  questions (`budget: 'D'`) a day, six an ISO week (Monday first, the
+  account's own day keys). The warm-up confirmation is `C` — logging — and is
+  never counted; nor is the bad-day mark.
+- **What `knowBy.warm` changes:** `no` on a lift switches the ramp model's
+  detection off for it everywhere a working set is counted — the targets
+  (`coach-prog.js`, the lift carries `warm`), the counts in `coach.js`, the
+  live read and the week's hard sets (`i.warm`, exId → answer) — so every set
+  he typed `N` there is the working set he says it is. `yes` reads as nothing
+  said. Three lifts `yes` and none `no` make the recap's row a one-tap "Tag n
+  warm-ups"; three `no` and none `yes` turn the confirmation off account-wide
+  (`warmStyle()`, derived, never stored).
+- **The record itself** takes the other two answers: "Yes, tag them" retypes
+  the probable warm-ups `W` on the session (`workout.js` `retagWarmups`, the
+  whole session node written as `saveEdit()` writes it, `volume` and `groups`
+  recomputed, the `history` row for the day retyped to match), and "did that
+  record have more in it?" writes `rir` 4 / 2 / 0 on the record set
+  (`setRirOnRecord`). Both through one `rewriteRecord()`; a refused write
+  changes nothing in memory. `workouts` carries a section-level `.write`.
+
+**The native tree's PROPOSED rules** (`web-patches/database.rules.PROPOSED.json`)
+validate `settings/coach` key by key and end in `$other: false`, so they
+refuse `know`, `knowBy` and `tally` — and so every native write of
+`settings/coach` — until this block is added beside `marks`; the `v` key's
+`.validate` must accept `2`, and if `asked` is enumerated its `$id` rule needs
+`/^(q_[a-z_]{1,40}|vol_neglect|bal_custom|warm:[A-Za-z0-9_-]{1,40}|q_pr_how:[A-Za-z0-9_-]{1,40})$/`.
+Published rules: nothing. The block, verbatim (`COACH-V2-SPEC.md` §3.5,
+`NEXT-NATIVE-V72.md` §5):
+
+```json
+"know":   { "$k": { ".validate": "$k.matches(/^[a-z][A-Za-z0-9]{0,23}$/) && newData.hasChildren(['v','c','at','n'])",
+            "v": { ".validate": "(newData.isString() && newData.val().length <= 12) || newData.isBoolean() || (newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000)" },
+            "c": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 3" },
+            "n": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 9" },
+            "at": { ".validate": "newData.isNumber() && newData.val() > 0" },
+            "$other": { ".validate": false } } },
+"knowBy": { "$k": { ".validate": "$k.matches(/^[a-z][A-Za-z0-9]{0,23}$/)",
+            "$id": { ".validate": "$id.matches(/^[A-Za-z0-9_+-]{1,40}$/) && newData.hasChildren(['v','c','at','n'])",
+              "v": { ".validate": "(newData.isString() && newData.val().length <= 12) || newData.isBoolean() || (newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000)" },
+              "c": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 3" },
+              "n": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 9" },
+              "at": { ".validate": "newData.isNumber() && newData.val() > 0" },
+              "$other": { ".validate": false } } } },
+"tally":  { "$k": { ".validate": "$k.matches(/^[a-z][A-Za-z0-9]{0,23}$/) && newData.isNumber() && newData.val() >= 0 && newData.val() <= 999" } }
+```
 
 **v52's food reads — when, how many, and for whom.** *Am I fueled?*, *Should I
 rest or go lighter?* and *How did today compare?* read `food/log/{date}`

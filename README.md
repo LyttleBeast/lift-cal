@@ -883,6 +883,19 @@ AGENTS.md. Switches are stored as `mute` (absent means on); Patterns alone is
 stored as `on`, where absent means off. The bad-day marks (v52) live there too,
 as `marks`, each one pruned after six months.
 
+**Since v72 it also holds what you told Coach** — the answers the log cannot
+supply, each kept as a fact `{ v, c, at, n }` under `know` (scalar) or `knowBy`
+(per lift), with `tally` for its counts. Coach asks one question at a time, at
+most two stored answers a day and six a week, and the first place it asks is
+the recap: under the finish line, when the ramp model saw an untagged warm-up
+ramp, "Were 45, 135 and 225 lb your warm-ups on Back Squat?" — *Yes, tag them*
+retypes those sets W on the session itself (the volume tile drops, the records
+re-read), *No, working sets* teaches it you log only working sets on that lift,
+and it stops reading a ramp into it; then the shipped "How did that feel?"; then
+one question — after a new best, "Did it feel like there was more in it?", one
+tap that rates the record set. A small *Not now* takes the whole card away. All
+of it is children of the granted node; the published rules do not change.
+
 The one thing that is **not** there is the rotating greeting: the counter behind
 it and the last few lines it used live on the device, because that value is
 written as the app opens and the app is routinely closed a second later — which

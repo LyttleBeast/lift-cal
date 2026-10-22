@@ -124,6 +124,8 @@ function liftTruth(L, k, exId, now) {
     injuredGroup: !!injuredNow, aim: T.aim, energy: T.energy,
     lastAll: last ? last.rec.exercises.find(e => e.exId === exId).sets : null,
     lastF, workLoadsLb: [...workLoadsLb],
+    // v72: he told Coach he logs no warm-ups on this lift (settings.knowBy.warm no)
+    warmNo: !!te.warmNo,
     usualReps: (() => { const rs = prior.slice(-3).flatMap(p => p.row.single ? [] : p.row.reps); if (!rs.length) return null; const v = rs.slice().sort((a, b) => a - b); return v[v.length >> 1]; })(),
     ratePctWk: (T.progression[exId] || {}).ratePctWk, phase: last ? last.s.phase : 'normal',
     // how far the LOGGED top load has climbed over the last eight weeks, in
