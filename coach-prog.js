@@ -75,7 +75,7 @@ import { wOut, wIn, fmtSetLoad, unitW, labelW, labelRate } from './units.js';
 import { GROUPS } from './exercises.js';
 import { tagsFor } from './coach-tags.js';
 import { dialsFor } from './coach-goal.js';
-import { workSetsOf, rampLoads, rampProfile } from './coach-ramp.js';
+import { rampOf, workSetsOf, rampLoads, rampProfile, RAMP_HEAVY, RAMP_LIGHT_REPS, RAMP_HEAVY_TRIPLE } from './coach-ramp.js';
 
 const DAY = 864e5;
 
@@ -688,7 +688,12 @@ function decide(ex, c) {
 
   // Last time's numbers, set by set: the default for every set a target does
   // not touch, and every top set's ghost weight when the target names no number.
-  const keep = last.all.map(s => ({ type: s.type, tw: s.w, tr: s.r, ...(s.dp === 1 ? { dp: 1 } : null) }));
+  // v70: a row the ramp model read as a warm-up rides in as logged, typed N,
+  // and carries `ramp: true` — so a reader of the rows (nextSet) can tell his
+  // 16 × 3 rung from the 16 × 6 working rows when a reduction lands on it.
+  const worked = new Set(last.work.map(s => s.i));
+  const keep = last.all.map((s, i) => ({ type: s.type, tw: s.w, tr: s.r, ...(s.dp === 1 ? { dp: 1 } : null),
+                                         ...(s.type !== 'W' && !worked.has(i) && repsOf(s) >= 1 ? { ramp: true } : null) }));
   const reps = rs => rs.join(', ');
   // Last time, said the way somebody says it: "3 × 8 at 185 lb", or "405 lb
   // for 1, then 315 lb for 5", or "185 lb for 12, 5, 11". Runs of one weight
@@ -1279,7 +1284,7 @@ function nextOf(ex, c, today) {
   // the target — a top set with back-offs — is not a straight scheme.
   const TL = L(t.loadLb);
   if (!onGrid(TL)) return null;
-  const main = t.sets.filter(x => x.type !== 'W' && x.tw !== '' && x.tw != null);
+  const main = t.sets.filter(x => x.type !== 'W' && !x.ramp && x.tw !== '' && x.tw != null);
   const atT = main.filter(x => Math.abs(L(x.tw) - TL) < GRID_TOL);
   if (atT.length < 2 || main.some(x => L(x.tw) > TL + GRID_TOL)) return null;
   const want = atT.map(x => parseInt(x.tr, 10)).filter(n => n >= 1);
@@ -1311,7 +1316,38 @@ function nextOf(ex, c, today) {
   // down (a re-entry, a reduction) is still a step down from.
   const lastAll = X.length ? allOf(src[src.length - 1]) : [];
   const anchor = Math.max(0, ...lastAll.filter(s => s && s.type !== 'W' && s.type !== 'D' && parseInt(s.r, 10) >= 1).map(s => parseFloat(s.w) || 0));
-  const split = workSetsOf(ticked, { T: t.loadLb, known, R: trAt(0), habit, anchor });
+  const ramp = rampOf(ticked, { T: t.loadLb, known, R: trAt(0), habit, anchor });
+  const split = ticked.filter((s, i) => ramp.workIdx.has(i));
+  // v70: UNSURE — Coach says nothing rather than guess. The tiers read a set's
+  // shape, and before anything has reached the target the same shape is both
+  // things: a target that came down (a re-entry, a reduction, a hold under a
+  // stale best) puts a real ramp set at 89% of it, and a deload puts a real
+  // working set at 80%. Quoting the ramp set as the next working set, or
+  // calling the working set a warm-up, is a wrong number; no number is the
+  // honest one. So, with nothing at the target yet, a set that is not a
+  // warm-up he typed or always does gets no answer — until the sets say it
+  // plainly (a fail, a too-hard rating, more reps than any warm-up, a third
+  // set at one load: rampOf's `plain`). And the FIRST set at the target is
+  // not yet the top when its reps say it may be a rung on the way past: half
+  // the plan's reps or fewer (15 × 3 on the way to 20 when the plan said 15 ×
+  // 10), or short of the plan on a target under his last top (107.5 × 4 for a
+  // plan of 7 after a reduction, with 125 his last top): either a bad set, or
+  // a ramp through a stale target, and the second set at that load settles it.
+  // A set just under the top is plain too — within the heavy tier of the
+  // heavier of the target and his last top, for more than a triple: 305 × 6
+  // under a 320 target is a working set he chose, and no rung sits there (a
+  // heavy opener is a single or a double). The ramp rows are on the screen
+  // already (v68); nothing is lost but a guess.
+  const isTop = s => (s.type || 'N') !== 'W' && s.type !== 'D' && parseFloat(s.w) >= t.loadLb - GRID_TOL;
+  const atTop = ticked.filter(isTop);
+  const nearTop = s => (s.type || 'N') === 'N' && parseFloat(s.w) >= RAMP_HEAVY * Math.max(t.loadLb, anchor) - GRID_TOL && parseInt(s.r, 10) > RAMP_HEAVY_TRIPLE;
+  const plain = ramp.plain || ticked.some(s => s.type === 'F' || s.type === 'D' || rirOf(s) === 0 || parseInt(s.r, 10) > RAMP_LIGHT_REPS);
+  const topR = atTop.length === 1 ? parseInt(atTop[0].r, 10) : null;
+  // The target came down: Coach's own reduce or re-entry, or a load under his last top.
+  const under = atTop.length === 1 && (t.mode === 'reduce' || t.mode === 'reenter' || parseFloat(atTop[0].w) < anchor - GRID_TOL);
+  const unsure = !plain && (atTop.length ? (topR != null && (topR * 2 <= trAt(0) || (under && topR < trAt(0))))
+                                         : (!ticked.some(nearTop) && ticked.some((s, i) => !ramp.sureIdx.has(i))));
+  if (unsure) return null;
   const W = split.map(s => ({ w: String(s.w == null ? '' : s.w), L: L(s.w), R: parseInt(s.r, 10), type: s.type || 'N', rir: rirOf(s) }));
   const done = W.filter(s => s.type !== 'D');
   const res = (kind, tw, tr, why, extra) => ({

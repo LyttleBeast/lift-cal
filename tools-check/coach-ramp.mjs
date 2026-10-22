@@ -183,6 +183,24 @@ section('F. the target’s load as T, mid-ramp');
   check('a triple at 90% before a five-rep plan is the last rung, live: 285 × 3 under a 315 × 5 target', of([S(285, 3)], { T: 315, R: 5 }).warm === '[0]' && of([S(285, 3)], { T: 315, R: 3 }).work === '[0]');
 }
 
+/* ================= F2. WHAT IS NOT A GUESS ================= */
+section('F2. sureIdx and plain — what the live read may lean on without guessing');
+{
+  const sure = (sets, opts) => idx(R.rampOf(sets, opts).sureIdx);
+  check('a typed W is sure wherever it is; a probable warm-up read by the tiers alone is not (45 × 10 under 315 is probable, not sure)',
+        sure([S(45, 10, 'W'), S(135, 5)], { T: 315 }) === '[0]' && of([S(45, 10)], { T: 315 }).probable === 1 && sure([S(45, 10)], { T: 315 }) === '[]');
+  check('his own ramp load is sure at the reps he has warmed up with there (20 × 8 with 20 × 8 known), not at the two reps of slack (20 × 10 is probable, not sure)',
+        sure([S(20, 8)], { T: 25, known: [{ w: 20, r: 8 }] }) === '[0]' && of([S(20, 10)], { T: 25, known: [{ w: 20, r: 8 }] }).probable === 1 && sure([S(20, 10)], { T: 25, known: [{ w: 20, r: 8 }] }) === '[]');
+  check('sureIdx is always within warmIdx', (() => { const r = R.rampOf(DAY.map((s, i) => (i < 2 ? { ...s, type: 'W' } : s)), { known: [{ w: 135, r: 5 }] }); return [...r.sureIdx].every(i => r.warmIdx.has(i)) && idx(r.sureIdx) === '[0,1,2,3]'; })());
+  check('no ratio makes a set sure: half the target or less is still only probable (10 × 9 under 20)', sure([S(10, 9)], { T: 20 }) === '[]' && of([S(10, 9)], { T: 20 }).probable === 1);
+  const pl = (sets, opts) => R.rampOf(sets, opts || {}).plain;
+  check('plain: a third set at one load before the top (50 × 5 ×3 under 60)', pl([S(50, 5), S(50, 5), S(50, 5)], { T: 60 }) === true && pl([S(50, 5), S(50, 5)], { T: 60 }) === false);
+  check('plain: an F, a D, or a set rated too hard in the run', pl([S(45, 10), S(135, 5, 'F')], { T: 315 }) === true && pl([S(45, 10), S(135, 5, 'D')], { T: 315 }) === true &&
+        pl([S(45, 10), S(135, 5, 'N', { rir: 0 })], { T: 315 }) === true && pl([S(45, 10), S(135, 5, 'N', { rir: 1 })], { T: 315 }) === false);
+  check('not plain: a descent (45 × 8 then 30 × 7 under a 60 target is the bar before the first plate), nor a clean ramp', pl([S(45, 8), S(30, 7)], { T: 60 }) === false && pl(DAY, {}) === false);
+  check('plain is false when detection is off (assisted, warm: no)', pl([S(50, 5), S(50, 5), S(50, 5)], { T: 60, assisted: true }) === false && pl([S(50, 5), S(50, 5), S(50, 5)], { T: 60, warm: 'no' }) === false);
+}
+
 /* ================= G. DETERMINISM, KEY ORDER, KILOS ================= */
 section('G. deterministic, order of keys irrelevant, a kilo-stored load the same');
 {
@@ -236,8 +254,9 @@ section('I. the module is pure and reaches only analytics.js');
   const imports = [...RAW.matchAll(/^import\s+(?:([^;]*?)\s+from\s+)?['"]([^'"]+)['"];?$/gm)].map(m => ({ names: (m[1] || '').trim(), from: m[2] }));
   check('one import, analytics.js, naming only isWorking', imports.length === 1 && imports[0].from === './analytics.js' && imports[0].names.replace(/[{}\s]/g, '') === 'isWorking', J(imports));
   check('no Date, no Math.random, no module-level let', !/\bDate\b/.test(CODE) && !/Math\s*\.\s*random/.test(CODE) && !CODE.split('\n').some(l => /^(export\s+)?(let|var)\s/.test(l)));
-  check('exports exactly rampOf, workSetsOf, rampProfile, rampLoads and the six constants',
-    J(Object.keys(R).sort()) === J(['GRID_TOL', 'RAMP_HEAVY', 'RAMP_KNOWN_EXPOSURES', 'RAMP_LIGHT', 'RAMP_MAX_SETS', 'RAMP_MID', 'rampLoads', 'rampOf', 'rampProfile', 'workSetsOf']), J(Object.keys(R).sort()));
+  check('exports exactly rampOf, workSetsOf, rampProfile, rampLoads and the eight constants',
+    J(Object.keys(R).sort()) === J(['GRID_TOL', 'RAMP_HEAVY', 'RAMP_HEAVY_TRIPLE', 'RAMP_KNOWN_EXPOSURES', 'RAMP_LIGHT', 'RAMP_LIGHT_REPS', 'RAMP_MAX_SETS', 'RAMP_MID', 'rampLoads', 'rampOf', 'rampProfile', 'workSetsOf']), J(Object.keys(R).sort()));
+  check('RAMP_LIGHT_REPS 12 and RAMP_HEAVY_TRIPLE 3 — the two caps nextSet reads a plain working set by', R.RAMP_LIGHT_REPS === 12 && R.RAMP_HEAVY_TRIPLE === 3);
 }
 
 done(st.cleanup);

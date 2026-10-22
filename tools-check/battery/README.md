@@ -54,7 +54,12 @@ load equal to the day's own target is Coach repeating its plan, not reciting
 the ramp — the same sentence the `target` kind says before anything is ticked.
 The live read's `workDone` already counts the truth's `workIdx` only. A target
 whose rows dropped a W row heavier than a reduced top is walked row by row
-against last time's (`T_GHOST`), a dropped W never a ghost.
+against last time's (`T_GHOST`), a dropped W never a ghost. A null next set is
+`N_NULL` (a miss) only after a true working set on a straight-sets lift with a
+numeric target — so Coach saying nothing on a ramp set costs nothing, and
+saying nothing on a working set it cannot tell from one costs a miss, never a
+wrong. Each next-set row in the report carries the day's `target` (pounds),
+its `mode` and `today` (the ticks so far), for reading a report by hand.
 
 **`scoreRamp` — not yet.** When a later ship proposes a ramp (the recap's
 "Were 45, 135 and 225 your warm-ups?", rack-v72, and whatever draws his ramp
@@ -71,7 +76,7 @@ is `scoring.mjs`, beside `scoreNextSet`.
 | `properties.mjs` | all four pass (deterministic, order-blind, unit-mirror, ban) |
 | `regress.mjs` | every case passes by the ship that fixes its code |
 | harness **wrong**, cause `engine` | **0** — from rack-v69 on (`--gate engine`) |
-| harness **wrong**, cause `untagged-warmup` | reported in v69; **0** from v70 on (`--gate all`, the default since v70). rack-v70 shipped at 35 of 110,901 — all on the live next set's first one or two ticks, where the lifter is working at a load Coach's target or his own log says is his warm-up; see SHIP-V70-SUMMARY.md |
+| harness **wrong**, cause `untagged-warmup` | reported in v69; **0** from v70 on (`--gate all`, the default since v70). rack-v70 shipped at 0: where the live next set cannot tell a warm-up from a working set (a set under a target that came down; a deload's first sets) it says nothing, and the cost is `N_NULL` misses (320 of 38,280 at v70), inside the nextSet + live bar; see SHIP-V70-SUMMARY.md |
 | harness **wrong**, `needsAnswer` | 0 once the question exists (v74); reported until then |
 | harness **miss**, target surface | ≤ 10% of target decisions, and `T_DEFER` on `intermediate_double` ≤ 3% — from v70 on |
 | harness **miss**, nextSet + live | ≤ 1% |

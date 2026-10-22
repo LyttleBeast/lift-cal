@@ -290,7 +290,7 @@ export function runCut(C, L, k, acc) {
                      bodyweight: tr.bodyweight, assisted: tr.assisted, u: L.u, hadTarget: !!(t && t.loadLb != null), targetLb: t && t.loadLb != null ? t.loadLb : null,
                      straight, exposures: tr.exposures, earnedUp, lastMainLb,
                      targetReps: t && t.sets && t.sets[si] && t.sets[si].type !== 'W' ? parseInt(t.sets[si].tr, 10) || null : null };
-        note('nextSet', e.exId, scoreNextSet(n, st), { set: si, kind: n && n.kind, text: n && n.text, ticked: s.type + s.w + '×' + s.r, truth: { isWork, isRamp, stopped, W: tRow.W } });
+        note('nextSet', e.exId, scoreNextSet(n, st), { set: si, kind: n && n.kind, text: n && n.text, ticked: s.type + s.w + '×' + s.r, target: st.targetLb, mode: t && t.mode, today: today.map(x => x.type + x.w + '×' + x.r).join(' '), truth: { isWork, isRamp, stopped, W: tRow.W } });
       }
       // the four-answer read
       if (isWork || isRamp) {

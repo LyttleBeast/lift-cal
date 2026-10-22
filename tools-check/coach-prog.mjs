@@ -1140,20 +1140,39 @@ if (MAIN) {
           tR.sets.slice(5).every(s => s.tw === '320' && s.tr === '6'), JSON.stringify(tR.sets));
     check('    … and typed W they ride in typed W, untouched', tW.sets.length === 8 && tW.sets.slice(0, 5).every((s, i) => s.type === 'W' && s.tw === RAMP[i].w && s.tr === RAMP[i].r));
 
-    // (b) The next set, mid-ramp, under that 320 × 6 target.
+    // (b) The next set, mid-ramp, under that 320 × 6 target. Two logs: the
+    // plain one, where Coach has never seen him warm up (so an untagged bar
+    // set is a reading, not a fact — nothing is said), and the ramped one,
+    // where 45, 135 and 225 are his own ramp loads (rampLoads) and are sure.
     const exOf = sets => { const sessions = logOf(squat, sets); const exposures = P.exposuresFor(sessions, squat.exId); return { ...squat, exposures, groupDaysSince: 3 }; };
     const C = { now: NOW, u: 'lb', ...ctx, repDrop: 0.25 };
-    const ex = exOf(plain);
+    const ex = exOf(plain), exR = exOf(ramped);
     const live = (w, r, type, extra) => ({ w: String(w), r: String(r), type: type || 'N', done: true, ...(extra || null) });
     const n0 = P.nextSet(ex, C, []);
-    const n1 = P.nextSet(ex, C, [live(45, 8)]);
-    check('(b) nothing ticked: the target. One N set of 45 × 8 ticked: `warmup`, with the target’s own tw and tr, and "Warming up. The target when you get there: 320 lb × 6."',
+    const n1 = P.nextSet(exR, C, [live(45, 8)]);
+    check('(b) nothing ticked: the target. One N set of 45 × 8 ticked, 45 among his ramp loads: `warmup`, with the target’s own tw and tr, and "Warming up. The target when you get there: 320 lb × 6."',
           !!n0 && n0.kind === 'target' && n0.tw === '320' && n0.tr === '6' && !!n1 && n1.kind === 'warmup' && n1.tw === n0.tw && n1.tr === n0.tr && n1.loadLb === 320 && n1.warmup === true &&
           n1.text === 'Warming up. The target when you get there: 320 lb × 6.' && n1.why[0] === n0.why[0] && /^Coach’s target for this lift today: /.test(n1.why[0]), JSON.stringify(n1));
-    const n3 = P.nextSet(ex, C, [live(45, 8), live(135, 5), live(225, 3)]);
-    check('    45, 135, 225 ticked: still warming up — never "Next set: 225 lb × 3"', !!n3 && n3.kind === 'warmup' && n3.loadLb === 320, JSON.stringify(n3));
+    check('    the same 45 × 8 on a log with no warm-up in it: UNSURE — null, never "Warming up" off the tiers alone and never "Next set: 45 lb × 8"', P.nextSet(ex, C, [live(45, 8)]) === null);
+    const n3 = P.nextSet(exR, C, [live(45, 8), live(135, 5), live(225, 3)]);
+    check('    45, 135, 225 ticked, his ramp: still warming up — never "Next set: 225 lb × 3"', !!n3 && n3.kind === 'warmup' && n3.loadLb === 320, JSON.stringify(n3));
+    check('    … and on the plain log, null at every rung', P.nextSet(ex, C, [live(45, 8), live(135, 5), live(225, 3)]) === null && P.nextSet(ex, C, [live(45, 8), live(135, 5)]) === null);
     const nW = P.nextSet(ex, C, [live(45, 8, 'W')]);
-    check('    a typed W ticked alone reads the same: `warmup`', !!nW && nW.kind === 'warmup' && nW.tw === n0.tw);
+    check('    a typed W ticked alone is sure on any log: `warmup`', !!nW && nW.kind === 'warmup' && nW.tw === n0.tw);
+    check('    a typed W then an untagged 225 × 3 on the plain log: null — the W is sure, the 225 is not', P.nextSet(ex, C, [live(45, 8, 'W'), live(225, 3)]) === null);
+    // What settles it under the target: the sets saying it plainly.
+    check('    a third set at one load under the target (3 × 250 × 6 under 320, 78%) is plain work: `same` at 250 from the third tick, null at the first two',
+          P.nextSet(ex, C, [live(250, 6)]) === null && P.nextSet(ex, C, [live(250, 6), live(250, 6)]) === null &&
+          (() => { const n = P.nextSet(ex, C, [live(250, 6), live(250, 6), live(250, 6)]); return !!n && n.kind === 'same' && n.tw === '250'; })(), JSON.stringify(P.nextSet(ex, C, [live(250, 6), live(250, 6), live(250, 6)])));
+    check('    a set within the heavy tier of the top for more than a triple is plain (300 × 6 under 320 is 94%: a working set he chose): `same` at 300 at once',
+          (() => { const n = P.nextSet(ex, C, [live(300, 6)]); return !!n && n.kind === 'same' && n.tw === '300'; })() && P.nextSet(ex, C, [live(300, 3)]) === null);
+    check('    an F under the target is plain (nobody fails a warm-up): `stop`', (() => { const n = P.nextSet(ex, C, [live(300, 4, 'F')]); return !!n && n.kind === 'stop'; })(), JSON.stringify(P.nextSet(ex, C, [live(300, 4, 'F')])));
+    check('    a set rated too hard under the target is plain: `stop`', (() => { const n = P.nextSet(ex, C, [live(300, 6, 'N', { rir: 0 })]); return !!n && n.kind === 'stop'; })());
+    check('    more reps than any warm-up (225 × 13) is plain: an answer, not null', P.nextSet(ex, C, [live(225, 13)]) !== null);
+    // The first set at the target, when its reps say it may be a rung on the way past.
+    check('    the first set AT the target with half the plan’s reps or fewer (320 × 3 under 320 × 6): null — a bad set or a rung through a stale target; the second set there settles it',
+          P.nextSet(ex, C, [live(320, 3)]) === null && (() => { const n = P.nextSet(ex, C, [live(320, 3), live(320, 3)]); return !!n && n.kind === 'down'; })());
+    check('    320 × 4 at the target (more than half the plan) on an add target that is his top: an answer', P.nextSet(ex, C, [live(320, 4)]) !== null);
     const nS = P.nextSet(ex, C, [live(45, 8, 'W'), live(320, 6)]);
     check('    after [W 45 × 8, N 320 × 6]: `same` at 320 — the warm-up counts for nothing, the working set does',
           !!nS && nS.kind === 'same' && nS.tw === '320' && nS.tr === '6', JSON.stringify(nS));

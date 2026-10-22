@@ -22,8 +22,8 @@ the stub list is unchanged.
 
 | file | sha256 (web, rack-v70) |
 |---|---|
-| `coach-ramp.js` (new) | `49c04c6ba8de79ac35ca3f809dc93938d5ad3a9db2f275c8dbff0a5e7703d3cc` |
-| `coach-prog.js` | `74f2395ce69c0dad7e7703b61e30b01913d4389f30e635facd7a3f8b5ac5991e` |
+| `coach-ramp.js` (new) | `b4d5dbc9726b867922b62e27f5fe5c2a812fe0df1dd3b293bfe0e48d7d798e79` |
+| `coach-prog.js` | `764cc0ce2ea5c04cf2de76ce22251911176f2df2bcdca5bef194e19e2607d7b4` |
 | `coach-live.js` | `11bdac94a6ea458ec02d6a99200ebd06cbfe486505e3c42e6d70b757092ce856` |
 | `coach-volume.js` | `5f6c6fcd7303f9bf761366c48d58624094f1f1aa2076a458a235caff5abfcd02` |
 | `coach.js` | `1076430a355030b401784fa54c69b3d1bd9b9ac9764570b05d8590ed1ccf6480` |
@@ -47,7 +47,13 @@ What changed, so the port's own verifiers know what to hold:
 `rampOf(sets, opts)`, `workSetsOf(sets, opts)`, `rampLoads(setLists, opts)`,
 `rampProfile(exposures, opts)`; constants `RAMP_LIGHT 0.70`, `RAMP_MID 0.85`,
 `RAMP_HEAVY 0.93`, `RAMP_MAX_SETS 6`, `GRID_TOL 0.011`, `RAMP_KNOWN_EXPOSURES
-6`. The module header has every rule and why; in one breath: before the first
+6`, `RAMP_LIGHT_REPS 12`, `RAMP_HEAVY_TRIPLE 3`. `rampOf()` returns
+`{ warmIdx, workIdx, sureIdx, plain, T, topReps, tagged, probable }`:
+`sureIdx` ⊆ `warmIdx` is the warm-ups that are not a reading (typed W, or at
+one of his ramp loads at reps he has warmed up with there — no slack); `plain`
+is whether the run before the top ended on a signal nobody reads two ways (a
+fail, a too-hard rating, a third set at one load — not a descent). Both exist
+for `nextSet`'s deferral (below). The module header has every rule and why; in one breath: before the first
 set at the top load, in an ascending run, a set typed N is a probable warm-up
 when it is light and short the way a warm-up is (any reps to 70% of the top;
 five or fewer to 85%; a double, or a triple before a top of five or more, to
@@ -76,6 +82,22 @@ bodyweight scheme switch detection off. Loads are compared as stored pounds.
   there: 320 lb × 6.', why: ['Coach’s target for this lift today: …'],
   warmup: true }`. No `up` after a step down in the same session ("Coach
   doesn’t step up after a step down in the same session.").
+- **`nextOf()` defers (returns `null`) where the split would be a guess.**
+  With nothing ticked at or above the target, a ticked set that is not in
+  `sureIdx` gets no answer — unless the sets are plain (`rampOf().plain`, or
+  an F, a D, `rir === 0`, or more than `RAMP_LIGHT_REPS` reps among them), or
+  a set sits at or above `RAMP_HEAVY × max(target, anchor)` for more than
+  `RAMP_HEAVY_TRIPLE` reps (305 × 6 under 320 is work he chose). And the
+  **first** set at or above the target gets no answer when its reps are half
+  the plan's first-set reps or fewer, or under the plan's on a target that
+  came down (`t.mode` `reduce` or `reenter`, or the set under `anchor`); a
+  second set at that load is answered. So `warmup` is said only off a sure
+  warm-up: a typed W, or his own rung. The native live sheet already handles
+  a null next (it did before v54); nothing new to draw.
+- `targetFor().sets` rows the ramp model read as a warm-up carry **`ramp:
+  true`** (typed N as logged). `nextOf()` leaves them out of the plan's
+  working rows (`atT`/`want`), so a reduction that lands on his 16 × 3 rung
+  reads the plan's reps as 6, not 3. Every other reader copies named fields.
 - `baselines().tops[].sets` carry `rir` when a set has one.
 
 ### `coach-live.js` — the first working set is the first set at work
@@ -114,9 +136,9 @@ the three views copy W rows as logged; a target's rows never clamp one.
 
 | native verifier | cases (from the web file of the same name) |
 |---|---|
-| `tools/verify-coach-ramp.mjs` (new) | all of `tools-check/coach-ramp.mjs`: his squat day tagged and untagged; the shapes that stay work; the triple, the feeler, the third set at one load, the rungs, the light descent, rir 0; `rampLoads`; the switches; the live plan (`T`, `R`, `habit`, `anchor`); determinism, key order, a kilo-stored load; `rampProfile` over the v68 warmup-leaks log; the import/export fence |
+| `tools/verify-coach-ramp.mjs` (new) | all of `tools-check/coach-ramp.mjs`: his squat day tagged and untagged; the shapes that stay work; the triple, the feeler, the third set at one load, the rungs, the light descent, rir 0; `rampLoads`; the switches; the live plan (`T`, `R`, `habit`, `anchor`); F2 — `sureIdx` (typed W, his rung at his reps, never a ratio) and `plain` (a third set at one load, F, D, rir 0; not a descent; false when detection is off); determinism, key order, a kilo-stored load; `rampProfile` over the v68 warmup-leaks log; the import/export fence (twelve exports) |
 | `tools/verify-coach-pure.mjs` | ALLOWED lists gain `./coach-ramp.js` for coach.js, coach-build.js, coach-live.js, coach-prog.js, coach-volume.js (its "exactly four imports" is five); a section for coach-ramp.js: imports only analytics.js's `isWorking`, no `Date`, no `Math.random`, no module-level `let`, never a Coach module |
-| `tools/verify-coach-prog.mjs` | section K: the same target with the ramp untagged, tagged or absent; "Last time:" never recites a ramp; the untagged ramp rows ride into the target's sets typed N; `nextSet` on `[N 45×8]` under a 320 × 6 target is `warmup` with the target's tw/tr, on `[W 45×8, N 320×6]` `same` at 320, `up` after 320 × 8, no `up` after a step down, a row not ticked is not read; a reduce drops a W row heavier than its load and keeps a lighter one; the byte-identity checks against older engines allow a v70 reason (a probable warm-up in any exposure, or a dropped W row) |
+| `tools/verify-coach-prog.mjs` | section K: the same target with the ramp untagged, tagged or absent; "Last time:" never recites a ramp; the untagged ramp rows ride into the target's sets typed N; `nextSet` on `[N 45×8]` under a 320 × 6 target is `warmup` with the target's tw/tr **on a log where 45 is his ramp load**, and `null` on a log with no warm-up in it (so too at 135 and 225; a typed W is `warmup` on either); what settles it under the target — a third set at one load (`same` from the third tick, null before), an F (`stop`), rir 0 (`stop`), 13 reps, a set within the heavy tier for more than a triple (300 × 6: `same` at once, 300 × 3: null); the first set AT the target with half the plan's reps (320 × 3: null, then `down` at the second); on `[W 45×8, N 320×6]` `same` at 320, `up` after 320 × 8, no `up` after a step down, a row not ticked is not read; a reduce drops a W row heavier than its load and keeps a lighter one; the byte-identity checks against older engines allow a v70 reason (a probable warm-up in any exposure, or a dropped W row) |
 | `tools/verify-coach-live.mjs` | section J: the drop 5 → 3 at 315 behind an untagged 45, 135, 225 reads as fatigue; the same word for word with the ramp typed W or absent; `anotherRead` counts 2 working sets; the chips rate the 315, not the 225; a log of untagged ramps teaches the same usual; a light set rated too hard is never "one more set". Section H's warm-up case: a typed W ticked alone is `warmup`, not `target` |
 | `tools/verify-coach-volume.mjs` | section D cases D1–D7 against the tier rule (the disguise cases are gone); the sweeps use one load per exercise |
 | `tools/verify-drop-sets.mjs` (the v54 identity sweep) | one load per exercise per session; logs the ramp model reads differently are left out |

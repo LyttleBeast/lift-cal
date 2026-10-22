@@ -92,10 +92,17 @@ export const GRID_TOL = 0.011;
 // The light tier takes any reps up to this; past the middle tier a warm-up is
 // at most a double. And when the top set is off the end of what was ticked,
 // its reps are read as five — a working set of five, the commonest there is.
-const LIGHT_REPS = 12;
+export const RAMP_LIGHT_REPS = 12;
+const LIGHT_REPS = RAMP_LIGHT_REPS;
 const MID_REPS = 5;
 const HEAVY_REPS = 2;
-const HEAVY_TRIPLE = 3;
+export const RAMP_HEAVY_TRIPLE = 3;
+const HEAVY_TRIPLE = RAMP_HEAVY_TRIPLE;
+// WHAT IS NOT A GUESS (sureIdx, below): his tag, or his own ramp loads at reps
+// he has warmed up with there. Not a ratio — "half the top or less" was tried
+// and dropped: a target that outlived two novice resets sits at twice what he
+// lifts, and his working set is then half of it. The live read (coach-prog.js
+// nextSet) defers on everything else rather than quote a number off the tiers.
 const TRIPLE_TOP_MIN = 5;
 const TOP_REPS_UNSEEN = 5;
 // Three sets at one load before the top are a working scheme, not a ramp: he
@@ -149,17 +156,28 @@ const near = (a, b) => Math.abs(a - b) < GRID_TOL;
            Coach asked for 210 today or not
 
    warmIdx / workIdx are indexes into `sets`. A set typed W is a warm-up
-   wherever it is and whatever its load; a set with no reps is neither. */
+   wherever it is and whatever its load; a set with no reps is neither.
+   `sureIdx` is the part of warmIdx that is not a guess: the sets typed W, and
+   the sets at his own ramp loads at reps he has warmed up with there (the two
+   reps of slack hisOf() gives are a reading, not a fact). `plain` says the run
+   before the top ended on a working signal nobody reads two ways — a fail, a
+   too-hard rating, a third set at one load — so what follows is work whatever
+   its ratio (a descent ends the run too, but 45 × 8 then 30 × 7 on a curl
+   whose target is 60 is the bar before the first plate, and `plain` leaves it
+   out). The tiers themselves are a reading of shape, and the live read defers
+   rather than quote a number on their word alone (nextSet, coach-prog.js: a
+   target that came down puts a real ramp set at 89% of it, and a deload puts a
+   real working set at 80% — the same shape). */
 export function rampOf(sets, opts) {
   const list = Array.isArray(sets) ? sets : [];
   const o = opts || {};
-  const warmIdx = new Set(), workIdx = new Set();
+  const warmIdx = new Set(), workIdx = new Set(), sureIdx = new Set();
   let tagged = 0, probable = 0;
   const cand = [];
   list.forEach((s, i) => {
     if (!(s && repsOf(s) >= 1)) return;
     cand.push(i);
-    if (typeOf(s) === 'W') { warmIdx.add(i); tagged++; }
+    if (typeOf(s) === 'W') { warmIdx.add(i); sureIdx.add(i); tagged++; }
   });
   const main = cand.filter(i => typeOf(list[i]) !== 'W' && typeOf(list[i]) !== 'D');
   const heaviest = main.length ? Math.max(...main.map(i => loadOf(list[i]))) : 0;
@@ -187,14 +205,15 @@ export function rampOf(sets, opts) {
 
   const detect = !o.assisted && o.warm !== 'no' && T > 0;
   const prob = new Set();
+  let broken = false, plain = false;
   if (detect) {
     const rungs = new Set(), at = {};
-    let prevL = -Infinity, broken = false;
+    let prevL = -Infinity;
     for (let j = 0; j < top; j++) {
       const i = cand[j], s = list[i], L = loadOf(s), R = repsOf(s), type = typeOf(s), k = String(L);
       if (L < prevL - GRID_TOL && prevL > RAMP_LIGHT * lightT + GRID_TOL) broken = true;   // a descent from above the light tier: the run is over
       if (type === 'W') { rungs.add(k); prevL = Math.max(prevL, L); continue; }
-      if (type === 'N' && (at[k] = (at[k] || 0) + 1) > SAME_LOAD_MAX) broken = true;   // a third set at one load
+      if (type === 'N' && (at[k] = (at[k] || 0) + 1) > SAME_LOAD_MAX) broken = plain = true;   // a third set at one load
       const his = hisOf(s);
       const under = L < T - GRID_TOL;
       if (!broken && type === 'N' && !tooHard(s) && (under || (live && his)) && (rungs.has(k) || rungs.size < RAMP_MAX_SETS) &&
@@ -205,8 +224,9 @@ export function rampOf(sets, opts) {
            (straight && L <= RAMP_HEAVY * T + GRID_TOL && R <= Math.min(MID_REPS, topReps + 1)) ||
            (habit && planReps != null && R * 2 < planReps && R <= LIGHT_REPS))) {
         prob.add(i); rungs.add(k);
+        if (his && known.some(x => near(x.w, L) && R <= x.r)) sureIdx.add(i);
       } else if (type === 'F' || type === 'D' || tooHard(s)) {
-        broken = true;                                      // nobody fails a warm-up, or rates one too hard
+        broken = plain = true;                                      // nobody fails a warm-up, or rates one too hard
       }
       prevL = Math.max(prevL, L);
     }
@@ -214,7 +234,7 @@ export function rampOf(sets, opts) {
   prob.forEach(i => warmIdx.add(i));
   probable = prob.size;
   cand.forEach(i => { if (isWorking(list[i]) && !prob.has(i)) workIdx.add(i); });
-  return { warmIdx, workIdx, T, topReps, tagged, probable };
+  return { warmIdx, workIdx, sureIdx, plain, T, topReps, tagged, probable };
 }
 
 /* rampLoads(setLists, opts) -> [{ w: pounds, r: reps }]
