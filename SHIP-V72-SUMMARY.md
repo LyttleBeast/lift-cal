@@ -238,7 +238,11 @@ sets. `sw.js` → `rack-v72`, `usage.js` → `rack-v72`.
   `saveEdit` path, verified against a refused write (`warmup-retag.mjs` C,
   `recap.mjs` F, `refused-write.mjs` 12) — a refusal leaves the record, cache
   and index byte-identical and the chips in place. The `history` write after a
-  retag is tolerated on refusal and corrected by the next fold. The recap now
+  retag is tolerated on refusal and corrected by the next fold. Offline, the
+  rewrite asks `hydrateForWrite(mk)` first (the brief's step 2): a month this
+  device never read refuses with the shipped "Couldn’t load … nothing was
+  changed" toast and the chips stay — Finish itself never needed the month, so
+  this is the one recap tap that does. The recap now
   runs `coach()` on its snapshot once on first draw (the full ranking, not only
   `finishRead`); on a long log that is a paint's worth of work on the one
   screen he is reading, not a boot cost.
