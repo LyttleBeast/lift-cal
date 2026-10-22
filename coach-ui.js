@@ -30,7 +30,7 @@ import { coach, CATEGORIES, QUESTIONS, PRO_ADDS, LIVE_NONE, isMuted, TOPICS_SHOW
          EFFORT, rateAsk, rateAnswer, targetSaid } from './coach.js';
 import { coachInput, coachReady, coachLogKnown, rememberGreeting, rememberHype, coachSettings, coachSettingsKnown,
          setCategoryMuted, answerQuestion, markAsked, liveSessionOnDevice, coachPro, setAim, setGoalLift,
-         markSession, loadFuel, fuelNeedsRead, learn, learnBy, learnTally } from './coach-data.js';
+         markSession, loadFuel, fuelNeedsRead, learn, learnBy, learnTally, rememberTap } from './coach-data.js';
 import { wIn, fmtW, unitW, limW } from './units.js';
 import { normGoalLift, GOAL_LB_MAX } from './coach-goal.js';
 // The two marks, from the vibe's icon set (vibes/icons/v1.js has today's), and
@@ -327,19 +327,29 @@ export function openCoachSheet(opts = {}) {
 
   /* v49: four chips show, and the rest wait under "More", which reveals
      them in place — no new sheet, nothing moves above it. */
-  function showButtons(list) {
+  /* v76: the starter bubbles come scored from the engine (topicsFor): the
+     ones it picked first, and the rest marked `more`, behind "More". A
+     question bubble (`question`) draws its question when tapped — stamped
+     then, as every question is when it is put — and is never routed. A
+     route bubble tapped is remembered on the device (rememberTap). */
+  function showButtons(list, first) {
     chipList = list;
     if (buttons) buttons.remove();
     buttons = el('div', 'coach-chips');
     const chip = item => {
       const b = el('button', 'coach-chip', item.label);
-      b.onclick = () => run(item.id, item.label);
+      b.onclick = () => {
+        if (item.question) { askBubble(item); return; }
+        rememberTap(item.id);
+        run(item.id, item.label);
+      };
       buttons.appendChild(b);
     };
-    list.slice(0, TOPICS_SHOWN).forEach(chip);
-    if (list.length > TOPICS_SHOWN) {
+    const shown = Number.isInteger(first) && first > 0 ? first : TOPICS_SHOWN;
+    list.slice(0, shown).forEach(chip);
+    if (list.length > shown) {
       const more = el('button', 'coach-chip', 'More');
-      more.onclick = () => { more.remove(); list.slice(TOPICS_SHOWN).forEach(chip); scroll(); };
+      more.onclick = () => { more.remove(); list.slice(shown).forEach(chip); scroll(); };
       buttons.appendChild(more);
     }
     if (list.length) thread.appendChild(buttons);
@@ -647,7 +657,20 @@ export function openCoachSheet(opts = {}) {
      nothing is already waiting for an answer, and the answer really changes
      what a registered rule does. Answering writes it and the sheet closes on
      the next open with the rule live. */
-  if (c.question) askQuestion(c.question);
+  /* v76: on Pro the opener's question is one of the starter bubbles (the
+     engine puts it there, or leaves it out on a caution day) and is drawn
+     when tapped. Basic sees no bubbles, so it is drawn as it always was. */
+  if (c.question && !c.pro) askQuestion(c.question);
+
+  // A question bubble tapped: the question, then the bubbles that are left.
+  function askBubble(item) {
+    asked.add(item.id);
+    if (buttons) { buttons.remove(); buttons = null; }
+    if (openingRow) { openingRow.remove(); openingRow = null; }
+    askQuestion(item.question);
+    showButtons(topics.filter(t => !asked.has(t.id)));
+    scroll();
+  }
 
   /* A question, drawn: the bubble, one chip per answer, and the question's
      own acknowledgement once one is tapped — the goal's "Coach sets your
@@ -701,7 +724,7 @@ export function openCoachSheet(opts = {}) {
   /* v49: THE BASIC TEASER (Micah's decision #15) — one real target, worked
      out by the same engine, above the Pro panel. Nothing else about targets. */
   if (!c.pro && c.teaser) bubble('coach', c.teaser.text, c.teaser.reason);
-  if (c.pro) showButtons(topics.slice());
+  if (c.pro) showButtons(topics.slice(), topics.filter(t => !t.more).length);
   else thread.appendChild(proPanel());
 
   sh.appendChild(noteEl(

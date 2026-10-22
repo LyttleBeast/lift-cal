@@ -2360,13 +2360,18 @@ function debriefCard(plan) {
           if (!ok) { b.disabled = false; return; }
         } else if (q.writes === 'answers') {
           answerQuestion(q.id, op.value).catch(() => {});
+        } else if (q.writes === 'knowBy' && q.key && q.by && op.value != null) {
+          // v76: a fact about one lift (q_drop_why → knowBy.hold.<exId>).
+          learnBy(q.key, q.by, op.value).catch(() => {});
         }
         // Its stamp: the id, or the per-record one the budget counts.
         markAsked(q.stamp || q.id).catch(() => {});
         s.questionDone = true;
-        s.questionAck = q.ack || null;
+        // v76: an option may carry its own ack (the hold's names the load).
+        const ack = op.ack !== undefined ? op.ack : q.ack;
+        s.questionAck = ack || null;
         chips.remove();
-        if (q.ack) row.appendChild(el('div', 'feel-ack', q.ack));
+        if (ack) row.appendChild(el('div', 'feel-ack', ack));
       };
       chips.appendChild(b);
     });
