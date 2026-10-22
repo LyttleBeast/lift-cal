@@ -517,7 +517,7 @@ function words(r, ex, c, i, u, b) {
     return {
       text: name + ' is down ' + down + '% over ' + plural(wks, 'week') +
             (cutWord ? ' of cutting' : ' while your weight has come down about ' + W(lost)) +
-            ', a small slide. Coach will say if it speeds up.',
+            ', a small slide. I’ll say if it speeds up.',
       reason: evidence + bodyEvidence
     };
   }
@@ -549,8 +549,8 @@ function words(r, ex, c, i, u, b) {
     const often = perWeek(r.often);
     let rung = '';
     if (r.rung === 'reset') {
-      rung = r.targetMode === 'reduce' ? ' Coach’s target steps the weight back, and you build from there.'
-        : ' Coach’s target keeps the weight until your reps are back in range.';
+      rung = r.targetMode === 'reduce' ? ' My target steps the weight back, and you build from there.'
+        : ' My target keeps the weight until your reps are back in range.';
     } else if (r.rung === 'wait') {
       rung = ' Stalls under five weeks often break on their own' + (i.targetsOn !== false ? ', so the targets stay.' : '.');
     } else if (r.rung === 'volume') {
@@ -573,7 +573,7 @@ function words(r, ex, c, i, u, b) {
   return {
     text: 'Your estimated max on ' + (r.level ? name + ' has been level at about ' + W(r.e1L) + ' for ' + plural(flatWks, 'week')
                                               : name + ' is down ' + down + '% over ' + plural(wks, 'week') + ', to ' + W(r.e1L)) +
-          '. Coach needs a couple of weigh-ins near the start and the end of that stretch to tell whether your weight is part of it.',
+          '. A couple of weigh-ins near the start and the end of that stretch would let me tell whether your weight is part of it.',
     reason: evidence
   };
 }
@@ -643,13 +643,13 @@ function lineOf(ex, b, ctx, i, u, now) {
   }
   if (r.because === 'thin') {
     return { text: name + ': too soon to call (' + plural(r.points, 'session') + ').',
-             reason: 'Coach wants four sessions across three weeks before it says whether a lift is moving.' };
+             reason: 'I want four sessions across three weeks before I say whether a lift is moving.' };
   }
   if (r.because === 'recent' && b.lastBestAt != null) {
     return { text: name + ': level lately, after a new best on ' + bestOn(b.lastBestAt) + '.',
              reason: 'Your best estimated max on it, 1% or more over every session before it.' };
   }
-  return { text: name + ': level lately.', reason: 'No new best in the last three weeks, and nothing Coach reads as a plateau or a slide.' };
+  return { text: name + ': level lately.', reason: 'No new best in the last three weeks, and nothing I read as a plateau or a slide.' };
 }
 
 /* v50: ONE SHORT WORD FOR A LIFT, for the lines that name several at once —
@@ -886,7 +886,7 @@ function record(i, now) {
     reason: 'Your best at ' + at + ' is ' + plural(p.bestReps, 'rep') + '. ' + p.reps + ' there would be a new best estimated max: ' +
             labelW(p.would, u) + ' against ' + labelW(p.best, u) + '.' +
             (gw ? ' ' + cap(gw) + ' last trained ' + (p.groupDays === 1 ? 'yesterday' : plural(p.groupDays, 'day') + ' ago') + '.' : ''),
-    unseen: 'Coach can’t see how you slept or how you feel, and those matter most on a record day.'
+    unseen: 'I can’t see how you slept or how you feel, and those matter most on a record day.'
   };
 }
 

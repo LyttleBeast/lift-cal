@@ -682,7 +682,7 @@ section('F. the stall answer — stage two’s reading, a figure through units.j
   const plainKg = stall({}, 'kg').text;
 
   check('with no weigh-ins, the answer says it cannot separate a cut from a plateau, and asks for none of it by name',
-        /Coach needs a couple of weigh-ins/.test(plain) && !/\bcut\b|plateau|\bstall/i.test(plain), plain);
+        /A couple of weigh-ins near the start and the end of that stretch would let me tell/.test(plain) && !/\bcut\b|plateau|\bstall/i.test(plain), plain);
   const lbNum = Number((/([\d.]+) lb/.exec(plain) || [, NaN])[1]);
   check('it names his estimated max, and a real one', Number.isFinite(lbNum) && lbNum > 50, plain);
   check('through units.js — the kilo answer says the same figure converted once, and never lb',
