@@ -205,8 +205,12 @@ row('N5', () => {
   // both yes here — and draws them (feel.mjs D drives the chips themselves).
   const chips = C.feelHarder({ s: 90 }) && C.canMark(inp.settings, rec.id) &&
                 !C.canMark({ ...inp.settings, mute: { questions: true } }, rec.id);
-  const ok = f.headline === 'Good work.' && f.line === 'Showing up on a harder day counts.' && !f.evidence.length &&
-             e3.line === 'Showing up on a harder day counts.' && C.feelHarder({ s: 90 }) && C.feelHarder({ e: 3 }) &&
+  /* v71: the line is one of the bad-day pool's (SHIP-V71-PROMPT §4), the
+     card's short keeps the shipped sentence, and the pool line is the same
+     one at the same open count whichever way the day was rated. */
+  const badDay = t => C.BAD_DAY.some(r => { try { return r.text({ count: 0, mark: null }) === t || r.text({ count: 99, mark: { r: 'sleep' } }) === t; } catch { return false; } });
+  const ok = f.headline === 'Good work.' && badDay(f.line) && f.short === 'Showing up on a harder day counts.' && !f.evidence.length &&
+             badDay(e3.line) && e3.line === f.line && C.feelHarder({ s: 90 }) && C.feelHarder({ e: 3 }) &&
              !C.feelHarder({ s: 100, e: 4 }) && !C.feelHarder(null) && chips;
   return grade(ok, false, said(f) + ' · energy 3: ' + said(e3) + ' · the mark chips: ' + (chips ? 'asked' : 'not asked'));
 });
@@ -230,7 +234,10 @@ row('N7', () => {
   const rec = record(T - 2 * 3600e3, [[BENCH, xN(3, 165, 5)], [CURL, xN(3, 55, 10)]]);
   const inp = input({ now: T, sessions: sortS(steady.concat([rec])) });
   const f = keep('N7', recap(inp, rec));
-  const ok = f.headline === 'Great workout.' && f.line === 'First session in 20 days.' && JSON.stringify(f.evidence) === '["back"]';
+  // v71: the line is a missed-time pool line with the gap in it where the
+  // line has a slot; the shipped sentence stays as the card's short.
+  const backLine = C.BACK_LINES.some(r => { try { return r.text({ n: 20, trained: true, priorGap: false }, 'lb') === f.line; } catch { return false; } });
+  const ok = f.headline === 'Great workout.' && backLine && f.short === 'First session in 20 days.' && JSON.stringify(f.evidence) === '["back"]';
   return grade(ok, f.headline === 'Good work.', said(f));
 });
 
@@ -457,7 +464,8 @@ section('P. properties — generated histories, both units, both tiers');
                         settings: { v: 1, mute: rnd() < 0.2 ? { targets: true } : {}, answers: {}, asked: {}, marks } });
     const f = recap(inp, rec);
     if (f.headline === 'Great workout.') seen.great++; else seen.good++;
-    if (f.line === 'Showing up on a harder day counts.') seen.harder++;
+    // v71: the harder day keeps the shipped sentence as the card's short; its line is a pool line.
+    if (f.short === 'Showing up on a harder day counts.') seen.harder++;
     f.evidence.forEach(e => { byEvidence[e] = (byEvidence[e] || 0) + 1; });
     if ((f.headline === 'Great workout.') !== (f.evidence.length > 0) || f.earned !== (f.headline === 'Great workout.')) bad.great.push(g + ': ' + said(f));
     if (!['Great workout.', 'Good work.'].includes(f.headline)) bad.two.push(g + ': ' + f.headline);

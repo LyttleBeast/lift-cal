@@ -657,6 +657,117 @@ section('H. v53 — the finish line on the Train card too, a named exception; ev
         Array.from({ length: 8 }, (_, opens) => C.coach({ ...pre, opens })).every(c => c.card.train.id !== 'hype_finish' && c.card.you.id !== 'hype_finish'));
 }
 
+/* ================= I. v71 — THE POOLS ================= */
+section('I. v71 — the four first-person pools: every line under the bans in both units, drawn where the ship says, rotating, and the finish line’s order');
+{
+  /* The bans are read out of coach-voice.mjs, where they live. A pool line
+     is held to the shipped list and the voice ban; the two pools the CARD
+     draws (missed time, rest) to the card ban as well. Every line is
+     rendered through a view that passes its gate, in both units. */
+  const VOICE = grab('VOICE_BANNED');
+  const bans = (t, card) => grab('BANNED').concat(VOICE, card ? grab('CARD_BANNED') : []).filter(re => re.test(t)).map(re => (t.match(re) || [''])[0]);
+  const VIEWS = {
+    BAD_DAY:    [{ count: 50, mark: { r: 'sleep' } }, { count: 2, mark: null }],
+    PR_LINES:   [{ name: 'Barbell Bench Press', exId: BENCH, set: { w: '225', r: '5' }, kind: 'e1rm', value: 262, prev: 250, bestAtW: 3, second: 'Barbell Row',
+                   noFailure: true, goal: { exId: BENCH, lb: 300, reps: 1 }, count: 40, nLift: 12, cut: true },
+                 { name: 'Barbell Row', exId: ROW, set: null, kind: 'weight', value: 205, prev: 195, bestAtW: 0, second: null, noFailure: false, goal: null, count: 1, nLift: 1, cut: false },
+                 { name: 'Leg Press', exId: LEGP, set: null, kind: 'volume', value: 9000, prev: 8000, bestAtW: 0, second: null, noFailure: true, goal: null, count: 3, nLift: 2, cut: false }],
+    BACK_LINES: [{ n: 12, trained: false, priorGap: true }, { n: 20, trained: true, priorGap: false }],
+    REST_LINES: [{ call: 'rest', streak: 3 }, { call: 'lighter', streak: 0 }]
+  };
+  const bad = [], typed = [], rendered = {};
+  Object.entries(VIEWS).forEach(([name, views]) => {
+    rendered[name] = new Set();
+    C[name].forEach(row => views.forEach(v => ['lb', 'kg'].forEach(u => {
+      let ok = false; try { ok = !!row.gate(v); } catch { ok = false; }
+      if (!ok) return;
+      const t = String(row.text(v, u) || '');
+      rendered[name].add(row.id);
+      const w = bans(t, name === 'BACK_LINES' || name === 'REST_LINES').concat(/!/.test(t) ? ['!'] : [], u === 'kg' && /\d ?lb\b/.test(t) ? ['lb on a kilo account'] : []);
+      if (w.length) bad.push(name + '/' + row.id + ' [' + u + '] “' + w.join('/') + '” in: ' + t);
+    })));
+    // No typed unit word in a pool's source: every weight is units.js's.
+    // In a quoted run — `v.goal.lb` is a field, `labelW(x, u)` the call every weight goes through.
+    C[name].forEach(row => {
+      const quoted = [...String(row.text).matchAll(/'((?:[^'\\]|\\.)*)'/g)].map(m => m[1]);
+      if (quoted.some(s => /\b(lb|lbs|kg|pounds?|kilos?)\b/.test(s))) typed.push(name + '/' + row.id);
+    });
+  });
+  check('every pool line renders through a view that passes its gate — ' + Object.entries(rendered).map(([k, s]) => k + ' ' + s.size + '/' + C[k].length).join(', '),
+        Object.entries(rendered).every(([k, s]) => s.size === C[k].length), JSON.stringify(Object.fromEntries(Object.entries(rendered).map(([k, s]) => [k, C[k].filter(r => !s.has(r.id)).map(r => r.id)]))));
+  check('and not one carries the shipped ban, the voice ban, the card ban where the card draws it, "!", or a pound in kilos', !bad.length, list(bad));
+  check('and no pool line types a unit word', !typed.length, list(typed));
+
+  /* WHERE THEY DRAW. A harder-rated session: the finish line's line is a
+     bad-day line and the card's short the shipped sentence. A comeback: a
+     back line. A record: a PR line, line 1 the shipped sentence. */
+  const steady = Array.from({ length: 10 }, (_, k) => sess(8 + 7 * k, [[BENCH, xN(3, 185, 5)], [ROW, xN(3, 155, 8)]]));
+  const now = { startedAt: NOW - 2 * 3600e3, endedAt: NOW - 3600e3, _date: key(NOW - 2 * 3600e3) };
+  const harder = { ...sess(0, [[BENCH, xN(3, 185, 5)]]), ...now, id: 'hard', feel: { s: 80, at: NOW } };
+  const comeback = { ...sess(0, [[BENCH, xN(3, 165, 5)]]), ...now, id: 'back' };
+  const record = { ...sess(0, [[BENCH, xN(3, 215, 5)]]), ...now, id: 'pr' };
+  const textsOf = (pool, views, u) => new Set(pool.flatMap(r => views.flatMap(v => { try { return r.gate(v) ? [String(r.text(v, u))] : []; } catch { return []; } })));
+  const lines = (rec, ss, u) => Array.from({ length: 200 }, (_, opens) => C.finishRead(input({ sessions: sortS(ss.concat([rec])), u, opens }), rec));
+  const H = lines(harder, steady, 'lb');
+  const badTexts = textsOf(C.BAD_DAY, [{ count: 11, mark: null }], 'lb');
+  check('rated 80% strength: "Good work.", a bad-day pool line, and the card’s short is the shipped sentence',
+        H.every(f => f.headline === 'Good work.' && badTexts.has(f.line) && f.short === 'Showing up on a harder day counts.'), H[0].line);
+  const older = steady.filter(s => s.startedAt < NOW - 20 * DAY);
+  const B = lines(comeback, older, 'lb');
+  const gapDays = Math.round((NOW - 2 * 3600e3 - Math.max(...older.map(s => s.startedAt))) / DAY);
+  const backTexts = textsOf(C.BACK_LINES, [{ n: gapDays, trained: true, priorGap: false }], 'lb');
+  check('the first session back after ' + gapDays + ' days: "Great workout." and a missed-time pool line, the shipped sentence as the short',
+        B.every(f => f.headline === 'Great workout.' && f.evidence[0] === 'back' && backTexts.has(f.line) && f.short === 'First session in ' + gapDays + ' days.'), B[0].line);
+  const P = lines(record, steady, 'lb'), Pk = lines(record, steady, 'kg');
+  check('a record: "Great workout.", a PR pool line with the record in it, and at open 0 the shipped sentence',
+        P.every(f => f.headline === 'Great workout.' && f.evidence[0] === 'pr') && P[0].line === 'New best on Barbell Bench Press: 215 x 5.' &&
+        Pk[0].line === 'New best on Barbell Bench Press: 97.5 x 5.', P[0].line + ' / ' + Pk[0].line);
+  check('and in kilos no PR line says a pound', Pk.every(f => !/\d ?lb\b/.test(f.line)), list(Pk.map(f => f.line).filter(t => /\d ?lb\b/.test(t))));
+
+  /* ROTATION: the open counter walks the eligible lines, so over 200 opens no
+     line repeats inside seven consecutive opens, every eligible line is
+     reached, and the same open count gives the same line. */
+  const windows = (xs, k) => xs.every((t, i) => !xs.slice(Math.max(0, i - k + 1), i).includes(t));
+  check('the bad-day line never repeats inside seven consecutive opens, and every eligible line is reached over 200',
+        windows(H.map(f => f.line), 7) && new Set(H.map(f => f.line)).size === [...badTexts].length, new Set(H.map(f => f.line)).size + ' of ' + badTexts.size);
+  check('the missed-time line too', windows(B.map(f => f.line), 7) && new Set(B.map(f => f.line)).size === backTexts.size, new Set(B.map(f => f.line)).size + ' of ' + backTexts.size);
+  check('and the PR line', windows(P.map(f => f.line), 7) && new Set(P.map(f => f.line)).size >= 7, String(new Set(P.map(f => f.line)).size));
+  check('deterministic: the same open count gives the same line', JSON.stringify(lines(harder, steady, 'lb')) === JSON.stringify(H));
+  check('and the three surfaces agree: the card’s finish line and the sheet’s opener are finishRead’s at the same open count',
+        [0, 3, 11].every(opens => { const inp = input({ sessions: sortS(steady.concat([harder])), opens });
+          const c = C.coach(inp), f = C.finishRead(inp, harder);
+          return c.opening.id === 'finish' && c.opening.text === f.headline + ' ' + f.line && c.card.you.id === 'hype_finish'; }));
+
+  /* THE CARD: away twelve days or more, the warm line is a missed-time line
+     held to the card's limits; on a rest day with the switch on, a rest line;
+     with the switch off, the shipped WARM pool. */
+  const away = input({ sessions: sortS(steady.map(s => ({ ...s, startedAt: s.startedAt - 10 * DAY, _date: key(s.startedAt - 10 * DAY) }))) });
+  const awayCards = Array.from({ length: 12 }, (_, opens) => C.coach({ ...away, opens }).card.you);
+  const backCard = textsOf(C.BACK_LINES, [{ n: C.coach(away).u && 18, trained: false, priorGap: false }], 'lb');
+  check('away eighteen days: the You card’s warm line is from the missed-time pool, nine words at most, and rotates',
+        awayCards.every(v => v.state === 'warm' && [...backCard].some(t => t === v.text) && v.text.split(/\s+/).length <= 9) &&
+        new Set(awayCards.map(v => v.text)).size >= 5, list(awayCards.map(v => v.state + ': ' + v.text)));
+  const restLog = input({ sessions: sortS(Array.from({ length: 10 }, (_, k) => sess(1 + 7 * k, [[ROW, xN(3, 155, 8)]]))
+    .concat([1, 3, 5, 6].map(a => sess(a, [[CURL, xN(3, 65, 10)]])))), recentHype: [] });
+  const restDay = C.coach(restLog).ask('ask_shape').id === 'rest_day';
+  // Every earned line shown inside the day, so the card falls to its warm line.
+  const shown = Array.from({ length: 12 }, (_, k) => C.coach({ ...restLog, opens: k }).card.you).filter(v => v.state === 'earned').map(v => ({ id: v.id, key: v.key, at: NOW - 1000 }));
+  const restCards = Array.from({ length: 12 }, (_, opens) => C.coach({ ...restLog, opens, recentHype: shown }).card.you);
+  const restTexts = textsOf(C.REST_LINES, [{ call: 'rest', streak: C.coach(restLog).u && 0 }], 'lb');
+  check('a rest day with the switch on and every earned line already shown today: the warm line is from the rest pool',
+        restDay && restCards.every(v => v.state === 'warm' && restTexts.has(v.text)), list(restCards.map(v => v.state + ': ' + v.text)));
+  const restOffCards = Array.from({ length: 12 }, (_, opens) => C.coach({ ...restLog, opens, recentHype: shown, settings: { v: 1, mute: { rest: true }, answers: {}, asked: {} } }).card.you);
+  check('and with the Rest switch off, the shipped WARM pool', restOffCards.every(v => v.state !== 'warm' || C.WARM.some(w => w.id === v.id)), list(restOffCards.map(v => v.state + ': ' + v.id)));
+
+  /* THE ORDER: an e1RM record above his rating above a volume record. */
+  const rated = { ...sess(0, [[BENCH, xN(3, 215, 5)]]), ...now, id: 'both', feel: { e: 9, at: NOW } };
+  const f1 = C.finishRead(input({ sessions: sortS(steady.concat([rated])) }), rated);
+  check('an e1RM record outranks his rating', f1.evidence[0] === 'pr' && f1.evidence.includes('rating'), JSON.stringify(f1.evidence));
+  const vol = { ...sess(0, [[BENCH, xN(6, 185, 5)]]), ...now, id: 'vol', feel: { e: 9, at: NOW } };
+  const f2 = C.finishRead(input({ sessions: sortS(steady.concat([vol])) }), vol);
+  check('his rating outranks a volume record', f2.evidence[0] === 'rating' && f2.evidence.includes('pr') && f2.evidence.indexOf('pr') > f2.evidence.indexOf('rating'), JSON.stringify(f2.evidence));
+}
+
 console.log('\nthe card only says what he has earned\n');
 console.log(results.join('\n'));
 console.log('\n' + pass + ' passed, ' + fail + ' failed\n');

@@ -1618,8 +1618,12 @@ section('P. v71 — every sentence Coach says is in the first person; "Coach" is
         !bad.length, list(bad));
   check('the labels are exact matches only: a sentence that merely contains one is not exempt',
         voiceOffence('Coach is here.') === 'Coach is' && voiceOffence('Coach') === null && voiceOffence('COACH ME') === null);
-  check('and the pools (coach.js BAD_DAY, PR_LINES, BACK_LINES, REST_LINES) are frozen data rows with an id, a gate and a text',
-        [C.BAD_DAY, C.PR_LINES, C.BACK_LINES, C.REST_LINES].every(p => Array.isArray(p) && Object.isFrozen(p) && p.length >= 40 &&
+  /* The pools are smaller than 03's lists on purpose: a line is in only when
+     every word of it is true of his log when it is drawn (coach.js §7d). So
+     the floor is the smallest pool the counter can rotate without a repeat
+     inside a week (seven), not 03's forty-two. */
+  check('and the pools (coach.js BAD_DAY, PR_LINES, BACK_LINES, REST_LINES) are frozen data rows with an id, a gate and a text, each seven or more deep',
+        [C.BAD_DAY, C.PR_LINES, C.BACK_LINES, C.REST_LINES].every(p => Array.isArray(p) && Object.isFrozen(p) && p.length >= 7 &&
           p.every(r => typeof r.id === 'string' && typeof r.gate === 'function' && typeof r.text === 'function')),
         [C.BAD_DAY, C.PR_LINES, C.BACK_LINES, C.REST_LINES].map(p => (p || []).length).join('/'));
 }

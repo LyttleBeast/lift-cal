@@ -962,6 +962,46 @@ section('J. the card’s earned line rotates on the same counter, and never repe
         C.coach({ ...RICH, opens: 3, recentGreets: [] }).greet.id === C.coach({ ...RICH, opens: 3, recentGreets: [], recentHype: ['hype_pr'] }).greet.id);
 }
 
+/* ================= K. v71 — THE POOLS ROTATE ON THE SAME COUNTER =================
+   The missed-time pool on the card (away twelve days or more, the warm slot)
+   and the bad-day pool on the finish line are walked by the open counter
+   like the greeting — and never written to the card's memory, since none of
+   them quotes a fact value. So: N opens give N different lines on a pool of
+   N, a repaint at the same open is the same line, a memory of earned lines
+   does not starve them, and the greeting does not move. */
+section('K. v71 — the pools rotate on the open counter, repeat on no consecutive opens, and leave the greeting alone');
+{
+  // The full log with its last session eighteen days back, so the card's
+  // warm slot is the missed-time pool's.
+  const AWAY = { ...FULL, sessions: FULL.sessions.filter(s => s.startedAt < NOW - 18 * DAY) };
+  const away = (k, memory) => C.coach({ ...AWAY, opens: k, recentGreets: [], recentHype: memory || [] });
+  const walk = Array.from({ length: 40 }, (_, k) => away(k).card.you);
+  const pool = [...new Set(walk.map(v => v.id))];
+  check('away eighteen days, the You card’s warm slot draws the missed-time pool — ' + pool.length + ' lines reached',
+        walk.every(v => v.state === 'warm' && /^back_/.test(v.id)) && pool.length >= 5, list(walk.map(v => v.id)));
+  check('no two consecutive opens show the same line', walk.every((v, i) => i === 0 || v.id !== walk[i - 1].id), list(walk.map(v => v.id)));
+  const first = Array.from({ length: pool.length }, (_, k) => away(7 + k).card.you.id);
+  check('and ' + pool.length + ' consecutive opens show all ' + pool.length, sameSet(first, pool), list(first));
+  check('a repaint at the same open count is the same line', away(4).card.you.id === away(4).card.you.id && away(4).card.you.text === away(4).card.you.text);
+  check('a memory of earned lines does not starve the pool, and does not move the greeting',
+        away(2, [{ id: 'hype_pr', key: 'pr:x', at: NOW - 1000 }, { id: 'hype_back', key: 'back:x', at: NOW - 1000 }]).card.you.state === 'warm' &&
+        away(2).greet.id === away(2, [{ id: 'hype_pr', key: 'pr:x', at: NOW - 1000 }]).greet.id);
+  // The Train card walks one step ahead, as the shipped warm lines do, so
+  // the two cards never say the same line on one open.
+  check('the Train card draws from the same pool a step ahead — never the You card’s line on the same open',
+        Array.from({ length: 12 }, (_, k) => away(k)).every(c => c.card.train.state !== 'warm' || c.card.train.id !== c.card.you.id));
+
+  // The finish line's bad-day pool, over a harder-rated session, across opens.
+  const rec = { ...sess(0, [['bench', 3, 185]], 'h'), startedAt: NOW - 2 * 3600e3, endedAt: NOW - 3600e3, _date: key(NOW - 2 * 3600e3), feel: { s: 80, at: NOW } };
+  const HARD = { ...FULL, sessions: FULL.sessions.concat([rec]).sort((a, b) => a.startedAt - b.startedAt) };
+  const lines = Array.from({ length: 60 }, (_, k) => C.finishRead({ ...HARD, opens: k }, rec).line);
+  const badPool = [...new Set(lines)];
+  check('rated 80%: the finish line walks the bad-day pool — ' + badPool.length + ' lines over 60 opens, none twice running',
+        badPool.length >= 7 && lines.every((t, i) => i === 0 || t !== lines[i - 1]), list(badPool));
+  check('and the card’s short stays the one shipped sentence throughout',
+        Array.from({ length: 12 }, (_, k) => C.finishRead({ ...HARD, opens: k }, rec).short).every(s => s === 'Showing up on a harder day counts.'));
+}
+
 /* ---------- report ---------- */
 console.log('\nthe greeting rotates on a counter, and a counter cannot repeat\n');
 console.log(results.join('\n'));

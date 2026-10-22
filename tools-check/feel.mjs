@@ -381,8 +381,11 @@ section('E. the rating is heard: the headline recomputes, and "How did today com
   check('and the recap drawn again leads with it', walk(hero).find(x => x.tag === 'h1').textContent === 'Great workout.');
   const g = await finished();
   await rate(g, 5, '90%');
-  check('rated 90% with nothing else to show: "Good work. Showing up on a harder day counts." (finish.mjs N5, and its chips above)',
-        g.api.summary().finish.headline === 'Good work.' && g.api.summary().finish.line === 'Showing up on a harder day counts.');
+  // v71: the line is a bad-day pool line; the card's short keeps the shipped sentence.
+  const badDay = t => C.BAD_DAY.some(r => { try { return r.text({ count: 0, mark: null }) === t; } catch { return false; } });
+  check('rated 90% with nothing else to show: "Good work." and one bad-day pool line (finish.mjs N5, and its chips above)',
+        g.api.summary().finish.headline === 'Good work.' && badDay(g.api.summary().finish.line) &&
+        g.api.summary().finish.short === 'Showing up on a harder day counts.', g.api.summary().finish.line);
   // How did today compare? — the rating after the shipped rows.
   const rec = { ...h.api.cache()[h.mk][h.dd].w1, _date: h.dateK };
   const say = feel => C.coach(inputOf(PRIOR.concat([{ ...rec, feel }]))).ask('ask_compare');

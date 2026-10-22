@@ -3940,6 +3940,199 @@ function pickWarm(d, opens, greetText, not) {
 }
 
 /* ================================================================
+   7d. THE POOLS (v71) — encouragement in the first person
+   ================================================================
+   Micah, 21 Oct 2026: first person, lots of encouragement, including on
+   bad days. Four pools from 03-conversation-design.md §5.4–§5.7, as data
+   rows like GREETINGS': { id, gate, text }. Each row's `gate` and `text`
+   take a VIEW — a small object of shipped facts the drawing seam already
+   has in hand (the finish line's record and gap, the card's fact store) —
+   and a row is eligible only when its gate passes; a row with a {slot} is
+   gated on the fact that fills it, and every weight goes through units.js.
+
+   What was left out, and why: a line is in the pool only when every word
+   of it is TRUE of his log at the moment it is drawn. 03's lists carry
+   lines that claim a fact nothing here can check ("that rep PR has been
+   coming for three sessions", "your plan's waiting", "the week has its
+   sessions"), lines that promise ("the next good day is coming"), lines
+   that prescribe, and lines with a banned word (still, just, only,
+   didn't, under, below, perfect, "we"). Those are not here. SHIP-V71-
+   SUMMARY.md lists every one with its reason. The rule above every pool
+   is Micah's: an untrue sentence is worse than none.
+
+   Rotation is the shipped one — the per-device open counter walks the
+   eligible lines (rotate()), and the card's memory only ever pushes it
+   forward. None of these lines quotes a fact VALUE the way an earned line
+   does, so none is written to the card's memory (the shipped rule for warm
+   lines): the three surfaces that read one session's finish line agree
+   because they read the same counter, not because one remembered. */
+
+// The bad day (§5.4): drawn by the finish line when he rated the session
+// harder or marked it. View: { count, mark } — his session count, and the
+// mark on this one when there is one.
+export const BAD_DAY = Object.freeze([
+  { id: 'bad_showed',    gate: () => true, text: () => 'Showing up on a bad day is hard. You did it.' },
+  { id: 'bad_counted',   gate: () => true, text: () => 'Today counted. The numbers can wait.' },
+  { id: 'bad_logged',    gate: () => true, text: () => 'Not every session is a good one. This one is logged, and that’s enough.' },
+  { id: 'bad_turned_up', gate: () => true, text: () => 'A hard day in the log is a day you turned up.' },
+  { id: 'bad_heavier',   gate: () => true, text: () => 'Some days the bar is heavier. Today was one. It’s done.' },
+  { id: 'bad_rough',     gate: () => true, text: () => 'A rough session, finished. That’s the whole job today.' },
+  { id: 'bad_built',     gate: () => true, text: () => 'Nothing I read today changes what you’ve built.' },
+  { id: 'bad_trained',   gate: () => true, text: () => 'You trained. On a day like this, that’s the win.' },
+  // "Thirty do" is a count, so it waits for the log to have thirty.
+  { id: 'bad_thirty',    gate: v => v.count >= 30, text: () => 'One session doesn’t move your trend. Thirty do, and you’ve got those.' },
+  { id: 'bad_option',    gate: () => true, text: () => 'Rest is always an option. So is doing exactly what you did.' },
+  { id: 'bad_direction', gate: () => true, text: () => 'I’ll read this one as a day, not a direction.' },
+  // "Not counting it" is true of a MARKED session and of nothing else.
+  { id: 'bad_not_count', gate: v => !!v.mark, text: () => 'Hard day, logged. I’m not counting it against you.' },
+  { id: 'bad_finished',  gate: () => true, text: () => 'You finished. Not every session has to be more than that.' },
+  { id: 'bad_straight',  gate: () => true, text: () => 'Nobody’s log is a straight line. Yours included.' },
+  { id: 'bad_habit',     gate: () => true, text: () => 'Some days are about keeping the habit, not the numbers. Habit kept.' },
+  { id: 'bad_gave',      gate: () => true, text: () => 'You gave today what you had. That’s all a session can ask.' },
+  { id: 'bad_decision',  gate: () => true, text: () => 'Bad day, good decision to come in.' },
+  { id: 'bad_remembers', gate: () => true, text: () => 'The log remembers the showing up longer than the numbers.' },
+  { id: 'bad_aside',     gate: v => !!v.mark, text: () => 'Set it aside. I will.' },
+  { id: 'bad_walking',   gate: () => true, text: () => 'The hard part was walking in. You’ve done the hard part.' },
+  { id: 'bad_done',      gate: () => true, text: () => 'Done is done. The weights will be there next time.' },
+  { id: 'bad_fix',       gate: () => true, text: () => 'Nothing to fix. On to the next one.' },
+  // "I've seen your good days" wants a log with days in it.
+  { id: 'bad_seen',      gate: v => v.count >= 10, text: () => 'I’ve seen your good days. One flat one changes nothing I know about you.' },
+  { id: 'bad_bank',      gate: () => true, text: () => 'The work’s in the bank even when the set isn’t.' },
+  { id: 'bad_kept',      gate: () => true, text: () => 'You kept the appointment with yourself. Today that was the lift.' },
+  { id: 'bad_honest',    gate: () => true, text: () => 'Flat session, honest log. That’s how the good reads stay true.' }
+]);
+
+// The record (§5.5): the finish line's first evidence when the session set
+// one. View, from the record: { name, set, kind, value, prev, bestAtW, second,
+// noFailure, goal, count, nLift, cut } — see prView().
+export const PR_LINES = Object.freeze([
+  // Line 1 is the shipped sentence, so the default is unchanged.
+  { id: 'pr_new_best',  gate: () => true,
+    text: (v, u) => 'New best on ' + v.name + ': ' + prText(v, u) + '.' },
+  { id: 'pr_first',     gate: v => !!v.set && v.kind !== 'volume',
+    text: (v, u) => fmtSetLoad(v.set.w, u) + ' for ' + v.set.r + '. That’s a first.' },
+  { id: 'pr_best_at',   gate: v => !!v.set && v.bestAtW > 0,
+    text: (v, u) => 'Your best at ' + labelW(parseFloat(v.set.w), u) + ' was ' + plural(v.bestAtW, 'rep') + '. Today it was ' + v.set.r + '.' },
+  { id: 'pr_heaviest',  gate: v => v.kind === 'weight',
+    text: (v, u) => 'Heaviest ' + v.name + ' ever logged: ' + labelW(v.value, u) + '.' },
+  { id: 'pr_volume',    gate: v => v.kind === 'volume',
+    text: (v, u) => 'Best session volume on ' + v.name + ': ' + labelVol(v.value, u) + '.' },
+  { id: 'pr_e1rm',      gate: v => v.kind === 'e1rm',
+    text: (v, u) => v.name + '’s estimated max moved to ' + labelW(v.value, u) + '. Your best before was ' + labelW(v.prev, u) + '.' },
+  { id: 'pr_two',       gate: v => !!v.second,
+    text: v => 'Two records in one session. ' + v.name + ' and ' + v.second + '.' },
+  { id: 'pr_clean',     gate: v => v.noFailure, text: () => 'Record set, no set to failure. Clean.' },
+  { id: 'pr_yours',     gate: () => true, text: () => 'The number’s in the log now. It’s yours.' },
+  { id: 'pr_focus',     gate: v => !!v.goal, text: () => 'A record on your focus lift. That’s the one you asked me to watch.' },
+  { id: 'pr_cut',       gate: v => v.cut, text: () => 'A record through a cut. That’s holding strength and then some.' },
+  { id: 'pr_workout_n', gate: v => v.count >= 2,
+    text: v => 'That’s workout ' + v.count + ' and a record in the same session.' },
+  { id: 'pr_goal_gap',  gate: v => v.kind === 'e1rm' && !!v.goal && v.goal.lb > v.value,
+    text: (v, u) => labelW(v.value, u) + ' estimated on ' + v.name + '. The ' + labelW(v.goal.lb, u) + ' target is ' + labelW(v.goal.lb - v.value, u) + ' away.' },
+  { id: 'pr_remember',  gate: () => true, text: () => 'That one’s worth remembering. It’s in the log, so it will be.' },
+  { id: 'pr_itself',    gate: () => true, text: () => 'Record. Nothing to add — it says it itself.' },
+  { id: 'pr_top',       gate: v => v.kind !== 'volume' && v.nLift >= 2,
+    text: v => 'Best ever on ' + v.name + '. The log has ' + plural(v.nLift, 'session') + ' of it, and this is the top.' }
+]);
+
+// Missed time (§5.6): the card's warm line while he has been away twelve
+// days or more, and the finish line's "back" evidence when the first session
+// back is logged. View: { n, trained, priorGap } — the gap in days, whether
+// the session back is in the log yet, and whether the log holds an earlier
+// gap this long.
+export const BACK_LINES = Object.freeze([
+  { id: 'back_good',      gate: () => true, text: () => 'Good to have you back.' },
+  { id: 'back_at_it',     gate: () => true, text: () => 'Back at it.' },
+  { id: 'back_place',     gate: () => true, text: () => 'The log kept your place.' },
+  { id: 'back_days',      gate: v => v.n != null, text: v => plural(v.n, 'day') + ', and the numbers are all here.' },
+  /* The card is the only surface before he trains, and it holds a line to
+     nine words, so the lines gated on !trained are cut to fit it — the sense
+     kept, a clause dropped. */
+  { id: 'back_glad',      gate: v => !v.trained, text: () => 'Back, and I’m glad. Where to start?' },
+  { id: 'back_over',      gate: v => !v.trained, text: () => 'The break’s over when you say it is.' },
+  { id: 'back_time_off',  gate: () => true, text: () => 'Time off is part of training. The log knows that.' },
+  { id: 'back_expired',   gate: () => true, text: () => 'Nothing here expired.' },
+  { id: 'back_not_test',  gate: v => !v.trained, text: () => 'First session back is a session, not a test.' },
+  { id: 'back_pick',      gate: v => !v.trained, text: () => 'Your groups have had their rest. Pick one.' },
+  { id: 'back_step',      gate: () => true, text: () => 'Back in. That’s the whole step.' },
+  { id: 'back_see',       gate: v => !v.trained, text: () => 'Good to see you. The log is ready.' },
+  { id: 'back_twelve',    gate: v => v.n === 12, text: () => 'Twelve days is a rest, not a reset.' },
+  { id: 'back_hard_set',  gate: v => v.trained, text: () => 'Coming back is the hard set. Done.' },
+  { id: 'back_here',      gate: () => true, text: () => 'Whatever the break was for, it’s over, and you’re here.' },
+  { id: 'back_habit',     gate: () => true, text: () => 'The habit’s yours. It waited.' },
+  { id: 'back_page',      gate: () => true, text: () => 'A fresh page, and the old ones are all there.' },
+  { id: 'back_good_day',  gate: v => !v.trained, text: () => 'Today’s a good day to lift something.' },
+  { id: 'back_rested',    gate: v => !v.trained, text: () => 'Your groups are fully rested. A good starting point.' },
+  { id: 'back_pick_lift', gate: v => !v.trained, text: () => 'Pick a lift you like. Start there.' },
+  { id: 'back_week_open', gate: () => true, text: () => 'Back, and the week is open.' },
+  { id: 'back_before',    gate: v => v.priorGap, text: () => 'You’ve come back from a gap before. It’s in the log.' },
+  { id: 'back_first',     gate: v => !v.trained, text: () => 'The first session back reads as a first session.' },
+  { id: 'back_bar',       gate: () => true, text: () => 'The bar’s where it was.' },
+  { id: 'back_patient',   gate: () => true, text: () => 'The plan is patient.' },
+  { id: 'back_logged',    gate: v => v.trained && v.n != null, text: v => 'First session back in ' + v.n + ' days: logged.' },
+  { id: 'back_welcome',   gate: () => true, text: () => 'Back on the log. Welcome.' }
+]);
+
+// Rest (§5.7): the card's warm line when the rest read says rest or lighter
+// and the switch is on. View: { call, streak } — the read's call and his run
+// of training days.
+// The card is its only surface, and the card holds a line to nine words, so
+// every row here fits that; 03's longer rest lines are not here.
+export const REST_LINES = Object.freeze([
+  { id: 'rest_three',    gate: v => v.streak === 3, text: () => 'Three days straight. A rest day is well earned.' },
+  { id: 'rest_option',   gate: () => true, text: () => 'Rest is always an option.' },
+  { id: 'rest_asking',   gate: v => v.call === 'rest', text: () => 'Nothing in your log asks for a session today.' },
+  { id: 'rest_your_call', gate: v => v.call === 'rest', text: () => 'Rest day by the log. Your call by you.' },
+  { id: 'rest_set',      gate: () => true, text: () => 'Rest is a set you don’t have to log.' },
+  { id: 'rest_on_plan',  gate: v => v.call === 'rest', text: () => 'Nothing to catch up on. Rest is on plan.' },
+  { id: 'rest_patient',  gate: v => v.call === 'rest', text: () => 'Day off. The plan is patient.' },
+  { id: 'rest_week',     gate: () => true, text: () => 'The week’s done its work.' }
+]);
+
+/* One line out of a pool: the rows whose gate passes and whose text renders,
+   walked by the open counter, the memory pushing it forward (pickHype's
+   cap, one short of the pool). Null when nothing qualifies, so every caller
+   has its shipped sentence to fall back on. `fit` holds the line to the
+   card's limits where the card is where it goes. */
+function pickLine(pool, view, u, opens, recent, fit) {
+  const lines = [];
+  pool.forEach(row => {
+    let ok = false, text = '';
+    try { ok = !!row.gate(view); } catch { ok = false; }
+    if (!ok) return;
+    try { text = String(row.text(view, u) || ''); } catch { text = ''; }
+    if (!text || text.includes('!') || (fit && !fitsCard(text))) return;
+    lines.push({ id: row.id, text });
+  });
+  if (!lines.length) return null;
+  const ids = [...new Set((recent || []).map(r => r.id))];
+  const memory = ids.slice(0, Math.min(HYPE_ROTATION, Math.max(1, lines.length - 1)));
+  const start = rotate(opens, lines.length);
+  for (let step = 0; step < lines.length; step++) {
+    const cand = lines[(start + step) % lines.length];
+    if (!memory.includes(cand.id)) return cand;
+  }
+  return lines[start];
+}
+
+// The missed-time view off the fact store: away twelve days or more and not
+// yet back in the log (the card), or the first session back (hype_back's
+// fact). `priorGap`: an earlier gap this long anywhere in the log.
+function backView(d) {
+  const back = d.f('session.back');
+  const away = d.f('session.lastDaysAgo');
+  if (back) return { n: back.gap, trained: true, priorGap: priorGapOf(d.all().slice(0, -1)) };
+  if (away != null && away >= BACK_GAP_DAYS) return { n: away, trained: false, priorGap: priorGapOf(d.all()) };
+  return null;
+}
+function priorGapOf(shaped) {
+  for (let i = 1; i < shaped.length; i++) {
+    if (daysBetween(shaped[i - 1].startedAt, shaped[i].startedAt) >= BACK_GAP_DAYS) return true;
+  }
+  return false;
+}
+
+/* ================================================================
    7c. THE FINISH LINE (v53) — what to celebrate after a workout
    ================================================================
    Micah, 24 Sep: "I am expecting a lot of encouragement" — and, the day
@@ -4009,21 +4202,49 @@ function prText(p, u) {
   if (p.set) return fmtSetLoad(p.set.w, u) + ' x ' + p.set.r;
   return p.kind === 'weight' ? 'heaviest ever, ' + labelW(p.value, u) : 'best session volume, ' + labelVol(p.value, u);
 }
+// His most reps at this weight on this lift, over the sessions before.
+function bestRepsAt(prior, exId, w) {
+  let best = 0;
+  prior.forEach(s => ((s && s.exercises) || []).forEach(ex => {
+    if (!ex || ex.exId !== exId) return;
+    (ex.sets || []).filter(isWorking).forEach(z => {
+      if (Math.abs((parseFloat(z.w) || 0) - w) < 0.01) best = Math.max(best, parseInt(z.r, 10) || 0);
+    });
+  }));
+  return best;
+}
 function prWhy(p, prior, u) {
   if (p.kind === 'e1rm' && p.set) {
     const w = parseFloat(p.set.w);
-    let best = 0;
-    prior.forEach(s => ((s && s.exercises) || []).forEach(ex => {
-      if (!ex || ex.exId !== p.exId) return;
-      (ex.sets || []).filter(isWorking).forEach(z => {
-        if (Math.abs((parseFloat(z.w) || 0) - w) < 0.01) best = Math.max(best, parseInt(z.r, 10) || 0);
-      });
-    }));
+    const best = bestRepsAt(prior, p.exId, w);
     if (w > 0 && best > 0) return 'Your best at ' + labelW(w, u) + ' was ' + plural(best, 'rep') + '.';
     return 'Your best estimated max before was ' + labelW(p.prev, u) + '.';
   }
   return p.kind === 'weight' ? 'Your heaviest before was ' + labelW(p.prev, u) + '.'
     : 'Your most before was ' + labelVol(p.prev, u) + '.';
+}
+
+/* v71: the record as the PR pool reads it — the record's own fields, and the
+   shipped facts beside it that a line may quote: his most reps at that weight
+   before, a second record in the same session, no set to failure, the lift
+   target when it is on this lift, his session count, how many sessions hold
+   this lift, and whether he is cutting (his word for it: the aim, or food
+   targets set to lose — hype_holding_cut's rule). */
+function prView(p, prs, prior, d, rec) {
+  const w = p.set ? parseFloat(p.set.w) : NaN;
+  const other = prs.find(x => x !== p && x.exId !== p.exId);
+  const g = d.f('coach.goalLift');
+  const aim = d.f('coach.aim');
+  return {
+    name: String(p.name || p.exId), exId: p.exId, set: p.set || null, kind: p.kind, value: p.value, prev: p.prev,
+    bestAtW: Number.isFinite(w) && w > 0 ? bestRepsAt(prior, p.exId, w) : 0,
+    second: other ? String(other.name || other.exId) : null,
+    noFailure: (Array.isArray(rec.exercises) ? rec.exercises : []).every(ex => !ex || (ex.sets || []).every(z => !z || z.type !== 'F')),
+    goal: g && g.exId === p.exId ? g : null,
+    count: d.f('session.count'),
+    nLift: prior.filter(s => ((s && s.exercises) || []).some(ex => ex && ex.exId === p.exId)).length + 1,
+    cut: aim === 'cut' || aim === 'recomp' || d.f('weight.goalDir') === -1
+  };
 }
 
 /* The targets replayed for one session, once per coach() call: the card's
@@ -4063,15 +4284,31 @@ function finishOf(d, rec, extras) {
   const ms = Array.isArray(x.milestones) ? x.milestones.filter(m => m && m.label) : [];
   const feel = normFeel(rec.feel);
   const ev = [];
+  // v71: the pools rotate on the device's open counter, pushed forward by the
+  // card's memory — the same two inputs the card's own lines read.
+  const opens = d.input.opens, recent = d.f('coach.recentHype') || [];
 
-  // 1. A record. The strongest kind first, then the order he did them in.
-  const pr = prs.slice().sort((a, b) => PR_RANK[a.kind] - PR_RANK[b.kind])[0];
-  if (pr) {
-    const name = String(pr.name || pr.exId);
-    ev.push({ id: 'pr', line: 'New best on ' + name + ': ' + prText(pr, u) + '.', short: 'New best on ' + name + '.',
-              why: prWhy(pr, prior, u) });
+  /* v71's ORDER (SHIP-V71-PROMPT §4): a record that carries a weight, then
+     his own rating, then the targets, a milestone, above his usual, a volume
+     record, and the comeback. Until v71 a volume record outranked his rating. */
+  // 1. A record that carries a weight — the strongest kind first, then the
+  // order he did them in. The line is a PR pool line the record fills; the
+  // pool's first line is the shipped sentence, so the default is unchanged.
+  const ranked = prs.slice().sort((a, b) => PR_RANK[a.kind] - PR_RANK[b.kind]);
+  const prLine = p => {
+    const name = String(p.name || p.exId);
+    const pick = pickLine(PR_LINES, prView(p, ranked, prior, d, rec), u, opens, recent, false);
+    return { id: 'pr', line: pick ? pick.text : 'New best on ' + name + ': ' + prText(p, u) + '.',
+             short: 'New best on ' + name + '.', why: prWhy(p, prior, u) };
+  };
+  const pr = ranked[0];
+  if (pr && pr.kind !== 'volume') ev.push(prLine(pr));
+  // 2. His own rating.
+  if (feel && ((feel.e != null && feel.e >= FEEL_HIGH_E) || (feel.s != null && feel.s >= FEEL_HIGH_S))) {
+    const line = feel.e != null && feel.e >= FEEL_HIGH_E ? 'You rated it ' + feel.e + ' out of ' + FEEL_TOP + '.' : 'Stronger than normal, by your rating.';
+    ev.push({ id: 'rating', line, short: line, why: 'Your own rating, straight after the session.' });
   }
-  // 2. Every Coach target met — two or more that named a weight, the bar
+  // 3. Every target met — two or more that named a weight, the bar
   // hype_targets_met holds (Pro, and the targets switch on).
   if (readable && pro && !isMuted(d.input.settings, 'targets')) {
     const t = replayOf(d, sh);
@@ -4080,12 +4317,12 @@ function finishOf(d, rec, extras) {
                 why: plural(t.n, 'lift') + ', each at its target weight and reps.' });
     }
   }
-  // 3. A session milestone, in its own shipped words.
+  // 4. A session milestone, in its own shipped words.
   if (ms.length) {
     ev.push({ id: 'milestone', line: ms[0].label + '.', short: ms[0].label + '.',
               why: ms[0].value + ', against a previous best of ' + ms[0].prev + '.' });
   }
-  // 4. Above his usual — "How did today compare?"'s own reading, and Pro
+  // 5. Above his usual — "How did today compare?"'s own reading, and Pro
   // like that answer is.
   if (readable && pro && !isMuted(d.input.settings, 'progression')) {
     const v = compareSession(d.overlap(), sh, d.now);
@@ -4097,17 +4334,16 @@ function finishOf(d, rec, extras) {
                 why: 'An estimated max of ' + labelW(up[0].now, u) + ' on ' + up[0].name + ', against a usual ' + labelW(up[0].usual, u) + '.' });
     }
   }
-  // 5. His own rating.
-  if (feel && ((feel.e != null && feel.e >= FEEL_HIGH_E) || (feel.s != null && feel.s >= FEEL_HIGH_S))) {
-    const line = feel.e != null && feel.e >= FEEL_HIGH_E ? 'You rated it ' + feel.e + ' out of ' + FEEL_TOP + '.' : 'Stronger than normal, by your rating.';
-    ev.push({ id: 'rating', line, short: line, why: 'Your own rating, straight after the session.' });
-  }
-  // 6. A comeback: the first session after twelve days or more away.
+  // 6. A volume record.
+  if (pr && pr.kind === 'volume') ev.push(prLine(pr));
+  // 7. A comeback: the first session after twelve days or more away. The
+  // line is a back pool line; the shipped sentence stays as the card's short.
   if (readable) {
     const before = d.all().filter(s => s !== sh && s.startedAt < sh.startedAt);
     const gap = before.length ? daysBetween(before[before.length - 1].startedAt, sh.startedAt) : null;
     if (gap != null && gap >= BACK_GAP_DAYS) {
-      ev.push({ id: 'back', line: 'First session in ' + gap + ' days.', short: 'First session in ' + gap + ' days.',
+      const pick = pickLine(BACK_LINES, { n: gap, trained: true, priorGap: priorGapOf(before) }, u, opens, recent, false);
+      ev.push({ id: 'back', line: pick ? pick.text : 'First session in ' + gap + ' days.', short: 'First session in ' + gap + ' days.',
                 why: 'The session before it was ' + plural(gap, 'day') + ' earlier.' });
     }
   }
@@ -4119,7 +4355,11 @@ function finishOf(d, rec, extras) {
   }
   const mark = d.markOf(sh);
   if (mark || feelHarder(feel)) {
-    return { headline: FINISH_GOOD, line: FINISH_HARDER, earned: false, evidence: [], short: FINISH_HARDER, id,
+    // v71: the headline keeps FINISH_HARDER's meaning and stays the card's
+    // short; the line he reads on the recap and the sheet is a bad-day pool
+    // line, one per session, rotated like every other.
+    const pick = pickLine(BAD_DAY, { count: d.f('session.count'), mark }, u, opens, recent, false);
+    return { headline: FINISH_GOOD, line: pick ? pick.text : FINISH_HARDER, earned: false, evidence: [], short: FINISH_HARDER, id,
              why: mark ? 'You marked it: ' + MARK_WORDS[mark.r] + '.' : 'By your own rating, straight after it.' };
   }
   const line = doneName(sh, d) + ' done: ' + plural(workingSetsOf(rec, d), 'set') + '.';
@@ -5123,7 +5363,20 @@ export function coach(input) {
     if (thin) { const it = INTENT_BY_ID.card_state_thin; return { ...renderIntent(it, d, u), state: it.id }; }
     // v53: where "Nothing stands out today." was — a warm line, never the
     // greeting's sentence, and on Train never the You card's.
-    const w = pickWarm(d, d.input.opens + (surface === 'train' ? 1 : 0), greet ? greet.text : null, claimed);
+    /* v71: while he has been away twelve days or more the warm line comes
+       from the missed-time pool, and on a day the rest read says rest or
+       lighter (switch on) from the rest pool — held to the card's limits
+       like every warm line, and never written to the card's memory. The
+       shipped WARM pool stands behind both. */
+    const opensAt = d.input.opens + (surface === 'train' ? 1 : 0);
+    const bv = backView(d);
+    const rest = !bv && restDay(d) ? d.f('session.rest') : null;
+    const pl = bv ? pickLine(BACK_LINES, bv, u, opensAt, recentHype, true)
+      : rest ? pickLine(REST_LINES, { call: rest.call, streak: d.f('session.streak') }, u, opensAt, recentHype, true) : null;
+    if (pl && pl.text !== (greet ? greet.text : null) && pl.id !== claimed) {
+      return { id: pl.id, kind: 'warm', state: 'warm', tone: 'good', text: pl.text, reason: '' };
+    }
+    const w = pickWarm(d, opensAt, greet ? greet.text : null, claimed);
     if (w) return { id: w.id, kind: 'warm', state: 'warm', tone: 'good', text: w.text, reason: '' };
     const it = INTENT_BY_ID.card_state_clear;
     return { ...renderIntent(it, d, u), state: it.id };
