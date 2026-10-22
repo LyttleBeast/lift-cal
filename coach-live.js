@@ -107,13 +107,24 @@
 // shapes), their working sets count together against his usual for it; two
 // different workouts are two workouts, and done stays per session.
 //
+// v73 — ANOTHER SET, AND AT WHAT WEIGHT? (anotherSetRead, at the end of the
+// file). Micah's literal question in the gym, answered once from the pieces
+// above in the same stopping-bias order — done, then fatigue (stop), then the
+// ramp (warmup), then his usual (the counts), then the number — with chips the
+// sheet acts on. Every number on a chip is nextSet()'s target, a quote of the
+// set he just ticked, or a row of his own last ramp; nothing is heavier after a
+// stop; and with no target in hand the quote is offered only when the set is
+// plainly work (plainWork), because the heaviest set so far is "the working
+// set" to the split until the top arrives, and a rung quoted as the next
+// working set is the one wrong number this read could invent.
+//
 // Imports exercises.js, units.js, coach-ramp.js (v70) and the session MATH of
 // analytics.js. coach.js imports this; nothing imports back.
 
 import { GROUPS, GROUP_ORDER } from './exercises.js';
 import { isWorking, mergeSessionExercises, continuesDrop, dropRuns, setsText } from './analytics.js';
 import { fmtSetLoad, unitW } from './units.js';
-import { workSetsOf, rampLoads } from './coach-ramp.js';
+import { workSetsOf, rampLoads, RAMP_HEAVY, RAMP_LIGHT_REPS, GRID_TOL } from './coach-ramp.js';
 
 /* Three sessions before any habit is called one. Two is a coincidence and a
    median of two is the average of a coincidence. */
@@ -529,13 +540,18 @@ function switchRead(i, t, history, shape, day = NO_DAY) {
   };
 }
 
+// How many working sets of this exercise each session in the window had — the
+// one count "one more set" and (v73) "another set, and at what weight?" both
+// read, written once so the two can never disagree about his usual.
+const countsOf = (history, exId) => history.map(s => s.order.find(ex => ex.exId === exId)).filter(Boolean).map(ex => ex.sets.length);
+
 function anotherRead(i, t, history) {
   const cur = t.current;
   if (!cur || cur.cardio || !cur.sets.length) return null;
   // Never after a set typed F, never after one he rated too hard (v69), and
   // never once the reps have fallen away.
   if (fatigueIn(cur.sets)) return null;
-  const counts = history.map(s => s.order.find(ex => ex.exId === cur.exId)).filter(Boolean).map(ex => ex.sets.length);
+  const counts = countsOf(history, cur.exId);
   if (counts.length < MIN_SESSIONS) return null;
   const now = cur.sets.length;
   const more = counts.filter(n => n > now).length;
@@ -776,4 +792,203 @@ export function rateAnswer(rir, next, u) {
   if (next.kind === 'up' || next.kind === 'down') return open + ' Next one: ' + load + ' × ' + next.tr + '.';
   if (next.stepped && rir >= 4) return 'Good. Stay at ' + load + ' for the next one.';
   return open + ' Same again: ' + load + ' × ' + next.tr + '.';
+}
+
+/* ================================================================
+   ANOTHER SET, AND AT WHAT WEIGHT? (v73, COACH-V2-SPEC §5)
+   ================================================================
+   anotherSetRead(input, exId) -> null | {
+     answer   'no'       done fired: "you're probably good for today"
+              'stop'     fatigue on this lift today: nothing heavier, stay or stop
+              'warmup'   mid-ramp: the target he is working up to
+              'yes'      one more is in line with his usual, or his usual is unknown
+              'probably' one more is his call: the majority of his sessions stopped here
+     text, short, why     the sentence, the quiet line, the reasons
+     tw, tr, loadLb       the number — nextSet()'s, or null when there is none
+     usual                { n, more, of } — anotherRead's counts, or null
+     chips                [{ id, label, tw?, tr? }], in the order the sheet draws them:
+                          yes · heavier | lighter · next_warmup · to_work · same · last · done }
+
+   Micah, 21 Oct 2026: in the gym Coach should answer the literal question.
+   The pieces were all here — done, fatigue, the counts, nextSet() — and this
+   composes them, in the shipped stopping-bias order, into one answer with
+   chips that act on it. It works out NO NUMBER OF ITS OWN: every `tw` on a chip
+   is nextSet()'s target (coach-prog.js, handed in as `i.nextSet`), a quote of
+   the last working set he ticked, or — on the next warm-up chip — a row of his
+   own last logged ramp (`i.lastRamp`, coach.js from coach-ramp.js rampProfile).
+   After a set typed F, one rated too hard, or a rep drop, the answer is `stop`
+   and no chip is heavier than the set he just did; after a step down today
+   nextSet() never says `up` (v70), so no `heavier` chip exists then either.
+   With the targets switch off there is no nextSet() function, so the only
+   numbered chip is the quote. `null` exactly where liveRead() is null: nothing
+   worked yet, or no exercise in hand. */
+const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+/* Whether the set he just did is work beyond doubt, when there is no target to
+   read the ramp against (nextSet() said nothing). Without a top in hand the
+   live split calls the heaviest set so far the working set — harmless while
+   no number came of it (v70, spec §10 #3), and a wrong number the moment it
+   is quoted as the next working set (the battery's N_WARMUP). So the quote is
+   offered only when the set is plainly work: at or near his last top on the
+   lift (coach-ramp.js's heavy tier), more reps than any warm-up, a second set
+   at the same load, a fail or a too-hard rating — or a lift with no top in
+   the log at all to read it against. */
+function plainWork(last, history, exId, known) {
+  if (!last) return false;
+  const L = load(last), R = reps(last);
+  if (last.type === 'F' || last.rir === 0 || R > RAMP_LIGHT_REPS) return true;
+  // A load he only ever warms up with on this lift is a warm-up, two sets of
+  // it or not: the bar is doubled on most of his ramps.
+  if ((known || []).some(x => Math.abs(x.w - L) < GRID_TOL)) return false;
+  let anchor = 0;
+  for (let k = history.length - 1; k >= 0 && !anchor; k--) {
+    const ex = history[k].order.find(e => e.exId === exId);
+    if (ex) anchor = Math.max(0, ...ex.sets.filter(s => s.type !== 'D').map(load));
+  }
+  return anchor <= 0 || L >= RAMP_HEAVY * anchor - GRID_TOL;
+}
+/* The rep drop read against ANY earlier set at the same or a heavier load, not
+   only the first working set: 65 × 5, 75 × 3, 75 × 3, 75 × 1 is a drop at the
+   top whatever the 65 was — a working set or the last rung — and this read
+   must never offer another set over it. fatigueIn() keeps the shipped rule
+   for the four habit answers; this one is stricter, where the bar is. */
+function dropFromAny(main) {
+  for (let k = 1; k < main.length; k++) {
+    const s = main[k];
+    for (let j = 0; j < k; j++) {
+      const p = main[j];
+      if (load(s) <= load(p) && reps(s) <= reps(p) * (1 - REP_DROP)) return { kind: 'drop', from: reps(p), to: reps(s) };
+    }
+  }
+  return null;
+}
+const LAST_CHIP = Object.freeze({ id: 'last', label: 'That’s the last one' });
+const DONE_CHIP = Object.freeze({ id: 'done', label: 'Done for today' });
+
+export function anotherSetRead(input, exId) {
+  try {
+    const i = input || {};
+    const t = todayOf(i);
+    // Nothing ticked anywhere: nothing to read, as liveRead. A warm-up ticked
+    // with nothing working yet is the one thing more this read answers.
+    if (!t.worked.length && !t.entries.some(e => e.ticked.length)) return null;
+    const cur = typeof exId === 'string' ? t.entries.find(e => e.exId === exId) || null : t.current;
+    if (!cur || cur.cardio || (!cur.ticked.length && !t.worked.length)) return null;
+    const u = i.u === 'kg' ? 'kg' : 'lb';
+    const history = historyOf(i);
+    const day = dayOf(i, t, history);
+    const shape = day.shape || shapeOf(i, t);
+    const said = (w, r) => loadSaid(w, u) + ' × ' + r;
+
+    // 1. DONE wins, as everywhere in this file.
+    const done = doneRead(i, t, history, shape, day);
+    if (done) {
+      return { answer: 'no', text: done.text, short: done.short, why: done.why.slice(),
+               tw: null, tr: null, loadLb: null, usual: null, chips: [DONE_CHIP] };
+    }
+    // The last working set he ticked, as the quote every "same" chip is: never
+    // a drop (a drop set's strips are not a set to repeat on their own).
+    const main = cur.sets.filter(s => s.type !== 'D');
+    const last = main[main.length - 1] || cur.sets[cur.sets.length - 1] || null;
+    const quote = last ? { tw: last.w == null ? '' : String(last.w), tr: String(reps(last)) } : null;
+    const nx = nextOf(i, cur);
+    // Whether that set is work beyond doubt, when nextSet() has no word on it:
+    // the one gate on quoting it (plainWork, above).
+    const plain = !!quote && plainWork(last, history, cur.exId, knownOf(i).get(cur.exId) || []);
+
+    // 2. STOP — fatigue the log can see on this lift today. nextSet()'s own
+    // stop is read the same way, should its split see a drop this file's does not.
+    const f = fatigueIn(cur.sets) || dropFromAny(main) || (nx && nx.kind === 'stop' ? { kind: 'next', text: nx.why[0] } : null);
+    if (f && quote) {
+      const w = loadSaid(quote.tw, u);
+      // The quote stands when nextSet() itself said stop at it, or the set is
+      // plainly work; a rep drop read between two sets under his top may be
+      // two rungs of a ramp, and then nothing is quoted.
+      const quoted = (nx && nx.kind === 'stop') || plain;
+      return {
+        answer: 'stop',
+        text: quoted ? 'That’s probably the set. Stay at ' + w + ' or call it there.' : 'That’s probably the set. Call it there, or stay where you are.',
+        short: 'That’s probably the set.',
+        why: [cap((f.kind === 'next' ? String(f.text).replace(/\.$/, '') : fatigueWords(f)) + '.'),
+              'Nothing heavier on it today. Stopping a set early costs nothing.'],
+        tw: null, tr: null, loadLb: null, usual: null,
+        chips: (quoted ? [{ id: 'same', label: 'Same weight, ' + w, tw: quote.tw, tr: quote.tr }] : []).concat([LAST_CHIP])
+      };
+    }
+
+    // 3. WARMING UP — nothing working yet on this lift and a ramp set ticked:
+    // the target he is working up to, and his own next warm-up where his last
+    // logged ramp has one more row than he has ticked.
+    if (nx && nx.kind === 'warmup') {
+      const chips = [];
+      const ramp = typeof i.lastRamp === 'function' ? i.lastRamp(cur.exId) : null;
+      const k = cur.ticked.length - cur.sets.length;
+      const row = Array.isArray(ramp) && ramp[k] && ramp[k].w !== '' && reps(ramp[k]) > 0 ? ramp[k] : null;
+      if (row) chips.push({ id: 'next_warmup', label: 'Next warm-up, ' + said(row.w, reps(row)), tw: String(row.w), tr: String(reps(row)) });
+      chips.push({ id: 'to_work', label: 'Go to the working set, ' + said(nx.tw, nx.tr), tw: nx.tw, tr: nx.tr });
+      return { answer: 'warmup', text: String(nx.text), short: String(nx.text), why: nx.why.slice(),
+               tw: nx.tw, tr: nx.tr, loadLb: nx.loadLb, usual: null, chips };
+    }
+    if (!quote) return null;
+
+    // 4. THE COUNTS — anotherRead's, and its words.
+    const counts = countsOf(history, cur.exId);
+    const n = cur.sets.length, of = counts.length, more = counts.filter(x => x > n).length;
+    const sessions = plural(of, 'session');
+    let answer, usualLine, why;
+    if (of >= MIN_SESSIONS && more > of * USUALLY) {
+      answer = 'yes';
+      usualLine = ' is in line with what you usually do: ' + (n + 1) + ' or more in ' + more + ' of your ' + sessions + ' of it.';
+      why = [plural(n, 'working set') + ' of ' + cur.name + ' so far this session — warm-ups are not counted.',
+             'Across your ' + sessions + ' of it in the last twelve weeks, ' + more + ' had ' + (n + 1) + ' or more.'];
+    } else if (of >= MIN_SESSIONS) {
+      answer = 'probably';
+      usualLine = '? You usually stop about here: ' + plural(n, 'set') + ' in ' + (of - more) + ' of ' + of + '.';
+      why = [plural(n, 'working set') + ' of ' + cur.name + ' so far this session — warm-ups are not counted.',
+             'Across your ' + sessions + ' of it in the last twelve weeks, ' + (of - more) + ' stopped at ' + n + ', so one more is your call.'];
+    } else {
+      answer = 'yes';
+      usualLine = '? One more is fine by the log; I don’t know your usual on this one yet.';
+      why = ['Fewer than ' + MIN_SESSIONS + ' sessions of it in the last twelve weeks, so I have no usual length to read.'];
+    }
+    why.push('Nothing in this session’s sets of it was taken to failure, none rated too hard, and none came in a quarter or more under the ' +
+             'first set’s reps at the same or a lighter weight.');
+
+    // 5. THE NUMBER — nextSet()'s, or the quote. On `up` the Yes chip stays at
+    // the set he just did and the step rides on its own chip; on `down` the
+    // same, with the lighter logged weight on its own chip.
+    const chips = [];
+    let tw = quote.tw, tr = quote.tr, loadLb = null, numbered = null;
+    if (nx && (nx.kind === 'same' || nx.kind === 'up' || nx.kind === 'down')) {
+      tw = nx.tw; tr = nx.tr; loadLb = nx.loadLb;
+      const yes = nx.kind === 'same' ? { tw: nx.tw, tr: nx.tr } : { tw: quote.tw, tr: nx.tr };
+      chips.push({ id: 'yes', label: 'Yes, ' + said(yes.tw, yes.tr), tw: yes.tw, tr: yes.tr });
+      if (nx.kind === 'up') chips.push({ id: 'heavier', label: 'Heavier, ' + said(nx.tw, nx.tr), tw: nx.tw, tr: nx.tr });
+      if (nx.kind === 'down') chips.push({ id: 'lighter', label: 'Lighter, ' + said(nx.tw, nx.tr), tw: nx.tw, tr: nx.tr });
+      numbered = nx.kind === 'same' ? ' I’d stay at ' + loadSaid(nx.tw, u) + '.'
+        : nx.kind === 'up' ? ' I’d put ' + said(yes.tw, yes.tr) + ' on it — or one step up, ' + said(nx.tw, nx.tr) + ', if you want it.'
+        : ' I’d put ' + said(yes.tw, yes.tr) + ' on it, or step down to ' + loadSaid(nx.tw, u) + '.';
+      why = why.concat(nx.why);
+    } else if (plain) {
+      chips.push({ id: 'same', label: 'Same again, ' + said(quote.tw, quote.tr), tw: quote.tw, tr: quote.tr });
+      numbered = ' Same weight again.';
+      why.push('I have no target on this lift today, so the one number I’ll name is the set you just did.');
+    } else {
+      // The set he just did may be a rung on the way up (no target to read the
+      // ramp against, and the shape alone is a reading): no number at all.
+      numbered = ' I’ll name a weight once you’re at your working weight.';
+      why.push('I have no target on this lift today, and the set you just did sits under your last top here, so I won’t quote it as a working set.');
+    }
+    const yesChip = chips[0] || null;
+    chips.push(LAST_CHIP, DONE_CHIP);
+    return {
+      answer, text: 'Another set of ' + cur.name + usualLine + numbered,
+      short: nx && (nx.kind === 'same' || nx.kind === 'up' || nx.kind === 'down')
+        ? 'Another set? ' + said(yesChip.tw, yesChip.tr) + '.' : yesChip ? 'Another set, same weight?' : 'Another set?',
+      why, tw, tr, loadLb,
+      usual: of >= MIN_SESSIONS ? { n, more, of } : null,
+      chips
+    };
+  } catch {
+    return null;
+  }
 }
