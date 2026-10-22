@@ -1204,6 +1204,49 @@ for the first time, both through `coach-data.js` `learnBy()`:
   `q_want_next:[A-Za-z0-9_-]{1,40}` and `q_rough_weight:[A-Za-z0-9_-]{1,40}` as
   two more alternatives. The native block above already takes both values.
 
+**v76 — the drop and the gap: `knowBy.hold`, `know.back`, one more stamp.**
+Still `v: 2`, still children of the already-granted `settings/coach`, **so no
+rules change** — `database.rules.json` and `database.rules.OPTIONAL-LOCK.json`
+are byte-identical to rack-v74. Both keys were declared in v72's `KNOW_KEYS`
+and are written for the first time now:
+
+- `knowBy.hold.<exId>` — his answer to *Barbell Bench Press came in 16% under
+  last time. On purpose?* (`coach-ask.js` `q_drop_why`), asked on the recap of
+  the session that dropped (`learnBy`, from `workout.js`'s recap row) or under
+  *What should I lift today?* (`learnBy`, from the sheet): `hold` (*Building
+  back up — hold it*) | `light` (*Lighter week*) | `day` (*Just that day*),
+  TTL 42 days. A drop is `coach-prog.js` `dropOf()`: the same scheme, the top
+  load more than 15% under the exposure before, the two under twelve days
+  apart. `coach.js` `lifts()` puts `holdAt` (hold) or `lightAt` (light) on the
+  lift, the answer's `at`; `coach-prog.js` reads them against the session the
+  answer was about (the newest exposure at or before it, which must itself be
+  the drop): `hold` holds every target at last time's weight and reps (mode
+  `hold`, code `held`, "Holding … while you build back, as you asked.") and the
+  next set never says `up`, until he logs heavier than the held session
+  himself; `light` takes that session out of `prev` for the shape test and out
+  of the range and step once a session has followed it, and `coach-overlap.js`
+  reads its week as light for that lift. `recordDay()` skips a lift with a live
+  hold. Any answer, `day` included, stops the question for its 42 days.
+- `know.back` — *Good to have you back. Training somewhere I can't see, or
+  time off?* (`q_back_what`), asked under *What should I train today?* and
+  *Should I rest or go lighter?* when he has been away twelve days or more:
+  `elsewhere` | `off`, TTL 14 days (`learn`). Once per gap: an answer given
+  after his newest session is this gap's (`coach-ask.js` `backAnswer()`), and
+  the question's 12-day cooldown covers a shown-and-unanswered one. `elsewhere`
+  rides on every lift (`back`) until his next session: `coach-prog.js`
+  re-enters at 90% whatever the gap, never the far 80%, and says so.
+- `asked.q_drop_why:<exId>` — the drop question's per-lift stamp, kept by
+  `normSettings()` and pruned at 56 days by `patchNow()` like the others.
+  `q_back_what` is stamped by its id. Both questions are budget `D`. If the
+  native rules enumerate `asked`, the `$id` rule needs
+  `q_drop_why:[A-Za-z0-9_-]{1,40}` as one more alternative (`q_back_what`
+  already matches `q_[a-z_]{1,40}`). The native block above takes both values.
+
+The starter bubbles (v76) keep a device-local memory too:
+`rack:{uid}:coachTaps`, the last five route ids he tapped in the sheet, newest
+first (`coach-data.js` `rememberTap()`, synchronous) — beside `coachGreets`,
+for its reason. Never the database.
+
 **v52's food reads — when, how many, and for whom.** *Am I fueled?*, *Should I
 rest or go lighter?* and *How did today compare?* read `food/log/{date}`
 through `coach-data.js` `loadFuel()`, reads only.
