@@ -86,7 +86,7 @@ export const SWAP_MAX = 5;
 /* The one thing the sheet says when a session is running. Starting a second
    one would clobber the first — startWorkout replaces the session outright —
    so there is no proposal at all, and this is why. */
-export const LIVE_LINE = 'A workout is running. Coach builds the next one once it is saved or discarded.';
+export const LIVE_LINE = 'A workout is running. I’ll build the next one once it is saved or discarded.';
 
 /* Dates, printed the way the app prints a session's date everywhere else
    (ui.js fmtDateFull: "Tue, Sep 16"). Spelled out rather than asked of Intl,
@@ -640,7 +640,7 @@ function build(i, o, top) {
     const shown = e.source ? e.source.date : base.date;
     if (!t.from || t.from.date === shown) return t;
     const why = t.why.slice();
-    const at = why.findIndex(w => /^Coach is learning/.test(w));
+    const at = why.findIndex(w => /^I’m learning/.test(w));
     why.splice(at === -1 ? why.length : at, 0, t.marked ? 'Worked out from before your marked session.'
       : 'Worked out from ' + sessionDay(t.from.date, t.from.daysAgo) + ', the last time you did this lift.');
     return { ...t, why };
