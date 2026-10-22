@@ -281,7 +281,7 @@ function readFuel(i, now) {
 
 /* The answer's sentences. None of them trips the ban, "eat" or "low", and the
    strongest verdict is "lighter than usual" with no instruction after it. */
-const REASON = 'Going by when you logged it. Coach reads what’s logged, and food advice isn’t part of what it does.';
+const REASON = 'Going by when you logged it. I read what’s logged, and food advice isn’t part of what I do.';
 
 // The day lines, each only when it has data. `cutWord`: "cut" is his word —
 // aim Lose fat or Recomp, or food targets set to lose — and nobody else's.
@@ -309,13 +309,13 @@ export function dayLines(input, read) {
      weight turn is read two weeks each way, so its date is "about 2 weeks
      ago"; the aim's is the day he set it. */
   const since = a.changedBy === 'aim' ? 'you changed your goal' : 'your weight trend changed';
-  if (a.phase === 'new') out.push('Coach is learning your new normal since ' + since + ', ' + plural(a.dayMed.n, 'day') + ' in.');
+  if (a.phase === 'new') out.push('I’m learning your new normal since ' + since + ', ' + plural(a.dayMed.n, 'day') + ' in.');
   else if (a.phase === 'before') {
     const n = a.changedDays;
     out.push('Your usual here is from before ' + since + (a.changedBy !== 'aim' ? ', about 2 weeks ago.'
       : n < 1 ? ' today.' : ', ' + plural(n, 'day') + ' ago.'));
   }
-  else if (a.dayStage === 'learning') out.push('Coach is learning your normal (' + plural(a.dayMed.n, 'day') + ' so far).');
+  else if (a.dayStage === 'learning') out.push('I’m learning your normal (' + plural(a.dayMed.n, 'day') + ' so far).');
   const p = i.patterns || null;
   const t2 = p ? p.fedBeforeTop || p.caloriesBeforeTop || null : null;
   if (t2) out.push(t2);
@@ -327,18 +327,18 @@ export function fuelAnswer(input, read) {
   const r = read, a = r.a;
   const more = s => s.map(t => ({ text: t, reason: '' }));
   if (r.state === 'thin') {
-    return { text: 'Coach reads fuel from your food log, and there isn’t enough in it yet (' + plural(r.n, 'day') + ').',
-             reason: 'Five days with food logged in the last four weeks, before Coach can tell a fully logged day from a part-logged one.', more: [] };
+    return { text: 'I read fuel from your food log, and there isn’t enough in it yet (' + plural(r.n, 'day') + ').',
+             reason: 'Five days with food logged in the last four weeks, before I can tell a fully logged day from a part-logged one.', more: [] };
   }
   if (r.state === 'empty') return { text: 'Nothing logged today yet.', reason: REASON, more: [] };
   if (r.state === 'unread') {
-    return { text: 'Coach couldn’t read today’s food log just now.', reason: REASON, more: more(dayLines(input, r)) };
+    return { text: 'I couldn’t read today’s food log just now.', reason: REASON, more: more(dayLines(input, r)) };
   }
   if (r.state === 'day') {
     const why = a.style === 'batch'
       ? 'Most of your entries go in together, later, so the hours they were logged say nothing about the day’s timing.'
-      : 'Coach is learning when you usually log food on training days (' + a.curve.n + ' of ' + CURVE_LEARNING + ' days so far).';
-    return { text: 'Coach reads your food by the day, not the hour.', reason: REASON,
+      : 'I’m learning when you usually log food on training days (' + a.curve.n + ' of ' + CURVE_LEARNING + ' days so far).';
+    return { text: 'I read your food by the day, not the hour.', reason: REASON,
              more: more(dayLines(input, r)).concat({ text: why, reason: '' }) };
   }
   const head = r.verdict === 'lighter' ? 'Lighter than usual' : r.verdict === 'heavier' ? 'Heavier than usual' : 'About usual';
@@ -353,7 +353,7 @@ export function fuelAnswer(input, read) {
    stored: an answer about whether he has eaten is used once and dropped
    (Micah's decision #9). */
 export function fedUnloggedAnswer(input, read) {
-  return { text: 'Then today isn’t in your log yet, so Coach can’t read it.', reason: REASON,
+  return { text: 'Then today isn’t in your log yet, so I can’t read it.', reason: REASON,
            more: dayLines(input, read).map(t => ({ text: t, reason: '' })) };
 }
 export function fedNoneAnswer(input, read) {

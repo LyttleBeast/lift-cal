@@ -2043,14 +2043,14 @@ section('N. v52 — the caution before a proposal, the mark’s chips, and "Shou
   sh = open(U3, trainOpts).sh;
   tap(sh, 'Am I fueled?'); tap(sh, 'I ate, it’s not logged');
   check('"I ate, it’s not logged": today is not in the log, so Coach cannot read it — and the day lines',
-        bubT(sh).includes('Then today isn’t in your log yet, so Coach can’t read it.'), list(bubT(sh)));
+        bubT(sh).includes('Then today isn’t in your log yet, so I can’t read it.'), list(bubT(sh)));
   // A batch logger, late at night: the day's totals, and the question under the answer.
   const BATCHED = fmonth(BAT, at(0, 23), true);
   state.input = { ...BATCHED, foodLog: BATCHED.logged }; state.calls.length = 0;
   sh = open(U3, trainOpts).sh;
   tap(sh, 'Am I fueled?');
   check('a batch logger is read by the day, and asked once how he logs — under the answer',
-        bubT(sh).includes('Coach reads your food by the day, not the hour.') &&
+        bubT(sh).includes('I read your food by the day, not the hour.') &&
         bubT(sh).includes('Do you usually log food as you go, or later in the day?') &&
         chipsIn(sh).some(b => b.textContent === 'As I go') && chipsIn(sh).some(b => b.textContent === 'Later'), list(bubT(sh)));
   tap(sh, 'As I go');

@@ -152,7 +152,7 @@ section('F. "Am I fueled?" — his food against his own normal, never a prescrip
 row('F1', () => {
   const inp = input({ sessions: [sess(2, UPPER), sess(4, LOWER)] });
   const a = ask(inp, 'ask_fueled');
-  const ok = a.id === 'fuel_fueled' && a.text === 'Coach reads fuel from your food log, and there isn’t enough in it yet (0 days).' &&
+  const ok = a.id === 'fuel_fueled' && a.text === 'I read fuel from your food log, and there isn’t enough in it yet (0 days).' &&
              !/kcal| g of|Nothing logged/.test(said(a));
   return grade(ok, a.id === 'ask_fueled', said(a));
 });
@@ -193,7 +193,7 @@ row('F5', () => {
   const a = ask(inp, 'ask_fueled');
   const ok = a.id === 'fuel_empty' && a.text === 'Nothing logged today yet.' && !(a.more || []).length &&
              (a.followups || []).map(f => f.label).join('|') === 'I ate, it’s not logged|I haven’t eaten' &&
-             ask(inp, 'ask_fed_unlogged').text === 'Then today isn’t in your log yet, so Coach can’t read it.' &&
+             ask(inp, 'ask_fed_unlogged').text === 'Then today isn’t in your log yet, so I can’t read it.' &&
              ask(inp, 'ask_fed_none').text === 'Noted. That’s for this answer; nothing is saved.';
   return grade(ok, a.id === 'ask_fueled', said(a) + ' · ' + (a.followups || []).map(f => f.label).join('|'));
 });
@@ -255,7 +255,7 @@ row('F10', () => {
   const line = (a.more || []).find(m => /new normal/.test(m.text));
   // v53 (on purpose, SHIP-V53-PROMPT §3.4): the line names the change — here the weight trend's turn.
   const ok = r && r.a.phase === 'new' && Math.abs(r.a.dayMed.kcal - 2200) < 1 && !!line &&
-             /^Coach is learning your new normal since your weight trend changed, \d+ days in\.$/.test(line.text);
+             /^I’m learning your new normal since your weight trend changed, \d+ days in\.$/.test(line.text);
   return grade(ok, !line, (r && r.a.phase + ' ' + r.a.dayMed.kcal) + ' · ' + said(a));
 });
 row('F11', () => {
@@ -263,7 +263,7 @@ row('F11', () => {
   const r = F.fueledRead(fuelIn(inp), inp.now);
   const a = ask(inp, 'ask_fueled');
   // v53 (on purpose, SHIP-V53-PROMPT §3.4): the line names the change — here his goal, set ten days ago.
-  const ok = r && r.a.phase === 'new' && Math.abs(r.a.dayMed.kcal - 2200) < 1 && (a.more || []).some(m => /^Coach is learning your new normal since you changed your goal, \d+ days in\.$/.test(m.text));
+  const ok = r && r.a.phase === 'new' && Math.abs(r.a.dayMed.kcal - 2200) < 1 && (a.more || []).some(m => /^I’m learning your new normal since you changed your goal, \d+ days in\.$/.test(m.text));
   return grade(ok, !r || r.a.phase !== 'new', (r && r.a.phase + ' ' + r.a.dayMed.kcal) + ' · ' + said(a));
 });
 row('F12', () => {
@@ -282,7 +282,7 @@ row('F13', () => {
   const stale = { ...base, foodLog: { ...base.foodLog, [key(NOW)]: [] } };
   const notRead = { ...base, foodLog: Object.fromEntries(Object.entries(base.foodLog).filter(([k]) => k !== key(NOW))) };
   const outs = [failed, stale, notRead].map(x => ask(x, 'ask_fueled'));
-  const ok = !hasFoodByNow || outs.every(a => a.text === 'Coach couldn’t read today’s food log just now.' && !/Nothing logged today/.test(said(a)));
+  const ok = !hasFoodByNow || outs.every(a => a.text === 'I couldn’t read today’s food log just now.' && !/Nothing logged today/.test(said(a)));
   return grade(ok, false, outs.map(a => a.text).join(' | '));
 });
 row('F14', () => {
