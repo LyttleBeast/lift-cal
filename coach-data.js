@@ -544,7 +544,8 @@ async function patchNow(change0, more) {
      on every write: twice the 28 days a lift stays asked, and well past the
      week the budget counts, so a stamp outlives its meaning by one cooldown
      and never piles up. The engine reads them by its own clock. */
-  Object.keys(next.asked).forEach(k => { if ((k.startsWith('warm:') || k.startsWith('q_pr_how:')) && staleStamp(next.asked[k])) delete next.asked[k]; });
+  // v73: and the step question's `asked.q_equipment_step:<exId>`, the same way.
+  Object.keys(next.asked).forEach(k => { if ((k.startsWith('warm:') || k.startsWith('q_pr_how:') || k.startsWith('q_equipment_step:')) && staleStamp(next.asked[k])) delete next.asked[k]; });
 
   try {
     await write('settings/coach', next);

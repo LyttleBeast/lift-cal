@@ -51,22 +51,23 @@ import { GROUPS, GROUP_ORDER } from './exercises.js';
 import { e1rm, isWorking, mergeSessionExercises, exerciseIndex, detectPRs, sessionMilestones, normFeel } from './analytics.js';
 import { labelW, labelRate, unitW, fmtW, fmtSetLoad, labelVol } from './units.js';
 import { propose, liveRefusal, buildMenu, swapTo, BUILD_ASK } from './coach-build.js';
-import { liveRead, setRead, LIVE_NONE, REP_DROP, EFFORT, rateAsk, rateAnswer } from './coach-live.js';
+import { liveRead, setRead, anotherSetRead, LIVE_NONE, REP_DROP, EFFORT, rateAsk, rateAnswer } from './coach-live.js';
 import { AIMS, EXPERIENCE, energyContext, normGoalLift, goalChecks, AIM_DIR } from './coach-goal.js';
 import { readLift, lighterWeek, recordDay, liftsMoving, prepare, targetsReplay, compareSession, nextTargets,
-         liftTrend, goalLiftRead, bigThree, focusRead, groupDaysAt, nextSetFor } from './coach-overlap.js';
+         liftTrend, goalLiftRead, bigThree, focusRead, groupDaysAt, nextSetFor, stepFor } from './coach-overlap.js';
 import { restRead, usualRun, replay, readinessRows, readinessHas, readinessAnswer, readinessHeavy, sessionRows,
          mergeRows, groupLine, restAnswer, lighterAnswer, groupAnswer, REST_REASON } from './coach-ready.js';
 import { fueledRead, fuelAnswer, fedUnloggedAnswer, fedNoneAnswer, fuelRow, sessionFoodRows, fuelDates, logStyle } from './coach-fuel.js';
 // v54: stage five's whole week — weekly volume, neglect and balance.
 import { volumeRead, volumeAnswer, balanceRead, balanceAnswer } from './coach-volume.js';
 // v70: the ramp model — a session's working sets, the warm-up out whether he typed the W or not.
-import { workSetsOf, rampLoads } from './coach-ramp.js';
+import { workSetsOf, rampLoads, rampProfile } from './coach-ramp.js';
 // v72: the questions and what he answered — the catalog (coach.js's QUESTIONS
 // is its `answers` subset), the stored facts' normaliser and reader, the
 // picker and the recap's plan. It imports units.js and coach-ramp.js, never
-// this file.
-import { ASK_QUESTIONS, normKnow, pickQuestion, debriefPlan, warmAnswer, aimLabel, ID_RE } from './coach-ask.js';
+// this file. v73: knowOf (the told step), stepAskLift (the step question's
+// gate) and stepStamp (its per-lift stamp).
+import { ASK_QUESTIONS, normKnow, pickQuestion, debriefPlan, warmAnswer, aimLabel, ID_RE, knowOf, stepAskLift, stepStamp } from './coach-ask.js';
 
 const DAY = 864e5;
 
@@ -379,6 +380,11 @@ function derive(input) {
      set is counted here, and on every lift handed to the targets and the live
      read; 'yes' and nothing said read as before. */
   const warmOf = ex => warmAnswer(input.settings, String((ex && ex.exId) || ''), now);
+  /* v73: what he said one step up is on a lift (knowBy.step, stored pounds),
+     for coach-prog.js stepOf() — inside the fact's TTL only, so a year-old
+     answer about a machine he may not use any more is a prior there and
+     nothing here. */
+  const stepToldOf = ex => { const k = knowOf(input.settings, 'step', String((ex && ex.exId) || ''), now); return k && !k.expired ? k.v : null; };
 
   /* v70: his ramp loads per lift (coach-ramp.js rampLoads) over the whole log,
      oldest first — the loads he only ever warms up with — so every working-set
@@ -674,7 +680,10 @@ function derive(input) {
           // v72: his word on warm-ups here, for coach-prog.js liftOf() — only
           // when he gave one, so a lift he has not been asked about is the
           // same four keys it always was.
-          ...(warmOf(ex) ? { warm: warmOf(ex) } : null)
+          ...(warmOf(ex) ? { warm: warmOf(ex) } : null),
+          // v73: and what he said one step up is (knowBy.step, pounds), the
+          // same way — read inside its TTL only; stepOf() prefers the log.
+          ...(stepToldOf(ex) != null ? { stepTold: stepToldOf(ex) } : null)
         });
       });
     });
@@ -4951,7 +4960,15 @@ function liveInput(d, session, current) {
        works out no weight and imports nothing that does. Off with the targets
        switch, and on a log Coach could not read. */
     nextSet: d.f('log.confidence') === 'readable' && !isMuted(d.input.settings, 'targets')
-      ? (exId, sets) => nextFor(d, exId, sets) : null
+      ? (exId, sets) => nextFor(d, exId, sets) : null,
+    /* v73: his own last logged ramp on a lift (coach-ramp.js rampProfile over
+       the overlap's exposures — already counted there), as rows { w, r } of
+       stored strings, for the "next warm-up" chip: a quote of a weight he
+       chose, never a generated one (OPEN-QUESTIONS #1). [] when none. */
+    lastRamp: exId => {
+      const l = d.overlap().lifts.find(x => x.exId === exId);
+      return l ? rampProfile(l.exposures, { warm: l.warm || null }).lastRamp : [];
+    }
   };
 }
 
@@ -5161,7 +5178,46 @@ function laneOpen(d, lane) {
 function questionUnder(d, where) {
   if (isMuted(d.input.settings, 'questions')) return null;
   if (laneOpen(d, 'under:' + where)) return null;
-  return pickQuestion(d, 'under:' + where, d.input.settings || {}, d.now, d.input.opens);
+  // v73: under the targets, the step question may be about a lift on the plan.
+  const plan = where === 'targets' ? (d.f('lift.targets') || []) : [];
+  const ctx = where === 'targets' ? stepCtx(d, plan.map(t => t.exId), id => { const t = plan.find(x => x.exId === id); return t && t.step ? t.step : null; }) : undefined;
+  const q = pickQuestion(d, 'under:' + where, d.input.settings || {}, d.now, d.input.opens, ctx);
+  return q ? { q, ctx } : null;
+}
+
+/* v73: THE STEP QUESTION'S CONTEXT for a moment — the lifts it may be about,
+   in screen order, each with what coach-ask.js stepAskLift() reads: the
+   library's equipment, the exposures the overlap counted, and the step in use
+   (`stepOf`, the target's own where a target is in hand, else the baselines'
+   through coach-overlap.js stepFor()). { id, step } for pickQuestion, or
+   undefined when no lift qualifies, so every other row reads as before. */
+function stepCtx(d, exIds, stepOf) {
+  const i = d.overlap();
+  const u = d.input.u === 'kg' ? 'kg' : 'lb';
+  const cands = (Array.isArray(exIds) ? exIds : []).map(id => {
+    const l = i.lifts.find(x => x.exId === id);
+    if (!l) return null;
+    const lib = d.lib && d.lib[id];
+    return { exId: id, name: String((lib && lib.name) || l.name || id), equipment: (lib && lib.equipment) || l.equipment || null,
+             exposures: l.exposures.length, step: (typeof stepOf === 'function' ? stepOf(id) : null) || stepFor(i, id, d.now) };
+  }).filter(Boolean);
+  const lift = stepAskLift(cands, d.input.settings || {}, d.now, u);
+  return lift ? { id: lift.exId, step: lift } : undefined;
+}
+
+/* v73: the question the live sheet may put, about the lift in hand — the
+   'live' lane, on the live gate the caller already passed. The lift is the
+   one at `current`, or the last exercise on the list with a ticked set. */
+function liveQuestionOf(d, session, current) {
+  if (isMuted(d.input.settings, 'questions')) return null;
+  const list = session && Array.isArray(session.exercises) ? session.exercises : [];
+  let ex = Number.isInteger(current) ? list[current] : null;
+  if (!ex) { for (let k = list.length - 1; k >= 0 && !ex; k--) if (list[k] && (list[k].sets || []).some(s => s && s.done)) ex = list[k]; }
+  if (!ex || !ex.exId) return null;
+  const ctx = stepCtx(d, [String(ex.exId)]);
+  if (!ctx) return null;
+  const q = pickQuestion(d, 'live', d.input.settings || {}, d.now, d.input.opens, ctx);
+  return q ? { q, ctx } : null;
 }
 
 // What the sheet is handed of a question: its words, its chips, and what it
@@ -5169,13 +5225,27 @@ function questionUnder(d, where) {
 /* v49: a question's text may be a function of the log, so it can carry his
    numbers through units.js ("your weight has come down about 4 lb"); it is
    resolved here, the one place a question is handed to the sheet. v72: and
-   the moment's context, for the two recap rows (none here). */
+   the moment's context, for the two recap rows (none here). v73: a fact
+   question (`writes` know/knowBy) also carries what its writer needs — the
+   key, the id, the stamp — and its chips in his unit (optionsFor); a row that
+   stores an answer is handed exactly what it always was. */
 const questionView = (q, d, u, ctx) => {
   if (!q) return null;
   let text = q.text;
   if (typeof text === 'function') { try { text = String(text(d, u, ctx) || ''); } catch { text = ''; } }
-  return text ? { id: q.id, text, options: q.options, ack: q.ack || null } : null;
+  if (!text) return null;
+  const v = { id: q.id, text, options: q.options, ack: q.ack || null };
+  if (q.writes !== 'answers') {
+    v.writes = q.writes;
+    v.key = q.key || null;
+    v.by = ctx && ctx.id != null ? String(ctx.id) : null;
+    v.stamp = typeof q.stampOf === 'function' ? q.stampOf(ctx) : q.id;
+    if (typeof q.optionsFor === 'function') { try { v.options = q.optionsFor(u); } catch {} }
+  }
+  return v;
 };
+// A picked question with its context, as questionUnder()/liveQuestionOf() hand it.
+const pickedView = (p, d, u) => (p ? questionView(p.q, d, u, p.ctx) : null);
 
 /* ---------- the public face ----------
 
@@ -5380,7 +5450,24 @@ export function coach(input) {
        and is never drawn when the session reads "done". */
     liveSet: (session, opts) => (!pro || isMuted(d.input.settings, 'live') ||
       !session || typeof session !== 'object' || session._edit
-      ? null : setRead(liveInput(d, session, opts && opts.current)))
+      ? null : setRead(liveInput(d, session, opts && opts.current))),
+    /* v73: ANOTHER SET, AND AT WHAT WEIGHT? (coach-live.js anotherSetRead) —
+       one answer with chips, on EXACTLY the `live` gate above: a readable
+       log, Pro, "In the gym" on, a live session and never an edit. With the
+       targets switch off liveInput() hands in no nextSet, so no chip carries a
+       target; the quote of the set he just did still does — a quote is not a
+       target. */
+    another: (session, opts) => (d.f('log.confidence') !== 'readable' || !pro ||
+      isMuted(d.input.settings, 'live') ||
+      !session || typeof session !== 'object' || session._edit
+      ? null : anotherSetRead(liveInput(d, session, opts && opts.current))),
+    /* v73: the one question the live sheet may put — the 'live' lane
+       (coach-ask.js pickQuestion), about the lift in hand: today, what one
+       step up is on a machine. The same gate again, and the questions switch. */
+    liveQuestion: (session, opts) => (d.f('log.confidence') !== 'readable' || !pro ||
+      isMuted(d.input.settings, 'live') ||
+      !session || typeof session !== 'object' || session._edit
+      ? null : pickedView(liveQuestionOf(d, session, opts && opts.current), d, u))
   };
 }
 
@@ -5407,7 +5494,7 @@ function ask(d, u, id) {
     if (v) {
       const where = v.id === 'lift_targets' ? 'targets' : v.id === 'goal_pace' ? 'goal' : v.id === 'fuel_fueled' ? 'fuel' : null;
       return { ...v, followups: followupsFor(d, u, id, v.id),
-               ...(where ? { question: questionView(questionUnder(d, where), d, u) } : null),
+               ...(where ? { question: pickedView(questionUnder(d, where), d, u) } : null),
                ...(v.id === 'session_compare' ? markView(d) : null),
                // v54: a once-only line in the answer (the neglected group,
                // once in four weeks): the sheet stamps `asked` as it draws it.
@@ -5565,6 +5652,9 @@ export function normSettings(v) {
     // and the record question's per-record stamps, `q_pr_how:<recordId>`,
     // the same way — so the budget counts every record it was asked on
     if (k.startsWith('q_pr_how:') && ID_RE.test(k.slice(9)) && Number.isFinite(rawAsk[k])) asked[k] = rawAsk[k];
+    // v73: and the step question's per-lift stamps, `q_equipment_step:<exId>`
+    // (coach-ask.js stepStamp), kept and pruned exactly like `warm:<exId>`.
+    if (k.startsWith('q_equipment_step:') && ID_RE.test(k.slice(17)) && Number.isFinite(rawAsk[k])) asked[k] = rawAsk[k];
   });
   /* No `lastGreet`. It used to live here and it was the wrong node for it: the
      write fires as the app opens and the app is routinely closed a second or

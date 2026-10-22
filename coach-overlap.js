@@ -1082,6 +1082,23 @@ export function nextSetFor(input, exId, sets, repDrop) {
   }
 }
 
+/* v73: THE STEP IN USE on one lift of the prepared log — coach-prog.js's
+   baselines().step ({ value, n, source: 'yours' | 'told' | 'default' }) or
+   null — for the step question's gate (coach-ask.js stepAskLift): whether
+   the log has learned the lift's own step yet. Here for the same reason
+   nextSetFor() is: coach.js reaches coach-prog.js only through this file. */
+export function stepFor(input, exId, now) {
+  try {
+    const i = prepare(input || {});
+    const l = i.lifts.find(x => x.exId === exId);
+    if (!l || !Number.isFinite(now)) return null;
+    const b = baselinesOf(i, l, ctxOf(i, now));
+    return b && b.step ? { value: b.step.value, n: b.step.n, source: b.step.source } : null;
+  } catch {
+    return null;
+  }
+}
+
 /* A LIFT THAT HAS CLIMBED, for the card: progressing, a series six weeks long
    at least, and up by twice his own session-to-session swing or more — well
    past noise. The biggest climb in its own terms wins; ties by id. */

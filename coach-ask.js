@@ -37,7 +37,7 @@
 // learnBy(), learnTally() and markAsked() are the writers, and workout.js
 // writes the record a "Yes, tag them" retypes.
 
-import { labelW, labelRate, fmtW } from './units.js';
+import { labelW, labelRate, fmtW, wIn } from './units.js';
 import { rampOf } from './coach-ramp.js';
 
 const DAY = 864e5;
@@ -86,6 +86,13 @@ export const KNOW_KEYS = Object.freeze({
   back:     Object.freeze({ options: Object.freeze(['elsewhere', 'off']), ttlDays: 14 }),
   // keyed facts, settings/coach.knowBy.<key>.<id>
   warm:     Object.freeze({ by: 'exId',  options: Object.freeze(['yes', 'no']),            ttlDays: 180 }),
+  /* v73: what he said one step up is on a machine, cable or plate lift
+     (q_equipment_step), in stored pounds on the two-decimal grid. Read by
+     coach-prog.js stepOf() only where the log has no jump seen twice — THE LOG
+     WINS, and a told step the log later contradicts is inert without a write
+     on paint (the house rule); it is replaced the next time the question is
+     answered on that lift, whose gate reopens whenever the step in use is not
+     the log's own. */
   step:     Object.freeze({ by: 'exId',  range: Object.freeze([0.5, 100000]),              ttlDays: 365 }),
   hold:     Object.freeze({ by: 'exId',  options: Object.freeze(['hold', 'light', 'day']), ttlDays: 42 }),
   wantNext: Object.freeze({ by: 'shape', options: Object.freeze(['same', 'push', 'ease']), ttlDays: 14 })
@@ -97,8 +104,11 @@ const KEY_RE = /^[a-z][A-Za-z0-9]{0,23}$/;
 const MAX_C = 3, MAX_N = 9, MAX_IDS = 60, MAX_TALLY = 999;
 
 const idOk = (spec, id) => (spec.by === 'shape' ? SHAPE_RE.test(id) && id.length <= 40 : ID_RE.test(id));
+// v73: a ranged fact is a stored weight (`step`, pounds), so it is any number
+// on the two-decimal grid every stored weight sits on — a 2.5-lb step, or a
+// kilo account's 1 kg stored as 2.2 — not an integer, which v72's bounds said.
 const valueOk = (spec, v) => (spec.options ? spec.options.includes(v)
-  : Number.isInteger(v) && v >= spec.range[0] && v <= spec.range[1]);
+  : Number.isFinite(v) && Math.round(v * 100) / 100 === v && v >= spec.range[0] && v <= spec.range[1]);
 
 // One stored fact, read: { v, c, at, n } or null for anything off the shape.
 function normFact(spec, raw) {
@@ -293,6 +303,51 @@ export function rampLoadsText(loads, u) {
   if (lb.length === 2) return fmtW(sorted[0], u) + ' and ' + labelW(sorted[1], u);
   if (lb.length === 3) return fmtW(sorted[0], u) + ', ' + fmtW(sorted[1], u) + ' and ' + labelW(sorted[2], u);
   return fmtW(sorted[0], u) + ' to ' + labelW(sorted[sorted.length - 1], u) + ' (' + plural(lb.length, 'set') + ')';
+}
+
+/* ---------- v73: the step question's gate, in one place ----------
+   stepAskLift(lifts, settings, now, u) -> the lift to ask about, or null.
+
+     lifts   the moment's candidates, in the order they stand on screen: the
+             lift in hand (live) or today's plan (under the targets), each
+             { exId, name, equipment, exposures (a count), step ({ source } or
+             null — coach-prog.js's, from the target or the baselines) }
+
+   One is asked about when it is loaded from a stack or a rack Coach cannot
+   guess the step of — a machine, a cable, a plate-loaded lift, or a dumbbell
+   on a kilo account (defaultStep() has no kilo dumbbell) — with three or more
+   exposures, when the step in use is not the log's own (`source !== 'yours'`:
+   the log wins and then there is nothing to ask), when he has not told Coach
+   inside the fact's TTL, and not inside its 28-day stamp. The first that
+   passes is the one; the catalog's `when` reads `ctx.step`. */
+export const STEP_ASK_MIN_EXPOSURES = 3;
+export const STEP_ASK_DAYS = 28;
+export const STEP_EQUIPMENT = Object.freeze(['machine', 'cable', 'plate']);
+export const stepStamp = exId => 'q_equipment_step:' + exId;
+export function stepAskLift(lifts, settings, now, u) {
+  const asked = (settings && settings.asked) || {};
+  for (const l of Array.isArray(lifts) ? lifts : []) {
+    if (!l || typeof l.exId !== 'string' || !ID_RE.test(l.exId)) continue;
+    const eq = l.equipment;
+    if (!(STEP_EQUIPMENT.includes(eq) || (u === 'kg' && eq === 'dumbbell'))) continue;
+    if (!(Number(l.exposures) >= STEP_ASK_MIN_EXPOSURES)) continue;
+    if (l.step && l.step.source === 'yours') continue;
+    const told = knowOf(settings, 'step', l.exId, now);
+    if (told && !told.expired) continue;
+    const at = asked[stepStamp(l.exId)];
+    if (Number.isFinite(at) && Number.isFinite(now) && daysBetween(at, now) < STEP_ASK_DAYS) continue;
+    return { exId: l.exId, name: String(l.name || l.exId), equipment: eq };
+  }
+  return null;
+}
+/* Its chips, in the display unit: the common stack and plate steps, each
+   value the POUNDS stored — a kilo chip's through wIn(), never a typed
+   constant — and its label through labelW(). *Not sure* stores nothing. */
+const STEP_CHOICES = Object.freeze({ lb: Object.freeze([2.5, 5, 10, 15]), kg: Object.freeze([1, 2.5, 5]) });
+export function stepOptions(u) {
+  const unit = u === 'kg' ? 'kg' : 'lb';
+  return STEP_CHOICES[unit].map(v => { const lb = wIn(v, unit); return { value: lb, label: labelW(lb, unit) }; })
+    .concat([{ value: null, label: 'Not sure', ack: null }]);
 }
 
 export const ASK_QUESTIONS = Object.freeze([
@@ -502,6 +557,32 @@ export const ASK_QUESTIONS = Object.freeze([
     stampOf: ctx => (ctx && ctx.pr && ctx.pr.recId ? 'q_pr_how:' + ctx.pr.recId : 'q_pr_how'),
     ack: 'Noted. I’ll read the next target from that.',
     when: (d, ctx) => !!(ctx && ctx.pr)
+  },
+
+  /* ---------- v73: in the gym ---------- */
+  /* THE STEP ON A STACK. Machines, cables and plate-loaded lifts have no
+     default step (coach-prog.js defaultStep: "vary too much to guess"), so
+     until the log shows one twice their target reads "the next setting up" and
+     the live sheet names no heavier set. He can read the step off the machine
+     in one glance. Asked in the live sheet about the lift in hand, or under
+     "What should I lift today?" about a lift on the plan (stepAskLift, above);
+     the answer is knowBy.step.<exId> in pounds, which stepOf() uses only until
+     the log learns another. `options` is the pound row — the catalog's shape;
+     the sheet draws optionsFor(u), the same values in his unit. */
+  {
+    id: 'q_equipment_step',
+    moments: Object.freeze(['live', 'under:targets']),
+    text: (d, u, ctx) => (ctx && ctx.step ? 'On ' + ctx.step.name + ', what’s one step up?' : ''),
+    options: Object.freeze(stepOptions('lb')),
+    optionsFor: u => stepOptions(u),
+    writes: 'knowBy', key: 'step',
+    // The two readers of a step: the targets (coach-prog.js stepOf) and the
+    // live sheet's heavier chip (nextSet's `up`).
+    changes: Object.freeze(['lift_targets', 'live_read']),
+    cooldownDays: STEP_ASK_DAYS, budget: 'D',
+    stampOf: ctx => (ctx && ctx.step ? stepStamp(ctx.step.exId) : 'q_equipment_step'),
+    ack: 'Noted. I’ll use that as the step here until your log shows me another.',
+    when: (d, ctx) => !!(ctx && ctx.step)
   }
 ]);
 
