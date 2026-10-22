@@ -68,6 +68,7 @@ export const CODES = Object.freeze({
   N_STOPPED:   { v: 'wrong', s: 'heavier after a set to failure, a set rated too hard, or a true rep drop among the working sets' },
   N_UNEARNED:  { v: 'wrong', s: 'a step up after a set that fell short of both the lifter’s own range and Coach’s own target reps' },
   N_WARMUP:    { v: 'wrong', s: 'a warm-up set quoted as the next working set (“Next set: 45 lb × 8” mid-ramp)' },
+  N_WARMUP_WORK:{ v: 'wrong', s: 'a working set read as a warm-up (“Warming up…” after a true working set)' },
   N_GRID:      { v: 'wrong', s: 'next set not on the lifter’s own grid' },
   N_BW:        { v: 'wrong', s: 'a loaded next set on a bodyweight-only lift' },
   N_REPS:      { v: 'wrong', s: 'next set reps outside anything the lifter has shown (over the top of the range by 4+)' },
@@ -131,8 +132,22 @@ export function scoreTarget(t, tr) {
   // ghost: a set logged with a weight whose target has a blank tw
   // (a target from before a marked session has that session's shape, not
   // the marked one's — the builder draws its sets, so no ghost is read)
+  // v70: a target's rows are last time's less any W row heavier than a reduced
+  // top (dropped, never clamped), so the two lists are walked together — a W
+  // row with no row of its own in the target is a dropped one, not a ghost.
   if (sets.length && tr.lastAll && !t.marked) {
-    tr.lastAll.forEach((s, i) => { if (s.w !== '' && s.w != null && (!sets[i] || sets[i].tw === '')) codes.push('T_GHOST'); });
+    let j = 0;
+    const dirW = tr.assisted ? -1 : 1;
+    tr.lastAll.forEach(s => {
+      const row = sets[j];
+      if (s.type === 'W' && !(row && row.type === 'W' && String(row.tw) === String(s.w))) {
+        // dropped: only ever a W heavier than a reduced or re-entered top
+        if (!(['reduce', 'reenter'].includes(t.mode) && load != null && dirW * ((parseFloat(s.w) || 0) - load) > TOL)) codes.push('T_GHOST');
+        return;
+      }
+      if (s.w !== '' && s.w != null && (!row || row.tw === '')) codes.push('T_GHOST');
+      j++;
+    });
   }
   if (load != null && !tr.bodyweight) {
     const L = toDisp(load, u);
@@ -172,6 +187,7 @@ export function scoreTarget(t, tr) {
              logged), lastDone { w (lb), r, isRamp, isWork }, stoppedTruth
              (F / rir 0 / true rep drop among TRUE working sets), lastRepsUnderLo,
              trueWLb, stepLb, gridDisp, lo, hi, bodyweight, u, hadTarget,
+             targetLb (the day's target load, pounds, or null — v70),
              straight, exposures, earnedUp (last true working set reps ≥ hi+2) } */
 export function scoreNextSet(n, st) {
   const codes = [], notes = [];
@@ -181,6 +197,14 @@ export function scoreNextSet(n, st) {
   }
   const off = textOffences([n.text].concat(n.why || []), st.u);
   if (off.length) { codes.push('N_TEXT'); notes.push(off.join('; ')); }
+  // v70: "Warming up. The target when you get there: …" names the target, not
+  // a next set, so it is judged on one thing only: was the set just ticked
+  // really a warm-up? On a true ramp set it is ok; on a true working set it is
+  // a working set read as a warm-up.
+  if (n.kind === 'warmup') {
+    if (st.lastDone && st.lastDone.isWork) { codes.push('N_WARMUP_WORK'); notes.push(n.text); }
+    return { codes, notes };
+  }
   const load = n.loadLb;
   if (st.bodyweight && load != null && load > 0) codes.push('N_BW');
   if (load != null && !st.bodyweight) {
@@ -194,7 +218,14 @@ export function scoreNextSet(n, st) {
       // Coach itself asked for on it — a step up on a set that fell short
       if (st.lastRepsUnderLo && st.lastDone && st.targetReps != null && st.lastDone.r < st.targetReps) codes.push('N_UNEARNED');
     }
-    if (st.lastDone && st.lastDone.isRamp && ['same', 'stop', 'down'].includes(n.kind) && load < st.trueWLb * 0.8) {
+    // v70: the number quoted has to be the ramp set's. When it is the day's
+    // own target load — he ticked a set AT the weight Coach planned, and Coach
+    // repeated the plan — that is the sentence the `target` kind says before
+    // anything is ticked, which this code never judged; the target itself was
+    // judged on its own surface. A target that sits on his warm-up weight is a
+    // low target, not a recited warm-up.
+    if (st.lastDone && st.lastDone.isRamp && ['same', 'stop', 'down'].includes(n.kind) && load < st.trueWLb * 0.8 &&
+        !(st.targetLb != null && Math.abs(load - st.targetLb) < TOL)) {
       codes.push('N_WARMUP'); notes.push(n.text);
     }
   }

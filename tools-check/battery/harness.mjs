@@ -286,7 +286,8 @@ export function runCut(C, L, k, acc) {
       if (n !== undefined) {
         const st = { doneLoadsLb: doneLoads.slice(), lastDone: { w, r, isRamp, isWork }, stoppedTruth: stopped, lastRepsUnderLo,
                      trueWLb: tRow.unit === 'kg' ? r2(tRow.W * LB_PER_KG) : tRow.W, stepLb: tr.stepLb, gridDisp: tr.gridDisp, lo: tr.lo, hi: tr.hi,
-                     bodyweight: tr.bodyweight, assisted: tr.assisted, u: L.u, hadTarget: !!(t && t.loadLb != null), straight, exposures: tr.exposures, earnedUp, lastMainLb,
+                     bodyweight: tr.bodyweight, assisted: tr.assisted, u: L.u, hadTarget: !!(t && t.loadLb != null), targetLb: t && t.loadLb != null ? t.loadLb : null,
+                     straight, exposures: tr.exposures, earnedUp, lastMainLb,
                      targetReps: t && t.sets && t.sets[si] && t.sets[si].type !== 'W' ? parseInt(t.sets[si].tr, 10) || null : null };
         note('nextSet', e.exId, scoreNextSet(n, st), { set: si, kind: n && n.kind, text: n && n.text, ticked: s.type + s.w + '×' + s.r, truth: { isWork, isRamp, stopped, W: tRow.W } });
       }
@@ -318,10 +319,14 @@ export function makeAcc() {
     tally(surface, v) { const c = this.counts[surface] || (this.counts[surface] = { ok: 0, miss: 0, wrong: 0 }); c[v]++; },
     record(r) {
       // Why it went wrong, where the harness can say: an untagged warm-up
-      // (Coach v1 has no ramp model; v2's to-do), or an answer v1 never asked.
+      // (a W the lifter never typed, on a lifter who does not tag them), or
+      // an answer v1 never asked. v70: a `shape` defer is no longer put down
+      // to the ramp — with the ramp model in, every one left is a real top
+      // load that moved more than 15% between two sessions (a coarse grid on
+      // a light lift, a bad day), which the ramp cannot explain.
       const UNTAGGED = ['N_WARMUP', 'V_OVER', 'N_FALSE_STOP', 'L_ANOTHER_DROP', 'R_RAMP', 'N_STOPPED'];
       if (r.codes.every(c => CODES[c].needsAnswer)) r.cause = 'needs-answer';
-      else if (r.tagW != null && r.tagW < 1 && (r.codes.some(c => UNTAGGED.includes(c)) || (r.codes.includes('T_DEFER') && r.code === 'shape'))) r.cause = 'untagged-warmup';
+      else if (r.tagW != null && r.tagW < 1 && r.codes.some(c => UNTAGGED.includes(c))) r.cause = 'untagged-warmup';
       else r.cause = 'engine';
       this.byCause[r.v + ':' + r.cause] = (this.byCause[r.v + ':' + r.cause] || 0) + 1;
       r.codes.forEach(c => {

@@ -51,10 +51,20 @@
 // PURE, and copied into the native tree verbatim (src/pure/coach-prog.js). No
 // reads, no DOM, no module state, and no clock: `now` is an argument. Imports
 // coach-goal.js (the dials), units.js, exercises.js (group words), coach-tags.js
-// (compound or isolation, and the movement pattern) and the session MATH of
+// (compound or isolation, and the movement pattern), coach-ramp.js (v70: which
+// of a session's sets were the warm-up, tagged or not) and the session MATH of
 // analytics.js — the merge invariant, what a working set is and the same e1rm
 // the set row prints, none of which may be restated here. coach-build.js
 // imports this; nothing imports back.
+//
+// v70, THE RAMP. A session's working sets are what coach-ramp.js workSetsOf()
+// says they are: a set typed N at the bottom of an ascending run before the
+// top, light and short the way a warm-up is, is read as one even when he never
+// typed the W. So `work` here never holds a ramp, "Last time:" never recites
+// one, and mid-session the first ticked bar set is not "the first working set"
+// — before it there is a `warmup` next-set kind that names the target and
+// nothing else. The stored type is never changed by this file: `all`, `keep`
+// and the ghosts stay as logged.
 //
 // tools-check/coach-prog.mjs is the battery: every row of the brief's table,
 // scored ok / miss / wrong, and thousands of generated histories per unit
@@ -65,6 +75,7 @@ import { wOut, wIn, fmtSetLoad, unitW, labelW, labelRate } from './units.js';
 import { GROUPS } from './exercises.js';
 import { tagsFor } from './coach-tags.js';
 import { dialsFor } from './coach-goal.js';
+import { workSetsOf, rampLoads, rampProfile } from './coach-ramp.js';
 
 const DAY = 864e5;
 
@@ -298,12 +309,18 @@ export function exposuresFor(sessions, exId) {
    least assistance is the hardest set. The top sets are the ones at T; k of
    them; R their reps. A drop set is lighter by definition and never carries
    progression. An exposure whose every working set is a drop has no top load
-   and is left out of the reading altogether. */
-function readExposure(e, u, assisted, now) {
-  const all = (Array.isArray(e.allSets) && e.allSets.length ? e.allSets : e.sets || []).map(copySet);
+   and is left out of the reading altogether.
+   v70: `work` is coach-ramp.js's split of `all` — a probable warm-up keeps its
+   stored type in `all` (so `keep` and the ghosts stay as logged) and is not in
+   `work`, which is what T, the top sets, the range, the step and every quote
+   are read from. */
+const allOf = e => (Array.isArray(e.allSets) && e.allSets.length ? e.allSets : e.sets || []);
+function readExposure(e, u, assisted, now, known) {
+  const all = allOf(e).map(copySet);
+  const working = new Set(workSetsOf(all, { assisted, known }));
   const work = [];
   all.forEach((s, i) => {
-    if (!isWorking(s) || !(repsOf(s) >= 1)) return;
+    if (!working.has(s)) return;
     work.push({ ...s, i, L: r2(wOut(parseFloat(s.w) || 0, u)), R: repsOf(s) });
   });
   const main = work.filter(s => s.type !== 'D');
@@ -315,6 +332,16 @@ function readExposure(e, u, assisted, now) {
     startedAt: e.startedAt, date: e.date, daysAgo: daysBetween(e.startedAt, now),
     all, work, top, T, k: top.length, R: top.map(s => s.R), scheme, grid: onGrid(T)
   };
+}
+
+/* v70: every exposure of a lift, read — with his ramp loads on it (coach-ramp.js
+   rampLoads: the loads he only ever warms up with, over the newest exposures)
+   handed to each read, so a 10-lb set before his 15-lb raises is the warm-up
+   it is in every session and not only in the ones where the tiers catch it. */
+function readAll(exposures, u, assisted, now) {
+  const list = Array.isArray(exposures) ? exposures : [];
+  const known = rampLoads(list.map(allOf), { assisted });
+  return list.map(e => readExposure(e, u, assisted, now, known)).filter(Boolean);
 }
 
 /* v69: the heavy gate, as one test — a read exposure whose top sets hold a
@@ -558,8 +585,7 @@ export function baselines(ex, ctx) {
     if (!ex || !Number.isFinite(c.now)) return null;
     const base = dialsFor({ aim: c.aim, exp: c.exp, energy: c.energy });
     const lift = liftOf(ex, base);
-    const X = (Array.isArray(ex.exposures) ? ex.exposures : [])
-      .map(e => readExposure(e, u, lift.assisted, c.now)).filter(Boolean);
+    const X = readAll(ex.exposures, u, lift.assisted, c.now);
     if (!X.length) return null;
     const prog = progressOf(X, c.now);
     const within = n => X.filter(e => e.daysAgo >= 0 && e.daysAgo < n).length;
@@ -574,7 +600,9 @@ export function baselines(ex, ctx) {
       tops: X.map(e => ({
         startedAt: e.startedAt, daysAgo: e.daysAgo, date: e.date, load: e.T, grid: e.grid,
         w: e.all[e.top[0].i].w,
-        sets: e.work.map(s => ({ load: s.L, reps: s.R, type: s.type, w: s.w }))
+        // v70: his rating rides along where there is one, so the record day
+        // can see a best he rated too hard (coach-overlap.js record()).
+        sets: e.work.map(s => ({ load: s.L, reps: s.R, type: s.type, w: s.w, ...(s.rir != null ? { rir: s.rir } : null) }))
       })),
       assisted: lift.assisted
     };
@@ -616,8 +644,7 @@ function decide(ex, c) {
 
   const base = dialsFor({ aim: c.aim, exp: c.exp, energy: c.energy });
   const lift = liftOf(ex, base);
-  const X = (Array.isArray(ex.exposures) ? ex.exposures : [])
-    .map(e => readExposure(e, u, lift.assisted, now)).filter(Boolean);
+  const X = readAll(ex.exposures, u, lift.assisted, now);
   const unit = unitW(u);
 
   /* ---------- the words' building blocks ----------
@@ -773,18 +800,22 @@ function decide(ex, c) {
 
   /* The sets for a target. Top sets carry it; every other set keeps last
      time's numbers — except that coming down (a reduction or a re-entry) no
-     set may be heavier than the new top set. */
+     set may be heavier than the new top set. v70: a warm-up row (typed W) is
+     never rewritten into a working weight — it is copied as logged, and one
+     heavier than the new top is dropped from the list instead of clamped. */
   const setsFor = (tw, trs, capAt) => {
     const sets = keep.slice();
+    const drop = new Set();
     if (capAt != null) {
       last.all.forEach((s, i) => {
-        if (s.w !== '' && lift.dir * (r2(wOut(parseFloat(s.w) || 0, u)) - capAt) > GRID_TOL) sets[i] = { ...sets[i], tw };
+        if (s.w === '' || !(lift.dir * (r2(wOut(parseFloat(s.w) || 0, u)) - capAt) > GRID_TOL)) return;
+        if (s.type === 'W') drop.add(i); else sets[i] = { ...sets[i], tw };
       });
     }
     last.top.forEach((s, j) => {
       sets[s.i] = { type: s.type, tw: tw != null ? tw : last.all[s.i].w, tr: String(trs[j]) };
     });
-    return sets;
+    return drop.size ? sets.filter((s, i) => !drop.has(i)) : sets;
   };
   // A load in the display unit, as stored: pounds exactly, kilos converted once.
   const store = P => (u === 'kg' ? String(wIn(P, 'kg')) : num(P));
@@ -1187,6 +1218,10 @@ export function targetFor(ex, ctx, mark) {
    ================================================================
    nextSet(ex, ctx, today) -> null | {
      kind    'target'  before the first working set today: the session's target
+             'warmup'  (v70) a warm-up ticked — typed W, or read as one by
+                       coach-ramp.js against the target's load — and nothing
+                       working yet: "Warming up. The target when you get
+                       there: …", the target's own numbers and no other
              'up'      one of this lift's own steps over the target, once a session
              'same'    the same weight again
              'down'    one step lighter, to a weight he has logged on this lift
@@ -1201,8 +1236,10 @@ export function targetFor(ex, ctx, mark) {
      ctx    prescribe()'s, plus `repDrop` — coach-live.js's REP_DROP, handed in
             by coach.js: this file never imports that one, and a second copy of
             the constant is how two rules drift
-     today  the live session's ticked working sets of this lift, in order:
-            { w, r, type, rir? }
+     today  the live session's ticked sets of this lift, in order — warm-ups
+            included since v70, so a ramp can be seen for one: { w, r, type,
+            done?, rir? }. A set with `done: false` is not read; a set with no
+            `done` key is one the caller already filtered to the ticked
 
    MID-WORKOUT IS THE MOST SENSITIVE PLACE COACH SPEAKS, so this is the
    narrowest reader in the file. Straight sets only (two or more at the
@@ -1255,28 +1292,52 @@ function nextOf(ex, c, today) {
   const m = ex.mark;
   const src = m && m.latest && Array.isArray(m.latest.exposures) ? m.latest.exposures
     : (Array.isArray(ex.exposures) ? ex.exposures : []).filter(x => !(m && m.markedAt instanceof Set && m.markedAt.has(x.startedAt)));
-  const X = src.map(e => readExposure(e, u, false, c.now)).filter(Boolean);
+  const X = readAll(src, u, false, c.now);
+  const known = rampLoads(src.map(allOf), {});
   const step = X.length ? stepOf(X, 1, lift.equipment, lift.lowerBody, u) : null;
   const S = step ? step.value : null;
   const range = X.length ? rangeOf(X, c.now, 1, lift.band) : null;
   const logged = P => X.some(e => e.work.some(s => Math.abs(s.L - P) < GRID_TOL));
   const store = P => (u === 'kg' ? String(wIn(P, 'kg')) : num(P));
 
-  const W = today.filter(s => s && isWorking(s) && parseInt(s.r, 10) >= 1)
-    .map(s => ({ w: String(s.w == null ? '' : s.w), L: L(s.w), R: parseInt(s.r, 10), type: s.type || 'N', rir: rirOf(s) }));
+  // v70: today's sets split by the ramp model, with the target's load as the
+  // top and his own ramp loads from the log beside it — so half way up a
+  // ramp, before anything at the target has been ticked, the bar set is a
+  // warm-up and not "the first working set". A ticked row typed W, and a
+  // probable warm-up, are both out of `done`.
+  const ticked = today.filter(s => s && s.done !== false && parseInt(s.r, 10) >= 1);
+  const habit = rampProfile(src, {}).stage === 'yours';
+  // His last top load on the lift, stored pounds: what a target that came
+  // down (a re-entry, a reduction) is still a step down from.
+  const lastAll = X.length ? allOf(src[src.length - 1]) : [];
+  const anchor = Math.max(0, ...lastAll.filter(s => s && s.type !== 'W' && s.type !== 'D' && parseInt(s.r, 10) >= 1).map(s => parseFloat(s.w) || 0));
+  const split = workSetsOf(ticked, { T: t.loadLb, known, R: trAt(0), habit, anchor });
+  const W = split.map(s => ({ w: String(s.w == null ? '' : s.w), L: L(s.w), R: parseInt(s.r, 10), type: s.type || 'N', rir: rirOf(s) }));
   const done = W.filter(s => s.type !== 'D');
   const res = (kind, tw, tr, why, extra) => ({
     exId: lift.exId, kind, tw: String(tw), tr: String(tr), loadLb: loadLbOf(tw), reps: tr,
     text: 'Next set: ' + shown(tw) + ' × ' + tr + '.', why, stepped: false, ...extra
   });
+  const targetLine = 'Coach’s target for this lift today: ' + t.line.replace(/^Target: /, '');
 
+  // v70: WARMING UP — a warm-up ticked (typed W, or read as one) and nothing
+  // working yet. The target is named, as the thing he is working up to, and
+  // no set is called "next": the ramp rows are already on the screen (v68).
+  const warmed = ticked.some(s => !split.includes(s));
+  if (!done.length && warmed) {
+    return res('warmup', twT, trAt(0), [targetLine],
+               { warmup: true, text: 'Warming up. The target when you get there: ' + shown(twT) + ' × ' + trAt(0) + '.' });
+  }
   // Before the first working set today: the session's target.
   if (!done.length) {
-    return res('target', twT, trAt(0), ['Coach’s target for this lift today: ' + t.line.replace(/^Target: /, '')]);
+    return res('target', twT, trAt(0), [targetLine]);
   }
   const k = done.length;
   const last = done[k - 1];
   const stepped = done.some(s => s.L > TL + GRID_TOL);
+  // v70: and no step up after a step down — a set ticked lighter than the one
+  // before it today says the session is not going up, whatever its reps.
+  const steppedDown = done.some((s, j) => j > 0 && s.L < done[j - 1].L - GRID_TOL);
 
   // STOP — any set typed F, any rated too hard, or reps down a quarter from the
   // first working set at the same or a lighter weight (REP_DROP, handed in).
@@ -1295,10 +1356,14 @@ function nextOf(ex, c, today) {
   // UP — two reps past the target at its weight, or rated way too easy at its
   // weight and reps: one step, once a session.
   const target = trAt(k - 1);
-  const earned = last.L >= TL - GRID_TOL && (last.R >= target + UP_REPS || (last.rir != null && last.rir >= 4 && last.R >= target));
+  const wouldEarn = last.L >= TL - GRID_TOL && (last.R >= target + UP_REPS || (last.rir != null && last.rir >= 4 && last.R >= target));
+  const earned = wouldEarn && !steppedDown;
   const how = last.R >= target + UP_REPS
     ? plural(last.R, 'rep') + ' at ' + shown(last.w) + ', ' + UP_REPS + ' or more past the target’s ' + target + '.'
     : 'You rated ' + shown(last.w) + ' × ' + last.R + ' way too easy.';
+  if (wouldEarn && steppedDown) {
+    return res('same', last.w, trAt(k), [how, 'Coach doesn’t step up after a step down in the same session.'], { stepped });
+  }
   if (earned && stepped) {
     return res('same', last.w, trAt(k), [how, 'Coach goes up one step in a session, and today’s is used.'], { stepped: true });
   }

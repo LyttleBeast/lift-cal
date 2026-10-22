@@ -851,13 +851,18 @@ function record(i, now) {
     });
     loads.sort((a, b2) => b2.load - a.load);
     for (const L of loads) {
-      let bestReps = 0, bestAt = null;
+      let bestReps = 0, bestAt = null, bestSet = null;
       recent.forEach(t => t.sets.forEach(s => {
         if (s.type === 'D' || Math.abs(s.load - L.load) >= TOL) return;
-        if (s.reps >= bestReps) { bestReps = s.reps; bestAt = t; }
+        if (s.reps >= bestReps) { bestReps = s.reps; bestAt = t; bestSet = s; }
       }));
       const reps = bestReps + 1;
       if (reps < RECORD_MIN_REPS) continue;
+      // v70: a best he rated too hard (rir 0, the integer — coach-prog.js
+      // rirOf()'s one test of a zero) is not a best to beat by a rep: he said
+      // that set cost everything. The same reading the live fatigue test and
+      // the next set make of the rating, here for the day it would be asked on.
+      if (bestSet && bestSet.rir === 0) continue;
       const would = e1rm(L.w, Math.min(reps, E1RM_MAX_REPS));
       if (!(would > best)) continue;
       cands.push({

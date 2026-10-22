@@ -28,7 +28,7 @@ import { stage, harness, J, setNow } from './lib/stage.mjs';
 const { check, section, done } = harness('Warm-ups count for nothing (v68)');
 const st = stage(['analytics.js', 'exercises.js', 'ui.js', 'units.js', 'coach.js', 'coach-build.js', 'coach-live.js',
   'coach-prog.js', 'coach-goal.js', 'coach-overlap.js', 'coach-ready.js', 'coach-fuel.js', 'coach-volume.js',
-  'coach-tags.js', 'blocks.js', 'friends-summary.js']);
+  'coach-tags.js', 'coach-ramp.js', 'blocks.js', 'friends-summary.js']);
 const A  = await st.load('analytics.js');
 const C  = await st.load('coach.js');
 const P  = await st.load('coach-prog.js');

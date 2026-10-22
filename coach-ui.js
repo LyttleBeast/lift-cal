@@ -1328,7 +1328,9 @@ export function openLiveSheet(opts = {}) {
         clear(afterHost);
         const n2 = v == null ? null : s2 && s2.next;
         bubble('coach', rateAnswer(v, n2, u), afterHost);
-        if (n2 && typeof opts.useNext === 'function') {
+        // v70: a `warmup` next names the target he is working up to, not the
+        // row he wants next — that row is a warm-up v68 already greyed in.
+        if (n2 && n2.kind !== 'warmup' && typeof opts.useNext === 'function') {
           const use = el('button', 'btn btn-primary btn-block', 'Use it for my next set');
           use.style.marginTop = '10px';
           use.onclick = () => { close(); opts.useNext({ exIdx: rated.exIdx, setIdx: rated.setIdx }, { tw: n2.tw, tr: n2.tr }); };

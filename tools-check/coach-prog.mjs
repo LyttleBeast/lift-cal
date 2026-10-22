@@ -53,6 +53,10 @@ const { EXERCISE_BY_ID } = await import(pathToFileURL(join(ROOT, 'exercises.js')
 /* ================= STAGING =================
    coach-prog.js against a stubbed store, through analytics.js's session math,
    exactly as coach-build.js is staged everywhere else. */
+// v70: the ramp model as staged beside today's coach-prog.js, so section D can
+// tell a history the ramp model reads differently from one it does not.
+let rampUrl = null;
+export const stagedRamp = () => import(rampUrl);
 export async function stageProg(rev) {
   const dir = mkdtempSync(join(tmpdir(), 'rack-coach-prog-'));
   // `rev` stages a past commit's coach-prog.js instead (section D: v49 must
@@ -71,6 +75,12 @@ export function todayKey(d = new Date()) {
     .replace("from './exercises.js'", 'from ' + real('exercises.js'))
     .replace("from './ui.js'", 'from ' + real('ui.js'))
     .replace("from './units.js'", 'from ' + real('units.js')));
+  // v70: coach-ramp.js, the ramp model coach-prog.js imports — staged under
+  // the name it imports it by (the temp dir is made a module package so the
+  // relative import resolves); an older revision without the import is unmoved.
+  writeFileSync(join(dir, 'package.json'), '{ "type": "module" }');
+  writeFileSync(join(dir, 'coach-ramp.js'), src('coach-ramp.js').replace("from './analytics.js'", "from './analytics.mjs'"));
+  if (!rev) rampUrl = pathToFileURL(join(dir, 'coach-ramp.js')).href;
   writeFileSync(join(dir, 'coach-prog.mjs'), prog
     .replace("from './analytics.js'", 'from ' + JSON.stringify(pathToFileURL(join(dir, 'analytics.mjs')).href))
     .replace("from './units.js'", 'from ' + real('units.js'))
@@ -432,6 +442,19 @@ if (MAIN) {
   };
   const heavier = (a, b, dir) => a != null && b != null && dir * (b - a) > 0.001;
   const clone = v => JSON.parse(JSON.stringify(v));
+  /* v70: last time's rows against a target's rows, in order. A W row the
+     target has no row for (the next target row is not a W at its weight) is
+     one setsFor dropped; everything else pairs up. */
+  const pairRows = (all, t) => {
+    const pairs = [], dropped = [];
+    let j = 0;
+    all.forEach(x => {
+      const row = t.sets[j];
+      if (x.type === 'W' && !(row && row.type === 'W' && row.tw === x.w)) { dropped.push(x); return; }
+      pairs.push([x, row]); j++;
+    });
+    return { pairs, dropped };
+  };
 
   const PER_UNIT = 2200;
   const broke = {};
@@ -459,10 +482,21 @@ if (MAIN) {
 
       const last = exposures[exposures.length - 1];
       if (!last) continue;          // never logged: a first, and nothing to vary
-      // Never a blank ghost where a weight was logged.
+      // Never a blank ghost where a weight was logged. v70: a target's rows are
+      // last time's rows less any W row heavier than a reduced top (dropped,
+      // never clamped — coach-prog.js setsFor), so the two lists are walked
+      // together: a W row with no row of its own in the target is a dropped
+      // one, and it must be heavier than the target's load on a reduce or a
+      // re-entry; every other row pairs up in order.
+      const { pairs, dropped } = pairRows(last.allSets, t);
       if (t.sets.length && last) {
-        last.allSets.forEach((x, i) => {
-          if (x.w !== '' && (!t.sets[i] || t.sets[i].tw === '')) note('ghost', h, 'set ' + i + ' logged ' + x.w + ', ghost blank');
+        pairs.forEach(([x, row], i) => {
+          if (x.w !== '' && (!row || row.tw === '')) note('ghost', h, 'set ' + i + ' logged ' + x.w + ', ghost blank');
+        });
+        dropped.forEach(x => {
+          if (!(['reduce', 'reenter'].includes(t.mode) && t.loadLb != null && dir * (lu(x.w, u) - lu(t.loadLb, u)) > 0.01)) {
+            note('ghost', h, 'W row ' + x.w + ' dropped from a ' + t.mode + ' at ' + t.loadLb);
+          }
         });
       }
       if (t.loadLb != null) {
@@ -478,7 +512,7 @@ if (MAIN) {
         if (!onGrid(P_)) note('grid', h, P_ + ' is off the grid');
         if (!onGrid(T)) note('offgrid', h, P_ + ' from an off-grid ' + T);
         if (u === 'kg') {
-          t.sets.filter((x, i) => x.tw !== last.allSets[i].w).forEach(x => {
+          pairs.filter(([x, row]) => row && row.tw !== x.w).map(([, row]) => row).forEach(x => {
             const shown = U.fmtSetW(x.tw, 'kg');
             if (!onGrid(Number(shown)) || Math.abs(Number(shown) - P_) > 0.05 || !t.line.includes(shown + ' kg')) {
               note('kilo', h, x.tw + ' prints ' + shown + ' against ' + P_ + ' in “' + t.line + '”');
@@ -608,12 +642,22 @@ if (MAIN) {
       const s = JSON.stringify(b && b.step) !== JSON.stringify(b48 && b48.step);
       return r || s || !!(t && t.range && t.range.held) || !!(t && t.mode === 'defer' && t.code === 'heavy');
     };
+    // v70 moved it again, on purpose: a probable warm-up in any exposure (the
+    // ramp model's own read, coach-ramp.js — never restated here) takes that
+    // set out of the working sets every rule reads; and a W row heavier than
+    // a reduced top is dropped from the target's rows rather than clamped.
+    const RAMP = await stagedRamp();
+    const v70Of = (t, exposures, assisted) => {
+      if (exposures.some(e => RAMP.rampOf(e.allSets, { assisted }).probable > 0)) return true;
+      const last = exposures[exposures.length - 1];
+      return !!(t && last && t.sets.length && t.sets.length !== last.allSets.length);
+    };
     const hold = (label, meta, sessions, group, ctx) => {
       const exposures = P.exposuresFor(sessions, meta.exId);
       const ex = { ...meta, exposures, groupDaysSince: group };
       const t = P.prescribe(ex, ctx);
       const b = P.baselines(ex, ctx), b48 = P48.baselines(ex, ctx);
-      const moved = v69Of(t, b, b48);
+      const moved = v69Of(t, b, b48) || v70Of(t, exposures, assistedOf(meta));
       if (moved) touched++;
       const now = JSON.stringify(t), then = JSON.stringify(P48.prescribe(ex, ctx));
       // Moved with a v69 reason: expected (rowsMoved). Moved without one: a
@@ -660,10 +704,10 @@ if (MAIN) {
         hold(u + ' seed ' + s, h.meta, h.sessions, h.group, h.ctx);
       }
     }
-    check('prescribe() is byte-identical to rack-v48’s on every battery row and swept history that no v69 rule touches (' +
+    check('prescribe() is byte-identical to rack-v48’s on every battery row and swept history that no v69 or v70 rule touches (' +
           (rows + swept - touched) + ' of ' + (rows + swept) + '; ' + rows + ' rows, ' + swept + ' histories)',
           rows >= 57 && !unfenced.length && rows + swept - touched > (rows + swept) * 0.5, list(unfenced));
-    check('v69: every target that moved from v48’s carries a v69 reason — a range or step baseline that moved, a held range, or a heavy defer (' +
+    check('v69/v70: every target that moved from v48’s carries a reason — a range or step baseline that moved, a held range, a heavy defer, a probable warm-up in the log, or a W row dropped from a reduced target (' +
           rowsMoved.length + ' moved, ' + touched + ' touched)', rowsMoved.length > 0 && touched >= rowsMoved.length);
     check('and every field baselines() already returned is too, range and step aside where v69 moved them', !basesMoved.length, list(basesMoved));
     check('v52: prescribe() and targetFor() with no mark are rack-v51’s prescribe(), byte for byte, on every untouched row and history — and each other’s everywhere',
@@ -902,10 +946,17 @@ if (MAIN) {
     // history; a moved target must carry a v69 reason.
     const diff = [], movedOk = [];
     let touched53 = 0;
+    // v70: and the ramp model's reasons (section D's v70Of) — a probable
+    // warm-up in any exposure, or a W row dropped from a reduced target's rows.
+    const RAMP = await stagedRamp();
     const same53 = (label, ex, ctx) => {
       const t = P.prescribe(ex, ctx), b = P.baselines(ex, ctx), b53 = P53.baselines(ex, ctx);
+      const last = ex.exposures[ex.exposures.length - 1];
+      const assisted = ex.exId === 'assisted-pull-up' || /assist/i.test(ex.name || '');
       const moved = JSON.stringify(b && b.range) !== JSON.stringify(b53 && b53.range) || JSON.stringify(b && b.step) !== JSON.stringify(b53 && b53.step) ||
-                    !!(t && t.range && t.range.held) || !!(t && t.mode === 'defer' && t.code === 'heavy');
+                    !!(t && t.range && t.range.held) || !!(t && t.mode === 'defer' && t.code === 'heavy') ||
+                    ex.exposures.some(e => RAMP.rampOf(e.allSets, { assisted }).probable > 0) ||
+                    !!(t && last && t.sets.length && t.sets.length !== last.allSets.length);
       if (moved) touched53++;
       if (JSON.stringify(t) !== JSON.stringify(P53.prescribe(ex, ctx))) (moved ? movedOk : diff).push(label);
     };
@@ -924,8 +975,8 @@ if (MAIN) {
       sw++;
       same53(u + ' seed ' + s, ex, h.ctx);
     }
-    check('unrated, prescribe() is rack-v53’s, byte for byte, on every row and swept history no v69 rule touches (' +
-          (cases().length + sw - touched53) + ' of ' + (cases().length + sw) + '), and every move carries a v69 reason (' + movedOk.length + ')',
+    check('unrated, prescribe() is rack-v53’s, byte for byte, on every row and swept history no v69 or v70 rule touches (' +
+          (cases().length + sw - touched53) + ' of ' + (cases().length + sw) + '), and every move carries a v69 or v70 reason (' + movedOk.length + ')',
           !diff.length && touched53 >= movedOk.length, list(diff));
     check('and an unrated set crosses exposuresFor() as the three keys it always was',
           JSON.stringify(Object.keys(P.exposuresFor(logOf(bench, [xN(1, 185, 8)]), bench.exId)[0].sets[0])) === '["w","r","type"]');
@@ -1059,6 +1110,90 @@ if (MAIN) {
           stH.b.step && stH.b.step.source === 'default' && stH.b.step.value === 5, JSON.stringify(stH.b.step));
     const stKg = ask(bench, [xN(3, kg(60), 8), xN(3, kg(67.5), 8), xN(3, kg(75), 8)], { u: 'kg' });
     check('    in kilos, 7.5-kg jumps twice on a 2.5-kg default: the default', stKg.t.step && stKg.t.step.source === 'default' && stKg.t.step.value === 2.5, JSON.stringify(stKg.t.step));
+  }
+
+  /* ================= K. v70 — THE RAMP: targets, their rows and the next set ================= */
+  section('K. v70 — the ramp model: a target never reads a ramp, its rows never clamp a warm-up, and mid-ramp the next set is the target itself');
+  {
+    const squat = metaOf('back-squat-high-bar');
+    const RAMP = [set(45, 10), set(45, 8), set(135, 5), set(135, 5), set(225, 3)];
+    // Build muscle's 6–10 band: three squat days at 3 × 10, climbing 305 → 310
+    // → 315 (the top reached, the 5-lb step seen twice: an add to 320 × 6) —
+    // and the same three with his untagged ramp in front of every one.
+    const ctx = { aim: 'muscle', exp: 'some', energy: null, rateWk: null };
+    const plain = [xN(3, 305, 10), xN(3, 310, 10), xN(3, 315, 10)];
+    const ramped = plain.map(sets => RAMP.concat(sets));
+    const taggedW = plain.map(sets => RAMP.map(s => ({ ...s, type: 'W' })).concat(sets));
+    const T = sets => run(P, { meta: squat, u: 'lb', sessions: logOf(squat, sets), ctx }).t;
+    const tP = T(plain), tR = T(ramped), tW = T(taggedW);
+    check('(a) the target reads the same lift with the ramp untagged, tagged W, or absent: 3 × 6 at 320 lb, the same line and why',
+          !!tP && tP.mode === 'add' && tP.loadLb === 320 && tP.line === 'Target: 3 × 6 at 320 lb.' && tR.line === tP.line && tW.line === tP.line &&
+          JSON.stringify(tR.why) === JSON.stringify(tP.why) && JSON.stringify(tW.why) === JSON.stringify(tP.why) &&
+          tR.loadLb === 320 && tW.loadLb === 320, [tP && tP.line, tR && tR.line, tW && tW.line].join(' | '));
+    const dShape = T([RAMP.concat(xN(3, 305, 10)), RAMP.concat(xN(3, 315, 10)), RAMP.concat([set(325, 8), set(295, 8), set(295, 8)])]);
+    const lastTime = dShape && dShape.why.find(w => /^Last time:/.test(w));
+    check('    and "Last time:" on a defer never recites the ramp: a shape defer quotes "325 lb for 8, then 2 × 8 at 295 lb", not 45, 135 or 225',
+          !!dShape && dShape.mode === 'defer' && dShape.code === 'shape' && lastTime === 'Last time: 325 lb for 8, then 2 × 8 at 295 lb.',
+          JSON.stringify(dShape && dShape.why));
+    check('    the untagged ramp rows ride into the target’s sets as logged — typed N, their own weights as ghosts — and the three working rows carry 320 × 6',
+          tR.sets.length === 8 && tR.sets.slice(0, 5).every((s, i) => s.type === 'N' && s.tw === RAMP[i].w && s.tr === RAMP[i].r) &&
+          tR.sets.slice(5).every(s => s.tw === '320' && s.tr === '6'), JSON.stringify(tR.sets));
+    check('    … and typed W they ride in typed W, untouched', tW.sets.length === 8 && tW.sets.slice(0, 5).every((s, i) => s.type === 'W' && s.tw === RAMP[i].w && s.tr === RAMP[i].r));
+
+    // (b) The next set, mid-ramp, under that 320 × 6 target.
+    const exOf = sets => { const sessions = logOf(squat, sets); const exposures = P.exposuresFor(sessions, squat.exId); return { ...squat, exposures, groupDaysSince: 3 }; };
+    const C = { now: NOW, u: 'lb', ...ctx, repDrop: 0.25 };
+    const ex = exOf(plain);
+    const live = (w, r, type, extra) => ({ w: String(w), r: String(r), type: type || 'N', done: true, ...(extra || null) });
+    const n0 = P.nextSet(ex, C, []);
+    const n1 = P.nextSet(ex, C, [live(45, 8)]);
+    check('(b) nothing ticked: the target. One N set of 45 × 8 ticked: `warmup`, with the target’s own tw and tr, and "Warming up. The target when you get there: 320 lb × 6."',
+          !!n0 && n0.kind === 'target' && n0.tw === '320' && n0.tr === '6' && !!n1 && n1.kind === 'warmup' && n1.tw === n0.tw && n1.tr === n0.tr && n1.loadLb === 320 && n1.warmup === true &&
+          n1.text === 'Warming up. The target when you get there: 320 lb × 6.' && n1.why[0] === n0.why[0] && /^Coach’s target for this lift today: /.test(n1.why[0]), JSON.stringify(n1));
+    const n3 = P.nextSet(ex, C, [live(45, 8), live(135, 5), live(225, 3)]);
+    check('    45, 135, 225 ticked: still warming up — never "Next set: 225 lb × 3"', !!n3 && n3.kind === 'warmup' && n3.loadLb === 320, JSON.stringify(n3));
+    const nW = P.nextSet(ex, C, [live(45, 8, 'W')]);
+    check('    a typed W ticked alone reads the same: `warmup`', !!nW && nW.kind === 'warmup' && nW.tw === n0.tw);
+    const nS = P.nextSet(ex, C, [live(45, 8, 'W'), live(320, 6)]);
+    check('    after [W 45 × 8, N 320 × 6]: `same` at 320 — the warm-up counts for nothing, the working set does',
+          !!nS && nS.kind === 'same' && nS.tw === '320' && nS.tr === '6', JSON.stringify(nS));
+    const nU = P.nextSet(ex, C, [live(45, 8), live(135, 5), live(225, 3), live(320, 6)]);
+    check('    after the untagged ramp and 320 × 6: `same` at 320, exactly as with the ramp typed W', !!nU && nU.kind === 'same' && nU.tw === '320' &&
+          JSON.stringify(nU) === JSON.stringify(P.nextSet(ex, C, [live(45, 8, 'W'), live(135, 5, 'W'), live(225, 3, 'W'), live(320, 6)])), JSON.stringify(nU));
+    const nUp = P.nextSet(ex, C, [live(45, 8), live(135, 5), live(225, 3), live(320, 8)]);
+    check('    …and 320 × 8 after the ramp earns the step: `up` to 325, the ramp never "a step down"', !!nUp && nUp.kind === 'up' && nUp.tw === '325', JSON.stringify(nUp));
+    const nDown = P.nextSet(ex, C, [live(320, 6), live(325, 6), live(320, 8)]);
+    check('    a step down in the session (325 then 320) and 8 reps at 320, which would have earned the step: no `up` — "Coach doesn’t step up after a step down in the same session."',
+          !!nDown && nDown.kind === 'same' && nDown.tw === '320' && nDown.why.some(w => /step up after a step down/.test(w)), JSON.stringify(nDown));
+    const nDownW = P.nextSet(ex, C, [live(320, 6), live(325, 6), live(320, 8, 'W')]);
+    check('    (a ticked W after them is not a step down — it is not a working set at all)', !!nDownW && nDownW.kind === 'same' && !nDownW.why.some(w => /step down/.test(w)), JSON.stringify(nDownW));
+    const nUn = P.nextSet(ex, C, [live(320, 8, 'N', { done: false })]);
+    check('    a row not ticked is not read: nothing done, nothing warmed — the target', !!nUn && nUn.kind === 'target');
+    const nLight = P.nextSet(ex, C, [live(45, 8), live(305, 6)]);
+    check('    a working set under the target (305 × 6 under 320, 95%) is work, not a warm-up: `same` at 305', !!nLight && nLight.kind === 'same' && nLight.tw === '305', JSON.stringify(nLight));
+
+    // (c) A reduce target's rows never carry a W row heavier than its load:
+    // his own 8–10 band (moved up at 10, started at 8, twice), then twice under
+    // 8 at 315 → back to 305, a weight he has lifted here. A 310 × 3 warm-up
+    // before the 315s is heavier than 305.
+    const climb = [xN(3, 285, 10), xN(3, 295, 8), xN(3, 295, 10), xN(3, 305, 8)];
+    const redLow = T(climb.concat([[set(285, 5, 'W'), set(315, 5), set(315, 5), set(315, 4)], [set(310, 3, 'W'), set(315, 5), set(315, 4), set(315, 4)]]));
+    const red = T(climb.concat([[set(285, 5, 'W'), set(315, 5), set(315, 5), set(315, 4)], [set(285, 5, 'W'), set(315, 5), set(315, 4), set(315, 4)]]));
+    check('(c) a reduce (two sessions under 8 at 315 → 305): the 310 × 3 warm-up is dropped from its rows, never clamped to 305; a 285 × 5 one stays as logged',
+          !!redLow && redLow.mode === 'reduce' && redLow.loadLb === 305 && !redLow.sets.some(s => s.type === 'W') && redLow.sets.length === 3 && redLow.sets.every(s => s.tw === '305') &&
+          !!red && red.mode === 'reduce' && red.loadLb === 305 && red.sets.length === 4 && red.sets[0].type === 'W' && red.sets[0].tw === '285' && red.sets[0].tr === '5',
+          [redLow && redLow.line, JSON.stringify(redLow && redLow.sets), red && red.line, JSON.stringify(red && red.sets)].join(' | '));
+    const sweepDrop = [];
+    for (const u of ['lb', 'kg']) for (let s = 1; s <= 600; s++) {
+      const h = history(s * 7919 + (u === 'kg' ? 13 : 0), u);
+      const { exposures, t } = drive(h, h.sessions);
+      if (!t || !t.sets.length || t.loadLb == null) continue;
+      const dir = assistedOf(h.meta) ? -1 : 1;
+      t.sets.forEach(x => { if (x.type === 'W' && x.tw !== '' && dir * (lu(x.tw, u) - lu(t.loadLb, u)) > 0.01 && ['reduce', 'reenter'].includes(t.mode)) sweepDrop.push(u + ' seed ' + s + ': W ' + x.tw + ' over ' + t.loadLb); });
+      const last = exposures[exposures.length - 1];
+      t.sets.forEach((x, i) => { if (x.type === 'W' && last && last.allSets.some(y => y.type === 'W' && y.w === x.tw) && x.tr !== last.allSets.find(y => y.type === 'W' && y.w === x.tw).r) sweepDrop.push(u + ' seed ' + s + ': W row rewritten'); });
+    }
+    check('    swept over 1200 histories: no reduce or re-entry carries a W row heavier than its load, and no W row is rewritten', !sweepDrop.length, list(sweepDrop));
   }
 
   console.log('\nCoach names a weight only when it is one he can load\n');

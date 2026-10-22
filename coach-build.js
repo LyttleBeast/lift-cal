@@ -59,17 +59,25 @@
 //   energy      { context, rateWk }: the weight trend, read by coach-goal.js
 //   targetsOn   whether the targets category is on. Off, no row has a target
 //
-// Imports exercises.js, units.js, blocks.js, coach-tags.js and coach-prog.js
-// (the targets), and the session MATH of analytics.js (the merge invariant and
-// what a working set is, which must not be restated here). coach.js imports
-// this; nothing imports back.
+// Imports exercises.js, units.js, blocks.js, coach-tags.js, coach-prog.js
+// (the targets), coach-ramp.js (v70: which sets were the warm-up) and the
+// session MATH of analytics.js (the merge invariant and what a working set is,
+// which must not be restated here). coach.js imports this; nothing imports back.
+//
+// v70, WARM-UPS IN A PROPOSAL. A W row is copied as he logged it — his ramp,
+// never a number Coach made up — and never rewritten: when a target comes
+// down (a reduction, a re-entry) a warm-up heavier than the new top is left
+// out of the target's rows rather than clamped to it (coach-prog.js setsFor).
+// The nudge reads the working sets as coach-ramp.js reads them, so "every
+// working set reached 5 reps" is not said over a ramp he never tagged.
 
 import { GROUPS, GROUP_ORDER } from './exercises.js';
-import { isWorking, mergeSessionExercises, dropRuns, setsText } from './analytics.js';
+import { mergeSessionExercises, dropRuns, setsText } from './analytics.js';
 import { fmtSetLoad, unitW } from './units.js';
 import { normalizeBlocks, blockOrder } from './blocks.js';
 import { tagsFor } from './coach-tags.js';
 import { exposuresFor, sessionDay, targetFor } from './coach-prog.js';
+import { workSetsOf, rampLoads } from './coach-ramp.js';
 
 /* How many alternatives "Swap one" offers. Five is a thumb's worth of chips;
    past that it is a picker, and the app already has one. */
@@ -302,8 +310,12 @@ function setsLine(sets, u) {
    it is the row's `target`, beside this note rather than inside it, written by
    coach-prog.js under a battery of its own — so this sentence keeps its voice
    check exactly as it was. */
-function nudge(sets) {
-  const working = sets.filter(isWorking);
+function nudge(sets, assisted, exposures) {
+  // v70: the working sets as the ramp model reads them — an assisted lift the
+  // way coach-prog.js liftOf() decides it, by id or by "assist" in the name,
+  // and his ramp loads from the lift's own exposures beside the shape rule.
+  const known = rampLoads((exposures || []).map(e => (Array.isArray(e.allSets) && e.allSets.length ? e.allSets : e.sets || [])), { assisted: !!assisted });
+  const working = workSetsOf(sets, { assisted: !!assisted, known });
   if (!working.length) return null;
   const failed = working.filter(s => s.type === 'F').length;
   if (failed) {
@@ -682,7 +694,10 @@ function build(i, o, top) {
      with its sets concatenated, so its target's sets are split back across
      the rows in order — only when they add up exactly, and otherwise every
      row of it keeps its placeholders rather than guess which set is whose.
-     Null when no row has a target with sets. */
+     Null when no row has a target with sets. v70: a target's rows carry his
+     W rows as logged, less any heavier than a reduced top (coach-prog.js
+     setsFor drops those, never clamps them) — so a duplicated block whose
+     target lost a W row falls back to its placeholders by the rule above. */
   const ghost = s => ({ w: '', r: '', type: s.type, done: false, tw: s.tw, tr: s.tr, ...dpOf(s) });
   const offset = new Map();
   const targetSets = laid.map((e, n) => {
@@ -749,7 +764,7 @@ function build(i, o, top) {
     layoff,
     leftOut,
     exercises: laid.map((e, n) => {
-      const said = nudge(e.sets);
+      const said = nudge(e.sets, e.exId === 'assisted-pull-up' || /assist/i.test(String(e.name || '')), exposures(e.exId));
       const note = !e.swapped ? said
         : e.source ? 'Numbers from ' + sessionWhen(e.source.daysAgo, e.source.date) + '.' + (said ? ' ' + said : '')
         : 'Not in your log yet, so there are no numbers to show.';

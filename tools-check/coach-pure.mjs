@@ -54,6 +54,12 @@ writeFileSync(join(dir, 'analytics.mjs'), src('analytics.js')
   .replace("from './exercises.js'", 'from ' + real('exercises.js'))
   .replace("from './ui.js'", 'from ' + real('ui.js'))
   .replace("from './units.js'", 'from ' + real('units.js')));
+// v70: coach-ramp.js, the ramp model every Coach module below imports — staged
+// once under the name they import it by; the temp dir is made a module package
+// so that one relative import resolves without a repoint in every chain.
+// Section O holds the file itself to this file's rules.
+writeFileSync(join(dir, 'package.json'), '{ "type": "module" }');
+writeFileSync(join(dir, 'coach-ramp.js'), src('coach-ramp.js').replace("from './analytics.js'", "from './analytics.mjs'"));
 /* coach-goal.js and coach-prog.js — v48's targets — are staged the same way:
    coach-build.js imports coach-prog.js, which takes the same session math
    through the stub, and coach-goal.js imports nothing at all. */
@@ -166,11 +172,14 @@ section('A. three imports, and the analytics one is a closed list');
   // weekly volume and balance, handed the shaped sessions from here and held
   // to the same rules in section N. coach-prog.js is still reached only
   // through the builder and the overlap (the next set: coach-overlap.js
-  // nextSetFor()).
+  // nextSetFor()). v70, deliberately added: coach-ramp.js is the eleventh —
+  // the ramp model, which says which of a session's sets were the warm-up;
+  // section O holds it to the same rules.
   const ALLOWED = ['./exercises.js', './analytics.js', './units.js', './coach-build.js', './coach-live.js',
-                   './coach-goal.js', './coach-overlap.js', './coach-ready.js', './coach-fuel.js', './coach-volume.js'];
+                   './coach-goal.js', './coach-overlap.js', './coach-ready.js', './coach-fuel.js', './coach-volume.js',
+                   './coach-ramp.js'];
   const extra = imports.map(i => i.from).filter(f => !ALLOWED.includes(f));
-  check('coach.js imports nothing outside exercises.js, analytics.js, units.js, coach-build.js, coach-live.js, coach-goal.js, coach-overlap.js, coach-ready.js, coach-fuel.js and coach-volume.js',
+  check('coach.js imports nothing outside exercises.js, analytics.js, units.js, coach-build.js, coach-live.js, coach-goal.js, coach-overlap.js, coach-ready.js, coach-fuel.js, coach-volume.js and coach-ramp.js',
         !extra.length, list(extra));
   check('and imports none of them twice',
         new Set(imports.map(i => i.from)).size === imports.length);
@@ -446,11 +455,12 @@ section('F. coach-build.js — the builder is copied byte for byte as well');
   const imports = [...BRAW.matchAll(/^import\s+(?:([^;]*?)\s+from\s+)?['"]([^'"]+)['"];?$/gm)]
     .map(m => ({ names: (m[1] || '').trim(), from: m[2] }));
   // coach-prog.js is the sixth (v48): the targets on each row are its
-  // prescribe(), and section H holds it to these same rules.
+  // prescribe(), and section H holds it to these same rules. coach-ramp.js is
+  // the seventh (v70): the nudge reads the working sets as the ramp model does.
   const ALLOWED = ['./exercises.js', './analytics.js', './units.js', './blocks.js', './coach-tags.js',
-                   './coach-prog.js'];
+                   './coach-prog.js', './coach-ramp.js'];
   const extra = imports.map(i => i.from).filter(f => !ALLOWED.includes(f));
-  check('it imports nothing outside the six pure modules it needs', !extra.length, list(extra));
+  check('it imports nothing outside the seven pure modules it needs', !extra.length, list(extra));
   check('and never coach.js — coach.js imports it, and a ring is a load order',
         !imports.some(i => i.from === './coach.js') && !/coach\.js'/.test(BCODE.replace(/coach-(build|tags)\.js'/g, '')));
   const a = imports.find(i => i.from === './analytics.js');
@@ -496,11 +506,12 @@ section('G. coach-live.js — the in-session read is copied byte for byte as wel
     .split('\n').map(l => l.replace(/(^|[^:'"\\])\/\/.*$/, '$1')).join('\n');
   const imports = [...LRAW.matchAll(/^import\s+(?:([^;]*?)\s+from\s+)?['"]([^'"]+)['"];?$/gm)]
     .map(m => ({ names: (m[1] || '').trim(), from: m[2] }));
-  const ALLOWED = ['./exercises.js', './analytics.js', './units.js'];
+  // v70: coach-ramp.js, the ramp model — a working set is what it says one is.
+  const ALLOWED = ['./exercises.js', './analytics.js', './units.js', './coach-ramp.js'];
   const extra = imports.map(i => i.from).filter(f => !ALLOWED.includes(f));
-  check('it imports nothing outside exercises.js, analytics.js and units.js', !extra.length, list(extra));
-  check('and never coach.js or coach-build.js — coach.js imports IT',
-        !imports.some(i => /coach/.test(i.from)));
+  check('it imports nothing outside exercises.js, analytics.js, units.js and coach-ramp.js', !extra.length, list(extra));
+  check('and never coach.js, coach-build.js or coach-prog.js — coach.js imports IT',
+        !imports.some(i => /coach(-build|-prog|-overlap|-volume)?\.js$/.test(i.from)));
   const a = imports.find(i => i.from === './analytics.js');
   const named = a ? a.names.replace(/[{}]/g, '').split(',').map(s => s.trim()).filter(Boolean) : [];
   /* v55, on purpose: continuesDrop — which drop set a set is in — is set math
@@ -548,9 +559,10 @@ section('H. coach-prog.js — the targets are copied byte for byte as well');
     .split('\n').map(l => l.replace(/(^|[^:'"\\])\/\/.*$/, '$1')).join('\n');
   const imports = [...PRAW.matchAll(/^import\s+(?:([^;]*?)\s+from\s+)?['"]([^'"]+)['"];?$/gm)]
     .map(m => ({ names: (m[1] || '').trim(), from: m[2] }));
-  const ALLOWED = ['./coach-goal.js', './units.js', './exercises.js', './coach-tags.js', './analytics.js'];
+  // v70: and coach-ramp.js, the ramp model (section O).
+  const ALLOWED = ['./coach-goal.js', './units.js', './exercises.js', './coach-tags.js', './analytics.js', './coach-ramp.js'];
   const extra = imports.map(i => i.from).filter(f => !ALLOWED.includes(f));
-  check('it imports nothing outside coach-goal.js, units.js, exercises.js, coach-tags.js and analytics.js',
+  check('it imports nothing outside coach-goal.js, units.js, exercises.js, coach-tags.js, analytics.js and coach-ramp.js',
         !extra.length, list(extra));
   check('and never coach.js, coach-build.js or coach-live.js — the builder imports IT',
         !imports.some(i => /coach(-build|-live)?\.js$/.test(i.from)));
@@ -834,15 +846,19 @@ section('N. coach-volume.js — the whole week is copied byte for byte as well')
     .split('\n').map(l => l.replace(/(^|[^:'"\\])\/\/.*$/, '$1')).join('\n');
   const imports = [...VRAW.matchAll(/^import\s+(?:([^;]*?)\s+from\s+)?['"]([^'"]+)['"];?$/gm)]
     .map(m => ({ names: (m[1] || '').trim(), from: m[2] }));
-  const ALLOWED = ['./exercises.js', './analytics.js', './coach-tags.js', './coach-goal.js'];
-  check('it imports exercises.js, analytics.js, coach-tags.js and coach-goal.js, and nothing else',
-        imports.every(i => ALLOWED.includes(i.from)) && imports.length === 4, list(imports.map(i => i.from)));
+  // v70: coach-ramp.js is the fifth — the hard sets are what the ramp model
+  // says the working sets are, and the disguise rule of v54 is gone.
+  const ALLOWED = ['./exercises.js', './analytics.js', './coach-tags.js', './coach-goal.js', './coach-ramp.js'];
+  check('it imports exercises.js, analytics.js, coach-tags.js, coach-goal.js and coach-ramp.js, and nothing else',
+        imports.every(i => ALLOWED.includes(i.from)) && imports.length === 5, list(imports.map(i => i.from)));
   const a = imports.find(i => i.from === './analytics.js');
   const named = a ? a.names.replace(/[{}]/g, '').split(',').map(s => s.trim()).filter(Boolean) : [];
   check('it takes only session math from analytics.js', named.length > 0 &&
         named.every(n => ['isWorking', 'mergeSessionExercises'].includes(n)), list(named));
   check('and never coach.js, coach-live.js or coach-prog.js — coach.js imports IT',
         !imports.some(i => /coach(-live|-prog|-build)?\.js$/.test(i.from)));
+  check('v70: the warm-up in disguise is gone — no DISGUISE constant, and hardSets() is coach-ramp.js’s split',
+        !/DISGUISE/.test(VCODE) && /workSetsOf\(/.test(VCODE));
   // (Its one 0.25 is the custom-exercise share, a different quarter.)
   check('REP_DROP is handed in, never restated: the rep-drop test reads the argument',
         !/\bREP_DROP\b/.test(VCODE) && /\(1 - repDrop\)/.test(VCODE) && !/\(1 - 0?\.25\)/.test(VCODE));
@@ -889,6 +905,44 @@ section('L. coach-overlap.js — quantile, blocksOf, lightOf and groupDaysAt exp
     check(n + ' is exported', new RegExp('export function ' + n + '\\(').test(NOW_SRC) && !new RegExp('export function ' + n + '\\(').test(V51));
     check('and its body is rack-v51’s, byte for byte', !!was && was === is, n);
   });
+}
+
+/* ================= O. COACH-RAMP.JS IS HELD TO THE SAME FENCE =================
+   v70's ramp model is the eleventh file the native port copies verbatim
+   (src/pure/coach-ramp.js), and the one every other Coach reader asks what a
+   working set is. It may reach analytics.js for that one word and nothing
+   else: no clock, no dice, no module state, and never a Coach module — every
+   one of them imports IT. */
+section('O. coach-ramp.js — the ramp model is copied byte for byte as well');
+{
+  const MRAW = src('coach-ramp.js');
+  const MCODE = MRAW.replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n').map(l => l.replace(/(^|[^:'"\\])\/\/.*$/, '$1')).join('\n');
+  const imports = [...MRAW.matchAll(/^import\s+(?:([^;]*?)\s+from\s+)?['"]([^'"]+)['"];?$/gm)]
+    .map(m => ({ names: (m[1] || '').trim(), from: m[2] }));
+  check('it imports analytics.js and nothing else', imports.length === 1 && imports[0].from === './analytics.js', list(imports.map(i => i.from)));
+  const a = imports.find(i => i.from === './analytics.js');
+  const named = a ? a.names.replace(/[{}]/g, '').split(',').map(s => s.trim()).filter(Boolean) : [];
+  check('and from it only isWorking — what a working set is, never restated', named.length === 1 && named[0] === 'isWorking', list(named));
+  check('never a Coach module — they import IT', !imports.some(i => /coach/.test(i.from)));
+  check('and never names store.js, reads or writes',
+        !/store\.js/.test(MCODE) && !/\bread\s*\(|\breadExact\s*\(|\bwrite\s*\(/.test(MCODE));
+  check('no Date at all — not even new Date(ms): nothing here is a day', !/\bDate\b/.test(MCODE) && !/performance\s*\.\s*now/.test(MCODE));
+  check('no Math.random()', !/Math\s*\.\s*random/.test(MCODE));
+  ['document', 'window', 'navigator', 'localStorage', 'sessionStorage', 'fetch', 'XMLHttpRequest']
+    .forEach(g => check('no ' + g, !new RegExp('\\b' + g + '\\b').test(MCODE),
+                        (MCODE.match(new RegExp('.*\\b' + g + '\\b.*')) || [''])[0].trim()));
+  check('no console, no timers', !/\bconsole\s*\./.test(MCODE) && !/\bset(Timeout|Interval)\s*\(/.test(MCODE));
+  const topLevel = MCODE.split('\n').filter(l => /^(export\s+)?(let|var)\s/.test(l));
+  check('no top-level let or var — nothing remembered between reads', !topLevel.length, list(topLevel.map(l => l.trim())));
+  check('no default export', !/export\s+default/.test(MCODE));
+  check('rampOf, workSetsOf and rampProfile are what it exports, and the engine readers import workSetsOf',
+        /export function rampOf\(sets, opts\)/.test(MRAW) && /export function workSetsOf\(sets, opts\)/.test(MRAW) &&
+        /export function rampProfile\(exposures, opts\)/.test(MRAW) &&
+        ['coach.js', 'coach-prog.js', 'coach-live.js', 'coach-volume.js', 'coach-build.js']
+          .every(f => /import \{[^}]*\bworkSetsOf\b[^}]*\} from '\.\/coach-ramp\.js'/.test(src(f))));
+  check('and it never writes to a set it is handed — no assignment through `.type`, `.w` or `.r`',
+        !/\.(type|w|r)\s*=[^=]/.test(MCODE));
 }
 
 /* ---------- report ---------- */

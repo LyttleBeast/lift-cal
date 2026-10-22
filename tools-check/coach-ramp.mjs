@@ -25,8 +25,8 @@ const of = (sets, opts) => { const r = R.rampOf(sets, opts); return { ...r, warm
 
 /* ================= A. THE CONSTANTS ================= */
 section('A. the constants are the spec’s');
-check('RAMP_LIGHT .65, RAMP_MID .85, RAMP_HEAVY .93, RAMP_MAX_SETS 6, GRID_TOL .011',
-  R.RAMP_LIGHT === 0.65 && R.RAMP_MID === 0.85 && R.RAMP_HEAVY === 0.93 && R.RAMP_MAX_SETS === 6 && R.GRID_TOL === 0.011);
+check('RAMP_LIGHT .70 (the spec’s .65, raised for the grid snap on light lifts — see the module header), RAMP_MID .85, RAMP_HEAVY .93, RAMP_MAX_SETS 6, GRID_TOL .011, RAMP_KNOWN_EXPOSURES 6',
+  R.RAMP_LIGHT === 0.70 && R.RAMP_MID === 0.85 && R.RAMP_HEAVY === 0.93 && R.RAMP_MAX_SETS === 6 && R.GRID_TOL === 0.011 && R.RAMP_KNOWN_EXPOSURES === 6);
 
 /* ================= B. MICAH'S SQUAT DAY ================= */
 section('B. his squat day: 45, 45, 135, 135, 225 up to 3 × 5 at 315');
@@ -68,9 +68,56 @@ section('C. the shapes that stay work');
   const mid = of([S(45, 8), S(225, 5), S(315, 5)], {});
   check('225 × 5 before 315 × 5: 71% at 5 reps ≤ min(5, 5) — a warm-up', mid.warm === '[0,1]', J(mid));
   const midTop3 = of([S(45, 8), S(225, 5), S(315, 3)], {});
-  check('225 × 5 before 315 × 3: more reps than the top set — work', midTop3.warm === '[0]' && midTop3.work === '[1,2]', J(midTop3));
+  check('225 × 5 before 315 × 3: a warm-up still — the middle tier’s cap is a flat five, not the top set’s reps (a heavy top has fives before it)', midTop3.warm === '[0,1]' && midTop3.work === '[2]', J(midTop3));
+  const midTop8 = of([S(45, 8), S(225, 8), S(315, 5)], {});
+  check('225 × 8 before 315 × 5: eight is past the cap — work', midTop8.warm === '[0]' && midTop8.work === '[1,2]', J(midTop8));
   const noTop = of([S(45, 10), S(135, 5), S(225, 5), S(225, 5), S(225, 5)], {});
   check('45, 135 before 3 × 5 at 225: two warm-ups, three working sets', noTop.warm === '[0,1]' && noTop.work === '[2,3,4]', J(noTop));
+
+  // The triple before a top of five or more, and the feeler before straight sets.
+  const triple = of([S(45, 8), S(135, 5), S(225, 3), S(285, 3), S(315, 5), S(315, 5), S(315, 5)], {});
+  check('285 × 3 (90%) on the way to 3 × 5 at 315 is the last rung — a triple before a top of five or more', triple.warm === '[0,1,2,3]' && triple.work === '[4,5,6]', J(triple));
+  const tripleHeavyTop = of([S(45, 8), S(135, 5), S(225, 3), S(285, 3), S(315, 3)], {});
+  check('… but 285 × 3 before 315 × 3 is work: only a day of triples makes a triple work', tripleHeavyTop.warm === '[0,1,2]' && tripleHeavyTop.work === '[3,4]', J(tripleHeavyTop));
+  const feeler = of([S(20, 8), S(25, 3), S(30, 4), S(35, 7), S(35, 5), S(35, 4), S(35, 2), S(35, 2)], {});
+  check('30 × 4 (86%) before five sets at 35: a feeler before straight sets — three warm-ups, five working', feeler.warm === '[0,1,2]' && feeler.work === '[3,4,5,6,7]', J(feeler));
+  const feelerOne = of([S(20, 8), S(25, 3), S(30, 4), S(35, 7)], {});
+  check('… the same with one set at the top: 30 × 4 at 86% with four reps is work (a ramp-to-top ends in one top set)', feelerOne.warm === '[0,1]' && feelerOne.work === '[2,3]', J(feelerOne));
+  const feelerReps = of([S(45, 8), S(50, 10), S(55, 11), S(55, 11), S(60, 11), S(60, 11)], {});
+  check('45 × 8, 50 × 10, 55 × 11, 55 × 11 before two sets of 60 × 11: a climbing working scheme, not feelers (a feeler has the top’s reps, one more at most, five at most) — and 45 × 8 at 75% is eight reps, work too', feelerReps.warm === '[]' && feelerReps.work === '[0,1,2,3,4,5]', J(feelerReps));
+  const fiveBeforeDoubles = of([S(320, 5), S(365, 2), S(365, 2)], {});
+  check('320 × 5 before two doubles at 365: work — five is more than one past two', fiveBeforeDoubles.warm === '[]' && fiveBeforeDoubles.work === '[0,1,2]', J(fiveBeforeDoubles));
+  const thirdSame = of([S(50, 5), S(50, 5), S(50, 5), S(60, 5), S(60, 5)], {});
+  check('a third set at one load before the top (50 × 5 three times under 60): work from that set on', thirdSame.warm === '[0,1]' && thirdSame.work === '[2,3,4]', J(thirdSame));
+  const doubled = of([S(45, 10), S(45, 8), S(135, 5), S(135, 5), S(225, 3), S(315, 5)], {});
+  check('… his doubled bar and first plate are still four warm-ups of five', doubled.probable === 5);
+  const rungs = of([S(45, 10), S(45, 8), S(95, 4), S(95, 4), S(135, 3), S(185, 2), S(225, 1), S(250, 1), S(315, 3), S(265, 8), S(265, 8)], {});
+  check('a heavy day’s eight-set ramp (45, 45, 95, 95, 135, 185, 225, 250 — six rungs) before 315 × 3: all eight warm-ups, the back-offs work', rungs.warm === '[0,1,2,3,4,5,6,7]' && rungs.work === '[8,9,10]', J(rungs));
+  const lightDescent = of([S(45, 8), S(35, 8), S(55, 5), S(70, 10), S(70, 10)], {});
+  check('a descent between two light sets (45 × 8 then 35 × 8 on a 70-lb curl) does not end the run: three warm-ups', lightDescent.warm === '[0,1,2]' && lightDescent.work === '[3,4]', J(lightDescent));
+  const hard = of([S(45, 10), S(135, 5, 'N', { rir: 0 }), S(225, 3), S(315, 5)], {});
+  check('a set he rated too hard (rir 0) is never a warm-up, and ends the run: 135 and everything after it is work', hard.warm === '[0]' && hard.work === '[1,2,3]', J(hard));
+  check('… rir 2 or 4 on a ramp set changes nothing', of([S(45, 10), S(135, 5, 'N', { rir: 2 }), S(225, 3), S(315, 5)], {}).warm === '[0,1,2]' && of([S(45, 10), S(135, 5, 'N', { rir: 4 }), S(225, 3), S(315, 5)], {}).warm === '[0,1,2]');
+}
+
+/* ================= C2. HIS OWN RAMP LOADS ================= */
+section('C2. rampLoads — the loads he only ever warms up with, and what they do');
+{
+  // Six raises days: 10 × 7–10 before 3 × 13 at 15, with 10 never a working load.
+  const days = [7, 9, 8, 10, 6, 8].map(r => [S(10, r), S(15, 13), S(15, 13), S(15, 12)]);
+  const known = R.rampLoads(days, {});
+  check('rampLoads over six days of 10 × n before 15: one load, 10, at the most reps he warmed up with there (10)', J(known) === J([{ w: 10, r: 10 }]), J(known));
+  check('10 × 8 before 15 × 13 is 67% and eight reps — past the light tier’s 70%? No: 67% is light, so a warm-up on its own', of([S(10, 8), S(15, 13), S(15, 13)], {}).warm === '[0]');
+  check('20 × 8 before 25 × 13 is 80% and eight reps — work by the tiers, a warm-up with 20 among his ramp loads', of([S(20, 8), S(25, 13), S(25, 13)], {}).warm === '[]' &&
+        of([S(20, 8), S(25, 13), S(25, 13)], { known: [{ w: 20, r: 8 }] }).warm === '[0]');
+  check('… up to the reps he has warmed up with there, give or take two: 20 × 10 yes, 20 × 11 no', of([S(20, 10), S(25, 13), S(25, 13)], { known: [{ w: 20, r: 8 }] }).warm === '[0]' &&
+        of([S(20, 11), S(25, 13), S(25, 13)], { known: [{ w: 20, r: 8 }] }).warm === '[]');
+  const mixed = R.rampLoads([[S(10, 8), S(15, 13), S(15, 13)], [S(10, 13), S(10, 13), S(10, 13)], [S(10, 7), S(15, 13), S(15, 13)]], {});
+  check('a load he worked at in one of the newest sessions (3 × 13 at 10) is not one of his ramp loads', J(mixed) === J([]), J(mixed));
+  check('one day is no habit: nothing known from a single session', J(R.rampLoads([[S(10, 8), S(15, 13), S(15, 13)]], {})) === '[]');
+  check('assisted, or warm: no — nothing known', J(R.rampLoads(days, { assisted: true })) === '[]' && J(R.rampLoads(days, { warm: 'no' })) === '[]');
+  check('only the newest six sessions are read: a working load seven sessions ago does not block the load', J(R.rampLoads([[S(10, 13), S(10, 13)]].concat(days), {})) === J([{ w: 10, r: 10 }]));
+  check('junk: nothing, no throw', J(R.rampLoads(null, null)) === '[]' && J(R.rampLoads([null, 3, []], {})) === '[]');
 }
 
 /* ================= D. THE ACCEPTED EDGE ================= */
@@ -115,8 +162,25 @@ section('F. the target’s load as T, mid-ramp');
   const lighter = of([S(45, 10), S(305, 5)], { T: 315 });
   check('a working set under the target (305 × 5 under 315) is work: 97% is past every tier', lighter.work === '[1]', J(lighter));
   const over = of([S(45, 10), S(325, 5)], { T: 315 });
-  check('a working set over the target is work', over.work === '[1]');
+  check('a working set over the target is work, and the top moves to it: T 325', over.work === '[1]' && over.T === 325);
+  check('the top is the heavier of the target and what he has lifted: 45, 135, 225 under a 200 target he is past read against 315 once 315 is ticked',
+        of([S(45, 10), S(135, 5), S(225, 3), S(315, 5)], { T: 200 }).warm === '[0,1,2]' && of([S(45, 10), S(135, 5), S(225, 3), S(315, 5)], { T: 200 }).T === 315);
   check('T ≤ 0 handed in falls back to the sets’ own top', of(DAY, { T: 0 }).T === 315 && of(DAY, { T: -5 }).T === 315);
+  // The plan and the log, live only.
+  const K = [{ w: 10, r: 8 }];
+  const atTarget = of([S(10, 6)], { T: 10, known: K });
+  check('a set AT the target that is one of his ramp loads (10 × 6, target 10, 10 among his ramp loads): a warm-up — the target is low, not the set', atTarget.warm === '[0]' && atTarget.work === '[]', J(atTarget));
+  check('… not in a logged session (no T handed in): there 10 is the session’s top and work', of([S(10, 6)], { known: K }).work === '[0]');
+  check('… and not at reps past what he has warmed up with there: 10 × 12 at the target is work', of([S(10, 12)], { T: 10, known: K }).work === '[0]');
+  const half = of([S(20, 8)], { T: 25, R: 17, habit: true });
+  check('under the target with fewer than half the target’s reps, on a lift he always ramps on (20 × 8 under 25 × 17): a warm-up', half.warm === '[0]', J(half));
+  check('… not without the habit, and not at half or more of the reps (20 × 9 under 17)', of([S(20, 8)], { T: 25, R: 17 }).work === '[0]' && of([S(20, 9)], { T: 25, R: 17, habit: true }).work === '[0]');
+  check('… never at the target: 315 × 2 under a 315 × 5 target is a grinding double, not a warm-up', of([S(315, 2)], { T: 315, R: 5, habit: true }).work === '[0]');
+  const anchor = of([S(150, 10)], { T: 210, anchor: 250 });
+  check('the light tier reads against his last top when the target came down: 150 × 10 under a 210 re-entry (71%) is his bar set for 250 (60%)', anchor.warm === '[0]', J(anchor));
+  check('… 210 × 5 under that target is the top and work: the anchor moves only the light tier', of([S(150, 10), S(210, 5)], { T: 210, anchor: 250 }).work === '[1]');
+  check('… and an anchor under the target changes nothing', of([S(150, 10)], { T: 210, anchor: 100 }).warm === '[]');
+  check('a triple at 90% before a five-rep plan is the last rung, live: 285 × 3 under a 315 × 5 target', of([S(285, 3)], { T: 315, R: 5 }).warm === '[0]' && of([S(285, 3)], { T: 315, R: 3 }).work === '[0]');
 }
 
 /* ================= G. DETERMINISM, KEY ORDER, KILOS ================= */
@@ -172,8 +236,8 @@ section('I. the module is pure and reaches only analytics.js');
   const imports = [...RAW.matchAll(/^import\s+(?:([^;]*?)\s+from\s+)?['"]([^'"]+)['"];?$/gm)].map(m => ({ names: (m[1] || '').trim(), from: m[2] }));
   check('one import, analytics.js, naming only isWorking', imports.length === 1 && imports[0].from === './analytics.js' && imports[0].names.replace(/[{}\s]/g, '') === 'isWorking', J(imports));
   check('no Date, no Math.random, no module-level let', !/\bDate\b/.test(CODE) && !/Math\s*\.\s*random/.test(CODE) && !CODE.split('\n').some(l => /^(export\s+)?(let|var)\s/.test(l)));
-  check('exports exactly rampOf, workSetsOf, rampProfile and the five constants',
-    J(Object.keys(R).sort()) === J(['GRID_TOL', 'RAMP_HEAVY', 'RAMP_LIGHT', 'RAMP_MAX_SETS', 'RAMP_MID', 'rampOf', 'rampProfile', 'workSetsOf']), J(Object.keys(R).sort()));
+  check('exports exactly rampOf, workSetsOf, rampProfile, rampLoads and the six constants',
+    J(Object.keys(R).sort()) === J(['GRID_TOL', 'RAMP_HEAVY', 'RAMP_KNOWN_EXPOSURES', 'RAMP_LIGHT', 'RAMP_MAX_SETS', 'RAMP_MID', 'rampLoads', 'rampOf', 'rampProfile', 'workSetsOf']), J(Object.keys(R).sort()));
 }
 
 done(st.cleanup);

@@ -31,12 +31,15 @@
 // only a lopsided split is worth saying at all. tools-check/coach-volume.mjs
 // scans every sentence for it, in both units.
 //
-// HOW A SET IS COUNTED (§6.1). A hard set is a working set (analytics.js
-// isWorking) with reps, of an exercise that is not cardio, less the warm-up in
-// disguise: a set typed N at half the session's top load or less, before the
-// first top set, with no more reps than the top set's plus two — all three
-// together, so a light high-rep working set still counts. The primary group
-// counts it whole; each secondary group (exercises.js's fourth field) half. A
+// HOW A SET IS COUNTED (§6.1). A hard set is a working set with reps, of an
+// exercise that is not cardio, as coach-ramp.js reads it (v70): a set typed N
+// that sits in an ascending run before the first top set, light and short the
+// way a warm-up is — any reps to 65% of the top, five or fewer to 85%, a
+// double or less to 93%, six sets at most — is the warm-up he never typed the
+// W on, and is not a hard set. (Until v70 the test here was "half the top load
+// or less, with no more reps than the top set's plus two", which let a 225
+// before a 315 count as volume: the battery's V_OVER, 722 of them.) The primary
+// group counts it whole; each secondary group (exercises.js's fourth field) half. A
 // custom exercise has no secondaries and no movement tag: primary only, and
 // out of the balance split, which says so — unless he has set its movement
 // (v56, coach-tags.js ownMovement()), and then the split reads it. The shipped
@@ -59,13 +62,15 @@
 // PURE, and copied into the native tree verbatim (src/pure/coach-volume.js).
 // No reads, no DOM, no module state; the clock is `now`. Imports exercises.js
 // (groups, secondaries), analytics.js's session math, coach-tags.js (movement
-// patterns and angles) and coach-goal.js (the floor each aim sets, and the
-// main lifts). coach.js imports this; nothing imports back.
+// patterns and angles), coach-goal.js (the floor each aim sets, and the
+// main lifts) and coach-ramp.js (v70: which sets were the warm-up). coach.js
+// imports this; nothing imports back.
 
 import { GROUPS, GROUP_ORDER, EXERCISE_BY_ID } from './exercises.js';
-import { isWorking, mergeSessionExercises } from './analytics.js';
+import { mergeSessionExercises } from './analytics.js';
 import { tagsFor, flyPulls } from './coach-tags.js';
 import { AIMS, volumeFloor, MAIN_LIFTS, MAIN_LIFT_AIMS, mainLiftGroups } from './coach-goal.js';
+import { workSetsOf, rampLoads } from './coach-ramp.js';
 
 const DAY = 864e5;
 
@@ -83,10 +88,6 @@ export const VERY_LOW = 4;
 // A set counts half for each group it works second (Pelland 2024's
 // fractional counting, §6.1).
 export const SECONDARY = 0.5;
-// The warm-up in disguise: half the top load or less, and the top set's reps
-// plus two at most.
-export const DISGUISE_SHARE = 0.5;
-export const DISGUISE_REPS = 2;
 // Too little: under 70% of his normal. About right: within 30% of it. More
 // than usual: 1.3× it or more. The focus group's range goes up by 30%.
 export const LITTLE_SHARE = 0.7;
@@ -163,28 +164,22 @@ const joined = xs => (xs.length > 1 ? xs.slice(0, -1).join(', ') + ' and ' + xs[
 const PAT_KEYS = Object.freeze(['push', 'pull', 'hPress', 'vPress', 'hPull', 'vPull', 'knee', 'hip']);
 const noPat = () => Object.fromEntries(PAT_KEYS.map(k => [k, 0]));
 
-/* THE HARD SETS OF ONE EXERCISE IN ONE SESSION, warm-ups in disguise out.
-   Exported for the battery, which drives the three conditions one at a time.
-   An assisted lift's load is the help, so nothing about it is a disguise. */
-export function hardSets(sets, assisted) {
-  const work = (Array.isArray(sets) ? sets : []).filter(s => s && isWorking(s) && parseInt(s.r, 10) >= 1);
-  if (assisted) return work;
-  const load = s => parseFloat(s.w) || 0;
-  const main = work.filter(s => s.type !== 'D');
-  const T = main.length ? Math.max(...main.map(load)) : 0;
-  if (!(T > 0)) return work;
-  const first = work.findIndex(s => s.type !== 'D' && load(s) >= T - 0.01);
-  const topReps = parseInt(work[first].r, 10);
-  return work.filter((s, k) => !(s.type === 'N' && k < first && load(s) <= T * DISGUISE_SHARE &&
-                                 parseInt(s.r, 10) <= topReps + DISGUISE_REPS));
+/* THE HARD SETS OF ONE EXERCISE IN ONE SESSION, the warm-up out whether he
+   typed the W or not — coach-ramp.js's split (v70). Exported for the battery.
+   An assisted lift's load is the help, so nothing about it is a ramp. */
+export function hardSets(sets, assisted, known) {
+  const work = (Array.isArray(sets) ? sets : []).filter(s => s && parseInt(s.r, 10) >= 1);
+  return workSetsOf(work, { assisted: !!assisted, known: known || [] });
 }
 
 // A rep drop in one exercise's working sets: a later set at the same or a
 // lighter load, reps down by REP_DROP or more from the first. coach.js's
 // repDrop() and coach-live.js's fatigue test, with the constant handed in.
 // v55: a drop set's sets ('D') are not read for it, as in both of those.
-function dropped(sets, repDrop) {
-  const w = (sets || []).filter(s => s && isWorking(s) && s.type !== 'D' && parseInt(s.r, 10) >= 1);
+// v70: read over the same split the hard sets are, so a 45 × 10 before the
+// top is never "the first set" a drop is measured from.
+function dropped(sets, repDrop, assisted, known) {
+  const w = hardSets(sets, assisted, known).filter(s => s.type !== 'D');
   if (w.length < 2 || !(repDrop > 0)) return false;
   const load = s => parseFloat(s.w) || 0, reps = s => parseInt(s.r, 10);
   return w.slice(1).some(s => load(s) <= load(w[0]) && reps(s) <= reps(w[0]) * (1 - repDrop));
@@ -195,7 +190,25 @@ function dropped(sets, repDrop) {
    rep drop per group; and the movement counts the balance split reads — v56,
    per primary group, so a group can be left out of one split and not the
    rest. */
-function countSession(rec, lib, repDrop) {
+const assistedOf = (ex, row) => ex.exId === 'assisted-pull-up' || /assist/i.test(String((row && row.name) || ex.name || ''));
+/* v70: his ramp loads per lift (coach-ramp.js rampLoads), over the sessions
+   the week read is handed, oldest first — so a 10-lb raise before his 15-lb
+   ones is a warm-up in every session, not only where the tiers catch it. */
+function knownOf(sessions, lib) {
+  const lists = new Map();
+  sessions.slice().sort((a, b) => (b.daysAgo - a.daysAgo) || ((a.startedAt || 0) - (b.startedAt || 0))).forEach(s => {
+    mergeSessionExercises((s.session || s).exercises).forEach(ex => {
+      if (!ex || !ex.exId) return;
+      if (!lists.has(ex.exId)) lists.set(ex.exId, { ex, lists: [] });
+      lists.get(ex.exId).lists.push(ex.sets || []);
+    });
+  });
+  const out = new Map();
+  lists.forEach(({ ex, lists: L }, id) => out.set(id, rampLoads(L, { assisted: assistedOf(ex, lib[id] || null) })));
+  return out;
+}
+
+function countSession(rec, lib, repDrop, known) {
   const out = { groups: {}, prim: {}, f: {}, drops: {}, custom: {}, pat: {}, customSets: 0 };
   mergeSessionExercises(rec && rec.exercises).forEach(ex => {
     if (!ex || !ex.exId) return;
@@ -203,15 +216,16 @@ function countSession(rec, lib, repDrop) {
     const g = (row && row.group) || ex.group;
     if (!g || !GROUPS[g]) return;
     if (((row && row.equipment) || ex.equipment) === 'cardio') return;
-    const assisted = ex.exId === 'assisted-pull-up' || /assist/i.test(String((row && row.name) || ex.name || ''));
-    const hard = hardSets(ex.sets, assisted);
+    const assisted = assistedOf(ex, row);
+    const his = (known && known.get(ex.exId)) || [];
+    const hard = hardSets(ex.sets, assisted, his);
     if (!hard.length) return;
     const n = hard.length;
     const built = EXERCISE_BY_ID[ex.exId];
     add(out.groups, g, n);
     add(out.prim, g, n);
     add(out.f, g, hard.filter(s => s.type === 'F').length);
-    if (dropped(ex.sets, repDrop)) add(out.drops, g, 1);
+    if (dropped(ex.sets, repDrop, assisted, his)) add(out.drops, g, 1);
     // v56: a custom exercise he has set a movement on is read by it — in the
     // split, and not among the customs Coach cannot place, nor in their share
     // of the group. Still its primary group only: nobody asked him about a
@@ -248,10 +262,11 @@ function weeksOf(i) {
     .filter(s => s && Number.isFinite(s.daysAgo) && s.daysAgo >= 0 && (s.session || s.exercises));
   const weeks = [];
   const at = k => weeks[k] || (weeks[k] = { n: 0, groups: {}, prim: {}, f: {}, drops: {}, custom: {}, pat: {}, customSets: 0 });
+  const known = knownOf(sessions, lib);
   sessions.forEach(s => {
     const w = at(Math.floor(s.daysAgo / 7));
     w.n++;
-    const c = countSession(s.session || s, lib, i.repDrop);
+    const c = countSession(s.session || s, lib, i.repDrop, known);
     ['groups', 'prim', 'f', 'drops', 'custom'].forEach(k => Object.keys(c[k]).forEach(g => add(w[k], g, c[k][g])));
     Object.keys(c.pat).forEach(g => { const P = w.pat[g] || (w.pat[g] = noPat()); PAT_KEYS.forEach(k => { P[k] += c.pat[g][k]; }); });
     w.customSets += c.customSets;

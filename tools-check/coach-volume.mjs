@@ -58,7 +58,7 @@ export function todayKey(d = new Date()) {
   return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
 }
 `);
-const FILES = ['analytics.js', 'coach-goal.js', 'coach-prog.js', 'coach-overlap.js', 'coach-build.js', 'coach-live.js',
+const FILES = ['analytics.js', 'coach-goal.js', 'coach-ramp.js', 'coach-prog.js', 'coach-overlap.js', 'coach-build.js', 'coach-live.js',
                'coach-ready.js', 'coach-fuel.js', 'coach-volume.js', 'coach.js'];
 FILES.forEach(f => writeFileSync(join(dir, f.replace(/\.js$/, '.mjs')), src(f)
   .replace("from './store.js'", "from './store-stub.mjs'")
@@ -70,13 +70,15 @@ const { EXERCISES } = await import(JSON.parse(real('exercises.js')));
 /* v56: rack-v55's stack too, out of git, staged the same way — the "before"
    of Micah's two answers in M. */
 const BEFORE = 'f2ba45e';
+// v70: coach-ramp.js is not in those older trees (nothing there imports it), so
+// a file a revision lacks is passed over rather than demanded of it.
+const OLD = (rev, f) => { try { return execFileSync('git', ['show', rev + ':' + f], { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }); } catch { return null; } };
 const odir = mkdtempSync(join(tmpdir(), 'rack-coach-volume-v55-'));
 const oat = f => JSON.stringify(pathToFileURL(join(odir, f)).href);
 writeFileSync(join(odir, 'store-stub.mjs'), readFileSync(join(dir, 'store-stub.mjs'), 'utf8'));
-FILES.forEach(f => writeFileSync(join(odir, f.replace(/\.js$/, '.mjs')),
-  execFileSync('git', ['show', BEFORE + ':' + f], { cwd: ROOT, encoding: 'utf8' })
-    .replace("from './store.js'", "from './store-stub.mjs'")
-    .replace(/from '\.\/([\w-]+)\.js'/g, (w, n) => 'from ' + (FILES.includes(n + '.js') ? oat(n + '.mjs') : real(n + '.js')))));
+FILES.forEach(f => { const t = OLD(BEFORE, f); if (t != null) writeFileSync(join(odir, f.replace(/\.js$/, '.mjs')),
+  t.replace("from './store.js'", "from './store-stub.mjs'")
+    .replace(/from '\.\/([\w-]+)\.js'/g, (w, n) => 'from ' + (FILES.includes(n + '.js') ? oat(n + '.mjs') : real(n + '.js')))); });
 const OC = await import(JSON.parse(oat('coach.mjs')));
 const OV = await import(JSON.parse(oat('coach-volume.mjs')));
 /* v57: rack-v56's stack (04e87cc, the ship this one starts from), staged the
@@ -85,10 +87,9 @@ const V56 = '04e87cc';
 const sdir = mkdtempSync(join(tmpdir(), 'rack-coach-volume-v56-'));
 const sat = f => JSON.stringify(pathToFileURL(join(sdir, f)).href);
 writeFileSync(join(sdir, 'store-stub.mjs'), readFileSync(join(dir, 'store-stub.mjs'), 'utf8'));
-FILES.forEach(f => writeFileSync(join(sdir, f.replace(/\.js$/, '.mjs')),
-  execFileSync('git', ['show', V56 + ':' + f], { cwd: ROOT, encoding: 'utf8' })
-    .replace("from './store.js'", "from './store-stub.mjs'")
-    .replace(/from '\.\/([\w-]+)\.js'/g, (w, n) => 'from ' + (FILES.includes(n + '.js') ? sat(n + '.mjs') : real(n + '.js')))));
+FILES.forEach(f => { const t = OLD(V56, f); if (t != null) writeFileSync(join(sdir, f.replace(/\.js$/, '.mjs')),
+  t.replace("from './store.js'", "from './store-stub.mjs'")
+    .replace(/from '\.\/([\w-]+)\.js'/g, (w, n) => 'from ' + (FILES.includes(n + '.js') ? sat(n + '.mjs') : real(n + '.js')))); });
 const SC = await import(JSON.parse(sat('coach.mjs')));
 const SV = await import(JSON.parse(sat('coach-volume.mjs')));
 
@@ -210,16 +211,26 @@ const chestWeeks = (now, was, o = {}) => weekly(9, k => [nx(o.id || 'pec-deck', 
         f8a.more.some(m => m.text === 'Core: 1 hard set in the last 7 days.'), J(f8a.more.map(m => m.text)));
 
   // --- counting ---
+  /* v70: the warm-up he never tagged is coach-ramp.js's tier rule now (its own
+     verifier, tools-check/coach-ramp.mjs, drives the rule set by set; these
+     hold what the COUNT does with it). Until v70 the test here was "half the
+     top load or less, with no more reps than the top set's plus two", and a
+     225 before a 315 counted as volume (the battery's V_OVER). */
   const hs = sets => V.hardSets(sets).length;
-  score('D1', 'a warm-up in disguise — N, 90 of a 185 top (≤ 50%), before the first top set, 5 reps (≤ top + 2) — is out',
+  score('D1', 'a warm-up he never tagged — N, 90 of a 185 top (49%), before the first top set, 5 reps — is out',
         { n: hs([S(90, 5), S(185, 5), S(185, 5), S(185, 5)]) }, { n: 3 });
-  score('D2', 'the load alone: 95 of 185 is over half — it counts', { n: hs([S(95, 5), S(185, 5), S(185, 5), S(185, 5)]) }, { n: 4 });
+  score('D2', 'the old half-the-load line is gone: 95 of 185 (51%) at 5 reps is a warm-up too, and 135 of 185 (73%) at 5 ≤ min(5, 5) as well',
+        { a: hs([S(95, 5), S(185, 5), S(185, 5), S(185, 5)]), b: hs([S(135, 5), S(185, 5), S(185, 5), S(185, 5)]) }, { a: 3, b: 3 });
+  score('D2b', 'and 45, 135 before 3 × 5 at 225 now also drop a 185 at 82% × 5 — three hard sets, not six, the accepted 85%/5-rep edge',
+        { n: hs([S(45, 10), S(135, 5), S(185, 5), S(225, 5), S(225, 5), S(225, 5)]) }, { n: 3 });
   score('D3', 'the order alone: after the first top set — it counts', { n: hs([S(185, 5), S(90, 5), S(185, 5), S(185, 5)]) }, { n: 4 });
-  score('D4', 'the reps alone: 8 against a top set of 5 (over 5 + 2) — a light working set, and it counts',
-        { n: hs([S(90, 8), S(185, 5), S(185, 5), S(185, 5)]) }, { n: 4 });
+  score('D4', 'the reps: 90 of 185 (49%) at 8 reps is still a light warm-up (any reps to 65%); 135 (73%) at 8 — more than the top’s 5 — is work',
+        { a: hs([S(90, 8), S(185, 5), S(185, 5), S(185, 5)]), b: hs([S(135, 8), S(185, 5), S(185, 5), S(185, 5)]) }, { a: 3, b: 4 });
+  score('D4b', 'a ramp-to-top working scheme at five reps past 85% — 165, 175, 185 × 5 — is three hard sets', { n: hs([S(165, 5), S(175, 5), S(185, 5)]) }, { n: 3 });
   score('D5', 'and it is the N set only: a light F set before the top is a working set', { n: hs([S(90, 5, 'F'), S(185, 5), S(185, 5)]) }, { n: 3 });
-  score('D6', 'a typed warm-up was never a working set; bodyweight has no top load to be half of',
-        { w: hs([S(90, 5, 'W'), S(185, 5)]), bw: hs([S(0, 10), S(0, 10)]) }, { w: 1, bw: 2 });
+  score('D6', 'a typed warm-up was never a working set; bodyweight has no top load to ramp to; assisted never ramps',
+        { w: hs([S(90, 5, 'W'), S(185, 5)]), bw: hs([S(0, 10), S(0, 10)]), as: V.hardSets([S(60, 5), S(100, 8), S(100, 8)], true).length }, { w: 1, bw: 2, as: 3 });
+  score('D7', 'six is the longest ramp: a seventh ascending set before the top is a hard set', { n: hs([S(45, 8), S(55, 8), S(65, 8), S(75, 5), S(85, 5), S(95, 5), S(105, 5), S(185, 5), S(185, 5)]) }, { n: 3 });
   const x1 = vol(weekly(9, () => [nx('barbell-bench-press', 4), nx('pec-deck', 3)]));
   score('X1', 'fractional: 4 bench (arms and shoulders its secondaries) and 3 pec deck — chest 7, arms 2, shoulders 2',
         { chest: row(x1, 'chest').sets, arms: row(x1, 'arms').sets, shoulders: row(x1, 'shoulders').sets }, { chest: 7, arms: 2, shoulders: 2 });
@@ -514,9 +525,12 @@ const chestWeeks = (now, was, o = {}) => weekly(9, k => [nx(o.id || 'pec-deck', 
   check('and the press split, the pull split, knees against hips and the weekly volume answer move for none of them', !other.length, list(other));
 
   /* A sweep: 300 histories of the four flyes among the lifts beside them, every
-     set type, warm-ups in disguise and all. Pushing falls, and pulling rises,
-     by the four flyes' own hard sets in the eight weeks — counted here from
-     V.hardSets(), never read off the answer — and nothing else moves. */
+     set type. Pushing falls, and pulling rises, by the four flyes' own hard
+     sets in the eight weeks — counted here from V.hardSets(), never read off
+     the answer — and nothing else moves. v70: every set at one load, because
+     the two stacks no longer agree on what a light set before the top is (the
+     ramp model's tiers against v54's half-the-load line — coach-ramp.mjs owns
+     that rule); this sweep is about the flyes' direction and nothing else. */
   {
     let seed = 57;
     const rnd = k => { seed = (seed * 1103515245 + 12345) % 2147483648; return Math.floor(seed / 65536) % k; };
@@ -532,7 +546,7 @@ const chestWeeks = (now, was, o = {}) => weekly(9, k => [nx(o.id || 'pec-deck', 
         for (let s = 0, per = 1 + rnd(3); s < per; s++) {
           const bag = POOL.slice(), ids = [];
           for (let n = 1 + rnd(6); n > 0; n--) ids.push(bag.splice(rnd(bag.length), 1)[0]);
-          const exs = ids.map(id => ex(id, Array.from({ length: 1 + rnd(5) }, () => S(rnd(4) === 0 ? 45 : 135, 3 + rnd(10), ['N', 'N', 'N', 'F', 'W', 'D'][rnd(6)]))));
+          const exs = ids.map(id => ex(id, Array.from({ length: 1 + rnd(5) }, () => S(135, 3 + rnd(10), ['N', 'N', 'N', 'F', 'W', 'D'][rnd(6)]))));
           const ago = 7 * k + rnd(7);
           if (ago < 7 * 8) exs.forEach(e => { if (PULLERS.includes(e.exId)) R += V.hardSets(e.sets).length; });
           log.push(sess(ago, exs));

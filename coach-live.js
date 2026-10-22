@@ -59,7 +59,12 @@
 // here as well — fatigueIn() reads it beside F and the rep drop, so "one more
 // set" is never said over it, target in hand or not. (Until v69 the four
 // answers learned of it only through the next set's stop, which needs a
-// target, so on a defer day the rating went unread.)
+// target, so on a defer day the rating went unread.) v70: "working set" here
+// is coach-ramp.js's word — a ramp he never typed the W on is not working sets
+// either, today or in the log, so the first working set the rep drop is read
+// against is the first set at work and never the bar (the battery's
+// L_ANOTHER_DROP: a real drop at the top, invisible behind a 45 × 10), and
+// "sets of it so far" and "n or more in k of your sessions" count the same way.
 //
 // PURE, and copied into the native tree verbatim (src/pure/coach-live.js). No
 // reads, no DOM, no clock, no module state. And it derives nothing about the
@@ -102,12 +107,13 @@
 // shapes), their working sets count together against his usual for it; two
 // different workouts are two workouts, and done stays per session.
 //
-// Imports exercises.js, units.js and the session MATH of analytics.js. coach.js
-// imports this; nothing imports back.
+// Imports exercises.js, units.js, coach-ramp.js (v70) and the session MATH of
+// analytics.js. coach.js imports this; nothing imports back.
 
 import { GROUPS, GROUP_ORDER } from './exercises.js';
 import { isWorking, mergeSessionExercises, continuesDrop, dropRuns, setsText } from './analytics.js';
 import { fmtSetLoad, unitW } from './units.js';
+import { workSetsOf, rampLoads } from './coach-ramp.js';
 
 /* Three sessions before any habit is called one. Two is a coincidence and a
    median of two is the average of a coincidence. */
@@ -173,6 +179,28 @@ const load = s => parseFloat(s && s.w) || 0;
    set can reach the log at all. */
 const loggedWorking = s => !!(s && isWorking(s) && reps(s) > 0);
 const liveWorking = s => !!(s && s.done && loggedWorking(s));
+// v70: and then the ramp model's word on them. A set that was ticked (or
+// logged) with reps in it is a candidate; coach-ramp.js says which of those
+// are the warm-up, typed or not — by their shape, and by the loads his log
+// shows he only ever warms up with on the lift (`known`, rampLoads over the
+// window's sessions). An assisted lift is decided the way coach-prog.js
+// liftOf() decides it — the id, or "assist" in the name.
+const assistedOf = (i, ex) => ex.exId === 'assisted-pull-up' || /assist/i.test(nameOf(i, ex));
+const workingOf = (i, ex, sets, known) => workSetsOf(sets.filter(s => s && reps(s) > 0), { assisted: assistedOf(i, ex), known: known.get(ex.exId) || [] });
+// His ramp loads per lift, from the window's sessions, oldest first.
+function knownOf(i) {
+  const lists = new Map();
+  (Array.isArray(i.sessions) ? i.sessions : []).filter(s => s && s.session)
+    .slice().sort((a, b) => a.startedAt - b.startedAt)
+    .forEach(s => mergeSessionExercises(s.session.exercises).forEach(ex => {
+      if (!ex || !ex.exId) return;
+      if (!lists.has(ex.exId)) lists.set(ex.exId, { ex, lists: [] });
+      lists.get(ex.exId).lists.push(ex.sets || []);
+    }));
+  const out = new Map();
+  lists.forEach(({ ex, lists: L }, id) => out.set(id, rampLoads(L, { assisted: assistedOf(i, ex) })));
+  return out;
+}
 
 /* ================================================================
    WHAT THE LIBRARY SAYS
@@ -204,14 +232,20 @@ function pickable(i, exId) {
    ticked working set in it. */
 function todayOf(i) {
   const raw = i.session && Array.isArray(i.session.exercises) ? i.session.exercises : [];
+  const known = knownOf(i);
   const entries = mergeSessionExercises(raw).filter(ex => ex && ex.exId).map(ex => {
     let last = -1;
     raw.forEach((e, k) => { if (e && e.exId === ex.exId && (e.sets || []).some(liveWorking)) last = k; });
+    // v70: `sets` are the working sets as the ramp model reads them; `ticked`
+    // every ticked set with reps, warm-ups included, which is what the next
+    // set is asked over — it reads the ramp against the target's own load.
+    const ticked = (ex.sets || []).filter(s => s && s.done && reps(s) > 0);
     return {
       exId: ex.exId, name: nameOf(i, ex), group: groupOf(i, ex), cardio: cardioOf(i, ex),
       first: raw.findIndex(e => e && e.exId === ex.exId),
       last,
-      sets: (ex.sets || []).filter(liveWorking)
+      sets: workingOf(i, ex, ticked, known),
+      ticked
     };
   });
   const worked = entries.filter(e => e.sets.length);
@@ -242,10 +276,11 @@ function todayOf(i) {
    counts toward no signature. */
 function historyOf(i) {
   const list = Array.isArray(i.sessions) ? i.sessions : [];
+  const known = knownOf(i);
   return list.filter(s => s && s.session).map(s => {
     const order = mergeSessionExercises(s.session.exercises).filter(ex => ex && ex.exId).map(ex => ({
       exId: ex.exId, name: nameOf(i, ex), group: groupOf(i, ex), cardio: cardioOf(i, ex),
-      sets: (ex.sets || []).filter(loggedWorking)
+      sets: workingOf(i, ex, ex.sets || [], known)
     })).filter(ex => ex.sets.length);
     const groupSets = {};
     order.forEach(ex => { if (!ex.cardio && ex.group) groupSets[ex.group] = (groupSets[ex.group] || 0) + ex.sets.length; });
@@ -643,7 +678,7 @@ export function setRead(input) {
       cur = k === -1 ? null : t.entries.find(e => e.exId === raw[k].exId) || null;
     }
     if (!cur) return { rated: null, next: null };
-    const rated = ratedOf(raw, cur.exId);
+    const rated = ratedOf(i, raw, cur.exId);
     let next = null;
     if (!cur.cardio && typeof i.nextSet === 'function') {
       const history = historyOf(i);
@@ -656,12 +691,15 @@ export function setRead(input) {
   }
 }
 
-// The next set for one of today's entries, asked once a read.
+// The next set for one of today's entries, asked once a read. v70: asked over
+// every ticked set with reps, warm-ups and all (`ticked`), because nextSet()
+// reads the ramp against the target's load and says "warming up" before the
+// first working set — a thing it cannot see from the working sets alone.
 function nextOf(i, e) {
   if (!e || e.cardio || typeof i.nextSet !== 'function') return null;
   if (!('next' in e)) {
     let n = null;
-    try { n = i.nextSet(e.exId, e.sets.slice()) || null; } catch { n = null; }
+    try { n = i.nextSet(e.exId, (e.ticked || e.sets).slice()) || null; } catch { n = null; }
     e.next = n;
   }
   return e.next;
@@ -673,12 +711,20 @@ function nextOf(i, e) {
 // drop set (analytics.js continuesDrop): a drop is a working set for every
 // count, but no reader of a rating reads one, and "How was it?" of the last
 // strip of a drop set asks about a part of it.
-function ratedOf(raw, exId) {
-  let at = null;
+// v70: and never a warm-up the ramp model reads as one — the chips are for the
+// set that counted, and a rating on a bar set would make it "the first working
+// set" every drop after it is measured against. The split is read over the
+// exercise's ticked sets in screen order, the way todayOf() reads them.
+function ratedOf(i, raw, exId) {
+  const ticked = [];
   raw.forEach((e, k) => {
     if (!e || e.exId !== exId) return;
-    (e.sets || []).forEach((s, j) => { if (liveWorking(s) && !continuesDrop(e.sets, j)) at = { exIdx: k, setIdx: j, s }; });
+    (e.sets || []).forEach((s, j) => { if (liveWorking(s)) ticked.push({ exIdx: k, setIdx: j, s, drop: continuesDrop(e.sets, j) }); });
   });
+  const ex = raw.find(e => e && e.exId === exId) || { exId };
+  const working = new Set(workingOf(i, ex, ticked.map(t => t.s), knownOf(i)));
+  let at = null;
+  ticked.forEach(t => { if (working.has(t.s) && !t.drop) at = t; });
   if (!at) return null;
   return { exIdx: at.exIdx, setIdx: at.setIdx, n: at.setIdx + 1, exId,
            w: at.s.w == null ? '' : String(at.s.w), r: reps(at.s), rir: at.s.rir == null ? null : at.s.rir };
@@ -718,6 +764,9 @@ export function rateAnswer(rir, next, u) {
   const open = OPENER[rir] || 'Noted.';
   if (!next) return open + ' Saved with the set.';
   const load = loadSaid(next.tw, unit);
+  // v70: rated mid-ramp — the target is named as what he is working up to,
+  // never as "the same again" of a warm-up.
+  if (next.kind === 'warmup') return open + ' ' + String(next.text);
   if (next.kind === 'stop') return open + ' Stay at ' + load + ', or call that the last set of this one.';
   if (next.kind === 'up' || next.kind === 'down') return open + ' Next one: ' + load + ' × ' + next.tr + '.';
   if (next.stepped && rir >= 4) return 'Good. Stay at ' + load + ' for the next one.';

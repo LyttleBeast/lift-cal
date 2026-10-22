@@ -174,7 +174,7 @@ writeFileSync(join(cdir, 'store-stub.mjs'), `
 export async function read(_p, fallback) { return fallback; }
 export function todayKey(d = new Date()) { const p = n => String(n).padStart(2, '0'); return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()); }
 `);
-const FILES = ['analytics.js', 'coach-goal.js', 'coach-prog.js', 'coach-overlap.js', 'coach-build.js', 'coach-live.js',
+const FILES = ['analytics.js', 'coach-goal.js', 'coach-ramp.js', 'coach-prog.js', 'coach-overlap.js', 'coach-build.js', 'coach-live.js',
                'coach-ready.js', 'coach-fuel.js', 'coach-volume.js', 'coach.js'];
 FILES.forEach(f => writeFileSync(join(cdir, f.replace(/\.js$/, '.mjs')), src(f)
   .replace("from './store.js'", "from './store-stub.mjs'")

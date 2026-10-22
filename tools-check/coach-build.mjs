@@ -58,6 +58,11 @@ writeFileSync(join(dir, 'analytics.mjs'), src('analytics.js')
   .replace("from './exercises.js'", 'from ' + real('exercises.js'))
   .replace("from './ui.js'", 'from ' + real('ui.js'))
   .replace("from './units.js'", 'from ' + real('units.js')));
+// v70: coach-ramp.js, the ramp model every Coach module below imports — staged
+// once under the name they import it by; the temp dir is made a module package
+// so that one relative import resolves without a repoint in every chain.
+writeFileSync(join(dir, 'package.json'), '{ "type": "module" }');
+writeFileSync(join(dir, 'coach-ramp.js'), src('coach-ramp.js').replace("from './analytics.js'", "from './analytics.mjs'"));
 /* coach-goal.js and coach-prog.js — v48's targets — are staged the same way:
    coach-build.js imports coach-prog.js, which takes the same session math
    through the stub, and coach-goal.js imports nothing at all. */

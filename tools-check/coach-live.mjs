@@ -55,6 +55,11 @@ writeFileSync(join(dir, 'analytics.mjs'), src('analytics.js')
   .replace("from './exercises.js'", 'from ' + real('exercises.js'))
   .replace("from './ui.js'", 'from ' + real('ui.js'))
   .replace("from './units.js'", 'from ' + real('units.js')));
+// v70: coach-ramp.js, the ramp model every Coach module below imports — staged
+// once under the name they import it by; the temp dir is made a module package
+// so that one relative import resolves without a repoint in every chain.
+writeFileSync(join(dir, 'package.json'), '{ "type": "module" }');
+writeFileSync(join(dir, 'coach-ramp.js'), src('coach-ramp.js').replace("from './analytics.js'", "from './analytics.mjs'"));
 /* coach-goal.js and coach-prog.js — v48's targets — are staged the same way:
    coach-build.js imports coach-prog.js, which takes the same session math
    through the stub, and coach-goal.js imports nothing at all. */
@@ -777,7 +782,11 @@ section('H. v54 — the next set (spec §3.10 with his rating), each rule by nam
   check('the last ticked working set of the exercise in hand, across a duplicated block: the second copy’s set 1',
         rd && rd.rated && rd.rated.exIdx === 2 && rd.rated.setIdx === 0 && rd.rated.n === 1 && rd.rated.rir === 2, J(rd && rd.rated));
   const warm = nextOf(FL, sess(FL, B, [[95, 10, { type: 'W' }]]));
-  check('a warm-up is not a working set: nothing to rate yet, and the target stands', warm && warm.rated === null && warm.next && warm.next.kind === 'target');
+  const bare = nextOf(FL, sess(FL, B, []));
+  check('a warm-up is not a working set: nothing to rate yet — and v70 says so: the next set is `warmup`, the target’s own numbers',
+        warm && warm.rated === null && warm.next && warm.next.kind === 'warmup' && bare && bare.next && bare.next.kind === 'target' &&
+        warm.next.tw === bare.next.tw && warm.next.tr === bare.next.tr && /^Warming up\. The target when you get there: /.test(warm.next.text),
+        J(warm && warm.next));
   check('"Set 3 · 190 lb × 8. How was it?" — in kilos "Set 1 · 87.5 kg × 8.", at bodyweight "bodyweight × 10"',
         L.rateAsk({ n: 3, w: '190', r: 8 }, 'lb') === 'Set 3 · 190 lb × 8. How was it?' &&
         L.rateAsk({ n: 1, w: String(U.wIn(87.5, 'kg')), r: 8 }, 'kg') === 'Set 1 · 87.5 kg × 8. How was it?' &&
@@ -928,6 +937,45 @@ section('I. v54 — a second session on the same day: what he trained this morni
   const rrOne = R.restRead(C.readyInput({ ...day2, sessions: HISTORY.concat([{ ...morning(chestAm.concat([logged('pushdown', 3), logged('curl', 3)])) }]).sort((a, b) => a.startedAt - b.startedAt) }), NOW);
   check('and a group’s day is the same whether its sets came in one visit or two — the chest day’s count, the arms day’s count',
         !!rrOne && ['chest', 'arms'].every(g => rrOne.groups[g].since === rr.groups[g].since && rrOne.groups[g].big === rr.groups[g].big));
+}
+
+/* ================= J. v70 — THE RAMP: the first working set is the first set at work ================= */
+section('J. v70 — an untagged ramp is not working sets: fatigue, the counts and the chips read the split');
+{
+  // A squat day he never tagged: 45 × 8, 135 × 5, 225 × 3, then 315 × 5 and
+  // 315 × 3. Until v70 the rep drop was measured against the 45 × 8 — a heavier
+  // set is never "a drop" — so the real drop at the top was invisible.
+  const ramp = [[45, 8], [135, 5], [225, 3]];
+  const dropDay = live([['squat', ramp.concat([[315, 5], [315, 3]])], ['rdl', [[205, 8], [205, 8], [205, 5, 'F']]]]);
+  const a = read(dropDay, {}, { current: 0 });
+  check('fatigueIn reads the drop 5 → 3 at 315: with the RDL’s F beside it the session is "done", and the squat’s reason is the drop at the top',
+        !!a && a.kind === 'done' && a.why.some(t => /Back Squat \(High Bar\): reps from 5 to 3 at the same or a lighter weight/.test(t)), J(a && a.why));
+  const tagged = live([['squat', ramp.map(([w, r]) => [w, r, 'W']).concat([[315, 5], [315, 3]])], ['rdl', [[205, 8], [205, 8], [205, 5, 'F']]]]);
+  check('… the same with the ramp typed W, word for word', J(read(tagged, {}, { current: 0 })) === J(a));
+  const noRamp = live([['squat', [[315, 5], [315, 3]]], ['rdl', [[205, 8], [205, 8], [205, 5, 'F']]]]);
+  check('… and the same with no ramp at all', J(read(noRamp, {}, { current: 0 })) === J(a));
+  // Two working sets after the ramp, no drop: "one more set" counts the two.
+  const two = live([['squat', ramp.concat([[315, 5], [315, 5]])]]);
+  const b = read(two, {}, { current: 0 });
+  check('anotherRead counts 2 working sets, not 5: "2 working sets of Back Squat (High Bar) so far this session — warm-ups are not counted."',
+        !!b && b.kind === 'another' && /3 or more in 10 of your 10 sessions/.test(b.text) && b.why[0] === '2 working sets of Back Squat (High Bar) so far this session — warm-ups are not counted.', J(b));
+  const alone = read(live([['squat', ramp]]), {}, { current: 0 });
+  check('the ramp alone ticked, nothing at the top yet: the heaviest set so far reads as the one working set (spec §10 #3 — harmless, no number comes of it) and "one more" is in line',
+        !!alone && alone.kind === 'another' && /^1 working set of/.test(alone.why[0]), J(alone));
+  // The chips rate the set that counted, never a warm-up.
+  const s = C.coach(input()).liveSet(live([['squat', ramp.concat([[315, 5]])]]), { current: 0 });
+  check('the set the chips rate is the 315 × 5, not the 225 × 3 before it', !!s && !!s.rated && s.rated.w === '315' && s.rated.n === 4, J(s && s.rated));
+  // His log, counted the same way: a history of untagged ramps teaches the
+  // same "usual" as one of tagged ones.
+  const rampHist = HISTORY.map(x => ({ ...x, exercises: x.exercises.map(e => (e.exId === 'squat'
+    ? { ...e, sets: [{ w: '45', r: '8', type: 'N', done: true }, { w: '135', r: '5', type: 'N', done: true }].concat(e.sets) } : e)) }));
+  const c = read(two, { sessions: rampHist }, { current: 0 });
+  check('a log of untagged squat ramps counts 4 working sets a session, as a tagged one does: the same "one more set" answer', J(c) === J(b), J(c));
+  // A set he rated too hard is never read as a warm-up: the stop stands.
+  const hard = live([['squat', [[135, 5, 'N'], [315, 5], [315, 5]]]]);
+  hard.exercises[0].sets[0].rir = 0;
+  const h = read(hard, {}, { current: 0 });
+  check('a light set he rated too hard is not a warm-up — "one more set" is never said over it', !!h && h.kind !== 'another', J(h && h.kind));
 }
 
 /* ---------- report ---------- */

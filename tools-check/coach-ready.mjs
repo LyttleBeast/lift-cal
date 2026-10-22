@@ -43,7 +43,7 @@ const real = p => JSON.stringify(pathToFileURL(join(ROOT, p)).href);
    against, each with every Coach module and the same stubbed store. */
 // v54: coach-volume.js too (coach.js imports it); a past commit without it
 // stages without it, as it always has for a file that was not there yet.
-const COACH_FILES = ['analytics.js', 'coach-goal.js', 'coach-prog.js', 'coach-overlap.js', 'coach-build.js',
+const COACH_FILES = ['analytics.js', 'coach-goal.js', 'coach-ramp.js', 'coach-prog.js', 'coach-overlap.js', 'coach-build.js',
                      'coach-live.js', 'coach-ready.js', 'coach-fuel.js', 'coach-volume.js', 'coach.js'];
 async function stageTree(rev) {
   const dir = mkdtempSync(join(tmpdir(), 'rack-coach-ready-'));

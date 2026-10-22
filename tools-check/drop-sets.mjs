@@ -100,21 +100,26 @@ export function todayKey(d = new Date()) {
   return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
 }
 `;
-const FILES = ['analytics.js', 'coach-goal.js', 'coach-prog.js', 'coach-overlap.js', 'coach-build.js', 'coach-live.js',
+// v70: coach-ramp.js is in the list; rack-v55's tree has no such file, so a
+// file the older revision lacks is simply not staged (nothing there imports it).
+const FILES = ['analytics.js', 'coach-goal.js', 'coach-ramp.js', 'coach-prog.js', 'coach-overlap.js', 'coach-build.js', 'coach-live.js',
                'coach-ready.js', 'coach-fuel.js', 'coach-volume.js', 'coach.js'];
 async function stage(tag, read) {
   const dir = mkdtempSync(join(tmpdir(), 'rack-drops-' + tag + '-'));
   const at = f => JSON.stringify(pathToFileURL(join(dir, f)).href);
   writeFileSync(join(dir, 'store-stub.mjs'), STORE);
-  FILES.forEach(f => writeFileSync(join(dir, f.replace(/\.js$/, '.mjs')), read(f)
+  const texts = new Map();
+  FILES.forEach(f => { try { texts.set(f, read(f)); } catch { /* not in this revision */ } });
+  texts.forEach((text, f) => writeFileSync(join(dir, f.replace(/\.js$/, '.mjs')), text
     .replace("from './store.js'", "from './store-stub.mjs'")
-    .replace(/from '\.\/([\w-]+)\.js'/g, (w, n) => 'from ' + (FILES.includes(n + '.js') ? at(n + '.mjs') : real(n + '.js')))));
+    .replace(/from '\.\/([\w-]+)\.js'/g, (w, n) => 'from ' + (texts.has(n + '.js') ? at(n + '.mjs') : real(n + '.js')))));
   const get = f => import(JSON.parse(at(f)));
   return { A: await get('analytics.mjs'), C: await get('coach.mjs'), P: await get('coach-prog.mjs'), L: await get('coach-live.mjs'),
-           V: await get('coach-volume.mjs'), O: await get('coach-overlap.mjs') };
+           V: await get('coach-volume.mjs'), O: await get('coach-overlap.mjs'),
+           R: texts.has('coach-ramp.js') ? await get('coach-ramp.mjs') : null };
 }
 const NEW = await stage('now', src);
-const OLD = await stage('v54', f => execFileSync('git', ['show', BEFORE + ':' + f], { cwd: ROOT, encoding: 'utf8' }));
+const OLD = await stage('v54', f => execFileSync('git', ['show', BEFORE + ':' + f], { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }));
 const A = NEW.A;
 const UI = await import(JSON.parse(real('ui.js')));
 const U = await import(JSON.parse(real('units.js')));
@@ -598,13 +603,17 @@ section('F2. the one read that was wrong: a drop set’s falling reps read as fa
   // A sweep: logs with no drop set in them read the same in both, every read above.
   let seed = 7;
   const rnd = () => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; };
-  let same = 0, diff = [], gaps = 0;
+  let same = 0, diff = [], gaps = 0, ramps = 0;
   for (let n = 0; n < 60; n++) {
     const sessions = Array.from({ length: 6 + Math.floor(rnd() * 8) }, (_, k) => {
       const ago = 2 + k * (2 + Math.floor(rnd() * 4));
       const t = new Date(NOW - ago * DAY); t.setHours(18, 0, 0, 0);
-      const mk = id => exOf(id, Array.from({ length: 2 + Math.floor(rnd() * 4) }, (_, j) =>
-        S2(Math.round((100 + rnd() * 100) / 5) * 5, 3 + Math.floor(rnd() * 10), j === 0 && rnd() < 0.2 ? 'W' : rnd() < 0.15 ? 'F' : 'N')));
+      // v70: one load per exercise per session. With a load drawn per set, a
+      // lighter set before a heavier one is the warm-up he never tagged to the
+      // ramp model and work to v54, and the two stacks are meant to differ on
+      // it (coach-ramp.mjs owns that rule); this sweep is about drop sets.
+      const mk = id => { const L = Math.round((100 + rnd() * 100) / 5) * 5; return exOf(id, Array.from({ length: 2 + Math.floor(rnd() * 4) }, (_, j) =>
+        S2(L, 3 + Math.floor(rnd() * 10), j === 0 && rnd() < 0.2 ? 'W' : rnd() < 0.15 ? 'F' : 'N'))); };
       return { id: 'x' + n + '_' + k, startedAt: t.getTime(), _date: key(t.getTime()), exercises: [mk(BENCH), mk(PEC)].slice(0, 1 + Math.floor(rnd() * 2)) };
     });
     const i = vin(sessions);
@@ -615,13 +624,21 @@ section('F2. the one read that was wrong: a drop set’s falling reps read as fa
     const agos = sessions.map(s => Math.round((NOW - s.startedAt) / DAY)).sort((x, y) => y - x);
     const gapped = agos.some((ago, k) => k > 0 && agos[k - 1] - ago > 21);
     if (gapped) gaps++;
+    // v70: a log the ramp model reads differently — a light set before the top
+    // that v54 counted as work and the ramp model reads as the warm-up he never
+    // tagged — is a log v70 meant to move, every read above (the volume read,
+    // the rep drops, the record day's first working set). Those are left out;
+    // the rest must still agree, and most of them must be the rest. The ramp
+    // model's own read says which (coach-ramp.js, never restated here).
+    const ramped = sessions.some(s => s.exercises.some(e => NEW.R.rampOf(e.sets, {}).probable > 0));
+    if (ramped) { ramps++; continue; }
     const a = J([OLD.V.volumeRead(OLD.C.volumeInput(i)), OLD.C.overlapInput(i).shaped.map(x => x.ldrop), gapped ? null : day(OLD, i)]);
     const b = J([NEW.V.volumeRead(NEW.C.volumeInput(i)), NEW.C.overlapInput(i).shaped.map(x => x.ldrop), gapped ? null : day(NEW, i)]);
     if (a === b) same++; else diff.push(n);
   }
-  check('60 generated logs with no drop set: the volume read, the rep drops and the record day are rack-v54’s exactly (' + same + ' of 60; ' +
-        gaps + ' with a three-week gap, where v69 reads the record day since the gap and it is left out)',
-        same === 60 && gaps < 10, diff.join(', '));
+  check('60 generated logs with no drop set: the volume read, the rep drops and the record day are rack-v54’s exactly on every log the ramp model leaves alone (' + same + ' of ' + (60 - ramps) + '; ' +
+        gaps + ' with a three-week gap, where v69 reads the record day since the gap and it is left out; ' + ramps + ' with an untagged ramp, which v70 reads on purpose)',
+        same === 60 - ramps && same >= 20 && gaps < 10, diff.join(', '));
 }
 
 section('F3. the live chips rate a drop set on the set he changed, never on a drop');

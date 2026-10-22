@@ -43,7 +43,9 @@
 // reached through the builder). And (v52) coach-ready.js, the rest read and
 // readiness — the training half of stage four, food-blind by construction —
 // and coach-fuel.js, "Am I fueled?" and the food rows, the food half. The two
-// never see each other: their rows are merged here. Nothing imports back.
+// never see each other: their rows are merged here. And (v70) coach-ramp.js,
+// whose one word — which of a session's sets were the warm-up, typed W or
+// not — is what every "working set" counted here means. Nothing imports back.
 
 import { GROUPS, GROUP_ORDER } from './exercises.js';
 import { e1rm, isWorking, mergeSessionExercises, exerciseIndex, detectPRs, sessionMilestones, normFeel } from './analytics.js';
@@ -58,8 +60,17 @@ import { restRead, usualRun, replay, readinessRows, readinessHas, readinessAnswe
 import { fueledRead, fuelAnswer, fedUnloggedAnswer, fedNoneAnswer, fuelRow, sessionFoodRows, fuelDates, logStyle } from './coach-fuel.js';
 // v54: stage five's whole week — weekly volume, neglect and balance.
 import { volumeRead, volumeAnswer, balanceRead, balanceAnswer } from './coach-volume.js';
+// v70: the ramp model — a session's working sets, the warm-up out whether he typed the W or not.
+import { workSetsOf, rampLoads } from './coach-ramp.js';
 
 const DAY = 864e5;
+
+/* v70: an assisted lift, decided the one way coach-prog.js liftOf() decides it
+   — the id, or "assist" in the name — because on one the load is the help and
+   nothing about its sets is a ramp. The merged library's name wins, the
+   record's stands in for an id that no longer resolves. */
+const assistedOf = (ex, lib) => String(ex && ex.exId) === 'assisted-pull-up' ||
+  /assist/i.test(String((lib && lib[ex.exId] && lib[ex.exId].name) || (ex && ex.name) || ''));
 
 /* The window every recurring-shape, median-gap and trailing-normal derivation
    below reads. Twelve weeks: long enough that a four-week block and a week off
@@ -359,6 +370,24 @@ function derive(input) {
   const groupOf = ex => (lib[ex.exId] && lib[ex.exId].group) || ex.group || null;
   const equipOf = ex => (lib[ex.exId] && lib[ex.exId].equipment) || ex.equipment || null;
 
+  /* v70: his ramp loads per lift (coach-ramp.js rampLoads) over the whole log,
+     oldest first — the loads he only ever warms up with — so every working-set
+     count below reads a 10-lb raise before his 15-lb ones as the warm-up it is. */
+  const ramps = () => once('ramps', () => {
+    const lists = new Map();
+    sessions.filter(s => s && Number.isFinite(s.startedAt)).slice().sort((a, b) => a.startedAt - b.startedAt).forEach(s => {
+      mergeSessionExercises(s.exercises).forEach(ex => {
+        if (!ex || !ex.exId) return;
+        if (!lists.has(ex.exId)) lists.set(ex.exId, { ex, lists: [] });
+        lists.get(ex.exId).lists.push(ex.sets || []);
+      });
+    });
+    const out = new Map();
+    lists.forEach(({ ex, lists: L }, id) => out.set(id, rampLoads(L, { assisted: assistedOf(ex, lib) })));
+    return out;
+  });
+  const knownOf = ex => ramps().get(ex.exId) || [];
+
   /* One session, reduced to what every rule below actually asks of it. */
   function shapeSession(s) {
     const rows = mergeSessionExercises(s.exercises).filter(ex => ex && ex.exId);
@@ -376,16 +405,21 @@ function derive(input) {
     rows.forEach(ex => {
       const g = groupOf(ex);
       if (!g || !GROUPS[g]) return;
-      const n = (ex.sets || []).filter(isWorking).length;
+      // v70: the working sets as the ramp model reads them — a ramp he never
+      // typed the W on is not two leg sets. (A set with no reps was a working
+      // set to the old count and is not one to this; the signature, the hard
+      // sets and the rep drop all follow.)
+      const work = workSetsOf(ex.sets || [], { assisted: assistedOf(ex, lib), known: knownOf(ex) });
+      const n = work.length;
       if (!n) return;
       sets[g] = (sets[g] || 0) + n;
-      const nf = (ex.sets || []).filter(x => isWorking(x) && x.type === 'F').length;
+      const nf = work.filter(x => x.type === 'F').length;
       if (nf) fsets[g] = (fsets[g] || 0) + nf;
       if (n >= 2 && equipOf(ex) !== 'cardio') sig.add(g);
       if (equipOf(ex) !== 'cardio') {
         lsets[g] = (lsets[g] || 0) + n;
         if (nf) lfsets[g] = (lfsets[g] || 0) + nf;
-        if (repDrop(ex.sets)) ldrop[g] = (ldrop[g] || 0) + 1;
+        if (repDrop(work)) ldrop[g] = (ldrop[g] || 0) + 1;
       }
     });
     return {
@@ -669,7 +703,7 @@ function derive(input) {
     all, inWindow, shapes, groupDays, groupGap,
     setsThisWeek, setsTrailing, sessionsIn, sessionGap, index,
     pDays, pSessions, trainedDays, pLift, lifts,
-    groupOf, equipOf,
+    groupOf, equipOf, knownOf,
     marks, markOf, idOf, perf, stalestOf, overdue
   };
 }
@@ -710,10 +744,11 @@ function sides(a, b) {
 // cannot land it two days back.
 const prevDay = k => dayKey(new Date(k + 'T12:00:00').getTime() - DAY);
 // A session's working sets, cardio left out: what a session holds, counted the
-// way every set count in this file is — isWorking, warm-ups excluded.
+// way every set count in this file is — warm-ups excluded, typed or (v70) read
+// as one by the ramp model.
 function workingSets(d, s) {
   return mergeSessionExercises((s.session && s.session.exercises) || []).reduce((a, ex) =>
-    (!ex || d.equipOf(ex) === 'cardio') ? a : a + (ex.sets || []).filter(isWorking).length, 0);
+    (!ex || d.equipOf(ex) === 'cardio') ? a : a + workSetsOf(ex.sets || [], { assisted: assistedOf(ex, d.input.lib), known: d.knownOf(ex) }).length, 0);
 }
 
 function symDiff(a, b) {
@@ -3947,8 +3982,11 @@ export function feelHarder(feel) {
   return !!f && ((f.s != null && f.s <= FEEL_LOW_S) || (f.e != null && f.e <= FEEL_LOW_E));
 }
 
-const workingSetsOf = rec => (rec && Array.isArray(rec.exercises) ? rec.exercises : [])
-  .reduce((a, ex) => a + (ex && Array.isArray(ex.sets) ? ex.sets : []).filter(isWorking).length, 0);
+// v70: the ramp model's count — the record carries its own names, so an
+// assisted lift is read off them; his ramp loads come from the fact store
+// when there is one (finishSafe has none: the log could not be read).
+const workingSetsOf = (rec, d) => (rec && Array.isArray(rec.exercises) ? rec.exercises : [])
+  .reduce((a, ex) => a + (ex && Array.isArray(ex.sets) ? workSetsOf(ex.sets, { assisted: assistedOf(ex, d ? d.input.lib : null), known: d ? d.knownOf(ex) : [] }) : []).length, 0);
 
 /* What was trained, for "Good work.": his own routine's name when one covers
    exactly these groups (shapeRoutine, the builder's test), otherwise the
@@ -4084,7 +4122,7 @@ function finishOf(d, rec, extras) {
     return { headline: FINISH_GOOD, line: FINISH_HARDER, earned: false, evidence: [], short: FINISH_HARDER, id,
              why: mark ? 'You marked it: ' + MARK_WORDS[mark.r] + '.' : 'By your own rating, straight after it.' };
   }
-  const line = doneName(sh, d) + ' done: ' + plural(workingSetsOf(rec), 'set') + '.';
+  const line = doneName(sh, d) + ' done: ' + plural(workingSetsOf(rec, d), 'set') + '.';
   return { headline: FINISH_GOOD, line, why: 'Every working set in the session, warm-ups out.', earned: false, evidence: [],
            short: line, id };
 }
